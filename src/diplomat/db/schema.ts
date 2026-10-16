@@ -21,6 +21,13 @@ import { Locale, LocaleSource } from '../../models/locale.js';
 import { RecurringPeriod } from '../../models/recurring.js';
 import { ClassificationMethod, TransactionStatus } from '../../models/transaction.js';
 
+// Owned rows name their user (RESTRICT); shared defaults carry null.
+const ownerColumn = () =>
+  text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'restrict' });
+const sharedOrOwnerColumn = () => text('user_id').references(() => users.id, { onDelete: 'restrict' });
+
 export const currencies = sqliteTable('currencies', {
   code: text('code').primaryKey(),
   symbol: text('symbol').notNull(),
@@ -41,6 +48,7 @@ export const accounts = sqliteTable('accounts', {
   // Optimistic-concurrency token for the generic versioned unit of work (ADR-021); unread/unbumped
   // by any flow not yet converted off its own repo write method.
   version: integer('version').notNull().default(0),
+  userId: ownerColumn(),
 });
 
 export const creditCards = sqliteTable('credit_cards', {
@@ -57,6 +65,7 @@ export const creditCards = sqliteTable('credit_cards', {
     .references(() => accounts.id),
   paymentAccountId: text('payment_account_id').references(() => accounts.id),
   version: integer('version').notNull().default(0),
+  userId: ownerColumn(),
 });
 
 export const categories = sqliteTable(
@@ -68,6 +77,7 @@ export const categories = sqliteTable(
     parentId: text('parent_id'),
     names: text('names'),
     version: integer('version').notNull().default(0),
+    userId: sharedOrOwnerColumn(),
   },
   (t) => [foreignKey({ columns: [t.parentId], foreignColumns: [t.id] })],
 );
@@ -88,15 +98,33 @@ export const merchantCategory = sqliteTable(
     weight: real('weight').notNull().default(1),
     origin: text('origin', { enum: [ClassificationMethod.enum.rule, ClassificationMethod.enum.history] }).notNull(),
     lastSeen: integer('last_seen'),
+    userId: sharedOrOwnerColumn(),
   },
-  (t) => [primaryKey({ columns: [t.merchantKey, t.categoryId] })],
+  (t) => [
+    // NULLs are distinct in a UNIQUE index, hence one partial index per audience.
+    uniqueIndex('merchant_category_shared_key')
+      .on(t.merchantKey, t.categoryId)
+      .where(sql`${t.userId} IS NULL`),
+    uniqueIndex('merchant_category_user_key')
+      .on(t.userId, t.merchantKey, t.categoryId)
+      .where(sql`${t.userId} IS NOT NULL`),
+    check(
+      'merchant_category_origin_owner',
+      sql`(${t.origin} = ${sql.raw(`'${ClassificationMethod.enum.rule}'`)} AND ${t.userId} IS NULL) OR (${t.origin} = ${sql.raw(`'${ClassificationMethod.enum.history}'`)} AND ${t.userId} IS NOT NULL)`,
+    ),
+  ],
 );
 
-export const tags = sqliteTable('tags', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  version: integer('version').notNull().default(0),
-});
+export const tags = sqliteTable(
+  'tags',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    version: integer('version').notNull().default(0),
+    userId: ownerColumn(),
+  },
+  (t) => [uniqueIndex('tags_user_name').on(t.userId, t.name)],
+);
 
 export const bills = sqliteTable(
   'bills',
@@ -112,6 +140,7 @@ export const bills = sqliteTable(
     status: text('status', { enum: ['open', 'closed', 'paid'] }).notNull(),
     paymentTransactionId: text('payment_transaction_id').references((): AnySQLiteColumn => transactions.id),
     version: integer('version').notNull().default(0),
+    userId: ownerColumn(),
   },
   (t) => [uniqueIndex('bills_card_month_year').on(t.creditCardId, t.month, t.year)],
 );
@@ -129,7 +158,7 @@ export const transactions = sqliteTable(
       .notNull()
       .references(() => currencies.code),
     source: text('source', { enum: ['mcp', 'rest', 'import'] }).notNull(),
-    idempotencyKey: text('idempotency_key').notNull().unique(),
+    idempotencyKey: text('idempotency_key').notNull(),
     classificationMethod: text('classification_method', { enum: ClassificationMethod.options }).notNull(),
     confidence: real('confidence').notNull(),
     rawInput: text('raw_input'),
@@ -142,8 +171,11 @@ export const transactions = sqliteTable(
     note: text('note'),
     billId: text('bill_id').references(() => bills.id),
     version: integer('version').notNull().default(0),
+    userId: ownerColumn(),
   },
   (t) => [
+    uniqueIndex('transactions_user_idempotency_key').on(t.userId, t.idempotencyKey),
+    index('idx_transactions_user_date').on(t.userId, t.date),
     index('idx_transactions_date').on(t.date),
     index('idx_transactions_from_account').on(t.fromAccountId),
     index('idx_transactions_to_account').on(t.toAccountId),
@@ -181,13 +213,14 @@ export const recurringRules = sqliteTable('recurring_rules', {
   categoryId: text('category_id').references(() => categories.id),
   merchantKey: text('merchant_key').references(() => merchants.key),
   version: integer('version').notNull().default(0),
+  userId: ownerColumn(),
 });
 
 export const dashboards = sqliteTable(
   'dashboards',
   {
     id: text('id').primaryKey(),
-    name: text('name').notNull().unique(),
+    name: text('name').notNull(),
     // Nullable — a source: 'file' row resolves content from `path` at read time instead
     // (ADR-027 Phase 2); exactly one of html/path is non-null per source, enforced below.
     html: text('html'),
@@ -195,8 +228,20 @@ export const dashboards = sqliteTable(
     path: text('path'),
     updatedAt: text('updated_at').notNull(),
     version: integer('version').notNull().default(0),
+    userId: sharedOrOwnerColumn(),
   },
   (t) => [
+    // Unique among the shared defaults and, separately, among each user's own (partial indexes: NULLs are distinct).
+    uniqueIndex('dashboards_shared_name')
+      .on(t.name)
+      .where(sql`${t.userId} IS NULL`),
+    uniqueIndex('dashboards_user_name')
+      .on(t.userId, t.name)
+      .where(sql`${t.userId} IS NOT NULL`),
+    check(
+      'dashboard_source_owner',
+      sql`(${t.source} = 'file' AND ${t.userId} IS NULL) OR (${t.source} = 'inline' AND ${t.userId} IS NOT NULL)`,
+    ),
     check(
       'dashboard_source_content',
       sql`(${t.source} = 'inline' AND ${t.html} IS NOT NULL AND ${t.path} IS NULL) OR (${t.source} = 'file' AND ${t.html} IS NULL AND ${t.path} IS NOT NULL)`,
@@ -219,12 +264,22 @@ export const budgets = sqliteTable(
     limitAmount: real('limit_amount').notNull(),
     period: text('period', { enum: BudgetPeriod.options }).notNull().default(BudgetPeriod.enum.monthly),
     version: integer('version').notNull().default(0),
+    userId: ownerColumn(),
   },
-  (t) => [uniqueIndex('budgets_category_currency_period').on(t.categoryId, t.currency, t.period)],
+  (t) => [uniqueIndex('budgets_user_category_currency_period').on(t.userId, t.categoryId, t.currency, t.period)],
 );
 
+// Instance-wide settings (one row). Empty today; preferences live in user_settings.
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
+  version: integer('version').notNull().default(0),
+});
+
+// One row per user; none means the defaults apply.
+export const userSettings = sqliteTable('user_settings', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
   locale: text('locale', { enum: Locale.options }).notNull().default(Locale.enum.en),
   localeSource: text('locale_source', { enum: LocaleSource.options }).notNull().default(LocaleSource.enum.default),
   // Nullable — unset means "derive from locale" (pt->BRL, en/es->USD), resolved at read time by

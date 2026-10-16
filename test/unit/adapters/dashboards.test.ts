@@ -77,6 +77,7 @@ describe('dbToEntity', () => {
         version: 2,
       },
       '<html></html>',
+      false,
     );
     expect(entity).toEqual({
       id: 'dash-1',
@@ -86,6 +87,7 @@ describe('dbToEntity', () => {
       version: 2,
       source: 'inline',
       path: null,
+      shared: false,
     });
   });
 
@@ -101,6 +103,7 @@ describe('dbToEntity', () => {
         version: 0,
       },
       '<section>from disk</section>',
+      true,
     );
     expect(entity).toEqual({
       id: 'dash-1',
@@ -110,6 +113,7 @@ describe('dbToEntity', () => {
       version: 0,
       source: 'file',
       path: 'overview.html',
+      shared: true,
     });
   });
 });
@@ -135,6 +139,7 @@ describe('modelToDb', () => {
       version: 0,
       source: DashboardSource.enum.inline,
       path: 'stray-path-must-be-discarded.html',
+      shared: false,
     });
     expect(row).toEqual({
       id: 'dash-1',
@@ -156,6 +161,7 @@ describe('modelToDb', () => {
       version: 0,
       source: DashboardSource.enum.file,
       path: 'overview.html',
+      shared: true,
     });
     expect(row).toEqual({
       id: 'dash-1',

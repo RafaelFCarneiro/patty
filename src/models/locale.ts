@@ -9,12 +9,10 @@ export type Locale = z.infer<typeof Locale>;
 export const LocaleSource = z.enum(['default', 'inferred', 'explicit']);
 export type LocaleSource = z.infer<typeof LocaleSource>;
 
-export const SETTINGS_ENTITY_TAG = 'settings';
-export const SETTINGS_SINGLETON_ID = 'singleton';
+export const USER_SETTINGS_ENTITY_TAG = 'userSettings';
 
-export const SettingsEntitySchema = withPersistenceMeta(
+export const UserSettingsEntitySchema = withPersistenceMeta(
   z.object({
-    id: z.literal(SETTINGS_SINGLETON_ID),
     locale: Locale,
     localeSource: LocaleSource,
     // Explicit override; null means "derive from locale" (logic/locale.ts's resolveBaseCurrency,
@@ -23,7 +21,7 @@ export const SettingsEntitySchema = withPersistenceMeta(
     baseCurrency: CurrencyCode.nullable(),
   }),
 );
-export type SettingsEntity = z.infer<typeof SettingsEntitySchema>;
+export type UserSettingsEntity = z.infer<typeof UserSettingsEntitySchema>;
 
 export type LabelMap<E extends string> = Record<E, Record<Locale, string>>;
 

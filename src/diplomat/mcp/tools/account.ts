@@ -48,8 +48,6 @@ const addAccountMovementDescription = (movement: 'expense' | 'income'): string =
   `currency field (default USD). Omitting account records an unattached ${movement === 'expense' ? '(e.g. cash) expense' : 'income'}.`;
 
 export const registerAccountTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, runEffects, runEffectsSequence } = ctx;
-
   server.registerTool(
     'add_account_expense',
     {
@@ -58,7 +56,8 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
       description: addAccountMovementDescription('expense'),
       inputSchema: AddAccountMovementSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const model = accountAdapters.addAccountMovementWireInToModel(args);
       const flow = () => addAccountExpense(deps, model, TransactionSource.enum.mcp).map(outcomeToDb);
       return fromResult((await runEffects(flow)).map(createResultToWireOut));
@@ -73,7 +72,8 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
       description: addAccountMovementDescription('income'),
       inputSchema: AddAccountMovementSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const model = accountAdapters.addAccountMovementWireInToModel(args);
       const flow = () => addAccountIncome(deps, model, TransactionSource.enum.mcp).map(outcomeToDb);
       return fromResult((await runEffects(flow)).map(createResultToWireOut));
@@ -92,7 +92,8 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
         `instead for a credit-card statement. ${STATEMENT_IMPORT_RESULT_DESCRIPTION}`,
       inputSchema: ImportAccountStatementSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffectsSequence } = ctx.as(extra);
       const model = accountAdapters.importAccountStatementWireInToModel(args);
       const plan = await importAccountStatement(deps, model, TransactionSource.enum.import);
       const outcomes = await runEffectsSequence(plan.lines, (line) => () => plan.flowFor(line)().map(outcomeToDb));
@@ -119,7 +120,8 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
         'cannot receive a category/subCategory (both rejected with a validation error).',
       inputSchema: UpdateAccountTransactionSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () =>
         updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(args)).map(outcomeToDb);
       return fromResult(await runEffects(flow));
@@ -140,7 +142,8 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
         'again with confirm: true.',
       inputSchema: DeleteTransactionSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => deleteAccountTransaction(deps, args).map(outcomeToDb);
       return fromResult((await runEffects(flow)).map(deleteResultToWireOut));
     },
@@ -156,7 +159,8 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
         'Note: credit accounts are created automatically with a credit card (create_credit_card).',
       inputSchema: CreateAccountSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () =>
         createAccount(deps, accountAdapters.createWireInToModel(args)).map(accountAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
@@ -187,7 +191,10 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
           ),
       },
     },
-    async (args) => fromResult(await getAccountBalances(deps, args)),
+    async (args, extra) => {
+      const { deps } = ctx.as(extra);
+      return fromResult(await getAccountBalances(deps, args));
+    },
   );
 
   server.registerTool(
@@ -200,7 +207,10 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
         type: AccountType.optional(),
       },
     },
-    async (args) => json(await listAccounts(deps, args.type)),
+    async (args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await listAccounts(deps, args.type));
+    },
   );
 
   server.registerTool(
@@ -216,7 +226,8 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
         'Credit accounts (card-managed) are rejected — use the card flow.',
       inputSchema: UpdateAccountSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () =>
         updateAccount(deps, accountAdapters.updateWireInToModel(args)).map(accountAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
@@ -237,7 +248,8 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
         name: z.string().min(1).describe('Account name'),
       },
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => deleteAccount(deps, args.name).map(accountAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },

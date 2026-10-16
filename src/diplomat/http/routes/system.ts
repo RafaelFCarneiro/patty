@@ -8,7 +8,7 @@ import { READ_SCOPE } from '../../../models/auth/scope.js';
 const SYSTEM_TAG = 'System';
 
 export const systemRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, version } = ctx;
+  const { publicDeps, version } = ctx;
   return [
     {
       method: 'get',
@@ -17,7 +17,7 @@ export const systemRoutes = (ctx: HttpContext): RouteDefinition[] => {
       tags: [SYSTEM_TAG],
       summary: 'Liveness and database probe — the only unauthenticated /api route (ADR-033 §6)',
       responses: { 200: okResponse('OK', HealthOut) },
-      handler: async () => getHealth(deps),
+      handler: async () => getHealth(publicDeps),
     },
     {
       method: 'get',
@@ -26,7 +26,10 @@ export const systemRoutes = (ctx: HttpContext): RouteDefinition[] => {
       tags: [SYSTEM_TAG],
       summary: 'Server status',
       responses: { 200: okResponse('Server status', StatusOut) },
-      handler: async () => getStatus(deps, version),
+      handler: async (_req, _reply, scope) => {
+        const { deps } = scope();
+        return getStatus(deps, version);
+      },
     },
   ];
 };

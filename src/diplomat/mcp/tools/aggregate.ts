@@ -1,13 +1,16 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { aggregateSpending } from '../../../controllers/aggregate.js';
-import { AggregateMetric, AggregateSort, AggregateSpendingSchema, type ResolvedAggregateSpending } from '../../../models/aggregate.js';
+import {
+  AggregateMetric,
+  AggregateSort,
+  AggregateSpendingSchema,
+  type ResolvedAggregateSpending,
+} from '../../../models/aggregate.js';
 import type { McpContext } from '../context.js';
 import { fromResult } from '../respond.js';
 import { READ_ONLY } from '../annotations.js';
 
 export const registerAggregateTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps } = ctx;
-
   server.registerTool(
     'aggregate_spending',
     {
@@ -29,6 +32,9 @@ export const registerAggregateTools = (server: McpServer, ctx: McpContext): void
         limit: AggregateSpendingSchema.shape.limit.default(50),
       },
     },
-    async (args) => fromResult(await aggregateSpending(deps, args as ResolvedAggregateSpending)),
+    async (args, extra) => {
+      const { deps } = ctx.as(extra);
+      return fromResult(await aggregateSpending(deps, args as ResolvedAggregateSpending));
+    },
   );
 };

@@ -2,6 +2,7 @@ import type { Result, ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import type { StalenessThresholds } from '../logic/currencyRate.js';
 import type { FlowOutcome } from '@rfc0/effect-runner';
+import type { Principal } from '../models/auth/principal.js';
 import type { Presentation, SignInConfig, SignInObservation, SignInState } from '../models/auth/signInFlow.js';
 import type { ClientConfigFailure } from '../models/clientConfig.js';
 import type { KeychainFailure } from '../models/auth/signIn.js';
@@ -28,7 +29,7 @@ import type { SetupCodesRepo } from '../diplomat/db/repos/setupCodes.js';
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
 import type { UsersRepo } from '../diplomat/db/repos/users.js';
 
-/** Side-effect dependencies, injected so controllers stay testable. */
+/** Side-effect dependencies, injected so controllers stay testable. One user's: every repo is already bound to them. */
 export type Deps = {
   accounts: AccountsRepo;
   bills: BillsRepo;
@@ -172,3 +173,26 @@ export type RunEffectsSequence = <I, T>(
   items: readonly I[],
   flowFor: (item: I) => () => ResultAsync<FlowOutcome<T>, AppError>,
 ) => Promise<Result<T, AppError>[]>;
+
+/** What one request needs to act as one user, built per request; nothing about the user is stored between requests. */
+export type Scoped = {
+  deps: Deps;
+  runEffects: RunEffects;
+  runEffectsSequence: RunEffectsSequence;
+  resetLocale: () => void;
+};
+
+/** Turns the authenticated principal into that user's scoped dependencies (built in composition/runtime.ts). */
+export type Tenancy = {
+  depsFor: (principal: Principal) => Deps;
+  runEffectsFor: (principal: Principal) => RunEffects;
+  runEffectsSequenceFor: (principal: Principal) => RunEffectsSequence;
+  resetLocaleFor: (principal: Principal) => void;
+};
+
+export const scopedFor = (tenancy: Tenancy, principal: Principal): Scoped => ({
+  deps: tenancy.depsFor(principal),
+  runEffects: tenancy.runEffectsFor(principal),
+  runEffectsSequence: tenancy.runEffectsSequenceFor(principal),
+  resetLocale: () => tenancy.resetLocaleFor(principal),
+});

@@ -44,6 +44,8 @@ export const assertCategoryNameAvailable = (categories: readonly Category[], nam
 export const assertSubCategoryNameAvailable = (siblings: readonly { name: string }[], name: string): boolean =>
   !hasSubCategoryNameCollision(siblings, name);
 
+export const isSharedDefault = (row: { shared: boolean }): boolean => row.shared;
+
 export const isCategoryUnreferenced = (refs: CategoryReferences): boolean =>
   refs.transactions === 0 && refs.recurring === 0 && refs.subCategories === 0;
 

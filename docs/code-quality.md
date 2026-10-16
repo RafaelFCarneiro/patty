@@ -146,6 +146,8 @@ for (const item of items) {
 }
 ```
 
+In `src/logic/`, `src/controllers/` and `src/adapters/` this is enforced by lint (`eslint.config.js`): loops (`for`, `for…of`, `for…in`, `while`, `do…while`), `let` and `.push(` are errors there. The shell (`diplomat/**`) and the composition root (`composition/**`) are exempt.
+
 Remeda functions to prefer over manual imperative equivalents:
 
 | Instead of… | Use… |

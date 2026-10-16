@@ -136,7 +136,7 @@ export const SpendingShiftDirection = z.enum(['up', 'down']);
 export type SpendingShiftDirection = z.infer<typeof SpendingShiftDirection>;
 
 export const SpendingShiftSchema = z.object({
-  category: z.string().min(1).describe("Top-level category name — sub-category spend rolls up into its parent"),
+  category: z.string().min(1).describe('Top-level category name — sub-category spend rolls up into its parent'),
   currency: CurrencyCode,
   current: z.number().describe('Effective, expense-only total for the reference month'),
   baseline: z.number().describe('Average monthly effective expense total over the preceding baselineMonths'),
@@ -170,7 +170,7 @@ export const SpendingShiftsResultSchema = z.object({
     .array(SpendingShiftSchema)
     .describe('Sorted by |deltaPct| descending; brand-new-spend categories (deltaPct: null) sort first'),
   converted: ConvertedTotalSchema.optional().describe(
-    'Opt-in converted grand total of the reference month\'s effective, expense-only spend across every ' +
+    "Opt-in converted grand total of the reference month's effective, expense-only spend across every " +
       'currency — present only when displayCurrency was supplied',
   ),
 });
@@ -246,7 +246,7 @@ export const MerchantShareSchema = z.object({
 export type MerchantShare = z.infer<typeof MerchantShareSchema>;
 
 export const CategoryConcentrationSchema = z.object({
-  category: z.string().min(1).describe("Top-level category name — sub-category spend rolls up into its parent"),
+  category: z.string().min(1).describe('Top-level category name — sub-category spend rolls up into its parent'),
   currency: CurrencyCode,
   categoryTotal: z.number().describe('Total effective expense in this category for the period'),
   merchants: z.array(MerchantShareSchema).describe('Top `topN` merchants by spend, descending'),
@@ -263,7 +263,7 @@ export const MerchantConcentrationResultSchema = z.object({
     .describe('One entry per (category, currency) with spend in the period; sorted by category name'),
   converted: ConvertedTotalSchema.optional().describe(
     'Opt-in converted grand total of the per-currency spend the concentration is computed over (each ' +
-      'currency\'s categoryTotal, summed once — not each merchant line) — present only when displayCurrency ' +
+      "currency's categoryTotal, summed once — not each merchant line) — present only when displayCurrency " +
       'was supplied',
   ),
 });

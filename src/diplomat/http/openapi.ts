@@ -5,8 +5,10 @@ import {
   type RouteConfig,
 } from '@asteasolutions/zod-to-openapi';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import './principal.js';
 import type { OpenAPIObject } from 'openapi3-ts/oas30';
 import { z } from 'zod';
+import { scopedFor, type Scoped, type Tenancy } from '../../controllers/deps.js';
 import type { Scope } from '../../models/auth/scope.js';
 
 /**
@@ -24,7 +26,9 @@ import type { Scope } from '../../models/auth/scope.js';
 extendZodWithOpenApi(z);
 
 export type HttpMethod = 'get' | 'post' | 'patch' | 'delete';
-export type RouteHandler = (req: FastifyRequest, reply: FastifyReply) => unknown;
+/** The request's user-scoped dependencies; throws without a principal (fails closed). Public routes never ask. */
+export type ScopeOf = () => Scoped;
+export type RouteHandler = (req: FastifyRequest, reply: FastifyReply, scope: ScopeOf) => unknown;
 export type RouteMeta = Omit<RouteConfig, 'method' | 'path'> & {
   method: HttpMethod;
   path: string;
@@ -37,21 +41,32 @@ export type RouteDefinition = RouteMeta & { handler: RouteHandler };
 // this is the sole conversion to OpenAPI's `{param}` syntax, applied when documenting.
 const toOpenApiPath = (fastifyPath: string): string => fastifyPath.replace(/:([A-Za-z]+)/g, '{$1}');
 
-export const mountRoutes = (app: FastifyInstance, definitions: RouteDefinition[]): void => {
+export const MISSING_PRINCIPAL_MESSAGE = 'fintrack: a route reached user data without an authenticated principal';
+
+const withScope =
+  (tenancy: Tenancy, handler: RouteHandler) =>
+  (req: FastifyRequest, reply: FastifyReply): unknown =>
+    handler(req, reply, () => {
+      if (!req.principal) throw new Error(MISSING_PRINCIPAL_MESSAGE);
+      return scopedFor(tenancy, req.principal);
+    });
+
+export const mountRoutes = (app: FastifyInstance, definitions: RouteDefinition[], tenancy: Tenancy): void => {
   for (const { method, path, scope, handler } of definitions) {
     const options = { config: { scope } };
+    const scoped = withScope(tenancy, handler);
     switch (method) {
       case 'get':
-        app.get(path, options, handler);
+        app.get(path, options, scoped);
         break;
       case 'post':
-        app.post(path, options, handler);
+        app.post(path, options, scoped);
         break;
       case 'patch':
-        app.patch(path, options, handler);
+        app.patch(path, options, scoped);
         break;
       case 'delete':
-        app.delete(path, options, handler);
+        app.delete(path, options, scoped);
         break;
       default: {
         const _exhaustive: never = method;

@@ -13,7 +13,9 @@ import * as R from 'remeda';
 export const findHtmlValidationIssues = (html: string): string[] => [
   ...(isNonEmptyContent(html) ? [] : ['content must not be empty']),
   ...(hasHtmlDocumentRoot(html)
-    ? ['content must be a fragment (sections + script) — remove the <!doctype>/<html> root; the shell (GET /ui) now provides it']
+    ? [
+        'content must be a fragment (sections + script) — remove the <!doctype>/<html> root; the shell (GET /ui) now provides it',
+      ]
     : []),
   ...findExternalScriptIssues(html),
   ...findScriptSyntaxIssues(html),
@@ -62,14 +64,17 @@ const normalizeScriptType = (rawType: string): string => (rawType.split(';')[0] 
 
 /** Boolean attributes (no `=value`) parse to `true`; real HTML keeps the first of a duplicate name. */
 const parseAttributes = (attributes: string): Map<string, string | true> => {
-  const result = new Map<string, string | true>();
-  for (const [, name, doubleQuoted, singleQuoted, unquoted] of attributes.matchAll(ATTRIBUTE_PATTERN)) {
-    if (!name) continue;
-    const key = name.toLowerCase();
-    if (result.has(key)) continue;
-    result.set(key, doubleQuoted ?? singleQuoted ?? unquoted ?? true);
-  }
-  return result;
+  return new Map(
+    R.pipe(
+      [...attributes.matchAll(ATTRIBUTE_PATTERN)],
+      R.filter(([, name]) => !!name),
+      R.map(
+        ([, name, doubleQuoted, singleQuoted, unquoted]) =>
+          [name!.toLowerCase(), (doubleQuoted ?? singleQuoted ?? unquoted ?? true) as string | true] as const,
+      ),
+      R.uniqueBy(([key]) => key),
+    ),
+  );
 };
 
 /** External (`src=`) tags have no inline body to check; skipped `type`s can't be classic-script-checked. */

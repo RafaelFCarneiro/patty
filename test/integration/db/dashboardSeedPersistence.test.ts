@@ -14,6 +14,8 @@ import { runEffects } from '@rfc0/effect-runner';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
 import { conflict } from '../../../src/models/error.js';
 import { Locale } from '../../../src/models/locale.js';
+import { randomUUID } from 'node:crypto';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 
 const TEST_KEY = 'e'.repeat(64);
 
@@ -44,11 +46,12 @@ describe('dashboard seed persistence across restart (ADR-008 onConflictDoNothing
 
     const overriddenHtml = '<section>my custom dashboard</section>';
     const deps = {
-      dashboards: dashboardsRepo(firstDb),
+      dashboards: dashboardsRepo(firstDb, OWNER_USER_ID),
       clock: () => new Date(),
+      newId: () => randomUUID(),
       locale: async () => Locale.enum.en,
     } as unknown as Deps;
-    const registry: ApplierRegistry = { [DASHBOARD_ENTITY_TAG]: dashboardApplier };
+    const registry: ApplierRegistry = { [DASHBOARD_ENTITY_TAG]: dashboardApplier(OWNER_USER_ID) };
     const result = await runEffects(
       { runner: createTransactionRunner(firstDb), isTransientContention: isSqliteBusy, conflictError: () => conflict },
       registry,
@@ -60,7 +63,9 @@ describe('dashboard seed persistence across restart (ADR-008 onConflictDoNothing
     const secondDb = await openDatabase(openOpts());
     await bootstrap(secondDb);
 
-    const after = await dashboardsRepo(secondDb).get('overview');
+    const after = await dashboardsRepo(secondDb, OWNER_USER_ID).get('overview');
     expect(after?.html).toBe(overriddenHtml);
+    // The shared default was never touched — it is still there for everyone else.
+    expect(await dashboardsRepo(secondDb, OWNER_USER_ID).isDefault('overview')).toBe(true);
   });
 });

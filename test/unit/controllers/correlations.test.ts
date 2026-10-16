@@ -187,7 +187,7 @@ describe('findCorrelations — spending_shifts', () => {
     expect(ratesFetched).toBe(false);
   });
 
-  it('provided displayCurrency: converts the sum of every row\'s current, unfiltered by minDeltaPct', async () => {
+  it("provided displayCurrency: converts the sum of every row's current, unfiltered by minDeltaPct", async () => {
     const deps = makeDeps({
       correlations: {
         spendingShifts: async () => [
@@ -457,33 +457,36 @@ describe('findCorrelations — budget_fit', () => {
     expect(ratesFetched).toBe(false);
   });
 
-  it('provided displayCurrency: converts committed (effective + pending) spend matched to budgets, ' +
-    'the same measure get_budget_status uses — not windowedSpend', async () => {
-    const committedSpendRow: CategorySpend = {
-      currency: CurrencyCode.enum.BRL,
-      categoryId: 'cat-food',
-      subCategoryId: null,
-      effective: 150,
-      pending: 50,
-    };
-    const deps = makeDeps({
-      budgets: { list: async () => [budgetViewRow({ limit: 500 })] } as unknown as Deps['budgets'],
-      transactions: {
-        // windowedSpend intentionally differs from committedSpend — the converted total must come
-        // from the latter (spendByCategory), not be re-derived from the former.
-        spendByCategoryWindowed: async () => [windowedSpendRow({ baselineTotal: 900 })],
-        spendByCategory: async () => [committedSpendRow],
-      } as unknown as Deps['transactions'],
-      correlations: { spendingShifts: async () => [] } as unknown as Deps['correlations'],
-      currencyRates: { list: async () => [usdBrlRate()] } as unknown as Deps['currencyRates'],
-    });
+  it(
+    'provided displayCurrency: converts committed (effective + pending) spend matched to budgets, ' +
+      'the same measure get_budget_status uses — not windowedSpend',
+    async () => {
+      const committedSpendRow: CategorySpend = {
+        currency: CurrencyCode.enum.BRL,
+        categoryId: 'cat-food',
+        subCategoryId: null,
+        effective: 150,
+        pending: 50,
+      };
+      const deps = makeDeps({
+        budgets: { list: async () => [budgetViewRow({ limit: 500 })] } as unknown as Deps['budgets'],
+        transactions: {
+          // windowedSpend intentionally differs from committedSpend — the converted total must come
+          // from the latter (spendByCategory), not be re-derived from the former.
+          spendByCategoryWindowed: async () => [windowedSpendRow({ baselineTotal: 900 })],
+          spendByCategory: async () => [committedSpendRow],
+        } as unknown as Deps['transactions'],
+        correlations: { spendingShifts: async () => [] } as unknown as Deps['correlations'],
+        currencyRates: { list: async () => [usdBrlRate()] } as unknown as Deps['currencyRates'],
+      });
 
-    const result = await findCorrelations(deps, budgetFitInput({ displayCurrency: CurrencyCode.enum.USD }));
-    // (150 + 50) * 0.2 = 40
-    expect(result._unsafeUnwrap()).toMatchObject({
-      converted: { displayCurrency: 'USD', total: 40, stale: false, excluded: [] },
-    });
-  });
+      const result = await findCorrelations(deps, budgetFitInput({ displayCurrency: CurrencyCode.enum.USD }));
+      // (150 + 50) * 0.2 = 40
+      expect(result._unsafeUnwrap()).toMatchObject({
+        converted: { displayCurrency: 'USD', total: 40, stale: false, excluded: [] },
+      });
+    },
+  );
 
   it('provided displayCurrency: a currency with no rate is excluded from the total and listed', async () => {
     const deps = makeDeps({
@@ -618,25 +621,31 @@ describe('findCorrelations — merchant_concentration', () => {
     expect(ratesFetched).toBe(false);
   });
 
-  it('provided displayCurrency: converts the per-currency total the concentration is computed over ' +
-    '(each currency\'s categoryTotal summed once, not each merchant line)', async () => {
-    const deps = makeDeps({
-      correlations: {
-        merchantConcentration: async () => [
-          merchantRow({ category: 'Food', merchantKey: 'a', spent: 60 }),
-          merchantRow({ category: 'Food', merchantKey: 'b', spent: 40 }),
-          merchantRow({ category: 'Transport', merchantKey: 'c', spent: 25 }),
-        ],
-      } as unknown as Deps['correlations'],
-      currencyRates: { list: async () => [usdBrlRate()] } as unknown as Deps['currencyRates'],
-    });
+  it(
+    'provided displayCurrency: converts the per-currency total the concentration is computed over ' +
+      "(each currency's categoryTotal summed once, not each merchant line)",
+    async () => {
+      const deps = makeDeps({
+        correlations: {
+          merchantConcentration: async () => [
+            merchantRow({ category: 'Food', merchantKey: 'a', spent: 60 }),
+            merchantRow({ category: 'Food', merchantKey: 'b', spent: 40 }),
+            merchantRow({ category: 'Transport', merchantKey: 'c', spent: 25 }),
+          ],
+        } as unknown as Deps['correlations'],
+        currencyRates: { list: async () => [usdBrlRate()] } as unknown as Deps['currencyRates'],
+      });
 
-    const result = await findCorrelations(deps, merchantConcentrationInput({ displayCurrency: CurrencyCode.enum.USD }));
-    // (60 + 40 + 25) * 0.2 = 25
-    expect(result._unsafeUnwrap()).toMatchObject({
-      converted: { displayCurrency: 'USD', total: 25, stale: false, excluded: [] },
-    });
-  });
+      const result = await findCorrelations(
+        deps,
+        merchantConcentrationInput({ displayCurrency: CurrencyCode.enum.USD }),
+      );
+      // (60 + 40 + 25) * 0.2 = 25
+      expect(result._unsafeUnwrap()).toMatchObject({
+        converted: { displayCurrency: 'USD', total: 25, stale: false, excluded: [] },
+      });
+    },
+  );
 
   it('provided displayCurrency: a currency with no rate is excluded from the total and listed', async () => {
     const deps = makeDeps({

@@ -4,7 +4,7 @@ import { createBudget } from '../../../src/controllers/budgets.js';
 import type { CreateBudget } from '../../../src/models/budget.js';
 import { setupHttpTest } from './setup.js';
 
-const { inject, getDeps, getRunEffects } = setupHttpTest();
+const { inject, getDeps, getRunEffects, setClock } = setupHttpTest();
 
 // Budget writes stay MCP-only (no REST create route), so fixtures for these REST-read tests are
 // seeded straight through the controller rather than via `inject`, mirroring how every other
@@ -102,9 +102,7 @@ describe('GET /api/budgets/status', () => {
     });
 
     it('provided displayCurrency: converts + sums committed spend, per-category lines unchanged', async () => {
-      const deps = getDeps();
-      const originalClock = deps.clock;
-      deps.clock = () => FIXED_NOW;
+      const restoreClock = setClock(() => FIXED_NOW);
 
       try {
         await inject({
@@ -171,7 +169,7 @@ describe('GET /api/budgets/status', () => {
         expect(withBody.converted?.total).toBeGreaterThanOrEqual(200);
         expect(withBody.converted?.stale).toBe(false);
       } finally {
-        deps.clock = originalClock;
+        restoreClock();
       }
     });
 

@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { McpTransport } from '../../../src/config.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 
 const TEST_KEY = 'f'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -84,7 +85,7 @@ describe('migration 0011 — dashboards id normalization', () => {
       ),
     ).rejects.toThrow();
 
-    const repo = dashboardsRepo(db);
+    const repo = dashboardsRepo(db, OWNER_USER_ID);
     expect(await repo.get('legacy')).toEqual({
       name: 'legacy',
       html: '<html>old</html>',

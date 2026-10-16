@@ -4,23 +4,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { IPV4_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
-import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
+import type { Runtime } from '../../src/composition/runtime.js';
 import { startHttpSidecar, type HttpSidecar } from '../../src/composition/http.js';
 import { buildApp } from './app-builder.js';
 
 let tmpDir: string;
-let deps: Deps;
+let runtime: Runtime;
 let version: string;
-let runEffects: RunEffects;
-let runEffectsSequence: RunEffectsSequence;
 
 beforeAll(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sidecar-test-'));
   const ctx = await buildApp({ dbPath: join(tmpDir, 'test.db') });
-  deps = ctx.deps;
+  runtime = ctx.runtime;
   version = ctx.version;
-  runEffects = ctx.runEffects;
-  runEffectsSequence = ctx.runEffectsSequence;
 });
 
 afterAll(() => {
@@ -43,15 +39,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
 
     const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    sidecar = await startHttpSidecar(
-      deps,
-      version,
-      runEffects,
-      runEffectsSequence,
-      () => {},
-      () => () => {},
-      port,
-    );
+    sidecar = await startHttpSidecar(runtime, version, port);
 
     expect(sidecar.listening).toBe(false);
     const logged = stderr.mock.calls.flat().join(' ');
@@ -62,15 +50,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
   });
 
   it('comes up and serves /api routes when the port is free', async () => {
-    sidecar = await startHttpSidecar(
-      deps,
-      version,
-      runEffects,
-      runEffectsSequence,
-      () => {},
-      () => () => {},
-      0,
-    );
+    sidecar = await startHttpSidecar(runtime, version, 0);
     expect(sidecar.listening).toBe(true);
 
     const port = (sidecar.app.server.address() as AddressInfo).port;
@@ -80,15 +60,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
   });
 
   it('binds loopback-only, not the LAN-reachable wildcard address', async () => {
-    sidecar = await startHttpSidecar(
-      deps,
-      version,
-      runEffects,
-      runEffectsSequence,
-      () => {},
-      () => () => {},
-      0,
-    );
+    sidecar = await startHttpSidecar(runtime, version, 0);
     expect(sidecar.listening).toBe(true);
 
     const address = sidecar.app.server.address() as AddressInfo;
@@ -99,16 +71,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
     const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const wildcardHost = IPV4_WILDCARD_HOST;
 
-    sidecar = await startHttpSidecar(
-      deps,
-      version,
-      runEffects,
-      runEffectsSequence,
-      () => {},
-      () => () => {},
-      0,
-      wildcardHost,
-    );
+    sidecar = await startHttpSidecar(runtime, version, 0, wildcardHost);
 
     expect(sidecar.listening).toBe(true);
     const address = sidecar.app.server.address() as AddressInfo;
@@ -119,15 +82,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
   });
 
   it('drains cleanly on shutdown — the port is released', async () => {
-    sidecar = await startHttpSidecar(
-      deps,
-      version,
-      runEffects,
-      runEffectsSequence,
-      () => {},
-      () => () => {},
-      0,
-    );
+    sidecar = await startHttpSidecar(runtime, version, 0);
     expect(sidecar.listening).toBe(true);
     const port = (sidecar.app.server.address() as AddressInfo).port;
 

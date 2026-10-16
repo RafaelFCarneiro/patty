@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { setupHttpTest } from './setup.js';
 
-const { inject, getDeps } = setupHttpTest();
+const { inject, setClock } = setupHttpTest();
 
 describe('GET /api/summary', () => {
   it('returns spending summary excluding pending', async () => {
@@ -100,9 +100,7 @@ describe('GET /api/summary', () => {
     // the same currency's total (unlike the balances endpoint, which supports ?account=).
 
     it('provided displayCurrency: converts + sums expenses, per-currency lines unchanged', async () => {
-      const deps = getDeps();
-      const originalClock = deps.clock;
-      deps.clock = () => FIXED_NOW;
+      const restoreClock = setClock(() => FIXED_NOW);
 
       try {
         await inject({
@@ -162,7 +160,7 @@ describe('GET /api/summary', () => {
           excluded: [],
         });
       } finally {
-        deps.clock = originalClock;
+        restoreClock();
       }
     });
 

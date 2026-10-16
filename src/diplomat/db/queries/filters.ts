@@ -8,6 +8,7 @@ import type {
   TransactionStatus,
 } from '../../../models/transaction.js';
 import { toMatchQuery } from './fts.js';
+import { ownedBy } from './scope.js';
 
 export type CommonFilters = {
   from: string | null;
@@ -56,8 +57,8 @@ export const toSearchFilters = (input: SearchTransactions, refs: ResolvedSearchR
   cursorKey: refs.cursorKey,
 });
 
-export const buildCommonWhere = (filters: CommonFilters): ReturnType<typeof sql>[] => {
-  const conditions: ReturnType<typeof sql>[] = [];
+export const buildCommonWhere = (filters: CommonFilters, userId: string): ReturnType<typeof sql>[] => {
+  const conditions: ReturnType<typeof sql>[] = [ownedBy(userId, 't')];
   if (filters.from) conditions.push(sql`t.date >= ${filters.from}`);
   if (filters.to) conditions.push(sql`t.date < ${filters.to}`);
   if (filters.type) conditions.push(sql`t.type = ${filters.type}`);
@@ -80,8 +81,8 @@ export const buildCommonWhere = (filters: CommonFilters): ReturnType<typeof sql>
 
 /** search_transactions' full WHERE — shared by the paged row query and its opt-in `count`
  *  (ADR-011 § shared filter WHERE-builder); only the projection/keyset/ORDER-BY tail differs. */
-export const buildSearchWhere = (filters: SearchConditionFilters): ReturnType<typeof sql>[] => {
-  const conditions = buildCommonWhere(filters);
+export const buildSearchWhere = (filters: SearchConditionFilters, userId: string): ReturnType<typeof sql>[] => {
+  const conditions = buildCommonWhere(filters, userId);
   if (filters.status) conditions.push(sql`t.status = ${filters.status}`);
   if (filters.subCategoryId) conditions.push(sql`t.subcategory_id = ${filters.subCategoryId}`);
   if (filters.text) {

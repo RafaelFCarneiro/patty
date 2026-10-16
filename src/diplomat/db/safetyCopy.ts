@@ -4,6 +4,7 @@ import type { Db } from './driver.js';
 import { DATA_REWRITING_MIGRATIONS } from './migrations.js';
 import { applyPendingMigrationsHolding } from './migrationBarrier.js';
 import { lastAppliedMillis, readJournal } from './migrationJournal.js';
+import type { SqlReader } from './tenancyIntegrity.js';
 import { withMigrationLock } from './migrationLock.js';
 
 const BACKUP_FILE_MODE = 0o600;
@@ -42,6 +43,7 @@ const snapshotTo = async (db: Db, destination: string): Promise<void> => {
   await db.run(sql`VACUUM INTO ${destination}`);
 };
 
+/** `verify` runs in that same transaction, before it commits. */
 /**
  * Applies `migrate` — taking the safety copy first when a data-rewriting migration is pending. Two layers:
  * the migration lock keeps other FinTrack STARTERS from interleaving their copies (and "is it still pending?" is
@@ -49,11 +51,13 @@ const snapshotTo = async (db: Db, destination: string): Promise<void> => {
  * while this process holds SQLite's WRITE lock, with the migrations applied in that same transaction, so no
  * other writer — including a process already running on an older release — can commit between the snapshot and
  * the migration and be missing from the backup (`applyPendingMigrationsHolding`).
+ * `verify` runs in that same transaction, before it commits.
  */
 export const migrateWithSafetyCopy = async (
   db: Db,
   migrationsFolder: string,
   migrate: () => Promise<void>,
+  verify?: (migrated: SqlReader) => Promise<void>,
 ): Promise<void> => {
   const dbFile = await databaseFile(db);
   const needsCopy = (await pendingRewritingTags(db, migrationsFolder)).length > 0;
@@ -61,9 +65,14 @@ export const migrateWithSafetyCopy = async (
 
   return withMigrationLock(dbFile, async () => {
     if ((await pendingRewritingTags(db, migrationsFolder)).length === 0) return migrate(); // a starter beat us to it
-    await applyPendingMigrationsHolding(db, migrationsFolder, async () => {
-      await backupBeforeRewriting(db, migrationsFolder);
-    });
+    await applyPendingMigrationsHolding(
+      db,
+      migrationsFolder,
+      async () => {
+        await backupBeforeRewriting(db, migrationsFolder);
+      },
+      verify,
+    );
     // Everything is applied; drizzle's own pass is a no-op and stays the final word on its bookkeeping.
     await migrate();
   });

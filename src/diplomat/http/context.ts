@@ -1,14 +1,25 @@
 import { AuthMode } from '../../models/auth/mode.js';
-import type { AuthDeps, Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
+import type { AuthDeps, Deps, RunEffects, Tenancy } from '../../controllers/deps.js';
 
-/** Shared HTTP edge context (ADR-025) — built once in `routes.ts`, passed to every route module
- *  so a domain's routes don't each carry the full parameter list. */
-export type HttpContext = {
-  deps: Deps;
+/** Shared HTTP edge context, built once in `routes.ts`; per-user dependencies are asked for per request instead. */
+export type HttpContext = Tenancy & {
   version: string;
-  runEffects: RunEffects;
-  runEffectsSequence: RunEffectsSequence;
+  publicDeps: Pick<Deps, 'health'>;
 };
+
+const DOCUMENTATION_ONLY = (): never => {
+  throw new Error('fintrack: this HTTP context only documents the routes (OpenAPI) — it serves none');
+};
+
+/** Builds the route list for documentation only (no request, no principal); handlers must never run. */
+export const documentationContext = (version: string): HttpContext => ({
+  version,
+  publicDeps: { health: { reachable: DOCUMENTATION_ONLY } },
+  depsFor: DOCUMENTATION_ONLY,
+  runEffectsFor: DOCUMENTATION_ONLY,
+  runEffectsSequenceFor: DOCUMENTATION_ONLY,
+  resetLocaleFor: DOCUMENTATION_ONLY,
+});
 
 /** What the auth routes need (ADR-033): the identity deps, the shell's runner for their flows (already
  *  adapted model→row), and whether the session cookie is `Secure`. */

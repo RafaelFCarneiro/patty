@@ -1,11 +1,13 @@
 import { sql } from 'drizzle-orm';
+import { ownedBy } from './scope.js';
 
 /**
  * Full transaction SELECT with all LEFT JOINs for name resolution and tag aggregation.
  * Shared by transactionsRepo and billsRepo so a joined column added in one place is
  * never missed in the other — both produce rows decoded by adapters/transactions.ts.
+ * Always confined to `userId`'s transactions: the predicate is part of the SELECT, so no caller can leave it out.
  */
-export const fullTxSelect = (whereClause: ReturnType<typeof sql>) => sql`
+export const fullTxSelect = (userId: string, whereClause: ReturnType<typeof sql>) => sql`
   SELECT t.*,
     fa.name AS from_account_name, ta.name AS to_account_name,
     cc.name AS credit_card_name,
@@ -20,6 +22,6 @@ export const fullTxSelect = (whereClause: ReturnType<typeof sql>) => sql`
   LEFT JOIN categories sc ON sc.id  = t.subcategory_id
   LEFT JOIN transaction_tags tt ON tt.transaction_id = t.id
   LEFT JOIN tags tg ON tg.id = tt.tag_id
-  WHERE ${whereClause}
+  WHERE ${ownedBy(userId, 't')} AND (${whereClause})
   GROUP BY t.id
 `;

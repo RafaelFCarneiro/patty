@@ -8,8 +8,6 @@ import { fromResult } from '../respond.js';
 import { MUTATING } from '../annotations.js';
 
 export const registerTransferTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, runEffects } = ctx;
-
   server.registerTool(
     'create_transfer',
     {
@@ -24,7 +22,8 @@ export const registerTransferTools = (server: McpServer, ctx: McpContext): void 
         'separate transfer that would otherwise look identical.',
       inputSchema: CreateTransferSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => createTransfer(deps, args, TransactionSource.enum.mcp).map(outcomeToDb);
       return fromResult(await runEffects(flow));
     },

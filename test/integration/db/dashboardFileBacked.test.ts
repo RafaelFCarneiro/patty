@@ -13,6 +13,7 @@ import {
   listDefaultDashboardFiles,
   UI_DASHBOARDS_ROOT,
 } from '../../../src/diplomat/db/repos/dashboards.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 
 const TEST_KEY = 'a'.repeat(64);
 
@@ -34,19 +35,19 @@ afterEach(() => {
 
 describe('bootstrap seeds default dashboards from ui/dashboards/*.html (ADR-027 Phase 2)', () => {
   it('registers "overview" as a source: file row on a fresh install', async () => {
-    const list = await dashboardsRepo(db).list();
+    const list = await dashboardsRepo(db, OWNER_USER_ID).list();
     expect(list).toContainEqual(expect.objectContaining({ name: 'overview', source: 'file' }));
   });
 
   it('resolves the dashboard content by reading ui/dashboards/overview.html, matching the file verbatim', async () => {
     const onDisk = await readFile(join(UI_DASHBOARDS_ROOT, 'overview.html'), 'utf-8');
-    const dashboard = await dashboardsRepo(db).get('overview');
+    const dashboard = await dashboardsRepo(db, OWNER_USER_ID).get('overview');
     expect(dashboard?.html).toBe(onDisk);
     expect(dashboard?.source).toBe('file');
   });
 
   it('findByName carries the path alongside source: file, for rename to preserve', async () => {
-    const entity = await dashboardsRepo(db).findByName('overview');
+    const entity = await dashboardsRepo(db, OWNER_USER_ID).findByName('overview');
     expect(entity?.source).toBe('file');
     expect(entity?.path).toBe('overview.html');
   });
@@ -57,11 +58,11 @@ describe('bootstrap seeds default dashboards from ui/dashboards/*.html (ADR-027 
   });
 
   it('re-running bootstrap does not duplicate or touch the already-seeded row (onConflictDoNothing)', async () => {
-    const before = await dashboardsRepo(db).findByName('overview');
+    const before = await dashboardsRepo(db, OWNER_USER_ID).findByName('overview');
     await bootstrap(db);
-    const after = await dashboardsRepo(db).findByName('overview');
+    const after = await dashboardsRepo(db, OWNER_USER_ID).findByName('overview');
     expect(after).toEqual(before);
-    const list = await dashboardsRepo(db).list();
+    const list = await dashboardsRepo(db, OWNER_USER_ID).list();
     expect(list.filter((d) => d.name === 'overview')).toHaveLength(1);
   });
 });
@@ -78,7 +79,7 @@ describe('dashboardsRepo resolves source: file content safely (ADR-027 Phase 2)'
       updatedAt: '2026-01-01',
     });
 
-    await expect(dashboardsRepo(db).get(name)).rejects.toThrow(/escapes ui\/dashboards/);
+    await expect(dashboardsRepo(db, OWNER_USER_ID).get(name)).rejects.toThrow(/escapes ui\/dashboards/);
   });
 
   it('propagates a read failure for a source: file row whose file is missing', async () => {
@@ -92,6 +93,6 @@ describe('dashboardsRepo resolves source: file content safely (ADR-027 Phase 2)'
       updatedAt: '2026-01-01',
     });
 
-    await expect(dashboardsRepo(db).get(name)).rejects.toThrow();
+    await expect(dashboardsRepo(db, OWNER_USER_ID).get(name)).rejects.toThrow();
   });
 });

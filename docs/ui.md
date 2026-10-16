@@ -295,16 +295,17 @@ baseline fragment, and self-check (fragment not full page; no embedded data; sam
 
 ## Live update — SSE, entity-tagged (ADR-027 Phase 3)
 
-**The change bus** comes from `@rfc0/effect-runner` (`createChangeBus({ onError })` returns `{ publish, subscribe }`);
-FinTrack owns only the SSE forwarding below and the wiring in `main.ts` / `test/integration/app-builder.ts`, which
-calls `createChangeBus` once and hands the bound `subscribe` down as a parameter — the same crossing pattern as
-`RunEffects`/`resetLocale`. A subscriber that throws is isolated by the bus and reported to its `onError` (a shared
+**The change bus** is `@rfc0/effect-runner`'s `createChangeBus<ChangeEvent>` (ADR-033 §5), `ChangeEvent` = `{ userId, entities }`: `publish(event)`
+after a commit, `subscribe(listener)`; publish-failure isolation is the package's. The composition root (`runtime.ts`) builds it once and hands `subscribe` down as a
+parameter — the same crossing pattern as `RunEffects`. `GET /ui/events` is the session user's stream: it forwards only the
+events whose `userId` is that user's (instance bookkeeping carries `null` and reaches no one), and refuses to open at all
+without a principal. A subscriber that throws is isolated by the bus and reported to its `onError` (a shared
 stderr reporter — never stdout, which carries the stdio MCP protocol, ADR-007); it can't fail the write that
 triggered it. No external broker: the MCP server, HTTP sidecar, and scheduler share one process (ADR-024), so an
 in-process bus is the whole mechanism.
 
 **The post-commit publish** is the package's (`runEffects`/`runEffectsSequence` publish the entity tags of a
-committed batch that wrote; see its [change-notification section](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.3.0/docs/architecture.md#change-notification)).
+committed batch that wrote; see its [change-notification section](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/architecture.md#change-notification)).
 FinTrack only subscribes: the tags in each SSE message are those the engine published.
 
 **`GET /ui/events`** (`registerUiEventsRoute`) is the shell's `EventSource` target. The handler calls

@@ -22,7 +22,6 @@ import { TransactionSource, TransactionViewSchema } from '../../../models/transa
 import * as wireInAccounts from '../../../wire/in/accounts.js';
 import { DeletedOut } from '../../../wire/out/common.js';
 import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../../../wire/out/transactions.js';
-import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import {
   conflict409,
@@ -39,8 +38,7 @@ import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const ACCOUNTS_TAG = 'Accounts';
 
-export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, runEffects, runEffectsSequence } = ctx;
+export const accountRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'get',
@@ -50,7 +48,8 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'List accounts',
       request: { query: wireInAccounts.AccountsQuerySchema },
       responses: { 200: okResponse('Accounts', z.array(AccountSchema)), 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps } = scope();
         const q = wireInAccounts.AccountsQuerySchema.safeParse(req.query);
         if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid type'] } });
         return reply.send(await listAccounts(deps, q.data.type));
@@ -69,7 +68,8 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps } = scope();
         const q = wireInAccounts.AccountBalancesQuerySchema.safeParse(req.query);
         if (!q.success) return invalidQueryResponse(reply);
         return send(reply, await getAccountBalances(deps, q.data));
@@ -83,7 +83,8 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Create account',
       request: { body: jsonBody(wireInAccounts.CreateAccountSchema) },
       responses: { 201: okResponse('Account created', AccountSchema), 409: conflict409, 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const wireIn = parse(wireInAccounts.CreateAccountSchema, req.body, reply);
         if (!wireIn) return reply;
         const flow = () =>
@@ -104,7 +105,8 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { name } = req.params as { name: string };
         const wireIn = parse(wireInAccounts.UpdateAccountSchema, { ...(req.body ?? {}), name }, reply);
         if (!wireIn) return reply;
@@ -126,7 +128,8 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { name } = req.params as { name: string };
         const flow = () => deleteAccount(deps, name).map(accountAdapters.outcomeToDb);
         return send(reply, await runEffects(flow));
@@ -146,7 +149,8 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const wireIn = parse(wireInAccounts.AddAccountMovementSchema, req.body, reply);
         if (!wireIn) return reply;
         const model = accountAdapters.addAccountMovementWireInToModel(wireIn);
@@ -176,7 +180,8 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const wireIn = parse(wireInAccounts.AddAccountMovementSchema, req.body, reply);
         if (!wireIn) return reply;
         const model = accountAdapters.addAccountMovementWireInToModel(wireIn);
@@ -200,7 +205,8 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Import an account statement',
       request: { body: jsonBody(wireInAccounts.ImportAccountStatementSchema) },
       responses: { 201: okResponse('Import result', BulkResultOut), 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffectsSequence } = scope();
         const wireIn = parse(wireInAccounts.ImportAccountStatementSchema, req.body, reply);
         if (!wireIn) return reply;
         const model = accountAdapters.importAccountStatementWireInToModel(wireIn);
@@ -229,7 +235,8 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { id } = req.params as { id: string };
         const wireIn = parse(wireInAccounts.UpdateAccountTransactionSchema, { ...(req.body as object), id }, reply);
         if (!wireIn) return reply;
@@ -252,7 +259,8 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
         404: notFound404,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { id } = req.params as { id: string };
         const confirm = (req.query as { confirm?: string }).confirm === 'true';
         const flow = () => deleteAccountTransaction(deps, { id, confirm }).map(transactionAdapters.outcomeToDb);

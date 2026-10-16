@@ -154,17 +154,37 @@ instance, and whoever holds the key and the volume can read every user's data. T
 Per-user encryption is out of scope.
 
 - **User-owned aggregates gain a non-null `user_id`:** `accounts`, `credit_cards`, `bills`, `transactions`,
-  `transaction_tags` (via its parent rows), `tags`, `budgets`, `recurring_rules`, `dashboards`, `merchants`,
-  and `merchant_category`.
-- **User categories** gain `user_id`. **Seeded default categories stay shared** (`user_id` null, read-only,
-  translated via ADR-009).
+  `tags`, `budgets`, `recurring_rules`. `transaction_tags` is owned through its two parents (both always the
+  same user's), so it gets no column of its own.
+- **Shared defaults, read-only (decided 2026-10-14):** rows that ship with FinTrack are shared by every user
+  (`user_id` null) and can be neither renamed nor deleted. Each user adds their own rows on top, and every read
+  returns *shared + own*:
+  - **categories:** the seeded defaults (`cat-food`, …, translated via ADR-009) are shared; user categories carry
+    `user_id`. (Bootstrap already re-seeds defaults on every boot, so deleting one never stuck anyway.)
+  - **merchant knowledge:** `merchants` stays a shared dictionary of normalized keys (never listed across
+    users). In `merchant_category`, the seeded `rule` rows are shared; learned `history` rows carry `user_id`.
+    Classification reads the shared rules plus the caller's own history, so one user's habits never classify
+    another's transactions.
+  - **dashboards:** the file-backed defaults are shared; saved (`inline`) dashboards carry `user_id`. Saving
+    under a default's name creates that user's own copy (today's detach behavior, per user).
 - **Shared reference data:** `currencies` and `currency_rates` (market data).
+- **Uniqueness becomes per user** wherever a user-owned name or key is unique today: tags by name, budgets by
+  (category, currency, period), user categories by name, saved dashboards by name, and transactions by
+  idempotency key (below).
 - **`settings` splits** into instance settings (singleton) and per-user preferences (`locale`, base currency;
   ADR-026/FD-021).
 - **One request-scoped principal** (`{ userId, scopes }`) is resolved in the diplomat layer from the cookie,
-  bearer token, or stdio/disabled default. It is passed into controllers as an explicit argument, never read
-  from ambient state. Controllers pass `userId` to repos, every repo query filters on it, and every insert sets
-  it.
+  bearer token, or stdio/disabled default. It is never read from ambient state (no global, no async-local
+  storage).
+- **User-scoped deps (decided 2026-10-14, replacing "pass `userId` to every repo call"):** the edge turns the
+  principal into a per-request `Deps` with `forUser(principal)`. Every repo it contains is already bound to
+  that user: each read filters on `user_id` (plus `user_id IS NULL` for the shared defaults above) and each
+  insert stamps it. Controllers receive these deps exactly as they receive deps today.
+  - **Stateless:** the scoped deps are a plain value built per request by partial application and dropped
+    afterwards. Nothing about "the current user" is stored between requests or shared between them.
+  - **Safe by construction:** no controller or repo call site can forget the filter, because an unscoped repo is
+    never handed to a controller. The only unscoped access is the composition root's (bootstrap, seeding,
+    migrations, auth).
   - This is boundary data like any other input. `logic/` stays pure.
   - ADR-028 is unchanged: user scoping is a filter on a repo's own table, not cross-aggregate correlation.
 - **Cross-user references are impossible by construction.** Entity resolvers (`controllers/resolve.ts`)
@@ -175,8 +195,11 @@ Per-user encryption is out of scope.
   deliberately **not** added to the hash: every existing key stays valid, and re-importing an old statement
   still dedups against the rows already in the database (see §7).
 - **The change bus** carries `userId` on every event. SSE/UI subscribers receive only their own user's events.
-- **The recurring scheduler** materializes due rules per user. One process still serves all users (ADR-024 is
-  unchanged).
+- **Recurring rules** are materialized on demand (`apply_due_recurring`) through the caller's scoped deps, so
+  only the caller's own due rules are applied. One process still serves all users (ADR-024 is unchanged).
+- **New users are invited, not given passwords (decided 2026-10-14):** an admin creates a user (UI or CLI) and
+  receives a one-time invite code and link, built like the setup code (hashed at rest, short-lived, single-use).
+  The person sets their own password through the same claim page. The admin never knows it.
 - **Migration of existing data:** every existing row is assigned to the **owner** user (§7). No data is lost
   or duplicated.
 - **Until tenancy lands, an instance has exactly one user.** The "create user" action is disabled in Phases 1–3,
@@ -312,6 +335,8 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
 3. [x] Phase 2 — personal access tokens, scopes, protected resource metadata.
 4. [ ] Phase 3 — in-process OAuth 2.1 AS for MCP; non-loopback exposure supported behind TLS.
 5. [ ] Phase 4 — multi-user tenancy.
+   - [x] Step 1 (`feat/tenancy-data`): `user_id` on every owned row (migration `0021_tenancy_data`, backfilled to the owner, with the safety copy and integrity check), user-scoped deps and appliers, per-user settings and change events, the isolation suite.
+   - [ ] Step 2 (`feat/user-management`): admin creates users by invitation; `fintrack key export` and the npm→Docker guide.
 
 Every phase is feature-sized (schema + multiple layers + security-sensitive). Each gets the DoD verification
 subagent, charged with checking that:

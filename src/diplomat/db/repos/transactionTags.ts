@@ -1,6 +1,6 @@
-import { and, eq, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import type { TransactionTagSet } from '../../../models/transactionTag.js';
-import { transactionTags } from '../schema.js';
+import { tags, transactions, transactionTags } from '../schema.js';
 import { isForeignKeyConstraintViolation } from '../sqliteErrors.js';
 import type { EntityApplier, Tx } from '../effects.js';
 
@@ -20,15 +20,27 @@ const replaceLinks = async (tx: Tx, transactionId: string, tagIds: string[]): Pr
   await tx.delete(transactionTags).where(stale);
 };
 
-export const transactionTagApplier: EntityApplier = {
-  // Zero reads (ADR-023 decision 6): the set applies to the row id the core already named. An FK
-  // miss on the link insert means a referenced row doesn't exist — the signature of a
-  // duplicate-idempotency-key replay, whose transaction insert no-op'd and left the minted id
-  // uninserted — so the set is a no-op, reported as `applied: false`: a duplicate replay never
-  // touches the surviving row's tags. The same error-translation registration billApplier uses
-  // for its cycle-uniqueness race, not a decision.
+/** No owner column here, so the applier checks the transaction and every tag are the user's; else it is a no-op. */
+const belongsToUser = async (tx: Tx, userId: string, transactionId: string, tagIds: string[]): Promise<boolean> => {
+  const [transaction] = await tx
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(and(eq(transactions.id, transactionId), eq(transactions.userId, userId)));
+  if (!transaction) return false;
+  const distinct = [...new Set(tagIds)];
+  if (distinct.length === 0) return true;
+  const owned = await tx
+    .select({ id: tags.id })
+    .from(tags)
+    .where(and(inArray(tags.id, distinct), eq(tags.userId, userId)));
+  return owned.length === distinct.length;
+};
+
+export const transactionTagApplier = (userId: string): EntityApplier => ({
+  // A missing parent (a duplicate-key replay never inserted its id) or someone else's makes the set a no-op.
   insert: async (tx, model) => {
     const { transactionId, tagIds } = model as TransactionTagSet;
+    if (!(await belongsToUser(tx, userId, transactionId, tagIds))) return { applied: false };
     try {
       await replaceLinks(tx, transactionId, tagIds);
       return { applied: true };
@@ -43,4 +55,4 @@ export const transactionTagApplier: EntityApplier = {
   delete: async () => {
     throw new Error('transactionTagApplier: delete is unsupported — links are removed via the transaction cascade');
   },
-};
+});

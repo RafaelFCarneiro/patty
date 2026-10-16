@@ -2,28 +2,28 @@ import { Locale } from '../../models/locale.js';
 import type { SettingsRepo } from './repos/settings.js';
 
 export type LocaleResolver = {
-  locale: () => Promise<Locale>;
-  resetLocale: () => void;
+  locale: (userId: string, settings: Pick<SettingsRepo, 'getLocale'>) => Promise<Locale>;
+  resetLocale: (userId: string) => void;
 };
 
 // resetLocale is shell-only — never a Deps field; a diplomat handler calls it after its own
-// setLocale write commits. configLocale (FINTRACK_LOCALE) always wins and is never cached.
-export const createLocaleResolver = (
-  settings: Pick<SettingsRepo, 'getLocale'>,
-  configLocale?: Locale,
-): LocaleResolver => {
-  let cachedLocale: Locale | null = null;
+// setLocale write commits. configLocale (FINTRACK_LOCALE) always wins, for every user, and is never cached.
+// Keyed by user, so one person's language never becomes another's.
+export const createLocaleResolver = (configLocale?: Locale): LocaleResolver => {
+  const cachedByUser = new Map<string, Locale>();
 
   return {
-    locale: async () => {
+    locale: async (userId, settings) => {
       if (configLocale) return configLocale;
-      if (cachedLocale) return cachedLocale;
+      const cached = cachedByUser.get(userId);
+      if (cached) return cached;
       const row = await settings.getLocale();
-      cachedLocale = row?.locale ?? Locale.enum.en;
-      return cachedLocale;
+      const locale = row?.locale ?? Locale.enum.en;
+      cachedByUser.set(userId, locale);
+      return locale;
     },
-    resetLocale: () => {
-      cachedLocale = null;
+    resetLocale: (userId) => {
+      cachedByUser.delete(userId);
     },
   };
 };

@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import type { Deps, RunEffects, RunEffectsSequence } from '../../../../src/controllers/deps.js';
+import type { Tenancy } from '../../../../src/controllers/deps.js';
 import { authInfoOf, principalOf } from '../../../../src/diplomat/mcp/authInfo.js';
 import { authInfoGate, GateKind, ownerGate, type PrincipalGate } from '../../../../src/diplomat/mcp/gate.js';
 import { guardScopes, toolScopesOf } from '../../../../src/diplomat/mcp/scopes.js';
@@ -158,14 +158,7 @@ const READ_TOOLS = [
 ];
 
 describe('every registered MCP tool declares its scope', () => {
-  const server = buildMcpServer(
-    {} as Deps,
-    '0.0.0',
-    (() => undefined) as unknown as RunEffects,
-    (() => undefined) as unknown as RunEffectsSequence,
-    () => undefined,
-    { gate: ownerGate },
-  );
+  const server = buildMcpServer({} as Tenancy, '0.0.0', { gate: ownerGate });
   const scopes = toolScopesOf(server);
   const names = [...scopes.keys()].sort();
 

@@ -57,7 +57,7 @@ const rig = async (setup: Setup = {}) => {
   const startServer = vi.fn(async () => server);
   const shell: Shell & { startServer: typeof startServer } = {
     deps: authDepsOf(ctx),
-    run: bindAuthRunEffects(ctx.runEffects),
+    run: bindAuthRunEffects(ctx.authRunEffects),
     close: vi.fn(),
     authRequired: setup.authRequired ?? true,
     defaultProfile: setup.defaultProfile ?? 'default',

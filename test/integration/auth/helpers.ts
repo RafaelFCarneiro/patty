@@ -256,7 +256,7 @@ export const stdioSessionFor = (
   const base = authDepsOf(ctx);
   const signIn = createSignInInterpreter({
     deps: { ...base, clock: options.clock ?? base.clock },
-    run: options.run ?? bindAuthRunEffects(ctx.runEffects),
+    run: options.run ?? bindAuthRunEffects(ctx.authRunEffects),
     store,
     origin: () => (options.origin === undefined ? SIGN_IN_ORIGIN : options.origin),
     startPage: options.temporaryServer,

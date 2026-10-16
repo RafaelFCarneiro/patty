@@ -137,14 +137,17 @@ describe('getSpendingSummary — displayCurrency', () => {
     });
   });
 
-  it('rebuilds period from its declared fields — both diplomat callers pass their whole args object, ' +
-    'which also carries displayCurrency', async () => {
-    const deps = makeDeps({ rows: [row({ currency: USD, total: 100 })] });
-    const periodWithExtraField = { ...PERIOD, displayCurrency: USD } as unknown as typeof PERIOD;
+  it(
+    'rebuilds period from its declared fields — both diplomat callers pass their whole args object, ' +
+      'which also carries displayCurrency',
+    async () => {
+      const deps = makeDeps({ rows: [row({ currency: USD, total: 100 })] });
+      const periodWithExtraField = { ...PERIOD, displayCurrency: USD } as unknown as typeof PERIOD;
 
-    const result = await getSpendingSummary(deps, periodWithExtraField, USD);
+      const result = await getSpendingSummary(deps, periodWithExtraField, USD);
 
-    expect(result.period).toEqual(PERIOD);
-    expect(result.period).not.toHaveProperty('displayCurrency');
-  });
+      expect(result.period).toEqual(PERIOD);
+      expect(result.period).not.toHaveProperty('displayCurrency');
+    },
+  );
 });

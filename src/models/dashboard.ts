@@ -57,6 +57,9 @@ export const DashboardEntitySchema = withPersistenceMeta(DashboardSchema).extend
       'internal; never on wire/out. Repo-relative filename under ui/dashboards/ for source: file rows, ' +
         'always null for source: inline (ADR-027 Phase 2)',
     ),
+  shared: z
+    .boolean()
+    .describe('internal; never on wire/out. One of the bundled defaults every user sees — nobody may change it'),
 });
 export type DashboardEntity = z.infer<typeof DashboardEntitySchema>;
 

@@ -3,9 +3,10 @@ import { CurrencyCode } from '../../models/money.js';
 import { MovementType, TransactionSortField, TransactionStatus } from '../../models/transaction.js';
 import type { transactions } from '../../diplomat/db/schema.js';
 import { parseCategoryNames } from './categories.js';
+import type { WithoutOwner } from './tenancy.js';
 
 // Inferred Drizzle select type — the canonical shape of a transactions row.
-export type TransactionRow = typeof transactions.$inferSelect;
+export type TransactionRow = WithoutOwner<typeof transactions.$inferSelect>;
 
 // The columns dbToModel consumes from the full transaction SELECT (node columns +
 // LEFT JOINed related names/tags). Decoded at the boundary before mapping to the model;

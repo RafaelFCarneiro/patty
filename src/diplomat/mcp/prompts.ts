@@ -83,8 +83,6 @@ export const importStatementPromptText = (source: ImportStatementSource | undefi
 
 /** Guided-workflow prompts (Feature Design 019) — few and cross-domain, one module (ADR-025). */
 export const registerPrompts = (server: McpServer, ctx: McpContext): void => {
-  const { deps } = ctx;
-
   server.registerPrompt(
     'monthly_review',
     {
@@ -94,14 +92,20 @@ export const registerPrompts = (server: McpServer, ctx: McpContext): void => {
         'budget fit, and recurring-payment candidates worth automating.',
       argsSchema: PeriodPromptArgsSchema,
     },
-    async ({ month, year }) => ({
-      messages: [
-        {
-          role: 'user',
-          content: { type: 'text', text: monthlyReviewPromptText(resolvePromptPeriod({ month, year }, deps.clock())) },
-        },
-      ],
-    }),
+    async ({ month, year }, extra) => {
+      const { deps } = ctx.as(extra);
+      return {
+        messages: [
+          {
+            role: 'user',
+            content: {
+              type: 'text',
+              text: monthlyReviewPromptText(resolvePromptPeriod({ month, year }, deps.clock())),
+            },
+          },
+        ],
+      };
+    },
   );
 
   server.registerPrompt(
@@ -113,14 +117,20 @@ export const registerPrompts = (server: McpServer, ctx: McpContext): void => {
         'significant spend, and offer to apply the suggestions.',
       argsSchema: PeriodPromptArgsSchema,
     },
-    async ({ month, year }) => ({
-      messages: [
-        {
-          role: 'user',
-          content: { type: 'text', text: budgetCheckupPromptText(resolvePromptPeriod({ month, year }, deps.clock())) },
-        },
-      ],
-    }),
+    async ({ month, year }, extra) => {
+      const { deps } = ctx.as(extra);
+      return {
+        messages: [
+          {
+            role: 'user',
+            content: {
+              type: 'text',
+              text: budgetCheckupPromptText(resolvePromptPeriod({ month, year }, deps.clock())),
+            },
+          },
+        ],
+      };
+    },
   );
 
   server.registerPrompt(
@@ -132,8 +142,10 @@ export const registerPrompts = (server: McpServer, ctx: McpContext): void => {
         'needs_review items.',
       argsSchema: ImportStatementPromptArgsSchema,
     },
-    async ({ source }) => ({
-      messages: [{ role: 'user', content: { type: 'text', text: importStatementPromptText(source) } }],
-    }),
+    async ({ source }) => {
+      return {
+        messages: [{ role: 'user', content: { type: 'text', text: importStatementPromptText(source) } }],
+      };
+    },
   );
 };

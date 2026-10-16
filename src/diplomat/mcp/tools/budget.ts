@@ -1,6 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { createBudget, deleteBudget, getBudgetStatus, listBudgets, updateBudget } from '../../../controllers/budgets.js';
+import {
+  createBudget,
+  deleteBudget,
+  getBudgetStatus,
+  listBudgets,
+  updateBudget,
+} from '../../../controllers/budgets.js';
 import { PeriodSchema } from '../../../models/date.js';
 import { CurrencyCode } from '../../../models/money.js';
 import { CreateBudgetSchema, UpdateBudgetSchema } from '../../../wire/in/budgets.js';
@@ -10,8 +16,6 @@ import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerBudgetTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, runEffects } = ctx;
-
   server.registerTool(
     'create_budget',
     {
@@ -26,7 +30,8 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
         'has a budget — use update_budget instead. Use get_budget_status to see spend-vs-limit.',
       inputSchema: CreateBudgetSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => createBudget(deps, args).map(budgetAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -40,7 +45,8 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
       description: "Update a budget's limit and/or period, identified by its id (from create_budget/list_budgets).",
       inputSchema: UpdateBudgetSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => updateBudget(deps, args).map(budgetAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -54,7 +60,8 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
       description: 'Delete a budget by id. Idempotent — deleting an already-absent id is not an error.',
       inputSchema: { id: z.string().min(1).describe('Budget id') },
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => deleteBudget(deps, args.id).map(budgetAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -68,7 +75,10 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
       description: 'List all budgets (the limits themselves, no spend) — use get_budget_status for spend-vs-limit.',
       inputSchema: {},
     },
-    async () => json(await listBudgets(deps)),
+    async (_args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await listBudgets(deps));
+    },
   );
 
   server.registerTool(
@@ -84,7 +94,7 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
         '`effective` (cleared spend only) and `committed` (effective + pending — the earmark-aware view of ' +
         "what's already spoken for); `pending` (committed - effective) is derived for convenience. Each " +
         'measure carries `amount` and `pct` (amount / limit); both sums are expense-only, same-currency ' +
-        "(income and transfers never count, even on a both-kind category); a category budget rolls up its " +
+        '(income and transfers never count, even on a both-kind category); a category budget rolls up its ' +
         "sub-categories' spend, a sub-category budget measures only its own (and also counts toward its " +
         "parent's, if the parent has a budget too). `remaining` (limit - committed.amount) can go negative " +
         'when over budget — over-budget is reported, never an error. Optional displayCurrency adds a ' +
@@ -100,6 +110,9 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
         ),
       },
     },
-    async (args) => json(await getBudgetStatus(deps, args, args.displayCurrency)),
+    async (args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await getBudgetStatus(deps, args, args.displayCurrency));
+    },
   );
 };

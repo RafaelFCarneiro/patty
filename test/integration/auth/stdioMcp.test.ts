@@ -24,7 +24,7 @@ const connectStdioClient = async (ctx: AppContext, options: { owner?: boolean; e
   const session = createStdioSession({
     signIn: createSignInInterpreter({
       deps: authDepsOf(ctx),
-      run: bindAuthRunEffects(ctx.runEffects),
+      run: bindAuthRunEffects(ctx.authRunEffects),
       store,
       origin: () => SIGN_IN_ORIGIN,
     }),
@@ -32,7 +32,7 @@ const connectStdioClient = async (ctx: AppContext, options: { owner?: boolean; e
     envToken: options.envToken,
     clientInfo: () => mcp?.server.getClientVersion(),
   });
-  const mcp = buildMcpServer(ctx.deps, ctx.version, ctx.runEffects, ctx.runEffectsSequence, () => undefined, {
+  const mcp = buildMcpServer(ctx.runtime, ctx.version, {
     gate: options.owner ? ownerGate : () => session.resolve(),
   });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();

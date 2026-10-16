@@ -14,8 +14,6 @@ const RATE_TOOL_DESCRIPTION_PREFIX =
   'and upserting them here so read-time valuation has data to work with. ';
 
 export const registerCurrencyRateTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, runEffects, runEffectsSequence } = ctx;
-
   server.registerTool(
     'set_exchange_rate',
     {
@@ -27,7 +25,8 @@ export const registerCurrencyRateTools = (server: McpServer, ctx: McpContext): v
         'A pair that already has a stored rate is overwritten (latest wins) — this is not a history log.',
       inputSchema: SetExchangeRateSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => setExchangeRate(deps, args).map(currencyRateAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -45,7 +44,8 @@ export const registerCurrencyRateTools = (server: McpServer, ctx: McpContext): v
         "item's status in the response.",
       inputSchema: SetExchangeRatesSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffectsSequence } = ctx.as(extra);
       const outcomes = await runEffectsSequence(
         args.rates,
         (item) => () => setExchangeRate(deps, item).map(currencyRateAdapters.outcomeToDb),
@@ -64,6 +64,9 @@ export const registerCurrencyRateTools = (server: McpServer, ctx: McpContext): v
         'is the raw cached table (ADR-026); use it to decide which pairs need refreshing.',
       inputSchema: {},
     },
-    async () => json(await listExchangeRates(deps)),
+    async (_args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await listExchangeRates(deps));
+    },
   );
 };

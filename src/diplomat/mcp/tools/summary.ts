@@ -7,8 +7,6 @@ import { json } from '../respond.js';
 import { READ_ONLY } from '../annotations.js';
 
 export const registerSummaryTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps } = ctx;
-
   server.registerTool(
     'get_spending_summary',
     {
@@ -29,6 +27,9 @@ export const registerSummaryTools = (server: McpServer, ctx: McpContext): void =
         ),
       },
     },
-    async (args) => json(await getSpendingSummary(deps, args, args.displayCurrency)),
+    async (args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await getSpendingSummary(deps, args, args.displayCurrency));
+    },
   );
 };

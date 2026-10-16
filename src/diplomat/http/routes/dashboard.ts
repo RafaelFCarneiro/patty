@@ -14,7 +14,6 @@ import {
   SaveDashboardSchema,
 } from '../../../models/dashboard.js';
 import { DeletedOut } from '../../../wire/out/common.js';
-import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { CACHE_CONTROL_NO_CACHE, conflict409, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
 import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
@@ -23,8 +22,7 @@ const DASHBOARDS_TAG = 'Dashboards';
 
 const renameDashboardBody = RenameDashboardSchema.pick({ newName: true });
 
-export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, runEffects } = ctx;
+export const dashboardRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'get',
@@ -33,7 +31,10 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
       tags: [DASHBOARDS_TAG],
       summary: 'List dashboards',
       responses: { 200: okResponse('Dashboards (HTML omitted)', z.array(DashboardListItemSchema)) },
-      handler: async () => listDashboards(deps),
+      handler: async (_req, _reply, scope) => {
+        const { deps } = scope();
+        return listDashboards(deps);
+      },
     },
     {
       method: 'get',
@@ -43,7 +44,8 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Get a dashboard as JSON',
       request: { params: nameParam },
       responses: { 200: okResponse('Dashboard', DashboardSchema), 404: notFound404 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps } = scope();
         const { name } = req.params as { name: string };
         const result = await getDashboard(deps, name);
         reply.header('cache-control', CACHE_CONTROL_NO_CACHE);
@@ -58,7 +60,8 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Save (upsert) a dashboard',
       request: { body: jsonBody(SaveDashboardSchema) },
       responses: { 200: okResponse('Dashboard saved', DashboardSchema), 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const wireIn = parse(SaveDashboardSchema, req.body, reply);
         if (!wireIn) return reply;
         const flow = () => saveDashboard(deps, wireIn.name, wireIn.html).map(dashboardAdapters.outcomeToDb);
@@ -73,7 +76,8 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Delete dashboard',
       request: { params: nameParam },
       responses: { 200: okResponse('Dashboard deleted', DeletedOut) },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { name } = req.params as { name: string };
         const flow = () => deleteDashboard(deps, name).map(dashboardAdapters.outcomeToDb);
         return send(reply, await runEffects(flow));
@@ -92,7 +96,8 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { name } = req.params as { name: string };
         const wireIn = parse(renameDashboardBody, req.body, reply);
         if (!wireIn) return reply;

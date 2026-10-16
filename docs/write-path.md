@@ -19,11 +19,11 @@ engine wiring, appliers, outcomes, and the per-flow notes.
 > `ApplierRegistry`, `ReadBack`, `IsTransientContention`, `EngineContext`, `PublishChange`), and the engine
 > semantics (one transaction per batch — an empty batch skips the transaction entirely — the version guard, the
 > bounded retry loop, idempotency, `runEffectsSequence`, change publication) are specified in its
-> [architecture doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.3.0/docs/architecture.md), with its principle in its
-> [FC/IS doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.3.0/docs/functional-core-imperative-shell.md). The package docs are not in the npm tarball — read them
+> [architecture doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/architecture.md), with its principle in its
+> [FC/IS doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/functional-core-imperative-shell.md). The package docs are not in the npm tarball — read them
 > on GitHub. **This file covers FinTrack's side only**: the SQLite adapter, the composition-root wiring, and the
 > per-flow notes. The package's public API (every `src/index.ts` export) is semver-governed
-> ([ADR 0001](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.3.0/docs/adr/0001-extracted-from-fintrack.md)); a port change lands there first.
+> ([ADR 0001](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/adr/0001-extracted-from-fintrack.md)); a port change lands there first.
 
 ### The core's contract — what a controller returns
 
@@ -114,16 +114,41 @@ and its failure isolation) is the package's to document — see the pointer abov
 - **The `ApplierRegistry`** is assembled once there, one `EntityApplier` per FinTrack entity tag.
 - **Typed `Tx`.** `diplomat/db/effects.ts` re-exports the package's `EntityApplier`/`ApplierRegistry`/`ReadBack`
   specialized with FinTrack's own `Tx`.
-- **Change bus.** `composition/runtime.ts` calls `createChangeBus({ onError })` once, passes `changeBus.publish` to
-  `runEffects`/`runEffectsSequence`, hands `changeBus.subscribe` to the HTTP sidecar (SSE, `docs/ui.md`), and wires
-  one shared stderr reporter (`reportChangeError`) as both the bus `onError` and the context's `onPublishError`.
-  stderr only — stdout carries the stdio MCP protocol (ADR-007).
+- **Change bus.** `composition/runtime.ts` calls the package's `createChangeBus<ChangeEvent>({ onError })` once and gives each
+  runner `publishFor(userId)` = `(entities) => bus.publish({ userId, entities })` — the only FinTrack code on the bus — so every event says whose change it is (`null` for the identity runner). It hands `changeBus.subscribe`
+  to the HTTP sidecar (SSE, `docs/ui.md`, which forwards only the stream's own user's events), and wires one shared
+  stderr reporter (`reportChangeError`) as both the bus `onError` and the context's `onPublishError`. stderr only —
+  stdout carries the stdio MCP protocol (ADR-007).
+- **One runner per request, per user (ADR-033 §5).** `runtime.runEffectsFor(principal)` /
+  `runEffectsSequenceFor(principal)` run the engine with an applier registry built for `principal.userId`
+  (`applierRegistryFor`): nothing is bound once and shared. The identity flows use `runtime.authRunEffects`
+  (`AUTH_APPLIERS` only), the one runner with no user.
 - **`runEffectsSequence` use.** Bulk import (`importAccountStatement`/`importCardStatement`) runs its lines through
   it and reuses the single-line flows verbatim.
 - **`RunEffects` is shell-only, never a field on `Deps`.** `controllers/deps.ts` exports the type, but only the
   `diplomat/mcp`/`diplomat/http` handlers hold an instance — a controller cannot reach it to apply its own
-  writes. `resetLocale` (`diplomat/db/localeCache.ts`) is threaded the same way to the one handler that needs it
-  (`set_locale`), called only after the write commits.
+  writes. The handler gets it, with the caller's `Deps`, from `Scoped` (`scopedFor(tenancy, principal)`).
+  `resetLocale` (`diplomat/db/localeCache.ts`, keyed by user) is part of `Scoped` too, used by the one handler that
+  needs it (`set_locale`), called only after the write commits.
+
+### Scoped appliers (ADR-033 §5)
+
+Every applier of an owned entity is built for one user — `ownedTableApplier(table, userId)` (`diplomat/db/effects.ts`),
+exported by each repo as `xApplier(userId)`. Appliers still decide nothing and read nothing about the domain; what the
+scope adds is mechanical:
+
+- **insert** stamps `user_id` with the runner's user (a `userId` on the model is discarded — a flow cannot choose an
+  owner), and an idempotent insert conflicts on `(user_id, idempotency_key)`; the surviving-row read is scoped too;
+- **update / delete** add `AND user_id = :me`, and an update never rewrites `user_id`. Another user's row — and a shared
+  default, whose `user_id` is NULL — does not match, so the write fails exactly like a stale version
+  (`VersionConflict`, three attempts, then `conflict`);
+- hand-written appliers follow the same rule (`transactionTagApplier` is the one deliberate exception to "appliers read nothing": its two ownership SELECTs run inside the batch's transaction, because a link table has no owner column of its own to confine a write by): `userSettingsApplier` (keyed by `user_id`, no `id`),
+  `merchantCategoryApplier` (writes only the user's `history` edge, conflicting only among their own edges),
+  `transactionTagApplier` (the transaction and every tag must be the user's, else a no-op `applied: false`);
+- reference data with no owner (`merchantApplier`, `currencyRateApplier`) is registered as it is.
+
+The friendly refusals (`"default categories can't be changed"`) are the controllers', before any effect; the appliers are
+the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
 
 ### Appliers — the mechanical write
 

@@ -8,6 +8,7 @@ import {
 } from '../../../src/controllers/dashboards.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { DASHBOARD_ENTITY_TAG, DashboardSource } from '../../../src/models/dashboard.js';
+import { SHARED_DEFAULT_READ_ONLY_MESSAGE } from '../../../src/models/tenancy.js';
 import type { Dashboard, DashboardEntity, DashboardListItem } from '../../../src/models/dashboard.js';
 import { PersistOp } from '@rfc0/effect-runner';
 
@@ -17,6 +18,7 @@ const makeDeps = (overrides?: Partial<Deps['dashboards']>): Deps => ({
   dashboards: {
     findRefByName: vi.fn(async () => null),
     findByName: vi.fn(async () => null),
+    isDefault: vi.fn(async () => false),
     get: vi.fn(async () => null),
     list: vi.fn(async (): Promise<DashboardListItem[]> => []),
     ...overrides,
@@ -55,7 +57,11 @@ describe('saveDashboard', () => {
     };
     expect(outcome.response).toEqual(dashboard);
     expect(outcome.persist).toEqual([
-      { op: PersistOp.enum.insert, entity: DASHBOARD_ENTITY_TAG, model: { ...dashboard, id: 'test-id', path: null } },
+      {
+        op: PersistOp.enum.insert,
+        entity: DASHBOARD_ENTITY_TAG,
+        model: { ...dashboard, id: 'test-id', path: null, shared: false },
+      },
     ]);
   });
 
@@ -74,30 +80,29 @@ describe('saveDashboard', () => {
       {
         op: PersistOp.enum.update,
         entity: DASHBOARD_ENTITY_TAG,
-        model: { ...dashboard, id: 'existing-id', version: 4, path: null },
+        model: { ...dashboard, id: 'existing-id', version: 4, path: null, shared: false },
       },
     ]);
   });
 
-  it('always stores source: inline, path: null — even overwriting an existing file-backed default', async () => {
-    // saveDashboard never reads the existing row's source (only id/version via findRefByName), so
-    // this is really asserting it never even has a chance to preserve source: file — the
-    // ADR-027 Phase 2 non-negotiable that a custom dashboard can never be file-backed.
-    const deps = makeDeps({ findRefByName: vi.fn(async () => ({ id: 'overview-id', version: 0 })) });
-    const result = await saveDashboard(deps, 'overview', '<section>detached from the file now</section>');
+  it('creates the caller’s OWN inline dashboard under a default’s name, leaving the default alone', async () => {
+    // findRefByName answers only the caller's own dashboards, so a default of that name is not found: the flow
+    // inserts a new inline, path-less row (owned by the caller at apply time), and the default stays as it is.
+    const deps = makeDeps({ findRefByName: vi.fn(async () => null), isDefault: vi.fn(async () => true) });
+    const result = await saveDashboard(deps, 'overview', '<section>my own overview</section>');
     const outcome = result._unsafeUnwrap();
     expect(outcome.persist).toEqual([
       {
-        op: PersistOp.enum.update,
+        op: PersistOp.enum.insert,
         entity: DASHBOARD_ENTITY_TAG,
         model: {
           name: 'overview',
-          html: '<section>detached from the file now</section>',
+          html: '<section>my own overview</section>',
           updatedAt: FIXED_CLOCK.toISOString(),
           source: DashboardSource.enum.inline,
-          id: 'overview-id',
-          version: 0,
+          id: 'test-id',
           path: null,
+          shared: false,
         },
       },
     ]);
@@ -142,6 +147,14 @@ describe('deleteDashboard', () => {
     expect(outcome.response).toEqual({ deleted: true });
   });
 
+  it('refuses to delete a shared default, with the one read-only message', async () => {
+    const deps = makeDeps({ findRefByName: vi.fn(async () => null), isDefault: vi.fn(async () => true) });
+
+    const result = await deleteDashboard(deps, 'overview');
+
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'validation', issues: [SHARED_DEFAULT_READ_ONLY_MESSAGE] });
+  });
+
   it('returns deleted:false with an empty batch when the name does not exist (idempotent)', async () => {
     const deps = makeDeps();
 
@@ -163,6 +176,7 @@ describe('renameDashboard', () => {
     version: 3,
     source: DashboardSource.enum.inline,
     path: null,
+    shared: false,
     ...overrides,
   });
 
@@ -184,40 +198,18 @@ describe('renameDashboard', () => {
       {
         op: PersistOp.enum.update,
         entity: DASHBOARD_ENTITY_TAG,
-        model: { ...dashboard, id: 'dash-existing', version: 3, path: null },
+        model: { ...dashboard, id: 'dash-existing', version: 3, path: null, shared: false },
       },
     ]);
   });
 
-  it('preserves source: file and path across a rename — a default stays file-backed under its new name', async () => {
-    const fileEntity = existingEntity({ source: DashboardSource.enum.file, path: 'overview.html' });
+  it('refuses to rename a shared default, with the one read-only message', async () => {
+    const fileEntity = existingEntity({ source: DashboardSource.enum.file, path: 'overview.html', shared: true });
     const deps = makeDeps({ findByName: vi.fn(async () => fileEntity) });
 
     const result = await renameDashboard(deps, 'overview', 'overview2');
 
-    expect(result.isOk()).toBe(true);
-    const outcome = result._unsafeUnwrap();
-    expect(outcome.response).toEqual({
-      name: 'overview2',
-      html: '<html>mine</html>',
-      updatedAt: FIXED_CLOCK.toISOString(),
-      source: DashboardSource.enum.file,
-    });
-    expect(outcome.persist).toEqual([
-      {
-        op: PersistOp.enum.update,
-        entity: DASHBOARD_ENTITY_TAG,
-        model: {
-          name: 'overview2',
-          html: '<html>mine</html>',
-          updatedAt: FIXED_CLOCK.toISOString(),
-          source: DashboardSource.enum.file,
-          id: 'dash-existing',
-          version: 3,
-          path: 'overview.html',
-        },
-      },
-    ]);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'validation', issues: [SHARED_DEFAULT_READ_ONLY_MESSAGE] });
   });
 
   it('returns unknown_dashboard when the current name does not exist', async () => {

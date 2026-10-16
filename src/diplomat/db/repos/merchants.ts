@@ -6,6 +6,7 @@ import { ClassificationMethod } from '../../../models/transaction.js';
 import { MerchantTopDbRowSchema, type MerchantTopDbRow } from '../../../wire/db/merchants.js';
 import type { Db } from '../driver.js';
 import { merchantCategory, merchants } from '../schema.js';
+import { ownedBy, visibleTo } from '../queries/scope.js';
 import { txPredicates } from '../queries/txPredicates.js';
 import type { EntityApplier } from '../effects.js';
 
@@ -28,11 +29,12 @@ const MatchRow = z.object({
  *  unspecified bare-column pick; a merchant with *no classified* transactions at all has no rows
  *  in `category_counts`, so the `LEFT JOIN` never matches and both `MIN`s come back `NULL` — the
  *  "resolves gracefully" case. */
-const MERCHANTS_TOP_SELECT = (limit: number) => sql`
+const MERCHANTS_TOP_SELECT = (userId: string, limit: number) => sql`
   WITH merchant_totals AS (
     SELECT t.merchant_key, COUNT(*) AS transaction_count
     FROM transactions t
-    WHERE ${txPredicates.effective()}
+    WHERE ${ownedBy(userId, 't')}
+      AND ${txPredicates.effective()}
       AND ${txPredicates.nonTransfer()}
       AND t.merchant_key IS NOT NULL
     GROUP BY t.merchant_key
@@ -43,7 +45,8 @@ const MERCHANTS_TOP_SELECT = (limit: number) => sql`
     SELECT t.merchant_key, t.category_id, COUNT(*) AS category_count
     FROM transactions t
     JOIN merchant_totals mt ON mt.merchant_key = t.merchant_key
-    WHERE ${txPredicates.effective()}
+    WHERE ${ownedBy(userId, 't')}
+      AND ${txPredicates.effective()}
       AND ${txPredicates.nonTransfer()}
       AND t.category_id IS NOT NULL
     GROUP BY t.merchant_key, t.category_id
@@ -69,22 +72,29 @@ export type MerchantsRepo = {
   top: (limit: number) => Promise<MerchantTopDbRow[]>;
 };
 
-export const merchantsRepo = (db: Db): MerchantsRepo => ({
+export const merchantsRepo = (db: Db, userId: string): MerchantsRepo => ({
   matchCandidates: async (normalizedDescription) => {
+    // Shared `rule` edges plus this user's `history` edges; the same (merchant, category) may have one of each,
+    // so weights are summed.
     const rows = await db.all<Record<string, unknown>>(sql`
       SELECT mc.merchant_key AS "merchantKey", mc.category_id AS "categoryId",
-             c.name AS "categoryName", mc.weight, COALESCE(mc.origin, ${ClassificationMethod.enum.history}) AS origin
+             c.name AS "categoryName", SUM(mc.weight) AS weight,
+             CASE WHEN SUM(mc.origin = ${ClassificationMethod.enum.rule}) > 0
+                  THEN ${ClassificationMethod.enum.rule} ELSE ${ClassificationMethod.enum.history} END AS origin
       FROM merchant_category mc
       JOIN categories c ON c.id = mc.category_id
-      WHERE ${normalizedDescription} LIKE '%' || mc.merchant_key || '%'
-      ORDER BY mc.weight DESC, length(mc.merchant_key) DESC
+      WHERE ${visibleTo(userId, 'mc')}
+        AND ${visibleTo(userId, 'c')}
+        AND ${normalizedDescription} LIKE '%' || mc.merchant_key || '%'
+      GROUP BY mc.merchant_key, mc.category_id
+      ORDER BY weight DESC, length(mc.merchant_key) DESC
       LIMIT 5
     `);
     return rows.map((r) => MatchRow.parse(r));
   },
 
   top: async (limit) => {
-    const rows = await db.all<Record<string, unknown>>(MERCHANTS_TOP_SELECT(limit));
+    const rows = await db.all<Record<string, unknown>>(MERCHANTS_TOP_SELECT(userId, limit));
     return rows.map((r) => MerchantTopDbRowSchema.parse(r));
   },
 });
@@ -106,16 +116,16 @@ export const merchantApplier: EntityApplier = {
 };
 
 /** Always an `insert` (no `id`/`version`) — `update`/`delete` are structurally unreachable. The
- *  `set` below deliberately omits `origin`: it must stay insert-only, or an edge first learned as
- *  `rule` would flip to `history` the next time a correction reinforces it. */
-export const merchantCategoryApplier: EntityApplier = {
+ *  `set` below deliberately omits `origin`: it must stay insert-only. Writes only the caller's own `history` edge. */
+export const merchantCategoryApplier = (userId: string): EntityApplier => ({
   insert: async (tx, model) => {
     const { merchantKey, categoryId, weightDelta, origin } = model as MerchantCategoryEdge;
     await tx
       .insert(merchantCategory)
-      .values({ merchantKey, categoryId, weight: weightDelta, origin })
+      .values({ merchantKey, categoryId, weight: weightDelta, origin, userId })
       .onConflictDoUpdate({
-        target: [merchantCategory.merchantKey, merchantCategory.categoryId],
+        target: [merchantCategory.userId, merchantCategory.merchantKey, merchantCategory.categoryId],
+        targetWhere: sql`${merchantCategory.userId} IS NOT NULL`,
         set: { weight: sql`${merchantCategory.weight} + ${weightDelta}` },
       });
     return { applied: true };
@@ -126,4 +136,4 @@ export const merchantCategoryApplier: EntityApplier = {
   delete: async () => {
     throw new Error('merchantCategoryApplier: delete is unsupported — merchant-category edges are never removed');
   },
-};
+});

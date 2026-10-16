@@ -26,5 +26,6 @@ export const setupHttpTest = () => {
   // whose create/update/delete tools stay MCP-only) — every other test seeds via `inject` alone.
   const getDeps = (): Deps => ctx!.deps;
   const getRunEffects = (): RunEffects => ctx!.runEffects;
-  return { inject, getDeps, getRunEffects };
+  const setClock = (clock: () => Date): (() => void) => ctx!.setClock(clock);
+  return { inject, getDeps, getRunEffects, setClock };
 };

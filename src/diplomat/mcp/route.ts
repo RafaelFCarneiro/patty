@@ -2,7 +2,7 @@ import type { IncomingMessage } from 'node:http';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { FastifyInstance } from 'fastify';
-import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
+import type { Tenancy } from '../../controllers/deps.js';
 import { hasScope, requiredMcpScope } from '../../logic/auth/scope.js';
 import { MCP_PATH } from '../../models/auth/bearer.js';
 import { authErrors } from '../../models/auth/errors.js';
@@ -24,18 +24,10 @@ import { toolScopesOf } from './scopes.js';
  * `insufficient_scope` challenge before any tool runs. The principal then travels to the tools as `req.raw.auth`
  * (the SDK's `AuthInfo`), where `scopes.ts` checks it again.
  */
-export const registerMcpRoute = (
-  app: FastifyInstance,
-  deps: Deps,
-  version: string,
-  runEffects: RunEffects,
-  runEffectsSequence: RunEffectsSequence,
-  resetLocale: () => void,
-  publicUrl?: string,
-): void => {
+export const registerMcpRoute = (app: FastifyInstance, tenancy: Tenancy, version: string, publicUrl?: string): void => {
   const scopeGuard = { gate: authInfoGate };
   // Built once, only to learn which scope each tool needs; the per-request server below is identical.
-  const catalog = buildMcpServer(deps, version, runEffects, runEffectsSequence, resetLocale, scopeGuard);
+  const catalog = buildMcpServer(tenancy, version, scopeGuard);
   const toolScopes = toolScopesOf(catalog);
 
   app.post(
@@ -51,7 +43,7 @@ export const registerMcpRoute = (
       },
     },
     async (req, reply) => {
-      const server = buildMcpServer(deps, version, runEffects, runEffectsSequence, resetLocale, scopeGuard);
+      const server = buildMcpServer(tenancy, version, scopeGuard);
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

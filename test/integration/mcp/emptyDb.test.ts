@@ -19,18 +19,19 @@ import { dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { healthRepo } from '../../../src/diplomat/db/repos/health.js';
 import { merchantsRepo } from '../../../src/diplomat/db/repos/merchants.js';
 import { recurringRepo } from '../../../src/diplomat/db/repos/recurring.js';
-import { settingsApplier, settingsRepo } from '../../../src/diplomat/db/repos/settings.js';
+import { settingsRepo, userSettingsApplier } from '../../../src/diplomat/db/repos/settings.js';
 import { tagsRepo } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
 import type { ApplierRegistry } from '../../../src/diplomat/db/effects.js';
 import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
 import { runEffects } from '@rfc0/effect-runner';
-import { Locale, LocaleSource, SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
+import { Locale, LocaleSource, USER_SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
 import { conflict } from '../../../src/models/error.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { listCategories } from '../../../src/controllers/categories.js';
 import { getPreferences, setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 
 const TEST_KEY = 'b'.repeat(64);
 const MIGRATIONS = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -51,24 +52,24 @@ describe('empty DB (ADR-008)', () => {
     runner = createTransactionRunner(db);
     await migrate(db, { migrationsFolder: MIGRATIONS });
 
-    const settingsR = settingsRepo(db);
+    const settingsR = settingsRepo(db, OWNER_USER_ID);
     deps = {
-      accounts: accountsRepo(db),
-      bills: billsRepo(db),
-      budgets: budgetsRepo(db),
-      categories: categoriesRepo(db),
-      subCategories: subCategoriesRepo(db),
-      correlations: correlationsRepo(db),
-      creditCards: creditCardsRepo(db),
+      accounts: accountsRepo(db, OWNER_USER_ID),
+      bills: billsRepo(db, OWNER_USER_ID),
+      budgets: budgetsRepo(db, OWNER_USER_ID),
+      categories: categoriesRepo(db, OWNER_USER_ID),
+      subCategories: subCategoriesRepo(db, OWNER_USER_ID),
+      correlations: correlationsRepo(db, OWNER_USER_ID),
+      creditCards: creditCardsRepo(db, OWNER_USER_ID),
       currencies: currenciesRepo(db),
       currencyRates: currencyRatesRepo(db),
-      dashboards: dashboardsRepo(db),
+      dashboards: dashboardsRepo(db, OWNER_USER_ID),
       health: healthRepo(db),
-      merchants: merchantsRepo(db),
-      recurring: recurringRepo(db),
+      merchants: merchantsRepo(db, OWNER_USER_ID),
+      recurring: recurringRepo(db, OWNER_USER_ID),
       settings: settingsR,
-      tags: tagsRepo(db),
-      transactions: transactionsRepo(db),
+      tags: tagsRepo(db, OWNER_USER_ID),
+      transactions: transactionsRepo(db, OWNER_USER_ID),
       clock: () => new Date(),
       newId: () => randomUUID(),
       locale: async () => {
@@ -77,7 +78,7 @@ describe('empty DB (ADR-008)', () => {
       },
       rateStaleness: { fiatHours: 24, cryptoHours: 1 },
     };
-    registry = { [SETTINGS_ENTITY_TAG]: settingsApplier };
+    registry = { [USER_SETTINGS_ENTITY_TAG]: userSettingsApplier(OWNER_USER_ID) };
   });
 
   afterAll(() => {

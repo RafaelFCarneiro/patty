@@ -9,8 +9,6 @@ import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerRecurringTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, runEffects } = ctx;
-
   server.registerTool(
     'create_recurring',
     {
@@ -23,7 +21,8 @@ export const registerRecurringTools = (server: McpServer, ctx: McpContext): void
         'so recurring spend shows up in merchant_concentration and reinforces classification like any other spend.',
       inputSchema: CreateRecurringSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => createRecurring(deps, args).map(recurringAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -37,7 +36,10 @@ export const registerRecurringTools = (server: McpServer, ctx: McpContext): void
       description: 'List all recurring rules with next due dates.',
       inputSchema: {},
     },
-    async () => json(await listRecurring(deps)),
+    async (_args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await listRecurring(deps));
+    },
   );
 
   server.registerTool(
@@ -60,7 +62,8 @@ export const registerRecurringTools = (server: McpServer, ctx: McpContext): void
           ),
       },
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => applyDueRecurring(deps, args).map(recurringAdapters.outcomeToDb).map(outcomeToDb);
       return fromResult(await runEffects(flow));
     },

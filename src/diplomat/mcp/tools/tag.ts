@@ -8,12 +8,13 @@ import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerTagTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, runEffects } = ctx;
-
   server.registerTool(
     'list_tags',
     { annotations: READ_ONLY, title: 'List tags', description: 'List all tags.', inputSchema: {} },
-    async () => json(await listTags(deps)),
+    async (_args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await listTags(deps));
+    },
   );
 
   server.registerTool(
@@ -26,7 +27,8 @@ export const registerTagTools = (server: McpServer, ctx: McpContext): void => {
         '(e.g. "work", "travel", "reembolsável").',
       inputSchema: CreateTagSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => createTag(deps, args.name).map(tagAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -40,7 +42,8 @@ export const registerTagTools = (server: McpServer, ctx: McpContext): void => {
       description: 'Delete a tag by id. Removes the tag and all its associations with transactions.',
       inputSchema: { id: z.string().min(1) },
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => deleteTag(deps, args.id).map(tagAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },

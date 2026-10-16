@@ -2,21 +2,32 @@ import { LibsqlError } from '@libsql/client';
 import { describe, expect, it } from 'vitest';
 import type { Tx } from '../../../../src/diplomat/db/effects.js';
 import { transactionTagApplier } from '../../../../src/diplomat/db/repos/transactionTags.js';
+import { tags, transactions } from '../../../../src/diplomat/db/schema.js';
 
 type WriteLog = { deletes: number; inserted: unknown[] };
 
-// A Tx stub whose only affordances are the two writes set-replace needs — any read attempt
-// throws, proving the applier performs zero reads (ADR-023 decision 6): the set applies to the
-// row id the core named, never to anything looked up here. `insertError` simulates the driver
-// raising on the link insert (e.g. an FK miss).
-const writesOnlyTx = (log: WriteLog, insertError?: Error): Tx => {
-  const readAttempted = () => {
-    throw new Error('transactionTagApplier must not read');
+/** What the user owns, as the applier's ownership check will find it: the transaction (or not) and which tags. */
+type Owned = { transaction: boolean; tagIds: string[] };
+const ALL_OWNED = (tagIds: string[]): Owned => ({ transaction: true, tagIds });
+
+// A Tx stub with the two reads the ownership check makes (the transaction, then the tags — each answered from `owned`)
+// and the two writes set-replace needs. `insertError` simulates the driver raising on the link insert.
+const stubTx = (log: WriteLog, owned: Owned, insertError?: Error): Tx => {
+  const unexpected = () => {
+    throw new Error('transactionTagApplier reached for something other than its ownership check and its writes');
   };
   return {
-    select: readAttempted,
-    all: readAttempted,
-    get: readAttempted,
+    select: () => ({
+      from: (table: unknown) => ({
+        where: async () => {
+          if (table === transactions) return owned.transaction ? [{ id: 'tx-1' }] : [];
+          if (table === tags) return owned.tagIds.map((id) => ({ id }));
+          return unexpected();
+        },
+      }),
+    }),
+    all: unexpected,
+    get: unexpected,
     delete: () => ({
       where: async () => {
         log.deletes += 1;
@@ -36,11 +47,13 @@ const writesOnlyTx = (log: WriteLog, insertError?: Error): Tx => {
 const foreignKeyMiss = () =>
   new LibsqlError('FOREIGN KEY constraint failed', 'SQLITE_CONSTRAINT', 'SQLITE_CONSTRAINT_FOREIGNKEY');
 
+const applier = transactionTagApplier('user-a');
+
 describe('transactionTagApplier', () => {
-  it('applies the set to the given transaction id — links inserted, stale links deleted, zero reads', async () => {
+  it('applies the set to the given transaction id — links inserted, stale links deleted', async () => {
     const log: WriteLog = { deletes: 0, inserted: [] };
 
-    const outcome = await transactionTagApplier.insert(writesOnlyTx(log), {
+    const outcome = await applier.insert(stubTx(log, ALL_OWNED(['tag-a', 'tag-b'])), {
       transactionId: 'tx-1',
       tagIds: ['tag-a', 'tag-b'],
     });
@@ -58,20 +71,46 @@ describe('transactionTagApplier', () => {
   it('an empty tag set only clears — no insert issued at all', async () => {
     const log: WriteLog = { deletes: 0, inserted: [] };
 
-    const outcome = await transactionTagApplier.insert(writesOnlyTx(log), { transactionId: 'tx-1', tagIds: [] });
+    const outcome = await applier.insert(stubTx(log, ALL_OWNED([])), { transactionId: 'tx-1', tagIds: [] });
 
     expect(outcome).toEqual({ applied: true });
     expect(log.inserted).toEqual([]);
     expect(log.deletes).toBe(1);
   });
 
-  it('an FK miss on the link insert no-ops with applied:false, before any link was deleted', async () => {
-    // The duplicate-replay signature: the addressed row was never inserted. Insert-first ordering
-    // means nothing has been removed when the miss fires — existing links stay exactly as-is.
+  it('a transaction that is not the user’s (another’s, or a duplicate replay’s) is a no-op', async () => {
     const log: WriteLog = { deletes: 0, inserted: [] };
 
-    const outcome = await transactionTagApplier.insert(writesOnlyTx(log, foreignKeyMiss()), {
-      transactionId: 'never-inserted-mint',
+    const outcome = await applier.insert(stubTx(log, { transaction: false, tagIds: ['tag-a'] }), {
+      transactionId: 'someone-elses-or-never-inserted',
+      tagIds: ['tag-a'],
+    });
+
+    expect(outcome).toEqual({ applied: false });
+    expect(log.deletes).toBe(0);
+    expect(log.inserted).toEqual([]);
+  });
+
+  it('a tag that is not the user’s links and clears nothing, even on the user’s own transaction', async () => {
+    const log: WriteLog = { deletes: 0, inserted: [] };
+
+    const outcome = await applier.insert(stubTx(log, ALL_OWNED(['tag-a'])), {
+      transactionId: 'tx-1',
+      tagIds: ['tag-a', 'tag-of-another-user'],
+    });
+
+    expect(outcome).toEqual({ applied: false });
+    expect(log.deletes).toBe(0);
+    expect(log.inserted).toEqual([]);
+  });
+
+  it('an FK miss on the link insert no-ops with applied:false, before any link was deleted', async () => {
+    // A parent removed between the ownership check and the insert. Insert-first ordering means nothing has been
+    // removed when the miss fires — existing links stay exactly as-is.
+    const log: WriteLog = { deletes: 0, inserted: [] };
+
+    const outcome = await applier.insert(stubTx(log, ALL_OWNED(['tag-a']), foreignKeyMiss()), {
+      transactionId: 'tx-1',
       tagIds: ['tag-a'],
     });
 
@@ -84,7 +123,7 @@ describe('transactionTagApplier', () => {
     const log: WriteLog = { deletes: 0, inserted: [] };
 
     await expect(
-      transactionTagApplier.insert(writesOnlyTx(log, new Error('disk I/O error')), {
+      applier.insert(stubTx(log, ALL_OWNED(['tag-a']), new Error('disk I/O error')), {
         transactionId: 'tx-1',
         tagIds: ['tag-a'],
       }),

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { recurringRules } from '../../diplomat/db/schema.js';
+import type { WithoutOwner } from './tenancy.js';
 
 // Recurring-rule row from the raw SELECT (snake_case + joined account/category names).
 // Loose; RecurringRuleViewSchema.parse/RecurringRuleEntitySchema.parse enforce enums and date
@@ -22,4 +23,4 @@ export const RecurringRowSchema = z.object({
 
 // What adapters/recurring.ts's modelToDb produces for the versioned unit of work (ADR-021) —
 // mirrors wire/db/accounts.ts's AccountRow.
-export type RecurringRuleRow = typeof recurringRules.$inferSelect;
+export type RecurringRuleRow = WithoutOwner<typeof recurringRules.$inferSelect>;

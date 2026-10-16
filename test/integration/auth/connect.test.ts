@@ -124,7 +124,7 @@ describe('GET /ui/connect', () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
     const deps = authDepsOf(ctx);
-    const started = await bindAuthRunEffects(ctx.runEffects)(() =>
+    const started = await bindAuthRunEffects(ctx.authRunEffects)(() =>
       startGrant(deps, {
         client: { name: 'fintrack login', version: '0' },
         profile: 'work',
@@ -372,7 +372,7 @@ describe('POST /ui/connect', () => {
   it('says "close this tab", not a dashboard link, for a `fintrack login` request', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
-    const started = await bindAuthRunEffects(ctx.runEffects)(() =>
+    const started = await bindAuthRunEffects(ctx.authRunEffects)(() =>
       startGrant(authDepsOf(ctx), {
         client: { name: 'fintrack login', version: '0' },
         profile: 'default',
@@ -431,7 +431,7 @@ describe('POST /ui/connect', () => {
   it('refuses "this session only" for a request that came from `fintrack login`', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
-    const started = await bindAuthRunEffects(ctx.runEffects)(() =>
+    const started = await bindAuthRunEffects(ctx.authRunEffects)(() =>
       startGrant(authDepsOf(ctx), {
         client: { name: 'fintrack login', version: '0' },
         profile: 'default',

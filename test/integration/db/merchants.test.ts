@@ -15,6 +15,7 @@ import {
   TransactionStatus,
   TransactionType,
 } from '../../../src/models/transaction.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 
 const TEST_KEY = 'e'.repeat(64);
 
@@ -29,7 +30,7 @@ beforeEach(async () => {
     FINTRACK_DB_KEY: TEST_KEY,
   });
   await bootstrap(db);
-  repo = merchantsRepo(db);
+  repo = merchantsRepo(db, OWNER_USER_ID);
 });
 
 afterEach(() => {
@@ -65,6 +66,7 @@ const insertTx = async ({
   status = TransactionStatus.enum.effective,
 }: TxOverrides): Promise<void> => {
   await db.insert(transactions).values({
+    userId: OWNER_USER_ID,
     id: randomUUID(),
     description: 'test transaction',
     amount: 10,

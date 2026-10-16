@@ -3,9 +3,10 @@ import type { budgets } from '../../diplomat/db/schema.js';
 import { BudgetPeriod } from '../../models/budget.js';
 import { CurrencyCode } from '../../models/money.js';
 import { parseCategoryNames } from './categories.js';
+import type { WithoutOwner } from './tenancy.js';
 
 // Budget row from a Drizzle select — derived from schema.ts (single source of truth).
-export type BudgetRow = typeof budgets.$inferSelect;
+export type BudgetRow = WithoutOwner<typeof budgets.$inferSelect>;
 
 /** Shared shape of the budget-with-target self-join row (`diplomat/db/repos/budgets.ts`) — stays a
  *  hand schema like `SubCategoryRowSchema` (`wire/db/categories.ts`) until the raw reads are

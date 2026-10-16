@@ -29,18 +29,10 @@ export const startSignInServer = async (config: AuthConfig, db: Db): Promise<Sig
       FINTRACK_HTTP: true,
     },
     db,
-    runtime.runEffects,
+    runtime.authRunEffects,
   );
   const { buildHttpApp } = await loadServerModule();
-  const app = buildHttpApp(
-    runtime.deps,
-    version,
-    runtime.runEffects,
-    runtime.runEffectsSequence,
-    runtime.resetLocale,
-    runtime.changeBus.subscribe,
-    { logger: false, auth, trustProxy: config.TRUST_PROXY },
-  );
+  const app = buildHttpApp(runtime, version, { logger: false, auth, trustProxy: config.TRUST_PROXY });
   // Loopback only, but under the NAME `localhost`: the session cookie is keyed by host, not port, so on `127.0.0.1`
   // this login would overwrite the cookie of any FinTrack already open there and sign its dashboard out.
   // Fastify binds `localhost` to both its IPv4 and IPv6 loopback addresses.

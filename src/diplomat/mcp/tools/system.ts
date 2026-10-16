@@ -9,7 +9,7 @@ import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerSystemTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, version, runEffects, resetLocale } = ctx;
+  const { version } = ctx;
 
   server.registerTool(
     'set_locale',
@@ -29,7 +29,8 @@ export const registerSystemTools = (server: McpServer, ctx: McpContext): void =>
         source: LocaleSource.exclude([LocaleSource.enum.default]),
       },
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects, resetLocale } = ctx.as(extra);
       const flow = () => setLocale(deps, args).map(settingsAdapters.outcomeToDb);
       const result = await runEffects(flow);
       if (result.isOk()) resetLocale();
@@ -50,7 +51,10 @@ export const registerSystemTools = (server: McpServer, ctx: McpContext): void =>
         'explicit override (set_base_currency) or derived from locale (pt→BRL, en/es→USD) when unset.',
       inputSchema: {},
     },
-    async () => json(await getPreferences(deps)),
+    async (_args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await getPreferences(deps));
+    },
   );
 
   server.registerTool(
@@ -64,7 +68,8 @@ export const registerSystemTools = (server: McpServer, ctx: McpContext): void =>
         'Use get_preferences to check the currently resolved value.',
       inputSchema: { baseCurrency: CurrencyCode },
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => setBaseCurrency(deps, args).map(settingsAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -82,6 +87,9 @@ export const registerSystemTools = (server: McpServer, ctx: McpContext): void =>
         'accessible via tools.',
       inputSchema: {},
     },
-    async () => json(await getStatus(deps, version)),
+    async (_args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await getStatus(deps, version));
+    },
   );
 };

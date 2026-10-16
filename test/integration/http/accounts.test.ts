@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { setupHttpTest } from './setup.js';
 
-const { inject, getDeps } = setupHttpTest();
+const { inject, setClock } = setupHttpTest();
 
 describe('GET /api/accounts', () => {
   it('lists seeded accounts', async () => {
@@ -405,9 +405,7 @@ describe('GET /api/accounts/balances', () => {
     // real Date.now() call here would flip `stale` once wall-clock time drifts past the window.
     const RATE_ASOF = '2026-08-10T10:00:00.000Z';
     const FIXED_NOW = new Date('2026-08-10T12:00:00.000Z');
-    const deps = getDeps();
-    const originalClock = deps.clock;
-    deps.clock = () => FIXED_NOW;
+    const restoreClock = setClock(() => FIXED_NOW);
 
     try {
       await inject({
@@ -474,7 +472,7 @@ describe('GET /api/accounts/balances', () => {
         excluded: [btcBody.balances[0]!.id],
       });
     } finally {
-      deps.clock = originalClock;
+      restoreClock();
     }
   });
 });

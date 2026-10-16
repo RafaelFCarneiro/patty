@@ -133,6 +133,7 @@ Consequences for releases:
   — hence the `@latest` pinning, and the global-install check `npm ls -g @rafaelfcarneiro/fintrack` in the message.
 - **Journal `when` values must only grow.** Drizzle stamps each applied migration with its journal entry's `when`; the guard reads that as "newer". Generate migrations in order
   (`drizzle-kit generate`), never hand-edit an earlier entry's `when` upwards past a later one, and never rebase a migration to an earlier timestamp than one already released.
+- **`drizzle-kit generate` cannot load the schema as-is**: `schema.ts` imports models that import `@rfc0/effect-runner`, whose `exports` map has an `import` condition only, and drizzle-kit loads the schema through `require`. Temporarily add `"default": "./dist/index.js"` next to `"import"` in `node_modules/@rfc0/effect-runner/package.json`, run `npx drizzle-kit generate --name <name>`, then restore the file (`npm ci` also does). A migration that drops a UNIQUE constraint or adds a NOT NULL foreign key needs a hand-written table rebuild (see `drizzle/0021_tenancy_data.sql`): keep the generated snapshot, replace the generated SQL.
 - A migration that was released and then dropped from the journal leaves databases "ahead" of every later build — treat a released migration as permanent (add a new one to undo it).
 
 ## Dependency upgrades — `drizzle-orm`, `drizzle-kit`, `@libsql/client`
