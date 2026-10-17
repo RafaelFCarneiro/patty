@@ -4,7 +4,14 @@ import { authErrors } from '../../models/auth/errors.js';
 import { INVITE_PATH, INVITE_CODE_PARAM } from '../../models/auth/origin.js';
 import { type UserEntity, UserRole } from '../../models/auth/owner.js';
 import { PrincipalVia } from '../../models/auth/principal.js';
-import { INVITE_TTL_MS, type Actor, type InviteEntity, UserStatus, type UserSummary } from '../../models/auth/users.js';
+import {
+  ActorKind,
+  INVITE_TTL_MS,
+  type Actor,
+  type InviteEntity,
+  UserStatus,
+  type UserSummary,
+} from '../../models/auth/users.js';
 import { hasCredentials, isActiveUser, formatSetupCode, normalizeSetupCode } from './owner.js';
 import { millis, toIso } from './time.js';
 
@@ -89,7 +96,7 @@ export const claimedByInvite = (user: UserEntity, passwordHash: string, now: Dat
 
 /** Who may manage users: an admin signed in through a browser session — or the trusted terminal. */
 export const authorizeActor = (actor: Actor, acting: UserEntity | null): AppError | null => {
-  if (actor.kind === 'terminal') return null;
+  if (actor.kind === ActorKind.enum.terminal) return null;
   if (actor.principal.via !== PrincipalVia.enum.session) return authErrors.sessionRequired;
   return isActiveAdmin(acting) ? null : authErrors.adminRequired;
 };

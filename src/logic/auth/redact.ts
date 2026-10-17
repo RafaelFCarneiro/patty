@@ -1,5 +1,7 @@
+import { INVITE_CODE_PARAM } from '../../models/auth/origin.js';
+
 /** Query parameters whose value is a secret a person was handed: an invite code today. */
-export const SECRET_QUERY_PARAMS: readonly string[] = ['code'];
+export const SECRET_QUERY_PARAMS: readonly string[] = [INVITE_CODE_PARAM];
 
 export const REDACTED = '[Redacted]';
 

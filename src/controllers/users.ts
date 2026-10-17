@@ -33,6 +33,7 @@ import { type UserEntity, UserRole } from '../models/auth/owner.js';
 import type { StartedSession } from '../models/auth/session.js';
 import {
   INSTANCE_SETTINGS_ID,
+  ActorKind,
   type Actor,
   type ClaimInviteInput,
   type InviteEntity,
@@ -85,12 +86,12 @@ const stepUpMatches = async (deps: AuthDeps, acting: UserEntity | null, password
  */
 const admit = (deps: AuthDeps, actor: Actor, options: { stepUp: boolean }): ResultAsync<string | null, AppError> =>
   safeTry(async function* () {
-    const acting = actor.kind === 'session' ? await deps.users.findById(actor.principal.userId) : null;
+    const acting = actor.kind === ActorKind.enum.session ? await deps.users.findById(actor.principal.userId) : null;
     yield* orRefuse(authorizeActor(actor, acting));
-    if (actor.kind === 'session' && options.stepUp) {
+    if (actor.kind === ActorKind.enum.session && options.stepUp) {
       yield* guard(await stepUpMatches(deps, acting, actor.password), authErrors.invalidCredentials);
     }
-    return ok(actor.kind === 'session' ? actor.principal.userId : null);
+    return ok(actor.kind === ActorKind.enum.session ? actor.principal.userId : null);
   });
 
 const targetOf = (deps: AuthDeps, userId: string): ResultAsync<UserEntity, AppError> =>
@@ -255,8 +256,10 @@ export const disableUser = (
     const ended = endingCredentials(await heldCredentials(deps, target.id), now);
     const disabled = disabledUser(target, now);
     const witnesses = isActiveAdmin(target) ? witnessingAdmins(users, target) : [];
+    // A pending invite is revoked too, so enabling the user later revives nothing.
+    const invites = R.map(await deps.invites.listUnclaimedByUser(target.id), removeInvite);
     return ok({
-      persist: [updateUser(disabled), ...ended.persist, ...witnesses],
+      persist: [updateUser(disabled), ...ended.persist, ...invites, ...witnesses],
       response: reportOf(disabled, ended.revoked, now),
     });
   });

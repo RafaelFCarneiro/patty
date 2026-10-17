@@ -14,7 +14,7 @@ import {
 import { inviteLink } from '../../../logic/auth/users.js';
 import { UserRole } from '../../../models/auth/owner.js';
 import { UsernameSchema } from '../../../models/auth/password.js';
-import type { Actor, IssuedInvite } from '../../../models/auth/users.js';
+import { ActorKind, type Actor, type IssuedInvite } from '../../../models/auth/users.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import {
   InviteOptionsSchema,
@@ -55,7 +55,7 @@ password by claiming the invite; users are disabled, never deleted, and the inst
 // The terminal is the trusted local operator: it holds the database key, so it has no session, no user and no step-up.
 const NEEDS_USERNAME = 'a username is required';
 
-const TERMINAL: Actor = { kind: 'terminal' };
+const TERMINAL: Actor = { kind: ActorKind.enum.terminal };
 
 // What each refusal says on this edge, in this edge's vocabulary: the domain's message is neutral.
 const REFUSAL_HINT: Readonly<Partial<Record<AppError['code'], (username: string) => string>>> = {

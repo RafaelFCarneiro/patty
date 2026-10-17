@@ -62,10 +62,13 @@ export type UserSummary = {
  * the actions that ask for it); the terminal is the trusted local operator: it holds the database key, so it has no
  * session, no user and no step-up.
  */
+export const ActorKind = z.enum(['terminal', 'session']);
+export type ActorKind = z.infer<typeof ActorKind>;
+
 export type Actor =
-  | { kind: 'terminal' }
+  | { kind: typeof ActorKind.enum.terminal }
   | {
-      kind: 'session';
+      kind: typeof ActorKind.enum.session;
       principal: Principal;
       /** The step-up password, for the actions that ask for it. */ password?: string;
     };

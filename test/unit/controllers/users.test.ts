@@ -505,6 +505,14 @@ describe('disableUser', () => {
     expect(modelOf(witness)).toEqual(ROOT);
   });
 
+  it('removes a pending invite in the same batch, so enabling later revives nothing', async () => {
+    const waiting = user('bob', { passwordHash: null });
+    const { persist } = await outcomeOf(
+      disableUser(depsFor({ users: [ROOT, waiting], invites: [invite('bob')] }), sessionActor('root'), 'bob'),
+    );
+    expect(countOf(persist, PersistOp.enum.delete, INVITE_ENTITY_TAG)).toBe(1);
+  });
+
   it('adds no witnesses when the disabled user is not an admin', async () => {
     const { persist } = await outcomeOf(disableUser(depsFor({ users: [ROOT, ANA] }), sessionActor('root'), 'ana'));
     expect(persist.filter((p) => p.entity === USER_ENTITY_TAG)).toHaveLength(1);

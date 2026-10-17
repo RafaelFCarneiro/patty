@@ -16,7 +16,7 @@ import { inviteLink } from '../../../logic/auth/users.js';
 import { resourceOrigin } from '../../../logic/auth/origin.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
-import type { Actor, IssuedInvite } from '../../../models/auth/users.js';
+import { ActorKind, type Actor, type IssuedInvite } from '../../../models/auth/users.js';
 import { validation } from '../../../models/error.js';
 import {
   InviteUserFormSchema,
@@ -64,7 +64,7 @@ const refusalOf = (error: AppError): { status: number; message: string } => ({
 const firstIssue = (error: z.ZodError): string => error.issues[0]?.message ?? AUTH_MESSAGES.tryAgain;
 
 const sessionActor = (req: FastifyRequest, password?: string): Actor => ({
-  kind: 'session',
+  kind: ActorKind.enum.session,
   principal: req.principal!,
   password,
 });
