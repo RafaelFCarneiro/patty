@@ -8,6 +8,7 @@ import {
   claimRaceWinner,
   formatSetupCode,
   hasCredentials,
+  isNeverClaimed,
   isSetupCodeUsable,
   isUnclaimed,
   normalizeSetupCode,
@@ -17,14 +18,10 @@ import {
 } from '../logic/auth/owner.js';
 import { canLogin, withPasswordHash } from '../logic/auth/password.js';
 import { evaluateSession, newSession, sessionPrincipal, touched } from '../logic/auth/session.js';
-import { isLiveToken, revokedToken } from '../logic/auth/token.js';
+import { endingCredentials, removeSession } from '../logic/auth/revoke.js';
+import { loggedIn } from '../logic/auth/users.js';
 import * as persistence from '../logic/persistence.js';
-import {
-  ACCESS_TOKEN_ENTITY_TAG,
-  SESSION_ENTITY_TAG,
-  SETUP_CODE_ENTITY_TAG,
-  USER_ENTITY_TAG,
-} from '../models/auth/entity.js';
+import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
 import { type AuthMode } from '../models/auth/mode.js';
 import {
@@ -45,13 +42,10 @@ import {
   type ResetPasswordInput,
 } from '../models/auth/password.js';
 import { type Principal } from '../models/auth/principal.js';
-import { type SessionEntity, type StartedSession } from '../models/auth/session.js';
+import { type StartedSession } from '../models/auth/session.js';
 import type { AuthDeps } from './deps.js';
 
-const removeSession = (session: SessionEntity): Persistable =>
-  persistence.remove({ entity: SESSION_ENTITY_TAG, id: session.id, version: session.version });
-
-const startSession = (deps: AuthDeps, userId: string, now: Date) => {
+export const startSession = (deps: AuthDeps, userId: string, now: Date) => {
   const token = deps.secrets.randomToken();
   const session = newSession({ id: deps.newId(), userId, tokenHash: deps.secrets.hashSecret(token) }, now);
   const persistable = persistence.insert({ entity: SESSION_ENTITY_TAG, model: session });
@@ -113,6 +107,7 @@ export const claimOwner = (
 ): ResultAsync<FlowOutcome<StartedSession>, AppError> =>
   safeTry(async function* () {
     const owner = yield* unclaimedOwner(deps);
+    yield* guard(isNeverClaimed(owner), authErrors.setupUnavailable);
 
     const now = deps.clock();
     const stored = await deps.setupCodes.findByHash(deps.secrets.hashSecret(normalizeSetupCode(input.code)));
@@ -121,7 +116,7 @@ export const claimOwner = (
     const passwordHash = await deps.secrets.hashPassword(input.password);
     const { persistable: sessionInsert, started } = startSession(deps, owner.id, now);
     const persist: Persistable[] = [
-      claimOwnerUpdate(owner, input, passwordHash),
+      claimOwnerUpdate(loggedIn(owner, now), input, passwordHash),
       persistence.update({ entity: SETUP_CODE_ENTITY_TAG, model: spentSetupCode(code, now) }),
       sessionInsert,
     ];
@@ -170,27 +165,18 @@ export const resetPassword = (
   safeTry(async function* () {
     const user = yield* findResetTarget(deps, input.username);
 
-    const now = deps.clock();
-    const sessions = await deps.sessions.listByUser(user.id);
-    const liveTokens = R.filter(await deps.accessTokens.listByUser(user.id), isLiveToken(now));
+    const ended = endingCredentials(
+      { sessions: await deps.sessions.listByUser(user.id), tokens: await deps.accessTokens.listByUser(user.id) },
+      deps.clock(),
+    );
     const persist: Persistable[] = [
       persistence.update({
         entity: USER_ENTITY_TAG,
         model: withPasswordHash(user, await deps.secrets.hashPassword(input.password)),
       }),
-      ...R.map(sessions, removeSession),
-      ...R.map(liveTokens, (token) =>
-        persistence.update({ entity: ACCESS_TOKEN_ENTITY_TAG, model: revokedToken(token, now) }),
-      ),
+      ...ended.persist,
     ];
-    return ok({
-      persist,
-      response: {
-        username: user.username,
-        sessionsEnded: sessions.length,
-        tokensRevoked: liveTokens.length,
-      },
-    });
+    return ok({ persist, response: { username: user.username, ...ended.revoked } });
   });
 
 /** `/ui/login`: verifies against the real hash — or the dummy one for an unknown/unclaimed/disabled
@@ -207,7 +193,8 @@ export const login = (deps: AuthDeps, input: LoginInput): ResultAsync<FlowOutcom
     const now = deps.clock();
     const { persistable: sessionInsert, started } = startSession(deps, account.id, now);
     const expired = R.map(await deps.sessions.listExpired(now.toISOString()), removeSession);
-    return ok({ persist: [...expired, sessionInsert], response: started });
+    const seen = persistence.update({ entity: USER_ENTITY_TAG, model: loggedIn(account, now) });
+    return ok({ persist: [...expired, seen, sessionInsert], response: started });
   });
 
 /** Logout: delete the session row. Idempotent — an unknown or already-gone token is not an error. */
@@ -260,4 +247,4 @@ export const claimRaceWinnerOf = async (deps: AuthDeps, refusal: AppError): Prom
 
 /** Read-only: does the owner still need claiming? Drives the setup-vs-login redirect. */
 export const ownerNeedsSetup = async (deps: AuthDeps): Promise<boolean> =>
-  isUnclaimed(await deps.users.findById(OWNER_USER_ID));
+  isNeverClaimed(await deps.users.findById(OWNER_USER_ID));

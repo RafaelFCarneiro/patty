@@ -55,6 +55,7 @@ const secrets: AuthSecrets = {
   randomToken: () => 'TOKEN',
   randomAccessToken: () => 'ftk_TOKEN',
   randomSetupCode: () => 'ABCDEFGHJKMNPQRSTVWX',
+  randomInviteCode: () => 'JKMNPQRSTVWXABCDEFGH',
   randomUserCode: () => 'ABCDEFGH',
   randomDeviceCode: () => 'DEVICE',
   hashSecret: (secret) => `sha(${secret})`,
@@ -68,6 +69,7 @@ const unclaimedOwner = (): UserEntity => ({
   role: UserRole.enum.admin,
   createdAt: NOW.toISOString(),
   disabledAt: null,
+  lastLoginAt: null,
   version: 0,
 });
 const claimedOwner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
@@ -92,6 +94,7 @@ const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW
     users: {
       findById: async (id) => users.find((user) => user.id === id) ?? null,
       findByUsername: async (username) => users.find((user) => user.username === username) ?? null,
+      listAll: async () => users,
     },
     sessions: {
       findByTokenHash: async (hash) => sessions.find((session) => session.tokenHash === hash) ?? null,
@@ -110,6 +113,8 @@ const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW
       listExpired: async () => [],
       listRedeemed: async () => [],
     },
+    invites: { findByHash: async () => null, listUnclaimed: async () => [], listUnclaimedByUser: async () => [] },
+    instanceSettings: { get: async () => null },
     setupCodes: {
       findByHash: async (hash) => codes.find((code) => code.codeHash === hash) ?? null,
       current: async () => codes.find((code) => code.id === SETUP_CODE_ID) ?? null,
@@ -264,7 +269,14 @@ describe('login', () => {
 
   it('starts a session for the right credentials ', async () => {
     const { persist, response } = await outcomeOf(login(depsFor({ users: [claimedOwner()] }), credentials));
-    expect(opsOf(persist)).toEqual([`${PersistOp.enum.insert}:${SESSION_ENTITY_TAG}`]);
+    expect(opsOf(persist)).toEqual([
+      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
+      `${PersistOp.enum.insert}:${SESSION_ENTITY_TAG}`,
+    ]);
+    expect((persist[0] as Persistable & { model: unknown }).model).toMatchObject({
+      id: OWNER_USER_ID,
+      lastLoginAt: NOW.toISOString(),
+    });
     expect(response.token).toBe('TOKEN');
     expect(JSON.stringify(persist)).not.toContain('"TOKEN"');
   });
@@ -274,6 +286,7 @@ describe('login', () => {
     const { persist } = await outcomeOf(login(depsFor({ users: [claimedOwner()], sessions: [expired] }), credentials));
     expect(opsOf(persist)).toEqual([
       `${PersistOp.enum.delete}:${SESSION_ENTITY_TAG}`,
+      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
       `${PersistOp.enum.insert}:${SESSION_ENTITY_TAG}`,
     ]);
   });

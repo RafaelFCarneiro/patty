@@ -31,9 +31,15 @@ export const hasCredentials = (user: UserEntity): user is ClaimedUserEntity =>
 
 export const isUnclaimed = (owner: UserEntity | null): boolean => owner !== null && !hasCredentials(owner);
 
+/** An owner nobody has ever held a login for. An admin reissue (`reissueInvite`) can later leave an owner without a
+ *  password, but that owner has a username and is recovered by an invite — setup, with its one-time code, is only for
+ *  the owner of a fresh database. */
+export const isNeverClaimed = (owner: UserEntity | null): boolean =>
+  owner !== null && owner.username === null && owner.passwordHash === null;
+
 /** A setup code exists only while auth is on AND nobody holds the owner's credentials (ADR-033 §2). */
 export const shouldIssueSetupCode = (mode: AuthMode, owner: UserEntity | null): boolean =>
-  mode === AuthMode.enum.required && isUnclaimed(owner);
+  mode === AuthMode.enum.required && isNeverClaimed(owner);
 
 export const isSetupCodeUsable = (code: SetupCodeEntity | null, now: Date): code is SetupCodeEntity =>
   code !== null && code.usedAt === null && millis(code.expiresAt) > now.getTime();

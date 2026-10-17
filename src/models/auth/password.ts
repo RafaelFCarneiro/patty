@@ -34,7 +34,7 @@ export type LoginInput = { username: string; password: string };
 export type ClaimOwnerLocallyInput = { username: string; password: string };
 export type ClaimOwnerInput = ClaimOwnerLocallyInput & { code: string };
 
-/** `username` absent means the owner — the only user until ADR-033 Phase 4. */
+/** `username` absent means the owner. */
 export type ResetPasswordInput = { username?: string; password: string };
 
 export type PasswordReset = { username: string; sessionsEnded: number; tokensRevoked: number };

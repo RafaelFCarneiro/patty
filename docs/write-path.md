@@ -93,9 +93,9 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   `null` (clear it) — an asymmetry the uniform factory can't express.
 - **Exception — the auth flows (ADR-033) are adapted once at the composition root.** `login`/`claimOwner`/
   `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions`, the CLI's `claimOwnerLocally`/`resetPassword` (`composition/cli.ts` binds its own runner the same way) and the access-token flows (`createToken`/
-  `revokeToken`/`revokeSignInByHash`/`authenticateToken`, `controllers/accessTokens.ts`) and the stdio sign-in flows (`startGrant`/`approveGrant`/`denyGrant`/`redeemGrant`/`pruneExpiredGrants`, `controllers/grants.ts`) are run from several shell sites (the auth hook,
+  `revokeToken`/`revokeSignInByHash`/`authenticateToken`, `controllers/accessTokens.ts`) and the stdio sign-in flows (`startGrant`/`approveGrant`/`denyGrant`/`redeemGrant`/`pruneExpiredGrants`, `controllers/grants.ts`) and the user-management flows (`inviteUser`/`reissueInvite`/`claimInvite`/`disableUser`/`enableUser`/`setRole`/`setSignInCap`, `controllers/users.ts`, run from the users and invite pages and the `users` command) are run from several shell sites (the auth hook,
   the sign-in and token routes, startup), none of which is "the" handler, and a single batch can mix three entities
-  (`claimOwner`: user + setup code + session). So `adapters/auth.ts`'s `outcomeToDb` (the five entities'
+  (`claimOwner`: user + setup code + session; `inviteUser`: user + invite). So `adapters/auth.ts`'s `outcomeToDb` (the seven entities'
   `entityDbAdapter` pairs applied in turn — each rewrites only its own tag) is applied in `composition/auth.ts`'s
   `bindAuthRunEffects`, which wraps the shell's `RunEffects` once: `runEffects(() => flow().map(outcomeToDb))`.
   Every auth call site then holds that bound runner, never the raw one. Still exactly once, still outside
@@ -200,9 +200,9 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   (`outcomeFor(TRANSACTION_TAG_ENTITY_TAG, outcomes).applied`) — not the transaction's. (Full reasoning:
   ADR-023 decision 3 / step 3.)
 
-- **Auth entities** (`user`, `session`, `setup_code`, `access_token`, `client_grant`;
-  `diplomat/db/repos/{users,sessions,setupCodes,accessTokens,clientGrants}.ts`). `userApplier`, `sessionApplier`,
-  and `accessTokenApplier` are plain `versionedTableApplier`s. `clientGrantApplier` is one too, except that its `insert`
+- **Auth entities** (`user`, `session`, `setup_code`, `access_token`, `client_grant`, `invite`, `instance_settings`;
+  `diplomat/db/repos/{users,sessions,setupCodes,accessTokens,clientGrants,invites,instanceSettings}.ts`). `sessionApplier`
+  and `accessTokenApplier` are plain `versionedTableApplier`s; `userApplier` and `inviteApplier` are too, except that their `insert` rethrows a unique-constraint violation as `VersionConflict` (`users.username`, and the partial index that keeps one unclaimed invite per user): two admins inviting the same name, or reissuing for the same user, at once — the loser's retry re-runs the flow, which then answers `username_taken` or replaces the winner's invite; `instanceSettingsApplier` wraps `insert` like `setupCodeApplier` (the `settings` singleton: a lost insert would report a cap that was never saved). `clientGrantApplier` is one too, except that its `insert`
   rethrows a unique-constraint violation as `VersionConflict`: `user_code` is unique among PENDING grants (a partial index),
   so two requests drawing the same free code at once collide there, and the retry re-runs `startGrant`, whose
   `freshUserCode` sees the committed row and draws another code (the shape `tagApplier` uses for `tags.name`).
@@ -224,7 +224,8 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   grant's `redeemed` `update` in ONE batch — the version guard on that `update` is what makes the device code single-use: a
   second redeem built from the same stale read cannot commit, and the engine's retry re-reads a spent grant — plus, for an
   approved grant past its window, the `expired` `update` that settles it (terminal, written once); `pruneExpiredGrants` one
-  `delete` per unredeemed grant past its window and per redeemed grant superseded by a newer approval for the same user, profile and client (never a live pending/approved one, never the newest redeemed per key).
+  `delete` per unredeemed grant past its window and per redeemed grant superseded by a newer approval for the same user, profile and client (never a live pending/approved one, never the newest redeemed per key); `approveGrant` writes the chosen duration clamped to `settings.max_sign_in_duration`.
+  The user-management flows (`controllers/users.ts`): `inviteUser` emits a user `insert` (no password) and its invite `insert`; `claimInvite` the user `update` (password, first login), the invite `update` (`used_at`) and a session `insert`, in ONE batch — the version guard on the invite makes it single-use; `reissueInvite` emits the previous unclaimed invite's `delete`, the new invite's `insert` (in that order, the partial unique index would otherwise refuse the insert) and, for a claimed user, the `update` clearing the password and `endingCredentials` (a session `delete` and a `revoked_at` `update` per live token, personal access tokens and stdio sign-ins alike); `disableUser` the user's `disabled_at` `update` plus the same `endingCredentials` — every credential ends in the SAME batch that disables, so no instant exists in which the user is disabled but a credential works; `enableUser` only the `disabled_at` `update`. **Witnesses:** an action that takes an active admin away (a disable, a demote, a reissue of a claimed admin) also emits an unchanged `update` of every admin it leaves standing (`witnessingAdmins`) — the guard read "another admin stands", and re-writing that admin puts its `version` in the batch, so two such actions racing from the same stale read conflict instead of both committing; the engine re-runs the loser, whose fresh read refuses it. `setSignInCap` emits one `instance_settings` `insert` or version-guarded `update`; `login`/`claimOwner` also `update` the user's `last_login_at`.
 
 ### Outcomes and responses
 

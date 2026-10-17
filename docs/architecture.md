@@ -198,8 +198,9 @@ recurring_rules     (id PK, description, amount, type, period, next_due, currenc
                      account_id FK, category_id FK, merchant_key FK, user_id, version — Feature Design 017;
                      null on rules created before the migration, no backfill)
 
-settings            (id PK DEFAULT 'singleton', version — instance-wide settings; nothing is stored
-                     here today, a person's preferences live in user_settings)
+settings            (id PK DEFAULT 'singleton', max_sign_in_duration: 24h|7d|30d DEFAULT 30d — the longest a
+                     stdio sign-in may last on this instance (ADR-034 §4), set by an admin; no row means the
+                     default —, version — instance-wide settings; a person's preferences live in user_settings)
 user_settings       (user_id PK FK→users, locale: en|es|pt DEFAULT en,
                      locale_source: default|inferred|explicit DEFAULT default,
                      base_currency FK→currencies? — nullable, unset means "derive from locale"
@@ -213,9 +214,16 @@ dashboards          (id PK, name, html (nullable), source: inline|file DEFAULT i
                      UNIQUE(name) WHERE user_id IS NULL, UNIQUE(user_id, name) WHERE user_id IS NOT NULL;
                      see § Dashboards / `/ui` surface)
 
-users               (id PK, username UNIQUE? — stored normalized (trimmed, NFKC, lower-cased), null until the owner
-                     is claimed, password_hash? (argon2id PHC string, null until claimed),
-                     role: admin|member, created_at, disabled_at?, version)
+users               (id PK, username UNIQUE? — stored normalized (trimmed, NFKC, lower-cased), null only for an
+                     owner never claimed, password_hash? (argon2id PHC string; null until the person claims their
+                     invite, and again after an admin reissue), role: admin|member, created_at, disabled_at?
+                     (users are disabled, never deleted), last_login_at? (set by login, setup and an invite
+                     claim), version)
+invites             (id PK, user_id FK→users ON DELETE RESTRICT — the invited, unclaimed row —, code_hash UNIQUE —
+                     sha256 of the normalized invite code, never the code —, created_by? FK→users ON DELETE
+                     RESTRICT (the admin; null when the trusted terminal issued it), created_at, expires_at
+                     (created + `INVITE_TTL_MS`, 72 h), used_at?, version; a partial UNIQUE index on user_id
+                     WHERE used_at IS NULL keeps at most one unclaimed invite per user)
 sessions            (id PK, user_id FK→users ON DELETE CASCADE, token_hash UNIQUE — sha256 of the cookie
                      token, never the token — created_at, last_seen_at, expires_at, version)
 access_tokens       (id PK, user_id FK→users ON DELETE CASCADE, kind: pat|stdio (default pat — what minted it: a
@@ -250,7 +258,7 @@ can read every user's data. **user_id** is on every user-owned row; the map says
 | --- | --- | --- |
 | **Owned** | `accounts`, `credit_cards`, `bills`, `transactions`, `tags`, `budgets`, `recurring_rules` (`user_id` NOT NULL, FK RESTRICT); `user_settings` (PK, FK CASCADE); `transaction_tags` (via its parents) | Reads see only the user's rows; writes are stamped with and confined to the user. |
 | **Shared default** | `categories` (the seeded `cat-*`), `merchant_category` `origin = rule`, `dashboards` `source = file` (`user_id` NULL) | Every read returns *shared + own*; nobody can rename or delete one (`SHARED_DEFAULT_READ_ONLY_MESSAGE`, `models/tenancy.ts`, one validation error from every tool and route). A dashboard saved under a default's name is the user's own copy and replaces the default for them alone. |
-| **Shared dictionary / reference** | `merchants`, `currencies`, `currency_rates`, `settings` (singleton) | No owner. Any signed-in user with write scope refreshes exchange rates (market data); the merchant dictionary is never listed across users. |
+| **Shared dictionary / reference** | `merchants`, `currencies`, `currency_rates`, `settings` (singleton: the sign-in cap) | No owner. Any signed-in user with write scope refreshes exchange rates (market data); the merchant dictionary is never listed across users. |
 
 **`depsFor(principal)` / `runEffectsFor(principal)`.** The composition root (`composition/runtime.ts`) builds, per request and
 by partial application, a `Deps` whose repos are already bound to `principal.userId` (`accountsRepo(db, userId)` …),
@@ -390,13 +398,15 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     still reuses `correlationsRepo.spendingShifts` (a category-only, budget-unaware read — out of
     ADR-028's scope).
 
-23. **Exactly one owner, created by migration, claimed — never created — by setup (ADR-033 §7).**
+23. **The owner is created by migration and claimed — never created — by setup; every other user is created by an invite, and only by an invite (ADR-033 §5, §7).**
     Migration `0018_auth_identity` inserts one `users` row (`OWNER_USER_ID`, role `admin`, no username, no
     `password_hash`) on every database, fresh or existing, and touches no domain table; the owner is never created
     lazily at runtime. The owner is the "default user": stdio and every `disabled`-mode request act as it
-    (`OWNER_PRINCIPAL`). `controllers/auth.ts`'s `claimOwner` is the only flow that gives it credentials and emits
-    an `update` of the owner — **no flow inserts a `user`**, so no path can create a second, empty user a database's
-    data doesn't belong to. A setup code exists only while auth is `required` AND the owner has no credentials.
+    (`OWNER_PRINCIPAL`) — and, beyond being the first admin, it is no more special than any other admin: it can be disabled or
+    demoted once another admin stands. `controllers/auth.ts`'s `claimOwner` and `claimOwnerLocally` give it credentials with an
+    `update`; `controllers/users.ts`'s `inviteUser` is **the one flow that inserts a `user`** (an unclaimed row with its invite, admin-only),
+    and `claimInvite` only ever `update`s that row — so no path creates an empty user at claim time, and the data a database
+    holds never ends up behind an account it doesn't belong to. A setup code exists only while auth is `required` AND the owner was never claimed (`isNeverClaimed`: no username, no password — an owner an admin has since reissued is recovered by an invite, not by setup). **The instance always keeps one active admin** (an admin who can log in right now): `guardAdminChange` refuses a disable, a demote or a reissue that would leave none, and the admins left standing are re-written unchanged in the same batch (see § User management).
     **Secrets are stored only as hashes:** passwords as argon2id, session tokens, access tokens (`ftk_…`) and setup codes as sha256 — the
     plaintext session token exists in the cookie, a plaintext access token on the one page that shows it at creation, and the plaintext code in one stderr line, nowhere else — and are never
     logged (the Fastify logger redacts `cookie`, `set-cookie`, `authorization`). **Safety copy:** before a migration
@@ -431,6 +441,8 @@ names the file — there is no barrel. Rules and their data sit side by side.
 | Owner identity and the setup code | `owner.ts` | `owner.ts` (`UserRole`, `OWNER_USER_ID`, `UserEntitySchema`, `SetupCodeEntitySchema`) |
 | Usernames, passwords, login inputs | `password.ts` | `password.ts` |
 | Browser sessions | `session.ts` | `session.ts` |
+| Users, roles and invites (status, guards, the admin gate) and the credentials a disable or reset ends | `users.ts`, `revoke.ts` | `users.ts` (`Actor`, `InviteEntitySchema`, `InstanceSettingsEntitySchema`, `SignInCap`, `UserSummary`) |
+| What may not reach a log line | `redact.ts` | — |
 | Access tokens (personal and stdio sign-ins) | `token.ts` | `token.ts` |
 | Scopes | `scope.ts` | `scope.ts` |
 | Who a request acts as | — | `principal.ts` (`Principal`, `PrincipalVia`) |
@@ -456,7 +468,7 @@ After authentication the hook checks **scope** against the matched route: `req.r
 
 The only exemptions are `PUBLIC_ROUTES` (`diplomat/http/authPaths.ts`), matched on the route's **registered pattern +
 method** (`req.routeOptions.url`), never the raw URL: `GET|HEAD /api/health`, `GET|HEAD|POST /ui/login`,
-`GET|HEAD|POST /ui/setup`, `GET|HEAD /ui/assets/app.css`, and the two Protected Resource Metadata routes. A path with no route is protected. An integration test
+`GET|HEAD|POST /ui/setup`, `GET|HEAD|POST /ui/invite` (an invited person has no login yet), `GET|HEAD /ui/assets/app.css`, and the two Protected Resource Metadata routes. A path with no route is protected. An integration test
 enumerates every route Fastify registers (an `onRoute` listener attached before registration) and asserts each one
 outside the list is rejected without a credential (and, outside `/ui`, with a challenge). Controllers still do not take the principal: the edge turns it into that user's scoped `Deps` (§ Tenancy), so a controller can only ever see the caller's data.
 
@@ -511,18 +523,19 @@ only reads the headers and translates; the decisions are pure functions in `logi
 
 **Flows** (`controllers/auth.ts`, rules in `logic/auth/`, all through `runEffects`):
 `issueSetupCode` (startup), `claimOwner` (`POST /ui/setup`), `claimOwnerLocally` and `resetPassword` (the CLI, below), `login`, `logout`, `authenticate` (every request;
-writes nothing unless the session is stale, `SESSION_TOUCH_INTERVAL_MS`), `pruneExpiredSessions` (startup), `controllers/accessTokens.ts`'s `createToken`/`revokeToken`/`revokeSignInByHash`/`authenticateToken` (above), and
-`controllers/grants.ts`'s stdio sign-in flows (next section).
+writes nothing unless the session is stale, `SESSION_TOUCH_INTERVAL_MS`), `pruneExpiredSessions` (startup), `controllers/accessTokens.ts`'s `createToken`/`revokeToken`/`revokeSignInByHash`/`authenticateToken` (above),
+`controllers/grants.ts`'s stdio sign-in flows (next section) and `controllers/users.ts`'s user-management flows (§ User management).
+`login`, `claimOwner` and `claimInvite` each stamp `users.last_login_at` in the batch that starts the session.
 Hashing, randomness and the clock are injected (`AuthDeps.secrets`, `clock`, `newId`); `diplomat/auth/credentials.ts`
 supplies argon2id (OWASP first-choice parameters, named constants), the session/access-token/setup-code/user-code/device-code randomness and sha256. `adapters/auth.ts` adapts the
-auth entities' batches once, in `composition/auth.ts`'s `bindAuthRunEffects` (five entities: user, session, setup code, access token, client grant); their appliers are plain
-`versionedTableApplier`s registered at the composition root. The login/setup/logout pages and routes are
+auth entities' batches once, in `composition/auth.ts`'s `bindAuthRunEffects` (seven entities: user, session, setup code, access token, client grant, invite, instance settings); their appliers are
+`versionedTableApplier`s registered at the composition root — the user, invite and instance-settings ones rethrow a unique-constraint or singleton-insert race as a `VersionConflict`, so the engine re-runs the flow and it reports the real answer (`username_taken`, a replaced invite) instead of a 500. The login/setup/logout pages and routes are
 `diplomat/http/routes/auth.ts` (urlencoded body parsing lives only in that route scope, so `/api` keeps refusing it),
 with in-process per-IP/per-username throttling (`diplomat/http/rateLimiter.ts`).
 
-**CLI entrypoints.** `main.ts` hands any argument — `setup`, `auth`, `login`, `logout` (`wire/in/cli.ts`'s `CliCommand`), `help`/`--help`, or
+**CLI entrypoints.** `main.ts` hands any argument — `setup`, `auth`, `login`, `logout`, `users` (`wire/in/cli.ts`'s `CliCommand`), `help`/`--help`, or
 anything else — to `diplomat/cli/commands.ts` (loaded lazily, with `composition/cli.ts`, the composition root that builds its `CliIo`), which returns a process exit code; an unknown command prints the usage and exits non-zero and **never
-falls through to starting a server**. `login` and `logout` are described under *Stdio sign-in* below. `commands.ts` only routes; the handlers are `commands/{auth,login,setup}.ts`, and they reach the world through `CliIo` (`diplomat/cli/io.ts`) alone. `composition/cli.ts` opens the database like the server — the same `loadConfig`,
+falls through to starting a server**. `login` and `logout` are described under *Stdio sign-in* below. `commands.ts` only routes; the handlers are `commands/{auth,login,setup,users}.ts`, and they reach the world through `CliIo` (`diplomat/cli/io.ts`) alone. `composition/cli.ts` opens the database like the server — the same `loadConfig`,
 key resolution, `bootstrap` and migrations, so the owner row exists — over the engine context of
 `diplomat/db/engine.ts`'s `createEngineContext` (shared with `composition/runtime.ts`) and `composition/auth.ts`'s `AUTH_APPLIERS` /
 `createAuthDeps`; it starts neither HTTP nor stdio. Commands: `auth setup` and the first step of `setup [client]` run
@@ -574,9 +587,9 @@ holds a credential — except under an explicit `FINTRACK_AUTH=disabled`, where 
   diagram is in `docs/auth-flows.md`.
 - *The grant* (`controllers/grants.ts`; rules in `logic/auth/grant.ts`): `startGrant` (device code returned once, only its sha256 stored; user code drawn
   until no pending grant holds it), `approveGrant`/`denyGrant` (browser **session only**; the grant must be pending and unexpired; the approval binds the approving user, the chosen
-  scopes and duration, and `approved_at`; `session` is refused for a `cli` grant), `redeemGrant` (single use: it mints the `kind: stdio` token — expiry
+  scopes and the chosen duration **clamped to the instance cap** (`clampToCap`; only approvals are clamped — a sign-in already granted, or a grant approved before the cap fell, keeps its expiry), and `approved_at`; `session` is refused for a `cli` grant), `redeemGrant` (single use: it mints the `kind: stdio` token — expiry
   `signInExpiry(approved_at, duration)`, absolute and capped at `MAX_SIGN_IN_DURATION_MS` — and marks the grant `redeemed` in the same batch, so a replay is refused by the version guard; `pending`/`denied`/`expired`/`invalid` are the other answers, the
-  terminal ones final), `findConsent` (the consent page's data and pre-selection: the asker's hint, else this user's `lastRedeemed` choice for this client and profile, else read-only/24 h),
+  terminal ones final), `findConsent` (the consent page's data and pre-selection: the asker's hint, else this user's `lastRedeemed` choice for this client and profile, else read-only/24 h — all clamped to the instance cap — plus `durations`, what the page may offer: `offeredDurations(channel, cap)`, nothing above `settings.max_sign_in_duration`),
   `pruneExpiredGrants` (startup: unredeemed grants past their window are deleted, and so are redeemed ones superseded by a newer approval — `logic/auth/grant.ts`'s `supersededGrants` keeps the newest per user, profile and client, the pre-selection's memory; a live pending or approved grant is never touched). The grant is a database row, so
   it works across processes.
 - *The page* (`diplomat/http/routes/connect.ts`, `connectPages.ts`, `ui/connect.html`): `GET|POST /ui/connect`, behind the session and the CSRF check
@@ -586,6 +599,35 @@ holds a credential — except under an explicit `FINTRACK_AUTH=disabled`, where 
 - *Terminal:* `diplomat/cli/commands/login.ts` — `fintrack login [--profile] [--duration] [--scope]` runs the same protocol over the `cli` channel (flags only pre-select the page): it feeds `login_requested`, then `ticked` (or `interrupted` after Ctrl-C) while a request is open, prints what the protocol presents, and the result is kept
   in the keychain profile (revoked again if the keychain refuses); `fintrack logout [--profile]` revokes the saved sign-in (`revokeSignInByHash`) and deletes the entry, idempotently;
   `setup`'s last step offers the same flow for the client's profile. `src/composition/signIn/server.ts` starts the temporary loopback app (`buildHttpApp`, auth required, a free port of `localhost` — loopback only, and a host name of its own so its session cookie, keyed by host, never replaces another FinTrack's at `127.0.0.1`) that serves `/ui/connect` for the duration of the login — never a server already on `HOST:PORT`, which a healthy `/api/health` does not prove opened this database. The shared repos/appliers/runner assembly is `src/composition/runtime.ts`'s `createRuntime` (also what `composition/boot.ts` uses).
+
+**User management (ADR-033 §2, §5; ADR-034 §4).** Several people share one instance, each with a private set of finances (§ Tenancy).
+There is no self-registration and an admin never learns a password:
+
+- *Roles and status.* `UserRole` is `admin | member`. A user is `invited` (a username and role, no password yet), `active` or `disabled`
+  (`logic/auth/users.ts`'s `userStatus`). Users are disabled, never deleted — the foreign keys to `users` that matter (`invites`) are RESTRICT — and a disabled
+  user's rows stay theirs.
+- *The flows* (`controllers/users.ts`, each gather → decide → persist through `runEffects`, `Actor` first): `inviteUser` (inserts the unclaimed `users` row and its `invites`
+  row; the plaintext code `JKMN-…` is in the response and nowhere else, only its sha256 is stored; username uniqueness is checked on the normalized name),
+  `reissueInvite` (a new invite for an unclaimed user; for a claimed one it is an admin-driven password reset — `password_hash` cleared and every session, token
+  and stdio sign-in ended in the same batch; the previous unclaimed invite is removed in the same batch), `claimInvite` (the one public flow: the invite must be unused and unexpired,
+  its user unclaimed and not disabled — otherwise the single `invalid_invite`; it `update`s the user's password, spends the invite and starts a session in one batch), `disableUser`
+  (the user's `disabled_at` **and** `endingCredentials` — every session deleted, every live token and stdio sign-in revoked — in one batch), `enableUser` (clears `disabled_at` only; nothing is revived), `setRole`,
+  `setSignInCap`, and the read-only `listUsers`.
+- *The actor.* `models/auth/users.ts`'s `Actor` is a browser **session** (a `Principal` with `via: session`, and — for the actions that ask — the typed password) or the trusted **terminal**. `logic/auth/users.ts`'s
+  `authorizeActor` is the gate every flow passes first: a `token`/`stdio`/`owner` principal is refused (`session_required`), a non-admin (a member, a disabled or password-less admin) is
+  `admin_required`. The acting user is re-read from the database, so a demotion takes effect on the very next request. Step-up (invite, reissue, disable, set-role, the cap) re-verifies the admin's password
+  with the same cost whether or not it matches; `enableUser` and `listUsers` do not re-ask. The terminal holds the database key, so it has no step-up and acts as no user.
+- *The guards* (`logic/auth/users.ts`'s `guardAdminChange`, a table over `AdminChange = disable | demote | reissue`): nobody disables or demotes themself; no action leaves zero **active admins** (an admin with credentials and not disabled — `isActiveAdmin`).
+  Because two admins can read "the other one stands" at the same moment, `controllers/users.ts`'s `witnessingAdmins` re-writes every admin an action leaves standing, unchanged, in the same batch: their `version` joins the decision, the second commit finds a stale version, the engine re-runs the flow and the re-run is refused.
+- *Edges.* Session-only and admin-only, never a tool and never a route under `/api` or `/mcp` — a bearer token of any scope reaches none of it (and `/ui` ignores a bearer altogether).
+  `diplomat/http/routes/users.ts`: `GET|POST /ui/access/users` and `POST /ui/access/users/{sign-in-cap,:id/reissue,:id/disable,:id/enable,:id/role}`, server-rendered by `userPages.ts` / `ui/users.html`, behind the session, the CSRF check and `session.ts`'s `requireAdmin`:
+  a non-admin gets Fastify's own not-found reply (`reply.callNotFound()`), the page and every form post alike, so the page does not announce itself. (A form POST to a path that really does not exist is a `415` — the urlencoded parser is registered only inside the form scopes — which is the one difference.)
+  The invite result page (`ui/userInvited.html`) is the only place the code and link are rendered. `diplomat/http/routes/invite.ts`: `GET|POST /ui/invite` (`ui/invite.html`), public like `/ui/setup`: `Referrer-Policy: strict-origin` on every answer (never `no-referrer`: a browser then sends `Origin: null` with the form and the CSRF check would refuse every claim), rate-limited per client address and per code (`AttemptLimiter`), Origin-checked when a browser declares one, and on success a session cookie and `303` to `/ui`.
+  The logger's request serializer (`composition/http.ts`) replaces the value of the `code` query parameter (`logic/auth/redact.ts`), since redaction paths cannot reach inside a URL. The tokens page links to the users page for an admin only. The terminal: `diplomat/cli/commands/users.ts` (`users list | invite <u> [--admin] | reissue | disable | enable | role <u> <member|admin>`),
+  routed like the auth commands (`Shell.deps`/`run`, `failed`/exit codes), printing the link built from `Shell.inviteOrigin` (`PUBLIC_URL`, else the sidecar's default origin).
+- *Errors.* `admin_required` (answered 404), `username_taken`, `cannot_change_self`, `last_admin`, `user_disabled`, `invalid_invite`, `unknown_user`. The messages are neutral (`AUTH_MESSAGES`); no `Remedy` is used, since the operation that fixes a refusal (enabling a user) is a button on the users page and a terminal command, never a tool or a route — each of those two edges words the next step itself (`REFUSAL_MESSAGE` in `routes/users.ts`, `REFUSAL_HINT` in `commands/users.ts`).
+- *The cap.* `settings.max_sign_in_duration` (`24h | 7d | 30d`, default 30 d, no row = default; `SignInCap`) limits what a person may choose when approving a stdio sign-in: `findConsent` offers nothing above it and `approveGrant` clamps whatever a hand-made form posts. It never shortens a sign-in already granted.
+- *Migration `0022_user_management`* only adds structure (`invites`, `users.last_login_at`, `settings.max_sign_in_duration`): it is not data-rewriting, so no safety copy is taken.
 
 **Startup order** (`composition/boot.ts`, and every command that opens the database): `openDatabase` → `bootstrap` = **version guard** (`diplomat/db/versionGuard.ts`'s `checkDatabaseNotAhead`:
 the database's newest applied migration, `migrationJournal.ts`'s `lastAppliedMillis`, against the newest this build's journal ships — `logic/migration.ts`'s `isDatabaseAhead`; a database that is ahead makes `bootstrap` return an error `DatabaseAhead` (`models/database.ts`), which `main.ts` and the CLI print with `databaseAheadMessage` and exit 1; nothing has been written) → safety copy (if a data-rewriting migration is pending) → migrate → seed → `prepareAuth` (identity deps; prune expired sessions and grants) → connect stdio → sidecar → announce the setup code.
@@ -655,7 +697,8 @@ routes, not `RouteDefinition`s (no OpenAPI entry) — are mounted by `routes/ui.
 `registerRoutes` alongside `mountRoutes` (ADR-027 Phase 1; see § Dashboards / `/ui` surface), its live-update stream split
 into open / forward / session-recheck steps. `routes/auth.ts`'s `registerAuthRoutes` (the `/ui/login`, `/ui/setup`,
 `/ui/logout` pages — browser HTML like `routes/ui.ts`, no OpenAPI entry; mounted only when auth is `required`) is called
-from `registerRoutes` too, as are `routes/tokens.ts`'s `registerTokenRoutes` (`/ui/access/tokens` pages, session-only)
+from `registerRoutes` too, as are `routes/tokens.ts`'s `registerTokenRoutes` (`/ui/access/tokens` pages, session-only),
+`routes/users.ts`'s `registerUserRoutes` (`/ui/access/users`, session-only and admin-only) and `routes/invite.ts`'s `registerInviteRoutes` (`/ui/invite`, public),
 and `routes/wellKnown.ts`'s `registerProtectedResourceMetadataRoutes` (both likewise only when auth is `required`); each
 page is a named handler the registration function wires. `routes.ts` reduces to construction + aggregation:
 `buildRouteDefinitions` concatenates every domain's list into the one array `mountRoutes`/`buildOpenApiDocument`
@@ -751,5 +794,5 @@ shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-0
 - ADR-030: extract the effect engine into a DB-agnostic core behind an explicit adapter port — delivers ADR-029 Phase 3 at the agreed 3a scope, SQLite stays the sole adapter (Postgres/3b is its own future ADR); refines/extends ADR-021/022/023 (accepted; Phase 1 — the port seam in place, still inside `diplomat/db`: `TransactionRunner`/`isTransientContention` injected in place of a direct `Db`/`isSqliteBusy` dependency, `runEffects`/`runEffectsSequence`/`EntityApplier`/`ApplierRegistry`/`ReadBack` generic over an opaque `Tx`, behavior-preserving — complete; Phase 2 — relocated the driver-free core and the `Persistable`/`PersistenceMeta` data contract to `src/effects/`, decoupled the engine from FinTrack's error taxonomy (generic over an injected `conflictError` factory), `diplomat/db` is now the SQLite adapter (`versionedTableApplier`), lint-enforced dependency isolation — complete; Phase 3 (repo/package lift-out) — delivered by ADR-031; 3b (Postgres adapter) — deferred, own ADR)
 - ADR-031: the effect engine lives in its own repository and is consumed as the published `@rfc0/effect-runner` package (MIT, npmjs.com, semver-governed port) — FinTrack keeps only the SQLite adapter (`diplomat/db`) (accepted; complete)
 - ADR-032: Docker distribution — container image on GHCR, HTTP transport by default, SQLite on a volume; `HOST`, `FINTRACK_DB_KEY_FILE`, fail-fast key resolution and lazy keychain import (accepted; Phase 1 — container-ready runtime — complete, Phase 2 — image/CI/publish — complete)
-- ADR-033: authentication and multi-user — identity (owner row by migration, password login, sessions, setup code), personal access tokens, in-process OAuth 2.1 AS for MCP, per-user tenancy; phased (accepted; Phase 1 — identity: owner row, sessions, setup code, UI login, auth mode, minimal public surface — complete; Phase 2 — personal access tokens, scopes, challenges, Protected Resource Metadata — complete; Phases 3–4 pending)
+- ADR-033: authentication and multi-user — identity (owner row by migration, password login, sessions, setup code), personal access tokens, in-process OAuth 2.1 AS for MCP, per-user tenancy; phased (accepted; Phase 1 — identity: owner row, sessions, setup code, UI login, auth mode, minimal public surface — complete; Phase 2 — personal access tokens, scopes, challenges, Protected Resource Metadata — complete; Phase 4 — per-user tenancy and admin user management by invitation — complete except `fintrack key export` and the npm→Docker guide; Phase 3 pending)
 - ADR-034: authentication on by default (`FINTRACK_AUTH=required` everywhere), terminal owner claim inside `setup`, and browser sign-in for stdio sessions with chosen expiry; revises ADR-033 §1 (accepted; step 1 — auth by default, `setup`/`auth setup`/`auth reset-password`, PAT expiry without "never" — and step 2 — stdio sign-in, `login`/`logout`, `/ui/connect`, the startup version guard — are implemented)

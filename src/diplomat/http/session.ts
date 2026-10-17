@@ -3,6 +3,7 @@ import type { AppError } from '../../common/errors.js';
 import { authenticate } from '../../controllers/auth.js';
 import { authenticateToken } from '../../controllers/accessTokens.js';
 import { authErrors } from '../../models/auth/errors.js';
+import { UserRole } from '../../models/auth/owner.js';
 import { type Principal, PrincipalVia } from '../../models/auth/principal.js';
 import type { AuthRoutesContext } from './context.js';
 import { readCookie, SESSION_COOKIE_NAME } from './cookies.js';
@@ -32,3 +33,11 @@ export const resolveBearerPrincipal = async (auth: AuthRoutesContext, token: str
  *  grants access also insists on a browser session. */
 export const requireSession = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> =>
   req.principal?.via === PrincipalVia.enum.session ? undefined : replyError(reply, authErrors.sessionRequired);
+
+/** User management is for administrators. Anyone else — a member — gets the answer for a page that does not exist
+ *  (Fastify's own not-found reply), not a 403 that would reveal it is there. */
+export const requireAdmin = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> => {
+  if (req.principal?.role === UserRole.enum.admin) return undefined;
+  reply.callNotFound();
+  return reply;
+};

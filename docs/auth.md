@@ -5,13 +5,13 @@ and what that does and doesn't protect. Decisions and rationale: [ADR-033](adr/0
 Internals (hook, principal, tables): [`architecture.md`](architecture.md) § Authentication.
 The flows as diagrams (startup, setup, login, the auth hook, logout/SSE, existing databases): [`auth-flows.md`](auth-flows.md).
 
-> **Status: Phase 2 of 4, plus [ADR-034](adr/034-local-auth-and-stdio-sign-in.md) steps 1 and 2.** This release ships the
-> identity foundation — exactly **one user** (the *owner*), password login, sessions, the setup code — and **personal
-> access tokens**: `Authorization: Bearer ftk_…` for `/api` and `/mcp`, with read/write scopes. **Authentication is on by
-> default, on every install** — a local npm one included: the owner is claimed in the terminal during
-> `setup` ([First setup](#first-setup)), and **a stdio session signs in too**, through the browser, for a duration the
-> person chooses ([Signing in Claude (stdio)](#signing-in-claude-stdio)). MCP OAuth (Phase 3) and multiple users with
-> per-user data (Phase 4) come later — see [What comes next](#what-comes-next).
+> **Status: Phases 1, 2 and 4 of ADR-033, plus [ADR-034](adr/034-local-auth-and-stdio-sign-in.md) steps 1 and 2.** This release ships
+> identity (password login, sessions, the setup code), **personal access tokens** (`Authorization: Bearer ftk_…` for `/api` and `/mcp`, with
+> read/write scopes), **several users on one instance** — each with a private set of finances (row-level isolation, see
+> [Threat model](#threat-model-so-far)) — and **admin user management by invitation** ([Users](#users-roles-and-invitations)). **Authentication is on by
+> default, on every install** — a local npm one included: the owner is claimed in the terminal during `setup` ([First setup](#first-setup)), and
+> **a stdio session signs in too**, through the browser, for a duration the person chooses ([Signing in Claude (stdio)](#signing-in-claude-stdio)).
+> MCP OAuth (Phase 3) and `fintrack key export` come later — see [What comes next](#what-comes-next).
 
 ## Auth modes
 
@@ -64,20 +64,24 @@ Invalid combinations are rejected at startup with an actionable message.
 
 ## The owner, and how an existing database is claimed
 
-There is **exactly one owner**, and every path leads to it.
+An instance starts with **one owner**, and every path to the data you already have leads to it. Other people join by
+[invitation](#users-roles-and-invitations).
 
 - A migration inserts the owner row — a stable id, role `admin`, **no username or password** — on **every** database,
   fresh or existing. It touches no other table; your accounts, transactions, budgets and settings are unchanged.
-- The owner *is* the "default user": stdio, and requests in `disabled` mode, act as it.
+- The owner *is* the "default user": requests in `disabled` mode (and a stdio session under it) act as it. Beyond being the first
+  administrator it is nothing special: once another administrator stands, an admin can demote or disable it like anyone else.
 - **Setup claims the owner; it never creates a user.** `/ui/setup` and `fintrack auth setup` both set the existing
-  owner's username and password. There is no code path that inserts a second user, so a database that already holds your
-  data can never end up with an empty account the data doesn't belong to.
+  owner's username and password. The **only** flow that inserts a user is an admin's *invite*, and claiming an invite only updates the row
+  the invite created — so a database that already holds your data can never end up with an empty account the data doesn't belong to.
+- **Setup is for an owner nobody has ever held.** If an admin later reissues the owner's invite (a password reset), the owner keeps its
+  username; it is recovered with that invite, not with a setup code, and `/ui/setup` stays closed.
 
 **An existing database (for example, one built up over stdio) therefore keeps all its data.** Upgrade, claim the owner
 once ([First setup](#first-setup)), and log in to the data you already have. Nothing is copied or migrated.
 
-> Moving an npm/stdio database into the Docker volume (and exporting its keychain key) is a Phase 4 deliverable
-> (`fintrack key export`). Until then, claiming works on a database file the container can already open.
+> Moving an npm/stdio database into the Docker volume (and exporting its keychain key) needs `fintrack key export`, which is not
+> built yet ([What comes next](#what-comes-next)). Until then, claiming works on a database file the container can already open.
 
 ## First setup
 
@@ -179,7 +183,7 @@ Without the code nobody can claim an exposed instance: there is no window in whi
   dead immediately — not merely forgotten by the browser.
 - The `next` parameter that returns you to the page you were on is accepted only if it is a same-origin path under
   `/ui`; anything else lands on `/ui`.
-- A disabled user (Phase 4) or a deleted session is rejected on the next request.
+- A [disabled](#disabling-a-user) user or a deleted session is rejected on the next request.
 
 ## Signing in Claude (stdio)
 
@@ -213,9 +217,10 @@ So the sign-in happens outside the protocol, and what it produces is read from t
 | **This session only** (worded after the client — "This Claude Desktop session only") | Kept in the process's memory, **never written to the keychain**. Revoked when the process exits (best effort); capped at **12 hours** in case the process died without cleaning up. The next Claude session asks again. Not offered for `fintrack login`. |
 | **24 hours** (default) | Saved in the OS keychain for the profile; expires 24 h after you approved. |
 | **7 days** | Saved in the keychain. |
-| **30 days** (the maximum) | Saved in the keychain. |
+| **30 days** (the default maximum) | Saved in the keychain. |
 
 - **Expiry is absolute**, counted from your approval; using the sign-in never extends it. When it ends, the next call shows a fresh link.
+- **An admin can lower the maximum** for the whole instance ([the sign-in cap](#the-sign-in-cap)): the page then offers nothing longer, and an approval is clamped to it. Sign-ins already granted keep their expiry.
 - A restart of the client needs no new approval while a saved sign-in is still valid ("silently signed in").
 - **Every sign-in is visible and revocable** at [`/ui/access/tokens`](#personal-access-tokens) — a "Claude sign-ins" table (client,
   profile, access, signed in, expires, last used) beside your personal access tokens. Revoking takes effect on that client's **next call**: the
@@ -238,7 +243,7 @@ In this order, and only the first that applies:
 
 `FINTRACK_PROFILE` (default `default`) names the saved sign-in. Give each client config its own profile and each signs in separately
 (`setup --profile work` writes it into the client's `env`; `login --profile work` signs it in; `logout --profile work` signs it out).
-Today they all act as the one owner; the profile is what lets them be different users after multi-user (ADR-033 Phase 4).
+Each profile holds its own sign-in, so two client configs on one machine can be signed in as two different users — each approves in the browser as themselves.
 
 ### `FINTRACK_TOKEN`
 
@@ -290,8 +295,8 @@ Unknown commands (`fintrack bogus`, `fintrack auth bogus`) print the usage and e
 There is no recovery email; recovery is a terminal command, trusted the same way as [`auth setup`](#first-setup):
 
 ```bash
-npx @rafaelfcarneiro/fintrack@latest auth reset-password            # the owner (the only user for now)
-npx @rafaelfcarneiro/fintrack@latest auth reset-password --user ana # a named user (Phase 4)
+npx @rafaelfcarneiro/fintrack@latest auth reset-password            # the owner
+npx @rafaelfcarneiro/fintrack@latest auth reset-password --user ana # a named user
 ```
 
 It asks for the new password twice, no echo (or `--password-stdin`), then in **one write**:
@@ -301,8 +306,75 @@ It asks for the new password twice, no echo (or `--password-stdin`), then in **o
 - **revokes every still-live access token** of that user (`revoked_at` is set and the rows are kept, so the list still
   shows what existed).
 
-It prints how many sessions ended and tokens were revoked. A session created by a login in the instant between the command reading the user's sessions and committing is not ended by that run; run it again if the server was busy. Other users' rows are never touched. An unknown `--user` is a
+(For someone who should choose their own password instead, [`users reissue`](#reissue-and-password-resets) clears it and issues an invite.) It prints how many sessions ended and tokens were revoked. A session created by a login in the instant between the command reading the user's sessions and committing is not ended by that run; run it again if the server was busy. Other users' rows are never touched. An unknown `--user` is a
 clear error before any password is asked; an unclaimed owner is pointed at `auth setup`.
+
+## Users, roles and invitations
+
+Several people can share one instance, each seeing only their own finances (the shared defaults aside — see the [threat model](#threat-model-so-far)).
+There is no self-registration, and **an administrator never learns anyone's password**: an admin creates a user by choosing a username and a role, and the
+person sets their own password by claiming an invite.
+
+| Role | May |
+|---|---|
+| `member` | Everything on their own data: the dashboards, `/api`, MCP, their own tokens and Claude sign-ins. User management does not exist for them (below). |
+| `admin` | The same, **plus** user management and the instance's sign-in cap. The owner is the first admin and nothing more special than that. |
+
+**User management is session-only and admin-only.** It is browser pages under `/ui/access/users` and, in a terminal that can open the database,
+`fintrack users …`. It is **not** an MCP tool, not an `/api` route, and unreachable with a bearer token of any scope (`/ui` ignores a bearer altogether). A member's
+request to any of those pages — the list or any form post — is answered exactly as for a page that does not exist (the framework's own `404`), not with a `403` that would
+announce it. (One difference remains: a form POST to a path that really does not exist is a `415`, because the form parser is only registered inside the pages that take forms.)
+The Access page links to Users for admins only.
+
+### Inviting someone
+
+At **`/ui/access/users`** (admins), *Invite a user* takes a username, a role and **your own password again** (like creating a token: a script running in a dashboard page
+holds your session but not your password, so it cannot invite anyone on its own). The result page shows a **link and a code, once** — FinTrack keeps only the code's SHA-256 —
+valid for **72 hours** and for a single use. Send them privately: whoever opens the link first chooses the password.
+
+- The user exists straight away as `invited`: a username and a role, no password, so nobody can log in as them yet. Usernames are unique, case-insensitively, among everyone —
+  invited and disabled users included.
+- **At most one unclaimed invite per user:** issuing a new one removes the previous one in the same write.
+- From a terminal: `npx @rafaelfcarneiro/fintrack@latest users invite ana [--admin]` prints the link and the code (no password — the terminal holds the database key). The link names `PUBLIC_URL`, else
+  this install's default address; the code can always be typed instead.
+
+### Claiming an invite
+
+The link opens **`/ui/invite?code=…`** (the code may also be typed in): the page shows the form for the invite code and a password (at least 12 characters, no other rules —
+the same as `/ui/setup`). Claiming **updates the row the invite created** (it sets the password and stamps the first login), spends the invite, and starts a session, so the person
+**lands signed in**.
+
+- **Single use, expiring, hashed.** A used, expired, mistyped, revoked (replaced by a newer one) or disabled-user's invite is refused with one and the same message.
+- **Throttled like setup:** failures are counted per client address and per code (5 per code and 20 per address in 15 minutes, then `429`), and the POST is Origin-checked whenever a browser declares one.
+- **An invite link is a short-lived bearer secret.** The page answers `Referrer-Policy: strict-origin` (also on its error answers: no path or query — so never the code — leaves in a `Referer`; it is deliberately not `no-referrer`, because with that policy a browser sends `Origin: null` on the page's own form post and the [CSRF check](#csrf) would refuse every claim), is `no-store` and locked down like the other sign-in pages, and the HTTP request log
+  replaces the value of the `code` query parameter. The code is never stored or logged in plaintext; the one place it is shown is the invite result page.
+
+### Reissue and password resets
+
+*Reissue invite* (or `users reissue ana`) works on a user who has not claimed their invite yet — it replaces it — **and as an admin-driven password reset** for one who has: in the same write it clears their
+password and **deletes every session and revokes every token and Claude sign-in** they hold, so the new invite is the only way back in. (It asks your password; a disabled user must be enabled first.)
+This is different from the terminal's [`auth reset-password`](#reset-a-password), where the *operator chooses* the new password.
+
+### Disabling a user
+
+*Disable* (or `users disable ana`) sets `disabled_at` and, **in the same write**, deletes every session and revokes every personal access token and stdio sign-in of that user. There is no instant at which the user is
+disabled but a credential still works: the next request on every channel — login, a session cookie, a bearer token, a Claude sign-in over stdio, and a sign-in they had approved but not yet picked up — is refused.
+Users are **disabled, never deleted**: their rows stay theirs, and their username stays taken.
+
+*Enable* only restores the ability to log in. The sessions, tokens and sign-ins ended at the disable stay ended; the person logs in again and signs their clients in again.
+
+### Guards
+
+- An admin **cannot disable or demote themself** — ask another admin.
+- **The instance always keeps at least one active admin** (an admin who can log in right now): disabling, demoting or resetting the last one is refused, from the browser and from the terminal alike. Two admins acting on each other at the same moment cannot both succeed: each action re-writes
+  the admins it leaves standing, so one of the two finds the world changed, re-checks, and is refused.
+- Role changes, disables and resets take effect on the person's very next request (their role is read from the database every time).
+
+### The sign-in cap
+
+Admins can lower the longest a Claude sign-in may last for the whole instance (the *Longest Claude sign-in* form on the Users page: 24 hours, 7 days or 30 days; the default is 30 days, today's maximum).
+The consent page offers only durations up to the cap, and **approving clamps** whatever was chosen to the cap — a hand-made form cannot ask for more. The cap applies to approvals made **after** it is set:
+**sign-ins already granted keep the expiry they were given** (and so does one approved before the cap fell but not yet picked up). "This session only" (at most 12 hours) is always allowed. Changing the cap asks your password.
 
 ## Personal access tokens
 
@@ -409,7 +481,7 @@ Without a session, in `required` mode, exactly these answer:
 | Route | Why |
 |---|---|
 | `GET /api/health` | Liveness plus `db: ok \| error` — nothing else. The container `HEALTHCHECK` uses it. |
-| `GET`/`POST /ui/login`, `GET`/`POST /ui/setup` | They create the session. |
+| `GET`/`POST /ui/login`, `GET`/`POST /ui/setup`, `GET`/`POST /ui/invite` | They create the session (`/ui/invite` is where an invited person claims their invite). |
 | `GET /ui/assets/app.css` | The one stylesheet those two pages use. |
 | `GET /.well-known/oauth-protected-resource`, `GET /.well-known/oauth-protected-resource/mcp` | [Protected Resource Metadata](#protected-resource-metadata) (RFC 9728): a client reads it from the 401 challenge, before it holds any token. Only in `required` mode. |
 
@@ -437,7 +509,7 @@ script) has no browser to defend.
 
 ## Brute-force protection
 
-Login and setup are rate-limited in process, per client IP **and** per submitted username: 5 failures per username
+Login, setup and [invite claims](#claiming-an-invite) are rate-limited in process, per client IP **and** per submitted username (for a claim, per code): 5 failures per username
 and 20 per IP in any 15 minutes, then `429` — even for the correct password — until the window clears. A successful
 login clears that username's count. Failures are counted for unknown usernames too, so the limiter reveals nothing.
 Behind a reverse proxy set `TRUST_PROXY`, or every client shares the proxy's IP and 20 failed logins from anyone
@@ -480,11 +552,15 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 - Guessing credentials online (argon2id, rate limits, one generic error, constant-time unknown-user path).
 - Someone claiming an exposed fresh instance before you (the setup code lives only in your logs).
 - A leaked database file or backup yielding passwords or sessions (only hashes are stored; the database is encrypted).
-- Credentials in logs (cookies, `Set-Cookie` and `Authorization` are redacted; passwords, tokens and codes are never
+- Credentials in logs (cookies, `Set-Cookie` and `Authorization` are redacted, and so is the `code` query parameter of an invite link; passwords, tokens and codes are never
   logged — the one deliberate exception is the setup code's single log line).
 - A leaked database yielding usable access tokens (only SHA-256 is stored; the plaintext is shown once).
 - A read-only token doing anything but reading (REST route scope, MCP tool scope checked at the edge and again in the tool).
 - One token minting or widening another (token management is session-only).
+- **A token, a script or MCP creating or promoting users**, or a member reaching user management: it is session-only and admin-only, with no `/api` route and no MCP tool; a member is answered as for a page that does not exist, and every invite, reissue, disable, role change and cap change re-asks the admin's password (so a script in a dashboard page cannot do it with the session alone).
+- **A leaked invite link** being used *after* the invite is spent, expired or replaced (single use, 72 hours, replaced by a reissue), or guessed (100 random bits, throttled), or read from a `Referer` or a log line (`strict-origin`, the parameter is redacted).
+- **A disabled or reset user keeping access** through any credential they already held (all of them end in the same write as the disable or reset).
+- **Leaving the instance with nobody to administer it**, including by two admins acting on each other at once.
 - **A program that merely runs a FinTrack stdio server in your name** (a client config you did not write, a script that spawns it): it gets "not signed in" until *you* approve a
   request in the browser, for the scopes and duration you pick, and you can revoke it any time at `/ui/access/tokens`.
 - **A sign-in link used as a lure** (the phishing defence, [above](#phishing-and-its-limits)): the link and code grant nothing by themselves, approval needs your own login
@@ -523,16 +599,18 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
   lock the owner's login out for 15 minutes by spamming wrong passwords (the cost of not revealing which usernames
   exist). The setup-code and session machinery are unaffected.
 - **A restarted process forgetting rate-limit state.** The limiter is in memory.
-- **More than one person.** Still one user: a second login cannot be created yet (admin user management is the next step). The data layer is ready for it — every owned row carries `user_id` and every read and write goes through that user's scoped dependencies — but note what that isolation is: **logical (row-level) inside one encrypted database, not cryptographic.** There is one database key per instance; whoever holds the key and the volume (or the `.bak` files beside it) can read every user's data, and exchange rates are shared market data any signed-in user with write scope can refresh.
+- **One person reading another's data when you hold the key.** Users are isolated **logically (row by row) inside one encrypted database, not cryptographically**: every owned row carries its user and every read and write goes through that user's scoped dependencies, but there is one database key per instance, and whoever holds the key and the volume (or the `.bak` files beside it) can read every user's data. Admins manage *who can sign in*, not a wall between people and the operator. Some data is shared on purpose: the seeded default categories and bundled dashboards (read-only for everyone) and exchange rates (market data any signed-in user with write scope can refresh).
+- **An invite or a password reset handed to the wrong person.** The link and code are bearer secrets for up to 72 hours; whoever claims first becomes that user. Send them privately, and reissue if in doubt (it also ends every credential the user held).
+- **The owner of the machine.** `fintrack users …` and `auth …` run with the database key and need no password; whoever can run them is the operator.
 - **Eavesdropping on a token.** A bearer sent over plain HTTP across a network can be read; use TLS (Phase 3 documents the proxy deployment).
 
 ## What comes next
 
-Phase 1 (identity) and Phase 2 (personal access tokens, scopes, Protected Resource Metadata) are done, and
+Phase 1 (identity), Phase 2 (personal access tokens, scopes, Protected Resource Metadata) and most of Phase 4 (per-user data, admin user management by invitation) are done, and
 [ADR-034](adr/034-local-auth-and-stdio-sign-in.md) steps 1 and 2 with them (authentication on by default, the terminal owner claim and
 password reset, no never-expiring tokens; the stdio browser sign-in with a chosen expiry, `login`/`logout`, the startup version guard).
 
 | Step / phase | Adds |
 |---|---|
 | 3 — MCP OAuth | An in-process OAuth 2.1 authorization server so OAuth-capable MCP clients can connect; the documented reverse-proxy + TLS deployment supersedes the loopback-only publish rule. |
-| 4 — multi-user | `user_id` on every user-owned table (backfilled to the owner), per-user scoping, stdio identity from ADR-034's sign-in (there is no `FINTRACK_USER`), admin user management, and `fintrack key export` + the npm→Docker move guide. |
+| 4, remainder | `fintrack key export` and the npm→Docker move guide (ADR-033 §7). |

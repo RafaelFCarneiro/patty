@@ -121,7 +121,7 @@ There is no "signed in forever". The consent screen (and `fintrack login --durat
 - **Every stdio sign-in is visible and revocable** under `/ui/access` (client name, profile, scopes, approved
   at, expires at, last used). Revoking takes effect on the next call.
 - After ADR-033 Phase 4, an admin can lower the maximum duration for the whole instance (an instance setting).
-  The user's choices are capped at that maximum.
+  The user's choices are capped at that maximum. *(Built with ADR-033 Phase 4 step 2: `settings.max_sign_in_duration`, `24h | 7d | 30d`, default `30d`; the consent page offers nothing above it and approval clamps. Sign-ins already granted keep their expiry.)*
 
 ### 5. Bootstrap and recovery happen in the terminal, as part of `setup`
 

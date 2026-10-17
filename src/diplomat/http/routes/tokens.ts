@@ -3,6 +3,8 @@ import type { z } from 'zod';
 import { createToken, listTokens, revokeToken } from '../../../controllers/accessTokens.js';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { authErrors } from '../../../models/auth/errors.js';
+import { UserRole } from '../../../models/auth/owner.js';
+import type { Principal } from '../../../models/auth/principal.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
 import { validation } from '../../../models/error.js';
 import { CreateTokenFormSchema } from '../../../wire/in/auth.js';
@@ -25,13 +27,23 @@ type Limiter = ReturnType<typeof createAttemptLimiter>;
 const showTokens = async (
   ctx: AuthRoutesContext,
   reply: FastifyReply,
-  userId: string,
+  principal: Principal,
   status: number,
   error?: string,
-) => page(reply, status, await renderTokensPage({ tokens: await listTokens(ctx.deps, userId), error }));
+) =>
+  page(
+    reply,
+    status,
+    await renderTokensPage({
+      tokens: await listTokens(ctx.deps, principal.userId),
+      // Only an administrator is shown the way to user management; to anyone else the page does not exist.
+      showUsersLink: principal.role === UserRole.enum.admin,
+      error,
+    }),
+  );
 
 const listPage = (ctx: AuthRoutesContext) => (req: FastifyRequest, reply: FastifyReply) =>
-  showTokens(ctx, reply, req.principal!.userId, 200);
+  showTokens(ctx, reply, req.principal!, 200);
 
 // A wrong step-up password is a refused action inside a valid session; anything else is a generic failure.
 const refusalOf = (error: AppError): { status: number; message: string } =>
@@ -40,11 +52,12 @@ const refusalOf = (error: AppError): { status: number; message: string } =>
     : { status: httpStatus(error), message: AUTH_MESSAGES.tryAgain };
 
 const createPage = (ctx: AuthRoutesContext, limiter: Limiter) => async (req: FastifyRequest, reply: FastifyReply) => {
-  const { userId } = req.principal!;
+  const principal = req.principal!;
+  const { userId } = principal;
   const parsed = CreateTokenFormSchema.safeParse(req.body);
-  if (!parsed.success) return showTokens(ctx, reply, userId, INVALID_FORM_STATUS, firstIssue(parsed.error));
+  if (!parsed.success) return showTokens(ctx, reply, principal, INVALID_FORM_STATUS, firstIssue(parsed.error));
   if (limiter.isLimited(req.ip, userId)) {
-    return showTokens(ctx, reply, userId, RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
+    return showTokens(ctx, reply, principal, RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
   }
   const created = await limiter.attempt(req.ip, userId, () =>
     ctx.runEffects(() => createToken(ctx.deps, userId, parsed.data)),
@@ -52,18 +65,19 @@ const createPage = (ctx: AuthRoutesContext, limiter: Limiter) => async (req: Fas
   if (created.isErr()) {
     if (created.error.code !== authErrors.invalidCredentials.code) limiter.forgive(req.ip, userId);
     const { status, message } = refusalOf(created.error);
-    return showTokens(ctx, reply, userId, status, message);
+    return showTokens(ctx, reply, principal, status, message);
   }
   limiter.recordSuccess(req.ip, userId);
   return page(reply, 200, await renderTokenCreatedPage(created.value));
 };
 
 const revokePage = (ctx: AuthRoutesContext) => async (req: FastifyRequest, reply: FastifyReply) => {
-  const { userId } = req.principal!;
+  const principal = req.principal!;
+  const { userId } = principal;
   const { id } = req.params as { id: string };
   const revoked = await ctx.runEffects(() => revokeToken(ctx.deps, userId, id));
   return revoked.isErr()
-    ? showTokens(ctx, reply, userId, httpStatus(revoked.error), AUTH_MESSAGES.unknownToken)
+    ? showTokens(ctx, reply, principal, httpStatus(revoked.error), AUTH_MESSAGES.unknownToken)
     : reply.redirect(TOKENS_PATH, SEE_OTHER);
 };
 

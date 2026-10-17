@@ -33,6 +33,15 @@ describe('request logging (ADR-033 §2)', () => {
     expect(output).not.toContain(SECRET);
   });
 
+  it('never writes an invite code from the query string into a request log line', async () => {
+    const output = await captureLog({ method: 'GET', url: `/probe?code=${SECRET}&keep=visible` });
+    expect(output).toContain('incoming request');
+    expect(output).not.toContain(SECRET);
+    // Only the secret is replaced: the rest of the URL is as useful in a log as ever.
+    expect(output).toContain('keep=visible');
+    expect(output).toContain('[Redacted]');
+  });
+
   it('declares redaction for the three credential-bearing headers, whatever a serializer adds later', () => {
     const options = httpLoggerOptions(true);
     expect(options && options.redact.paths).toEqual([

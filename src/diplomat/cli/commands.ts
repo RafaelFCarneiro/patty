@@ -3,6 +3,7 @@ import { NPX_COMMAND } from '../../models/package.js';
 import { runAuthCommand } from './commands/auth.js';
 import { runLogin, runLogout } from './commands/login.js';
 import { runSetupCommand } from './commands/setup.js';
+import { runUsersCommand } from './commands/users.js';
 import { EXIT_FAILURE, EXIT_OK, type CliIo } from './io.js';
 import { reasonOf } from '../../models/error.js';
 import { CLI_MESSAGES } from './messages.js';
@@ -17,8 +18,9 @@ Commands:
   login            Sign a client in from this terminal (opens a browser approval, saves it to the OS keychain)
   logout           Revoke the saved sign-in and remove it from the keychain
   auth <command>   Owner login: setup, reset-password
+  users <command>  Manage who can sign in: list, invite, reissue, disable, enable, role
 
-The setup and auth commands print their own help when run with no arguments. With no command at all, FinTrack runs as an MCP server (stdio).
+The setup, auth and users commands print their own help when run with no arguments. With no command at all, FinTrack runs as an MCP server (stdio).
 `.trimStart();
 
 const runKnownCommand = (command: CliCommand, rest: readonly string[], io: CliIo): Promise<number> => {
@@ -31,6 +33,8 @@ const runKnownCommand = (command: CliCommand, rest: readonly string[], io: CliIo
       return runLogout(rest, io);
     case CliCommand.enum.auth:
       return runAuthCommand(rest, io);
+    case CliCommand.enum.users:
+      return runUsersCommand(rest, io);
     default: {
       const _exhaustive: never = command;
       throw new Error(`unmapped command: ${String(_exhaustive)}`);

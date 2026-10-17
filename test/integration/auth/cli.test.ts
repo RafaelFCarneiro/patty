@@ -47,6 +47,7 @@ const harness = (ctx: AppContext, input: { stdin?: string; terminal?: boolean } 
         close: () => undefined,
         authRequired: true,
         defaultProfile: DEFAULT_PROFILE,
+        inviteOrigin: LOOPBACK_ORIGIN,
         signIn: () =>
           createSignInInterpreter({
             deps: authDepsOf(ctx),

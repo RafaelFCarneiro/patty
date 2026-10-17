@@ -16,6 +16,12 @@ export type AuthError =
   | { code: 'unknown_token'; id: string }
   | { code: 'session_required' }
   | { code: 'invalid_grant' }
+  | { code: 'admin_required' }
+  | { code: 'username_taken'; username: string }
+  | { code: 'cannot_change_self' }
+  | { code: 'last_admin' }
+  | { code: 'invalid_invite' }
+  | { code: 'user_disabled' }
   | { code: 'resource_metadata_unavailable'; hint: string };
 
 export const authErrors = {
@@ -44,6 +50,14 @@ export const authErrors = {
   sessionDurationRefused: validation(['a sign-in requested by `fintrack login` cannot last "this session only"']),
   // Unknown, expired, denied, already-approved or already-redeemed: indistinguishable, like a setup code.
   invalidGrant: { code: 'invalid_grant' } satisfies AuthError,
+  // User management is for signed-in admins; to anyone else it reads as a page that does not exist.
+  adminRequired: { code: 'admin_required' } satisfies AuthError,
+  usernameTaken: (username: string): AuthError => ({ code: 'username_taken', username }),
+  cannotChangeSelf: { code: 'cannot_change_self' } satisfies AuthError,
+  lastAdmin: { code: 'last_admin' } satisfies AuthError,
+  // Wrong, expired, used, revoked and foreign invites are indistinguishable by design, like a setup code.
+  invalidInvite: { code: 'invalid_invite' } satisfies AuthError,
+  userDisabled: { code: 'user_disabled' } satisfies AuthError,
   // No PUBLIC_URL and a non-loopback Host: the instance cannot name the resource it would describe.
   metadataUnavailable: {
     code: 'resource_metadata_unavailable',

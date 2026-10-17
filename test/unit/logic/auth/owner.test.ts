@@ -8,6 +8,7 @@ import {
   isUnclaimed,
   normalizeSetupCode,
   planOwnerClaim,
+  isNeverClaimed,
   shouldIssueSetupCode,
   spentSetupCode,
 } from '../../../../src/logic/auth/owner.js';
@@ -24,6 +25,7 @@ const owner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
   role: UserRole.enum.admin,
   createdAt: NOW.toISOString(),
   disabledAt: null,
+  lastLoginAt: null,
   version: 0,
   ...overrides,
 });
@@ -79,6 +81,18 @@ describe('owner state', () => {
     expect(shouldIssueSetupCode(AuthMode.enum.required, claimed())).toBe(false);
     expect(shouldIssueSetupCode(AuthMode.enum.required, null)).toBe(false);
   });
+
+  it('issues none for an owner an admin reissued: they have a username and are recovered by an invite', () => {
+    const reissued = claimed({ passwordHash: null });
+    expect(isNeverClaimed(reissued)).toBe(false);
+    expect(shouldIssueSetupCode(AuthMode.enum.required, reissued)).toBe(false);
+  });
+
+  it('calls only an owner with no username and no password never claimed', () => {
+    expect(isNeverClaimed(owner())).toBe(true);
+    expect(isNeverClaimed(claimed())).toBe(false);
+    expect(isNeverClaimed(null)).toBe(false);
+  });
 });
 
 describe('isSetupCodeUsable', () => {
@@ -103,6 +117,7 @@ describe('owner credential helpers', () => {
     role: 'admin',
     createdAt: '2026-10-07T12:00:00.000Z',
     disabledAt: null,
+    lastLoginAt: null,
     version: 7,
   } as const;
 

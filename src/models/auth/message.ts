@@ -23,6 +23,12 @@ export const AUTH_MESSAGES = {
   unknownToken: 'No such access token.',
   sessionRequired: 'Access tokens can only be managed from a signed-in browser session.',
   invalidGrant: 'This sign-in request is not valid, has expired, or was already answered.',
+  adminRequired: 'Only an administrator can manage users.',
+  usernameTaken: 'That username is already taken.',
+  cannotChangeSelf: 'You cannot disable or demote yourself. Ask another administrator.',
+  lastAdmin: 'That would leave the instance without an active administrator.',
+  invalidInvite: 'That invite is not valid, has expired, or was already used. Ask an administrator for a new one.',
+  userDisabled: 'That user is disabled. Enable them first.',
   prmNeedsOrigin:
     'This instance cannot say what its own origin is — set PUBLIC_URL to its external URL to publish its ' +
     'Protected Resource Metadata.',

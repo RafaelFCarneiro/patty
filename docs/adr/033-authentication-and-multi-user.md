@@ -93,7 +93,8 @@ phases (see below). Local npm behavior stays zero-config.
   ambient credential.
 - **Brute force.** Login and setup are rate-limited per IP and per username, with a constant-time
   user-not-found path.
-- **User management.** Admins create, disable, and reset users from the UI. There is no self-registration.
+- **User management.** Admins create, disable, and reset users from the UI (and the trusted terminal). There is no self-registration. Built in
+  Phase 4 step 2: by invitation (§5), session-only and admin-only, never an MCP tool or an `/api` route; users are disabled, never deleted; the instance always keeps one active admin.
 
 ### 3. Personal access tokens (REST + MCP)
 
@@ -202,8 +203,9 @@ Per-user encryption is out of scope.
   The person sets their own password through the same claim page. The admin never knows it.
 - **Migration of existing data:** every existing row is assigned to the **owner** user (§7). No data is lost
   or duplicated.
-- **Until tenancy lands, an instance has exactly one user.** The "create user" action is disabled in Phases 1–3,
-  so a second login can never see the first user's data.
+- **Until tenancy landed, an instance had exactly one user.** The "create user" action was disabled in Phases 1–3 and in Phase 4 step 1,
+  so a second login could never see the first user's data. With `user_id` on every owned row and user-scoped deps (step 1), step 2 unlocked it: an
+  invite is the only way a user comes to exist.
 
 ### 6. Unauthenticated surface (deliberately minimal)
 
@@ -334,9 +336,10 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
 2. [x] Phase 1 — identity, sessions, UI login, setup code, auth mode.
 3. [x] Phase 2 — personal access tokens, scopes, protected resource metadata.
 4. [ ] Phase 3 — in-process OAuth 2.1 AS for MCP; non-loopback exposure supported behind TLS.
-5. [ ] Phase 4 — multi-user tenancy.
+5. [x] Phase 4 — multi-user tenancy.
    - [x] Step 1 (`feat/tenancy-data`): `user_id` on every owned row (migration `0021_tenancy_data`, backfilled to the owner, with the safety copy and integrity check), user-scoped deps and appliers, per-user settings and change events, the isolation suite.
-   - [ ] Step 2 (`feat/user-management`): admin creates users by invitation; `fintrack key export` and the npm→Docker guide.
+   - [x] Step 2 (`feat/user-management`): admin creates users by invitation (migration `0022_user_management`: `invites`, `users.last_login_at`, `settings.max_sign_in_duration`); claim at `/ui/invite`; reissue, disable, enable, set-role; the instance sign-in cap (ADR-034 §4); `fintrack users …` in the trusted terminal; the always-one-active-admin guard; the isolation suite also run against a user created through this product path.
+6. [ ] `fintrack key export` and the npm→Docker move guide (§7) — the tail of Phase 4 step 2 as first drawn, not built with it.
 
 Every phase is feature-sized (schema + multiple layers + security-sensitive). Each gets the DoD verification
 subagent, charged with checking that:

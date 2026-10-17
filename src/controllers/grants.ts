@@ -5,6 +5,7 @@ import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
 import {
   approvedGrant,
+  clampToCap,
   consentChoice,
   deniedGrant,
   durationAllowedFor,
@@ -14,8 +15,10 @@ import {
   newGrant,
   newStdioSignIn,
   normalizeUserCode,
+  offeredDurations,
   redeemPlan,
   redeemedGrant,
+  signInCapOf,
   supersededGrants,
 } from '../logic/auth/grant.js';
 import { isActiveUser } from '../logic/auth/owner.js';
@@ -26,8 +29,7 @@ import { authErrors } from '../models/auth/errors.js';
 import {
   type ApproveGrantInput,
   type ClientGrantEntity,
-  type GrantChoice,
-  type GrantRequest,
+  type Consent,
   RedeemKind,
   RedeemPlanKind,
   type RedeemResult,
@@ -71,17 +73,21 @@ export const startGrant = (deps: AuthDeps, input: StartGrantInput): ResultAsync<
     });
   });
 
-/** What the consent page shows for a code, with the form's pre-selection — `null` for an unknown, expired or
- *  already-answered code (indistinguishable on purpose). Read-only. */
-export const findConsent = async (
-  deps: AuthDeps,
-  userId: string,
-  rawUserCode: string,
-): Promise<{ request: GrantRequest; choice: GrantChoice } | null> => {
+const instanceCap = async (deps: AuthDeps) => signInCapOf(await deps.instanceSettings.get());
+
+/** What the consent page shows for a code, with the form's pre-selection and the durations it may offer (never above
+ *  the instance cap) — `null` for an unknown, expired or already-answered code (indistinguishable on purpose).
+ *  Read-only. */
+export const findConsent = async (deps: AuthDeps, userId: string, rawUserCode: string): Promise<Consent | null> => {
   const grant = await deps.clientGrants.findPendingByUserCode(normalizeUserCode(rawUserCode));
   if (!isAnswerable(grant, deps.clock())) return null;
   const last = await deps.clientGrants.lastRedeemed(userId, grant.profile, grant.clientName);
-  return { request: grantRequestOf(grant), choice: consentChoice(grant, last) };
+  const cap = await instanceCap(deps);
+  return {
+    request: grantRequestOf(grant),
+    choice: consentChoice(grant, last, cap),
+    durations: offeredDurations(grant.channel, cap),
+  };
 };
 
 const answerableGrant = (deps: AuthDeps, rawUserCode: string) =>
@@ -92,7 +98,9 @@ const answerableGrant = (deps: AuthDeps, rawUserCode: string) =>
 
 /**
  * Approve a pending sign-in as the signed-in person (ADR-034 §3.4). Browser sessions only — a token cannot approve
- * a grant — and the grant binds to the user who approved it, with the scopes and duration they chose.
+ * a grant — and the grant binds to the user who approved it, with the scopes and duration they chose, clamped to the
+ * instance's `max_sign_in_duration` (ADR-034 §4). Only approvals are clamped: a sign-in already granted keeps its
+ * expiry.
  */
 export const approveGrant = (
   deps: AuthDeps,
@@ -103,9 +111,10 @@ export const approveGrant = (
     yield* requireSession(principal);
     const grant = yield* answerableGrant(deps, input.userCode);
     yield* guard(durationAllowedFor(grant.channel, input.duration), authErrors.sessionDurationRefused);
+    const duration = clampToCap(input.duration, await instanceCap(deps));
     const approved = approvedGrant(
       grant,
-      { userId: principal.userId, scopes: TOKEN_ACCESS_SCOPES[input.access], duration: input.duration },
+      { userId: principal.userId, scopes: TOKEN_ACCESS_SCOPES[input.access], duration },
       deps.clock(),
     );
     return ok({

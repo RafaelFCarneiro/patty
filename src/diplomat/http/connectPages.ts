@@ -1,7 +1,7 @@
 import * as R from 'remeda';
-import { type GrantChoice, type GrantRequest, SignInDuration } from '../../models/auth/grant.js';
+import { type Consent, type GrantRequest, SignInDuration } from '../../models/auth/grant.js';
 import { TokenAccess } from '../../models/auth/token.js';
-import { durationAllowedFor, sessionOnlyLabel } from '../../logic/auth/grant.js';
+import { sessionOnlyLabel } from '../../logic/auth/grant.js';
 import { ACCESS_LABEL, errorBlock, escapeHtml, fillTemplate, formatMinute } from './authPages.js';
 import { CONNECT_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from './authPaths.js';
 import { readCached, UI_ROOT } from './uiFiles.js';
@@ -27,22 +27,14 @@ const radio = (name: string, value: string, label: string, checked: boolean): st
 const accessOptions = (selected: TokenAccess): string =>
   TokenAccess.options.map((access) => radio('access', access, ACCESS_LABEL[access], access === selected)).join('');
 
-// "This session only" is for a stdio process, which has a session to tie the sign-in to; `fintrack login`
-// does not (the choice would be refused, so it is not offered).
-const durationOptions = (request: GrantRequest, selected: SignInDuration): string =>
-  R.pipe(
-    SignInDuration.options,
-    R.filter((duration) => durationAllowedFor(request.channel, duration)),
-    R.map((duration) =>
-      radio('duration', duration, durationLabel(duration, request.clientName), duration === selected),
-    ),
+// Only what the asker may have (`logic/auth/grant.ts`'s `offeredDurations`): "this session only" is for a stdio
+// process, which has a session to tie the sign-in to, and nothing is above the instance's cap.
+const durationOptions = (request: GrantRequest, offered: readonly SignInDuration[], selected: SignInDuration): string =>
+  R.map(offered, (duration) =>
+    radio('duration', duration, durationLabel(duration, request.clientName), duration === selected),
   ).join('');
 
-export const renderConnectPage = async (fields: {
-  request: GrantRequest;
-  choice: GrantChoice;
-  error?: string;
-}): Promise<string> =>
+export const renderConnectPage = async (fields: Consent & { error?: string }): Promise<string> =>
   fillTemplate(await readCached(CONNECT_TEMPLATE_PATH), {
     stylesheet: UI_APP_CSS_PATH,
     action: CONNECT_PATH,
@@ -53,7 +45,7 @@ export const renderConnectPage = async (fields: {
     requestedAt: formatMinute(fields.request.createdAt),
     userCode: escapeHtml(fields.request.userCode),
     accessOptions: accessOptions(fields.choice.access),
-    durationOptions: durationOptions(fields.request, fields.choice.duration),
+    durationOptions: durationOptions(fields.request, fields.durations, fields.choice.duration),
     error: errorBlock(fields.error),
   });
 

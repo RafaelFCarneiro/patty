@@ -10,6 +10,8 @@ Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All too
 
 ## Scopes per tool
 
+**There is no user-management tool, by design.** Creating, inviting, disabling and promoting users, and the instance's sign-in cap, are session-only and admin-only: browser pages under `/ui/access/users` and the trusted terminal's `fintrack users` command ([`auth.md`](auth.md#users-roles-and-invitations)). No token — whatever its scope — and no MCP client can reach them.
+
 Over HTTP with authentication `required`, `/mcp` takes an `Authorization: Bearer ftk_…` personal access token (or a session
 cookie), and every tool needs a scope ([`auth.md`](auth.md#scopes)). A tool's scope derives from its
 `annotations.readOnlyHint`: `true` → `fintrack:read`, otherwise `fintrack:write` (which includes read). A read-only token

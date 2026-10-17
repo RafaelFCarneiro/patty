@@ -34,6 +34,7 @@ const claimedOwner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
   role: UserRole.enum.admin,
   createdAt: NOW.toISOString(),
   disabledAt: null,
+  lastLoginAt: null,
   version: 1,
   ...overrides,
 });

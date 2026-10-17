@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinTrack — invite</title>
+    <link rel="stylesheet" href="{{stylesheet}}" />
+  </head>
+  <body>
+    <main class="auth-card tokens-card">
+      <h1>{{heading}}</h1>
+      <p class="auth-lede">“{{username}}” — {{role}}. {{consequence}}</p>
+      <p class="auth-warning" role="alert">
+        Hand this over now: you won't see it again. FinTrack keeps only a hash of the code, and it stops working on
+        {{expiresAt}} or as soon as it is used.
+      </p>
+      {{link}}
+      <p>Code</p>
+      <p class="token-secret" data-testid="invite-code">{{code}}</p>
+      <p class="auth-hint">
+        Whoever opens the link or types the code at <code>{{invitePath}}</code> chooses the password. Anyone who sees it
+        before them could claim the account — send it privately.
+      </p>
+      <p><a href="{{usersPath}}">Back to users</a></p>
+    </main>
+  </body>
+</html>

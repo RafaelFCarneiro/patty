@@ -16,6 +16,7 @@ import {
 import { Scope, WRITE_SCOPE } from '../../models/auth/scope.js';
 import { SESSION_ONLY_LABEL, UNKNOWN_CLIENT_NAME } from '../../models/auth/signIn.js';
 import { AccessTokenKind, TOKEN_NAME_MAX_LENGTH, TokenAccess } from '../../models/auth/token.js';
+import { DEFAULT_SIGN_IN_CAP, type InstanceSettingsEntity, type SignInCap } from '../../models/auth/users.js';
 import { formatSetupCode, normalizeSetupCode } from './owner.js';
 import { millis, toIso } from './time.js';
 
@@ -31,9 +32,24 @@ export const signInExpiry = (approvedAt: string, duration: SignInDuration): stri
 /** `session` lives in the stdio process's memory only; every other duration is saved to the keychain. */
 export const persistsToKeychain = (duration: SignInDuration): boolean => duration !== SignInDuration.enum.session;
 
+/** The longest sign-in this instance allows: the admin's setting, else today's maximum (30 days). */
+export const signInCapOf = (settings: InstanceSettingsEntity | null): SignInCap =>
+  settings?.maxSignInDuration ?? DEFAULT_SIGN_IN_CAP;
+
+export const withinCap = (duration: SignInDuration, cap: SignInCap): boolean =>
+  SIGN_IN_DURATION_MS[duration] <= SIGN_IN_DURATION_MS[cap];
+
+/** A duration above the cap becomes the cap. Applied when a sign-in is approved; a granted one keeps its expiry. */
+export const clampToCap = (duration: SignInDuration, cap: SignInCap): SignInDuration =>
+  withinCap(duration, cap) ? duration : cap;
+
 /** Whether this grant's asker may be handed a sign-in of this duration. */
 export const durationAllowedFor = (channel: GrantChannel, duration: SignInDuration): boolean =>
   channel === GrantChannel.enum.stdio || duration !== SignInDuration.enum.session;
+
+/** The durations the consent page offers this asker: what its channel may have, up to the instance cap. */
+export const offeredDurations = (channel: GrantChannel, cap: SignInCap): SignInDuration[] =>
+  R.filter(SignInDuration.options, (duration) => durationAllowedFor(channel, duration) && withinCap(duration, cap));
 
 export const newGrant = (
   fields: { id: string; deviceCodeHash: string; userCode: string; input: StartGrantInput },
@@ -102,10 +118,12 @@ export const expiredGrant = (grant: ClientGrantEntity): ClientGrantEntity => ({
 });
 
 /** What the consent form pre-selects: the asker's hint, else this user's last choice for this client, else the
- *  defaults (read-only, 24 hours). A hint of `session` is dropped for a grant that may not have one. */
+ *  defaults (read-only, 24 hours), all within the instance cap. A hint of `session` is dropped for a grant that may not
+ *  have one. */
 export const consentChoice = (
   grant: ClientGrantEntity,
   last: Pick<ClientGrantEntity, 'scopes' | 'duration'> | null,
+  cap: SignInCap,
 ): GrantChoice => {
   const lastAccess = last?.scopes
     ? last.scopes.includes(WRITE_SCOPE)
@@ -121,7 +139,7 @@ export const consentChoice = (
   );
   return {
     access: grant.hintAccess ?? lastAccess ?? TokenAccess.enum.read,
-    duration: duration ?? DEFAULT_SIGN_IN_DURATION,
+    duration: clampToCap(duration ?? DEFAULT_SIGN_IN_DURATION, cap),
   };
 };
 

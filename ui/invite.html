@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinTrack — accept invite</title>
+    <link rel="stylesheet" href="{{stylesheet}}" />
+  </head>
+  <body>
+    <main class="auth-card">
+      <h1>Accept your invite</h1>
+      <p class="auth-lede">Enter the invite code you were given and choose a password. Your username is already set.</p>
+      {{error}}
+      <form class="auth-form" method="post" action="{{action}}">
+        <label
+          >Invite code
+          <input
+            name="code"
+            value="{{code}}"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            required
+          />
+        </label>
+        <label
+          >Password
+          <input
+            name="password"
+            type="password"
+            autocomplete="new-password"
+            minlength="{{passwordMinLength}}"
+            required
+            autofocus
+          />
+        </label>
+        <p class="auth-hint">
+          At least {{passwordMinLength}} characters. There are no other rules — a long passphrase is best.
+        </p>
+        <button type="submit">Create login</button>
+      </form>
+    </main>
+  </body>
+</html>

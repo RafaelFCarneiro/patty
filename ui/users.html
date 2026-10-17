@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinTrack — users</title>
+    <link rel="stylesheet" href="{{stylesheet}}" />
+  </head>
+  <body>
+    <main class="auth-card tokens-card">
+      <h1>Users</h1>
+      <p class="auth-lede">
+        Everyone who can sign in to this instance, each with a private set of finances. People choose their own password
+        by claiming an invite — you never see it. Users are disabled, never deleted.
+        <a href="{{tokensPath}}">Access tokens</a> · <a href="{{dashboards}}">Back to the dashboards</a>
+      </p>
+      {{error}} {{users}}
+      <h2>Invite a user</h2>
+      <form class="auth-form" method="post" action="{{inviteAction}}">
+        <label
+          >Username
+          <input name="username" autocomplete="off" autocapitalize="none" spellcheck="false" required />
+        </label>
+        <label
+          >Role
+          <select name="role">
+            {{roleOptions}}
+          </select>
+        </label>
+        <label
+          >Your password
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <p class="auth-hint">
+          You get a link and a code to hand over, valid for {{inviteHours}} hours and shown once. Your password is asked
+          again so that nothing running in a dashboard page can invite anyone on its own.
+        </p>
+        <button type="submit">Create invite</button>
+      </form>
+      <h2>Longest Claude sign-in</h2>
+      <p class="auth-hint">
+        The most a person may choose when they approve a Claude sign-in. Sign-ins already granted keep the expiry they
+        were given.
+      </p>
+      <form class="auth-form" method="post" action="{{capAction}}">
+        <label
+          >Maximum
+          <select name="maxSignInDuration">
+            {{capOptions}}
+          </select>
+        </label>
+        <label
+          >Your password
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit">Save</button>
+      </form>
+    </main>
+  </body>
+</html>

@@ -23,7 +23,9 @@ import { transactionRoutes } from './routes/transaction.js';
 import { transferRoutes } from './routes/transfer.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerConnectRoutes } from './routes/connect.js';
+import { registerInviteRoutes } from './routes/invite.js';
 import { registerTokenRoutes } from './routes/tokens.js';
+import { registerUserRoutes } from './routes/users.js';
 import { registerProtectedResourceMetadataRoutes } from './routes/wellKnown.js';
 import { registerUiRoutes, type SessionRecheck } from './routes/ui.js';
 import { resolvePrincipal } from './session.js';
@@ -85,6 +87,8 @@ export const registerRoutes = (
     registerAuthRoutes(app, auth);
     registerTokenRoutes(app, auth);
     registerConnectRoutes(app, auth);
+    registerUserRoutes(app, auth);
+    registerInviteRoutes(app, auth);
     registerProtectedResourceMetadataRoutes(app, auth.publicUrl);
   }
 

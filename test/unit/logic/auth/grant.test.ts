@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   approvedGrant,
+  clampToCap,
   consentChoice,
   deniedGrant,
   durationAllowedFor,
@@ -11,12 +12,15 @@ import {
   newGrant,
   newStdioSignIn,
   normalizeUserCode,
+  offeredDurations,
   persistsToKeychain,
   redeemPlan,
   redeemedGrant,
   sessionOnlyLabel,
+  signInCapOf,
   signInExpiry,
   supersededGrants,
+  withinCap,
 } from '../../../../src/logic/auth/grant.js';
 import {
   CLIENT_GRANT_TTL_MS,
@@ -30,6 +34,7 @@ import {
 } from '../../../../src/models/auth/grant.js';
 import { UNKNOWN_CLIENT_NAME } from '../../../../src/models/auth/signIn.js';
 import { AccessTokenKind, TOKEN_NAME_MAX_LENGTH } from '../../../../src/models/auth/token.js';
+import { DEFAULT_SIGN_IN_CAP, SignInCap } from '../../../../src/models/auth/users.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -231,12 +236,14 @@ describe('consentChoice — what the form pre-selects', () => {
   const lastWrite = { scopes: [READ, WRITE], duration: SignInDuration.enum['7d'] };
 
   it('defaults to read-only for 24 hours', () => {
-    expect(consentChoice(pendingGrant(), null)).toEqual({ access: 'read', duration: '24h' });
+    expect(consentChoice(pendingGrant(), null, DEFAULT_SIGN_IN_CAP)).toEqual({ access: 'read', duration: '24h' });
   });
 
   it('remembers the last choice for this client', () => {
-    expect(consentChoice(pendingGrant(), lastWrite)).toEqual({ access: 'write', duration: '7d' });
-    expect(consentChoice(pendingGrant(), { scopes: [READ], duration: SignInDuration.enum.session })).toEqual({
+    expect(consentChoice(pendingGrant(), lastWrite, DEFAULT_SIGN_IN_CAP)).toEqual({ access: 'write', duration: '7d' });
+    expect(
+      consentChoice(pendingGrant(), { scopes: [READ], duration: SignInDuration.enum.session }, DEFAULT_SIGN_IN_CAP),
+    ).toEqual({
       access: 'read',
       duration: 'session',
     });
@@ -244,15 +251,19 @@ describe('consentChoice — what the form pre-selects', () => {
 
   it('lets the asker’s hint win over the last choice', () => {
     const hinted = pendingGrant({ hintAccess: 'read', hintDuration: SignInDuration.enum['30d'] });
-    expect(consentChoice(hinted, lastWrite)).toEqual({ access: 'read', duration: '30d' });
+    expect(consentChoice(hinted, lastWrite, DEFAULT_SIGN_IN_CAP)).toEqual({ access: 'read', duration: '30d' });
   });
 
   it('never pre-selects "this session only" for a grant that may not have it', () => {
     const cli = pendingGrant({ channel: GrantChannel.enum.cli });
     const rememberedSession = { scopes: [READ], duration: SignInDuration.enum.session };
-    expect(consentChoice(cli, rememberedSession).duration).toBe('24h');
+    expect(consentChoice(cli, rememberedSession, DEFAULT_SIGN_IN_CAP).duration).toBe('24h');
     expect(
-      consentChoice(pendingGrant({ channel: GrantChannel.enum.cli, hintDuration: 'session' }), null).duration,
+      consentChoice(
+        pendingGrant({ channel: GrantChannel.enum.cli, hintDuration: 'session' }),
+        null,
+        DEFAULT_SIGN_IN_CAP,
+      ).duration,
     ).toBe('24h');
   });
 });
@@ -372,5 +383,66 @@ describe('sessionOnlyLabel', () => {
 
   it('falls back to a plain label for the unknown-client placeholder', () => {
     expect(sessionOnlyLabel(UNKNOWN_CLIENT_NAME)).toBe('This session only');
+  });
+});
+
+describe('the instance cap on sign-in durations (ADR-034 §4)', () => {
+  const settings = (maxSignInDuration: SignInCap) => ({ id: 'singleton', maxSignInDuration, version: 0 });
+
+  it('is today’s maximum, 30 days, until an admin lowers it', () => {
+    expect(DEFAULT_SIGN_IN_CAP).toBe('30d');
+    expect(signInCapOf(null)).toBe('30d');
+    expect(signInCapOf(settings('7d'))).toBe('7d');
+  });
+
+  it.each([
+    ['session', '24h', true],
+    ['24h', '24h', true],
+    ['7d', '24h', false],
+    ['30d', '24h', false],
+    ['7d', '7d', true],
+    ['30d', '7d', false],
+    ['30d', '30d', true],
+    ['session', '30d', true],
+  ] as const)('%s is within a %s cap: %s', (duration, cap, within) => {
+    expect(withinCap(duration, cap)).toBe(within);
+  });
+
+  it.each([
+    ['30d', '7d', '7d'],
+    ['30d', '24h', '24h'],
+    ['7d', '24h', '24h'],
+    ['7d', '30d', '7d'],
+    ['24h', '7d', '24h'],
+    ['session', '24h', 'session'],
+  ] as const)('clamps a chosen %s under a %s cap to %s', (chosen, cap, expected) => {
+    expect(clampToCap(chosen, cap)).toBe(expected);
+  });
+
+  it('offers a stdio asker every duration up to the cap and a cli asker none that is session-only', () => {
+    expect(offeredDurations(GrantChannel.enum.stdio, '30d')).toEqual(['session', '24h', '7d', '30d']);
+    expect(offeredDurations(GrantChannel.enum.stdio, '7d')).toEqual(['session', '24h', '7d']);
+    expect(offeredDurations(GrantChannel.enum.stdio, '24h')).toEqual(['session', '24h']);
+    expect(offeredDurations(GrantChannel.enum.cli, '7d')).toEqual(['24h', '7d']);
+  });
+
+  it('never offers a duration above the cap, whatever the cap', () => {
+    for (const cap of SignInCap.options) {
+      for (const channel of Object.values(GrantChannel.enum)) {
+        expect(offeredDurations(channel, cap).every((duration) => withinCap(duration, cap))).toBe(true);
+      }
+    }
+  });
+
+  it('pre-selects nothing above the cap: a remembered or hinted 30 days becomes the cap', () => {
+    const lastWrite = { scopes: [READ], duration: SignInDuration.enum['30d'] };
+    expect(consentChoice(pendingGrant(), lastWrite, '7d').duration).toBe('7d');
+    expect(consentChoice(pendingGrant({ hintDuration: '30d' }), null, '24h').duration).toBe('24h');
+    expect(consentChoice(pendingGrant(), lastWrite, '30d').duration).toBe('30d');
+  });
+
+  it('does not move an expiry already granted: the cap only acts when a sign-in is approved', () => {
+    const approvedAt = NOW.toISOString();
+    expect(signInExpiry(approvedAt, '30d')).toBe(new Date(NOW.getTime() + 30 * 24 * HOUR_MS).toISOString());
   });
 });

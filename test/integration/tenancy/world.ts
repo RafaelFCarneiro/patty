@@ -52,7 +52,7 @@ export type World = {
   baseCurrency: 'USD' | 'BRL' | 'USDC' | null;
 };
 
-const worldOf = (label: 'A' | 'B', userId: string): World => {
+export const worldOf = (label: 'A' | 'B', userId: string): World => {
   const lower = label.toLowerCase();
   return {
     label,
@@ -106,7 +106,7 @@ export const markersOf = (world: World): string[] => {
 const NOW = '2026-10-01T00:00:00.000Z';
 
 /** Inserts the whole of one user's data. Dates sit in September 2026; the recurring rule is already due. */
-const seedWorld = async (db: Db, w: World): Promise<void> => {
+export const seedWorld = async (db: Db, w: World): Promise<void> => {
   const owner = { userId: w.userId };
   await db.insert(accounts).values([
     { ...owner, id: w.acc1.id, name: w.acc1.name, type: 'checking', initialBalance: 1000, currency: 'USD' },
@@ -243,9 +243,14 @@ const seedWorld = async (db: Db, w: World): Promise<void> => {
   });
 };
 
-export type Actor = { world: World; token: string };
+export type Actor = {
+  world: World;
+  token: string;
+  /** How this actor calls an MCP tool when not over HTTP with its bearer token — a stdio sign-in, say. */
+  call?: (name: string, args: Record<string, unknown>) => Promise<Outcome>;
+};
 
-const mintTokenFor = async (ctx: AppContext, world: World): Promise<string> => {
+export const mintTokenFor = async (ctx: AppContext, world: World): Promise<string> => {
   const token = `ftk_${world.label}${'x'.repeat(40)}`;
   await ctx.db.insert(accessTokens).values({
     id: `pat-${world.label}`,
@@ -372,6 +377,7 @@ export const callTool = async (
   name: string,
   args: Record<string, unknown> = {},
 ): Promise<Outcome> => {
+  if (actor.call) return actor.call(name, args);
   const res = await postMcp(app, actor, toolCall(name, args));
   const message = res.json as {
     result?: { isError?: boolean; content?: Array<{ text?: string }> };

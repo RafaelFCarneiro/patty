@@ -2,6 +2,7 @@ import { runEffects } from '@rfc0/effect-runner';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
 import { AUTH_APPLIERS, bindAuthRunEffects, createAuthDeps } from './auth.js';
 import { version } from '../common/buildVersion.js';
+import { httpOrigin } from '../common/net.js';
 import { loadConfig } from '../config.js';
 import { clientConfigs } from '../diplomat/clientConfig/clients.js';
 import { runCli } from '../diplomat/cli/commands.js';
@@ -47,6 +48,7 @@ const openShell = async (): Promise<Result<Shell, DatabaseAhead>> => {
     close: () => closeDatabase(db),
     authRequired: config.FINTRACK_AUTH === AuthMode.enum.required,
     defaultProfile: config.FINTRACK_PROFILE,
+    inviteOrigin: config.PUBLIC_URL ?? httpOrigin(config.HOST, config.PORT),
     // `login` never reuses a server already on HOST:PORT: it names no page and serves its own, on this database.
     signIn: (profile) =>
       createSignInFor({ config, db, deps, run }, { profile, origin: () => null, canServePage: true }),

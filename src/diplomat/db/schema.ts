@@ -14,6 +14,7 @@ import { sql } from 'drizzle-orm';
 import { GrantChannel, GrantStatus, type SignInDuration } from '../../models/auth/grant.js';
 import { UserRole } from '../../models/auth/owner.js';
 import { type Scope } from '../../models/auth/scope.js';
+import { DEFAULT_SIGN_IN_CAP, SignInCap } from '../../models/auth/users.js';
 import { AccessTokenKind, type TokenAccess } from '../../models/auth/token.js';
 import { BudgetPeriod } from '../../models/budget.js';
 import { DashboardSource } from '../../models/dashboard.js';
@@ -270,8 +271,11 @@ export const budgets = sqliteTable(
 );
 
 // Instance-wide settings (one row). Empty today; preferences live in user_settings.
+// The instance-wide singleton. `max_sign_in_duration` is the longest a stdio sign-in may last (ADR-034 §4); no row
+// means the default (30d, today's maximum).
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
+  maxSignInDuration: text('max_sign_in_duration', { enum: SignInCap.options }).notNull().default(DEFAULT_SIGN_IN_CAP),
   version: integer('version').notNull().default(0),
 });
 
@@ -320,8 +324,34 @@ export const users = sqliteTable('users', {
   role: text('role', { enum: UserRole.options }).notNull(),
   createdAt: text('created_at').notNull(),
   disabledAt: text('disabled_at'),
+  lastLoginAt: text('last_login_at'),
   version: integer('version').notNull().default(0),
 });
+
+// An invitation to claim one unclaimed user (ADR-033 §5). Only sha256(code) is stored. Users are disabled, never
+// deleted, so both references are RESTRICT: an invite can never outlive its user's row or the admin's.
+export const invites = sqliteTable(
+  'invites',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    codeHash: text('code_hash').notNull().unique(),
+    // Null = issued from the trusted terminal, which acts as no user.
+    createdBy: text('created_by').references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: text('created_at').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    usedAt: text('used_at'),
+    version: integer('version').notNull().default(0),
+  },
+  (table) => [
+    // At most one unclaimed invite per user: issuing a new one removes the previous in the same batch.
+    uniqueIndex('invites_one_open_per_user')
+      .on(table.userId)
+      .where(sql`${table.usedAt} IS NULL`),
+  ],
+);
 
 // Only sha256(token) is stored — a database read never yields a usable session.
 export const sessions = sqliteTable('sessions', {
