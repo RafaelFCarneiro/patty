@@ -1,5 +1,4 @@
 import { err, ok, type Result } from 'neverthrow';
-import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { authErrors } from '../../models/auth/errors.js';
 import { type UserEntity, UserRole } from '../../models/auth/owner.js';
@@ -7,7 +6,7 @@ import type { SessionEntity } from '../../models/auth/session.js';
 import type { AccessTokenEntity } from '../../models/auth/token.js';
 import { AdminChange, type InviteEntity, type RevokedCredentials } from '../../models/auth/users.js';
 import { hasCredentials } from './owner.js';
-import { isLiveToken, revokedToken } from './token.js';
+import { endedCredentials, type HeldCredentials } from './revoke.js';
 import { disabledUser, guardAdminChange, isActiveAdmin, remainingAdmins, withoutPassword, withRole } from './users.js';
 
 /**
@@ -30,7 +29,7 @@ export type UserPlan = {
   revoked: RevokedCredentials;
 };
 
-type Held = { sessions: readonly SessionEntity[]; tokens: readonly AccessTokenEntity[] };
+type Held = HeldCredentials;
 
 type Facts = {
   actingUserId: string | null;
@@ -54,20 +53,6 @@ const unchanged = (target: UserEntity): UserPlan => ({
 /** The admins an action leaves standing — written unchanged, so their `version` is part of the decision. */
 const witnesses = (users: readonly UserEntity[], target: UserEntity): UserEntity[] =>
   isActiveAdmin(target) ? remainingAdmins(users, target) : [];
-
-/** Everything the user holds that lets them in: all sessions, and the tokens still live, revoked. */
-const endedCredentials = (held: Held, now: Date) => {
-  const tokens = R.pipe(
-    held.tokens,
-    R.filter(isLiveToken(now)),
-    R.map((token) => revokedToken(token, now)),
-  );
-  return {
-    sessions: [...held.sessions],
-    tokens,
-    revoked: { sessionsEnded: held.sessions.length, tokensRevoked: tokens.length },
-  };
-};
 
 /** Disabling ends every credential and every pending invite in the same plan that disables. Idempotent. */
 export const planDisable = (

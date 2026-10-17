@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { err, type ResultAsync } from 'neverthrow';
 import type { FlowOutcome } from '@rfc0/effect-runner';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import {
   currentSignInCap,
@@ -115,30 +115,49 @@ const redirectToUsers = (_value: unknown, _req: FastifyRequest, reply: FastifyRe
   reply.redirect(USERS_PATH, SEE_OTHER);
 
 type StepUpAction<P, F extends { password: string }, T> = {
-  /** The path parameters, for a route about one user. */
-  params?: z.ZodType<P, z.ZodTypeDef, unknown>;
   form: z.ZodType<F, z.ZodTypeDef, unknown>;
-  /** The flow, given the actor (who typed the password) and the form without it. */
+  /** The flow, given the actor (who typed the password), the path parameters and the form without the password. */
   run: (actor: Actor, params: P, input: Omit<F, 'password'>) => ResultAsync<T, AppError>;
   onSuccess: (value: T, req: FastifyRequest, reply: FastifyReply) => FastifyReply | Promise<FastifyReply>;
 };
 
+/** The path parameters of a route about one user. */
+type UserParams = z.infer<typeof UserParamsSchema>;
+type NoParams = Record<string, never>;
+
+const NO_PARAMS: z.ZodType<NoParams, z.ZodTypeDef, unknown> = z
+  .object({})
+  .strip()
+  .transform(() => ({}));
+
 /**
- * One state-changing admin action: decode the params and the form, run the flow as the typed-password actor through the
- * throttled `attemptAs`, then render the success or the refusal on the users page. Every action that changes who can
- * sign in or what they can do goes through here, so none can skip the password.
+ * One state-changing admin action: decode the path parameters and the form, run the flow as the typed-password actor
+ * through the throttled `attemptAs`, then render the success or the refusal on the users page. Every action that
+ * changes who can sign in or what they can do goes through here, so none can skip the password.
  */
 const stepUpAction =
-  <P, F extends { password: string }, T>(pages: UserPages, action: StepUpAction<P, F, T>): Replier =>
+  <P, F extends { password: string }, T>(
+    pages: UserPages,
+    params: z.ZodType<P, z.ZodTypeDef, unknown>,
+    action: StepUpAction<P, F, T>,
+  ): Replier =>
   async (req, reply) => {
-    const params = action.params ? action.params.safeParse(req.params) : undefined;
+    const decodedParams = params.safeParse(req.params);
     const form = action.form.safeParse(req.body);
-    if (params && !params.success) return showUsers(pages, req, reply, INVALID_FORM_STATUS, AUTH_MESSAGES.tryAgain);
+    if (!decodedParams.success) return showUsers(pages, req, reply, INVALID_FORM_STATUS, AUTH_MESSAGES.tryAgain);
     if (!form.success) return showUsers(pages, req, reply, INVALID_FORM_STATUS, firstIssue(form.error));
     const { password, ...input } = form.data;
-    const result = await attemptAs(pages, req, password, (actor) => action.run(actor, params?.data as P, input));
+    const result = await attemptAs(pages, req, password, (actor) => action.run(actor, decodedParams.data, input));
     return result.isErr() ? refused(pages, req, reply, result.error) : action.onSuccess(result.value, req, reply);
   };
+
+/** An action on the instance (the invite form, the cap), not on one user: it has no path parameters. */
+const instanceAction = <F extends { password: string }, T>(pages: UserPages, action: StepUpAction<NoParams, F, T>) =>
+  stepUpAction(pages, NO_PARAMS, action);
+
+/** An action on one user, named by the `:id` of the path. */
+const userAction = <F extends { password: string }, T>(pages: UserPages, action: StepUpAction<UserParams, F, T>) =>
+  stepUpAction(pages, UserParamsSchema, action);
 
 const runIn = <T>(pages: UserPages, flow: () => ResultAsync<FlowOutcome<T>, AppError>) => pages.ctx.runEffects(flow);
 
@@ -150,36 +169,32 @@ const listPage =
 const userRoutes = (pages: UserPages) => {
   const { deps } = pages.ctx;
   return {
-    invite: stepUpAction(pages, {
+    invite: instanceAction(pages, {
       form: InviteUserFormSchema,
       run: (actor, _params, input) => runIn(pages, () => inviteUser(deps, actor, input)),
       onSuccess: showInvited(pages, USER_PAGE_HEADINGS.inviteCreated),
     }),
-    reissue: stepUpAction(pages, {
-      params: UserParamsSchema,
+    reissue: userAction(pages, {
       form: StepUpFormSchema,
       run: (actor, params) => runIn(pages, () => reissueInvite(deps, actor, params.id)),
       onSuccess: showInvited(pages, USER_PAGE_HEADINGS.newInvite),
     }),
-    disable: stepUpAction(pages, {
-      params: UserParamsSchema,
+    disable: userAction(pages, {
       form: StepUpFormSchema,
       run: (actor, params) => runIn(pages, () => disableUser(deps, actor, params.id)),
       onSuccess: redirectToUsers,
     }),
-    enable: stepUpAction(pages, {
-      params: UserParamsSchema,
+    enable: userAction(pages, {
       form: StepUpFormSchema,
       run: (actor, params) => runIn(pages, () => enableUser(deps, actor, params.id)),
       onSuccess: redirectToUsers,
     }),
-    role: stepUpAction(pages, {
-      params: UserParamsSchema,
+    role: userAction(pages, {
       form: SetRoleFormSchema,
       run: (actor, params, input) => runIn(pages, () => setRole(deps, actor, { userId: params.id, role: input.role })),
       onSuccess: redirectToUsers,
     }),
-    cap: stepUpAction(pages, {
+    cap: instanceAction(pages, {
       form: SignInCapFormSchema,
       run: (actor, _params, input) => runIn(pages, () => setSignInCap(deps, actor, input)),
       onSuccess: redirectToUsers,

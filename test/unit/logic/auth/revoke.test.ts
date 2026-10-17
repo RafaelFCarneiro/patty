@@ -1,6 +1,6 @@
 import { PersistOp, type Persistable } from '@rfc0/effect-runner';
 import { describe, expect, it } from 'vitest';
-import { endingCredentials, removeSession } from '../../../../src/logic/auth/revoke.js';
+import { endedCredentials, endingCredentials, removeSession } from '../../../../src/logic/auth/revoke.js';
 import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG } from '../../../../src/models/auth/entity.js';
 import type { SessionEntity } from '../../../../src/models/auth/session.js';
 import { type AccessTokenEntity, AccessTokenKind } from '../../../../src/models/auth/token.js';
@@ -90,5 +90,27 @@ describe('endingCredentials', () => {
       persist: [],
       revoked: { sessionsEnded: 0, tokensRevoked: 0 },
     });
+  });
+});
+
+describe('endedCredentials — the one rule', () => {
+  it('returns every session, the live tokens already revoked, and the counts — as data, no writes', () => {
+    const stdio = token('stdio', { kind: AccessTokenKind.enum.stdio });
+    const ended = endedCredentials(
+      { sessions: [session('s1')], tokens: [token('pat'), stdio, token('old', { revokedAt: 'x' })] },
+      NOW,
+    );
+    expect(ended.sessions.map((s) => s.id)).toEqual(['s1']);
+    expect(ended.tokens.map((t) => [t.id, t.revokedAt])).toEqual([
+      ['pat', NOW.toISOString()],
+      ['stdio', NOW.toISOString()],
+    ]);
+    expect(ended.revoked).toEqual({ sessionsEnded: 1, tokensRevoked: 2 });
+  });
+
+  it('is what the writes are built from: same counts, one delete and one update per item', () => {
+    const held = { sessions: [session('s1'), session('s2')], tokens: [token('pat')] };
+    expect(endingCredentials(held, NOW).revoked).toEqual(endedCredentials(held, NOW).revoked);
+    expect(endingCredentials(held, NOW).persist).toHaveLength(3);
   });
 });

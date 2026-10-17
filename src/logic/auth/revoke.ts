@@ -10,24 +10,38 @@ import { isLiveToken, revokedToken } from './token.js';
 export const removeSession = (session: SessionEntity): Persistable =>
   persistence.remove({ entity: SESSION_ENTITY_TAG, id: session.id, version: session.version });
 
+export type HeldCredentials = { sessions: readonly SessionEntity[]; tokens: readonly AccessTokenEntity[] };
+
 /**
- * Everything that lets a user in, ended together: every session is deleted and every still-live token — personal
- * access tokens and stdio sign-ins alike — is revoked (the row is kept, so the list still shows what existed).
- * Written to run in the SAME batch as the change that makes it necessary (a disable, a password reset), so there
- * is no instant at which the user is gone but a credential still works.
+ * The one rule for ending everything that lets a user in: every session goes, and every still-live token — personal
+ * access tokens and stdio sign-ins alike — comes back revoked (the row is kept, so the list still shows what existed).
+ * Meant to run in the SAME batch as the change that makes it necessary (a disable, a password reset), so there is no
+ * instant at which the user is gone but a credential still works.
  */
+export const endedCredentials = (held: HeldCredentials, now: Date) => {
+  const tokens = R.pipe(
+    held.tokens,
+    R.filter(isLiveToken(now)),
+    R.map((token) => revokedToken(token, now)),
+  );
+  return {
+    sessions: [...held.sessions],
+    tokens,
+    revoked: { sessionsEnded: held.sessions.length, tokensRevoked: tokens.length } satisfies RevokedCredentials,
+  };
+};
+
+/** `endedCredentials` as the writes that apply it: a session `delete` and a token `update` each. */
 export const endingCredentials = (
-  held: { sessions: readonly SessionEntity[]; tokens: readonly AccessTokenEntity[] },
+  held: HeldCredentials,
   now: Date,
 ): { persist: Persistable[]; revoked: RevokedCredentials } => {
-  const live = R.filter(held.tokens, isLiveToken(now));
+  const ended = endedCredentials(held, now);
   return {
     persist: [
-      ...R.map(held.sessions, removeSession),
-      ...R.map(live, (token) =>
-        persistence.update({ entity: ACCESS_TOKEN_ENTITY_TAG, model: revokedToken(token, now) }),
-      ),
+      ...R.map(ended.sessions, removeSession),
+      ...R.map(ended.tokens, (token) => persistence.update({ entity: ACCESS_TOKEN_ENTITY_TAG, model: token })),
     ],
-    revoked: { sessionsEnded: held.sessions.length, tokensRevoked: live.length },
+    revoked: ended.revoked,
   };
 };

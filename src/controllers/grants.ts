@@ -99,8 +99,8 @@ const answerableGrant = (deps: AuthDeps, rawUserCode: string) =>
 /**
  * Approve a pending sign-in as the signed-in person (ADR-034 §3.4). Browser sessions only — a token cannot approve
  * a grant — and the grant binds to the user who approved it, with the scopes and duration they chose, clamped to the
- * instance's `max_sign_in_duration` (ADR-034 §4). Only approvals are clamped: a sign-in already granted keeps its
- * expiry.
+ * instance's `max_sign_in_duration` (ADR-034 §4). Redemption clamps to the cap in force then as well, so a request
+ * approved before the cap fell is still minted within it; a sign-in already minted keeps its expiry.
  */
 export const approveGrant = (
   deps: AuthDeps,
