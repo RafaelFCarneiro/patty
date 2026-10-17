@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { AppError } from '../../../src/common/errors.js';
 import { authenticateToken, createToken, listTokens, revokeToken } from '../../../src/controllers/accessTokens.js';
 import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
-import { ACCESS_TOKEN_ENTITY_TAG } from '../../../src/models/auth/entity.js';
+import { ACCESS_TOKEN_ENTITY_TAG, USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
 import { authErrors } from '../../../src/models/auth/errors.js';
 import { OWNER_USER_ID, type UserEntity, UserRole } from '../../../src/models/auth/owner.js';
 import { PrincipalVia } from '../../../src/models/auth/principal.js';
@@ -88,9 +88,11 @@ describe('createToken', () => {
     const { persist, response } = await outcomeOf(createToken(depsFor(), OWNER_USER_ID, input));
 
     expect(response.token).toBe(PLAINTEXT);
-    expect(persist).toHaveLength(1);
-    expect(persist[0]).toMatchObject({ op: PersistOp.enum.insert, entity: ACCESS_TOKEN_ENTITY_TAG });
-    const stored = (persist[0] as { model: Record<string, unknown> }).model;
+    // The user's own row first, unchanged: a disable racing this mint conflicts on its version and retries.
+    expect(persist).toHaveLength(2);
+    expect(persist[0]).toMatchObject({ op: PersistOp.enum.update, entity: USER_ENTITY_TAG });
+    expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: ACCESS_TOKEN_ENTITY_TAG });
+    const stored = (persist[1] as { model: Record<string, unknown> }).model;
     expect(stored).toMatchObject({
       id: 'new-id',
       userId: OWNER_USER_ID,
@@ -111,7 +113,7 @@ describe('createToken', () => {
       createToken(depsFor(), OWNER_USER_ID, { name: 'ro', access: 'read', expiry: '30', password: PASSWORD }),
     );
     const thirtyDays = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    expect((persist[0] as { model: AccessTokenEntity }).model).toMatchObject({
+    expect((persist[1] as { model: AccessTokenEntity }).model).toMatchObject({
       scopes: [READ],
       expiresAt: thirtyDays,
     });

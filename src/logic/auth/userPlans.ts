@@ -1,11 +1,14 @@
 import { err, ok, type Result } from 'neverthrow';
+import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { authErrors } from '../../models/auth/errors.js';
 import { type UserEntity, UserRole } from '../../models/auth/owner.js';
 import type { SessionEntity } from '../../models/auth/session.js';
 import type { AccessTokenEntity } from '../../models/auth/token.js';
+import type { ClientGrantEntity } from '../../models/auth/grant.js';
 import { AdminChange, type InviteEntity, type RevokedCredentials } from '../../models/auth/users.js';
 import { hasCredentials } from './owner.js';
+import { expiredGrant } from './grant.js';
 import { endedCredentials, type HeldCredentials } from './revoke.js';
 import { disabledUser, guardAdminChange, isActiveAdmin, remainingAdmins, withoutPassword, withRole } from './users.js';
 
@@ -20,6 +23,8 @@ export type UserPlan = {
   sessions: SessionEntity[];
   /** Live tokens, already revoked. */
   tokens: AccessTokenEntity[];
+  /** Approved sign-in requests nobody has redeemed yet, now expired: each could still mint a sign-in as the user. */
+  expiredGrants: ClientGrantEntity[];
   /** Unclaimed invites to remove. */
   removedInvites: InviteEntity[];
   /** Invites to insert. */
@@ -44,6 +49,7 @@ const unchanged = (target: UserEntity): UserPlan => ({
   userWrites: [],
   sessions: [],
   tokens: [],
+  expiredGrants: [],
   removedInvites: [],
   newInvites: [],
   after: target,
@@ -56,7 +62,7 @@ const witnesses = (users: readonly UserEntity[], target: UserEntity): UserEntity
 
 /** Disabling ends every credential and every pending invite in the same plan that disables. Idempotent. */
 export const planDisable = (
-  facts: Facts & { held: Held; openInvites: readonly InviteEntity[] },
+  facts: Facts & { held: Held; openInvites: readonly InviteEntity[]; approvedGrants: readonly ClientGrantEntity[] },
 ): Result<UserPlan, AppError> => {
   if (facts.target.disabledAt !== null) return ok(unchanged(facts.target));
   const refusal = guardAdminChange(AdminChange.enum.disable, facts);
@@ -67,6 +73,7 @@ export const planDisable = (
     userWrites: [disabled, ...witnesses(facts.users, facts.target)],
     sessions: ended.sessions,
     tokens: ended.tokens,
+    expiredGrants: R.map(facts.approvedGrants, expiredGrant),
     removedInvites: [...facts.openInvites],
     newInvites: [],
     after: disabled,
@@ -79,7 +86,12 @@ export const planDisable = (
  * is cleared and every credential ends, so the invite is the only way back in. A disabled user must be enabled first.
  */
 export const planReissue = (
-  facts: Facts & { held: Held; openInvites: readonly InviteEntity[]; invite: Omit<InviteEntity, 'version'> },
+  facts: Facts & {
+    held: Held;
+    openInvites: readonly InviteEntity[];
+    approvedGrants: readonly ClientGrantEntity[];
+    invite: Omit<InviteEntity, 'version'>;
+  },
 ): Result<UserPlan, AppError> => {
   if (facts.target.disabledAt !== null) return err(authErrors.userDisabled);
   const refusal = guardAdminChange(AdminChange.enum.reissue, facts);
@@ -90,9 +102,12 @@ export const planReissue = (
     ? endedCredentials(facts.held, facts.now)
     : { sessions: [], tokens: [], revoked: NO_REVOCATIONS };
   return ok({
-    userWrites: claimed ? [after, ...witnesses(facts.users, facts.target)] : [],
+    // The target row is always written (unchanged for an unclaimed user), so a claim or reissue racing this one
+    // conflicts on its version instead of leaving a code that can never work.
+    userWrites: [after, ...witnesses(facts.users, facts.target)],
     sessions: ended.sessions,
     tokens: ended.tokens,
+    expiredGrants: R.map(facts.approvedGrants, expiredGrant),
     removedInvites: [...facts.openInvites],
     newInvites: [facts.invite],
     after,

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { bindAuthRunEffects } from '../../../src/composition/auth.js';
+import { createToken } from '../../../src/controllers/accessTokens.js';
 import { disableUser } from '../../../src/controllers/users.js';
 import { UserRole } from '../../../src/models/auth/owner.js';
 import { PrincipalVia, type Principal } from '../../../src/models/auth/principal.js';
@@ -486,6 +487,42 @@ describe('disable and enable', () => {
     const res = await post(ctx, owner, `${USERS_URL}/no-such-user/disable`, { password: PASSWORD });
     expect(res.statusCode).toBe(404);
     expect(res.body).toContain('No such user');
+  });
+});
+
+describe('a credential cannot be issued to a user after theirs were ended', () => {
+  it('does not let a sign-in approved before a disable be redeemed after the user is enabled again', async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    const { session } = stdioSessionFor(ctx);
+    await approveConnect(ctx, ana.cookie, userCodeIn(await session.resolve()), {});
+
+    await post(ctx, owner, `${USERS_URL}/${ana.userId}/disable`, { password: PASSWORD });
+    await post(ctx, owner, `${USERS_URL}/${ana.userId}/enable`, { password: PASSWORD });
+
+    expect((await session.resolve()).kind).toBe('not_signed_in');
+    expect(await ctx.db.all(sql`SELECT * FROM access_tokens WHERE kind = 'stdio'`)).toEqual([]);
+  });
+
+  it('does not let a token mint that read the user before a disable commit after it', async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    const deps = authDepsOf(ctx);
+    const run = bindAuthRunEffects(ctx.authRunEffects);
+    const input = { name: 'raced', access: 'write' as const, expiry: '30' as const, password: MEMBER_PASSWORD };
+
+    const stale = (await createToken(deps, ana.userId, input))._unsafeUnwrap();
+    await post(ctx, owner, `${USERS_URL}/${ana.userId}/disable`, { password: PASSWORD });
+    let first = true;
+    const minted = await run(() => {
+      if (!first) return createToken(deps, ana.userId, input);
+      first = false;
+      return okAsync(stale);
+    });
+
+    // The stale batch conflicts on the user's version; its retry sees a disabled user and refuses.
+    expect(minted.isErr()).toBe(true);
+    expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
   });
 });
 

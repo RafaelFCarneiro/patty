@@ -4,6 +4,7 @@ import { authErrors } from '../../../../src/models/auth/errors.js';
 import { type UserEntity, UserRole } from '../../../../src/models/auth/owner.js';
 import type { SessionEntity } from '../../../../src/models/auth/session.js';
 import { type AccessTokenEntity, AccessTokenKind } from '../../../../src/models/auth/token.js';
+import { GrantStatus, type ClientGrantEntity } from '../../../../src/models/auth/grant.js';
 import { INVITE_TTL_MS, type InviteEntity } from '../../../../src/models/auth/users.js';
 
 const NOW = new Date('2026-10-14T12:00:00.000Z');
@@ -59,6 +60,25 @@ const invite = (id: string, userId = 'ana'): InviteEntity => ({
   usedAt: null,
   version: 0,
 });
+const approvedGrant: ClientGrantEntity = {
+  id: 'g1',
+  deviceCodeHash: 'sha(device)',
+  userCode: 'ABCDEFGH',
+  clientName: 'Claude',
+  clientVersion: '1',
+  profile: 'default',
+  channel: 'stdio',
+  hintAccess: null,
+  hintDuration: null,
+  status: GrantStatus.enum.approved,
+  userId: 'ana',
+  scopes: ['fintrack:read'],
+  duration: '24h',
+  createdAt: NOW.toISOString(),
+  approvedAt: NOW.toISOString(),
+  expiresAt: FUTURE,
+  version: 2,
+};
 const freshInvite = { ...invite('new'), version: undefined } as unknown as Omit<InviteEntity, 'version'>;
 
 const ROOT = admin('root');
@@ -74,7 +94,14 @@ const planOf = <T>(result: { isOk: () => boolean; _unsafeUnwrap: () => T; _unsaf
   result._unsafeUnwrap();
 
 describe('planDisable', () => {
-  const facts = { actingUserId: 'root', users: [ROOT, ANA], held: HELD, openInvites: [invite('i1')], now: NOW };
+  const facts = {
+    actingUserId: 'root',
+    users: [ROOT, ANA],
+    held: HELD,
+    openInvites: [invite('i1')],
+    approvedGrants: [approvedGrant],
+    now: NOW,
+  };
 
   it('disables the user and ends every session, live token and pending invite — and nothing else', () => {
     const plan = planOf(planDisable({ ...facts, target: ANA }));
@@ -88,6 +115,11 @@ describe('planDisable', () => {
     expect(plan.newInvites).toEqual([]);
     expect(plan.revoked).toEqual({ sessionsEnded: 2, tokensRevoked: 2 });
     expect(plan.after.disabledAt).toBe(NOW.toISOString());
+  });
+
+  it('expires every approved, unredeemed sign-in request of the user, so enabling later mints nothing', () => {
+    const plan = planOf(planDisable({ ...facts, target: ANA }));
+    expect(plan.expiredGrants).toEqual([{ ...approvedGrant, status: GrantStatus.enum.expired }]);
   });
 
   it('adds no witnesses for a member, and every other active admin for an admin', () => {
@@ -124,6 +156,7 @@ describe('planReissue', () => {
     users: [ROOT, TWO, ANA],
     held: HELD,
     openInvites: [invite('i1')],
+    approvedGrants: [approvedGrant],
     invite: freshInvite,
     now: NOW,
   };
@@ -133,7 +166,9 @@ describe('planReissue', () => {
     const plan = planOf(planReissue({ ...facts, target: waiting, held: NO_HELD }));
     expect(plan.removedInvites.map((i) => i.id)).toEqual(['i1']);
     expect(plan.newInvites).toEqual([freshInvite]);
-    expect(plan).toMatchObject({ userWrites: [], sessions: [], tokens: [] });
+    // The row is written unchanged, so a claim racing this reissue conflicts on its version.
+    expect(plan.userWrites).toEqual([waiting]);
+    expect(plan).toMatchObject({ sessions: [], tokens: [] });
     expect(plan.revoked).toEqual({ sessionsEnded: 0, tokensRevoked: 0 });
     expect(plan.after).toEqual(waiting);
   });
@@ -145,6 +180,10 @@ describe('planReissue', () => {
     expect(plan.tokens.map((t) => t.id)).toEqual(['pat', 'stdio']);
     expect(plan.revoked).toEqual({ sessionsEnded: 2, tokensRevoked: 2 });
     expect(plan.after.passwordHash).toBeNull();
+  });
+
+  it('expires the approved, unredeemed sign-in requests on a reissue too', () => {
+    expect(planOf(planReissue({ ...facts, target: ANA })).expiredGrants.map((g) => g.status)).toEqual(['expired']);
   });
 
   it('witnesses the admins left standing when it resets an admin, and only then', () => {

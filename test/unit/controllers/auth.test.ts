@@ -110,6 +110,7 @@ const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW
       findByDeviceCodeHash: async () => null,
       findPendingByUserCode: async () => null,
       lastRedeemed: async () => null,
+      listApprovedByUser: async () => [],
       listExpired: async () => [],
       listRedeemed: async () => [],
     },

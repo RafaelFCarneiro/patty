@@ -23,6 +23,7 @@ import {
 import * as persistence from '../logic/persistence.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
+  CLIENT_GRANT_ENTITY_TAG,
   INSTANCE_SETTINGS_ENTITY_TAG,
   INVITE_ENTITY_TAG,
   USER_ENTITY_TAG,
@@ -69,6 +70,7 @@ const persistOf = (plan: UserPlan): Persistable[] => [
   ...R.map(plan.removedInvites, removeInvite),
   ...R.map(plan.newInvites, (invite) => persistence.insert({ entity: INVITE_ENTITY_TAG, model: invite })),
   ...R.map(plan.userWrites, updateUser),
+  ...R.map(plan.expiredGrants, (grant) => persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: grant })),
   ...R.map(plan.sessions, removeSession),
   ...R.map(plan.tokens, (token) => persistence.update({ entity: ACCESS_TOKEN_ENTITY_TAG, model: token })),
 ];
@@ -176,6 +178,7 @@ export const reissueInvite = (
       users: await deps.users.listAll(),
       held: await heldCredentials(deps, target.id),
       openInvites: await deps.invites.listUnclaimedByUser(target.id),
+      approvedGrants: await deps.clientGrants.listApprovedByUser(target.id),
       invite: invite.invite,
       now,
     });
@@ -243,6 +246,7 @@ export const disableUser = (
       users: await deps.users.listAll(),
       held: await heldCredentials(deps, target.id),
       openInvites: await deps.invites.listUnclaimedByUser(target.id),
+      approvedGrants: await deps.clientGrants.listApprovedByUser(target.id),
       now,
     });
     return ok({ persist: persistOf(plan), response: reportOf(plan.after, plan.revoked, now) });

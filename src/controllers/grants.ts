@@ -24,7 +24,7 @@ import {
 import { isActiveUser } from '../logic/auth/owner.js';
 import { tokenDisplayPrefix, tokenPrincipal } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
-import { ACCESS_TOKEN_ENTITY_TAG, CLIENT_GRANT_ENTITY_TAG } from '../models/auth/entity.js';
+import { ACCESS_TOKEN_ENTITY_TAG, CLIENT_GRANT_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
 import {
   type ApproveGrantInput,
@@ -175,7 +175,9 @@ export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<Flo
           },
           now,
         );
+        // The approver's row is re-written unchanged so a racing disable or reset conflicts and retries into a refusal.
         const persist: Persistable[] = [
+          persistence.update({ entity: USER_ENTITY_TAG, model: user }),
           persistence.insert({ entity: ACCESS_TOKEN_ENTITY_TAG, model: entity }),
           persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: redeemedGrant(plan.grant) }),
         ];

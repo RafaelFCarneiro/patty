@@ -145,6 +145,7 @@ const depsFor = ({
       findByDeviceCodeHash: async () => null,
       findPendingByUserCode: async () => null,
       lastRedeemed: async () => null,
+      listApprovedByUser: async () => [],
       listExpired: async () => [],
       listRedeemed: async () => [],
     },
@@ -339,6 +340,8 @@ describe('reissueInvite', () => {
     expect(opsOf(persist)).toEqual([
       `${PersistOp.enum.delete}:${INVITE_ENTITY_TAG}`,
       `${PersistOp.enum.insert}:${INVITE_ENTITY_TAG}`,
+      // The target row, unchanged: a claim racing this reissue conflicts on its version.
+      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
     ]);
     expect(response.revoked).toEqual({ sessionsEnded: 0, tokensRevoked: 0 });
     expect(response.code).toBe('JKMN-PQRS-TVWX-ABCD-EFGH');

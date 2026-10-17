@@ -14,7 +14,7 @@ import {
   usedToken,
 } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
-import { ACCESS_TOKEN_ENTITY_TAG } from '../models/auth/entity.js';
+import { ACCESS_TOKEN_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
 import { type Principal, PrincipalVia } from '../models/auth/principal.js';
 import {
@@ -40,7 +40,7 @@ export const createToken = (
       user?.passwordHash ?? deps.secrets.dummyPasswordHash,
       input.password,
     );
-    yield* okOr(canLogin(user, passwordMatches) ? user : null, authErrors.invalidCredentials);
+    const account = yield* okOr(canLogin(user, passwordMatches) ? user : null, authErrors.invalidCredentials);
 
     const now = deps.clock();
     const token = deps.secrets.randomAccessToken();
@@ -48,7 +48,12 @@ export const createToken = (
       { id: deps.newId(), userId, tokenHash: deps.secrets.hashSecret(token), prefix: tokenDisplayPrefix(token), input },
       now,
     );
-    const persist: Persistable[] = [persistence.insert({ entity: ACCESS_TOKEN_ENTITY_TAG, model: entity })];
+    // The user row is re-written unchanged: a disable or reset racing this mint conflicts on its version and retries
+    // into a refusal, so a credential can never be issued to a user after their credentials were ended.
+    const persist: Persistable[] = [
+      persistence.update({ entity: USER_ENTITY_TAG, model: account }),
+      persistence.insert({ entity: ACCESS_TOKEN_ENTITY_TAG, model: entity }),
+    ];
     return ok({ persist, response: { token, summary: summarizeToken(entity, now) } });
   });
 

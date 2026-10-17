@@ -12,6 +12,9 @@ describe('redactSecretQuery', () => {
     ['/ui/invite?CODE=abcd', `/ui/invite?CODE=${REDACTED}`],
     ['/ui/invite?code=a%20b#frag', `/ui/invite?code=${REDACTED}#frag`],
     ['/ui/invite?code=', `/ui/invite?code=${REDACTED}`],
+    ['/ui/invite?%63ode=SECRET', `/ui/invite?%63ode=${REDACTED}`],
+    ['/ui/invite?x=1&%43%6F%64%65=SECRET&y=2', `/ui/invite?x=1&%43%6F%64%65=${REDACTED}&y=2`],
+    ['/ui/invite?code=a&code=b', `/ui/invite?code=${REDACTED}&code=${REDACTED}`],
   ])('redacts the value in %s', (url, expected) => {
     expect(redactSecretQuery(url)).toBe(expected);
   });
