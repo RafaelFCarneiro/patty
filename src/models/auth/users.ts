@@ -42,6 +42,10 @@ export type InviteEntity = z.infer<typeof InviteEntitySchema>;
 export const UserAction = z.enum(['reissue', 'disable', 'enable', 'role']);
 export type UserAction = z.infer<typeof UserAction>;
 
+/** The actions that can take an active admin away. */
+export const AdminChange = z.enum(['disable', 'demote', 'reissue']);
+export type AdminChange = z.infer<typeof AdminChange>;
+
 export const UserStatus = z.enum(['invited', 'active', 'disabled']);
 export type UserStatus = z.infer<typeof UserStatus>;
 

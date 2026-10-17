@@ -76,7 +76,7 @@ const ACTIONS: Readonly<Record<UserStatus, (user: UserSummary) => string>> = {
     roleForm(user) +
     stepUpForm(user, UserAction.enum.reissue, 'Reset password') +
     stepUpForm(user, UserAction.enum.disable, 'Disable'),
-  disabled: (user) => actionForm(user, UserAction.enum.enable, 'Enable'),
+  disabled: (user) => stepUpForm(user, UserAction.enum.enable, 'Enable'),
 };
 
 const statusCell = (user: UserSummary): string =>

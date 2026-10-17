@@ -1,4 +1,4 @@
-import { desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, lte } from 'drizzle-orm';
 import * as inviteAdapters from '../../../adapters/invites.js';
 import type { InviteEntity } from '../../../models/auth/users.js';
 import type { Db } from '../driver.js';
@@ -11,6 +11,8 @@ export type InvitesRepo = {
   /** Every invite not yet claimed, live or expired — the ones a new invite for the same user replaces. */
   listUnclaimed: () => Promise<InviteEntity[]>;
   listUnclaimedByUser: (userId: string) => Promise<InviteEntity[]>;
+  /** Unclaimed invites whose window has passed (`expiresAt` is ISO, so it sorts chronologically). */
+  listExpiredUnclaimed: (nowIso: string) => Promise<InviteEntity[]>;
 };
 
 export const invitesRepo = (db: Db): InvitesRepo => ({
@@ -21,6 +23,14 @@ export const invitesRepo = (db: Db): InvitesRepo => ({
 
   listUnclaimed: async () => {
     const rows = await db.select().from(invites).where(isNull(invites.usedAt)).orderBy(desc(invites.createdAt));
+    return rows.map(inviteAdapters.dbToModel);
+  },
+
+  listExpiredUnclaimed: async (nowIso) => {
+    const rows = await db
+      .select()
+      .from(invites)
+      .where(and(isNull(invites.usedAt), lte(invites.expiresAt, nowIso)));
     return rows.map(inviteAdapters.dbToModel);
   },
 

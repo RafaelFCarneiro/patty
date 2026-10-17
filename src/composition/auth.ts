@@ -4,6 +4,7 @@ import { formatAppError } from '../common/errors.js';
 import { McpTransport, type Config } from '../config.js';
 import { issueSetupCode, pruneExpiredSessions } from '../controllers/auth.js';
 import { pruneExpiredGrants } from '../controllers/grants.js';
+import { pruneExpiredInvites } from '../controllers/users.js';
 import type { AuthDeps, RunEffects, SignInInterpreter } from '../controllers/deps.js';
 import type { RuntimeConfig } from './runtime.js';
 import { createSignInFor } from './signIn/wiring.js';
@@ -119,6 +120,8 @@ const housekeeping = async (run: RunEffects, deps: AuthDeps): Promise<void> => {
     throw new Error(`fintrack: could not prune expired sessions — ${formatAppError(sessions.error)}`);
   const grants = await run(() => pruneExpiredGrants(deps));
   if (grants.isErr()) throw new Error(`fintrack: could not prune expired sign-ins — ${formatAppError(grants.error)}`);
+  const invites = await run(() => pruneExpiredInvites(deps));
+  if (invites.isErr()) throw new Error(`fintrack: could not prune expired invites — ${formatAppError(invites.error)}`);
 };
 
 export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEffects): Promise<PreparedAuth> => {

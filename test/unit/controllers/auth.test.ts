@@ -113,7 +113,12 @@ const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW
       listExpired: async () => [],
       listRedeemed: async () => [],
     },
-    invites: { findByHash: async () => null, listUnclaimed: async () => [], listUnclaimedByUser: async () => [] },
+    invites: {
+      findByHash: async () => null,
+      listUnclaimed: async () => [],
+      listUnclaimedByUser: async () => [],
+      listExpiredUnclaimed: async () => [],
+    },
     instanceSettings: { get: async () => null },
     setupCodes: {
       findByHash: async (hash) => codes.find((code) => code.codeHash === hash) ?? null,

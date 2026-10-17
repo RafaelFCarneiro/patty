@@ -361,7 +361,7 @@ This is different from the terminal's [`auth reset-password`](#reset-a-password)
 disabled but a credential still works: the next request on every channel — login, a session cookie, a bearer token, a Claude sign-in over stdio, and a sign-in they had approved but not yet picked up — is refused.
 Users are **disabled, never deleted**: their rows stay theirs, and their username stays taken.
 
-*Enable* only restores the ability to log in. The sessions, tokens and sign-ins ended at the disable stay ended; the person logs in again and signs their clients in again.
+*Enable* (it asks your password too) only restores the ability to log in. The sessions, tokens and sign-ins ended at the disable stay ended; the person logs in again and signs their clients in again.
 
 ### Guards
 
@@ -374,7 +374,7 @@ Users are **disabled, never deleted**: their rows stay theirs, and their usernam
 
 Admins can lower the longest a Claude sign-in may last for the whole instance (the *Longest Claude sign-in* form on the Users page: 24 hours, 7 days or 30 days; the default is 30 days, today's maximum).
 The consent page offers only durations up to the cap, and **approving clamps** whatever was chosen to the cap — a hand-made form cannot ask for more. The cap applies to approvals made **after** it is set:
-**sign-ins already granted keep the expiry they were given** (and so does one approved before the cap fell but not yet picked up). "This session only" (at most 12 hours) is always allowed. Changing the cap asks your password.
+**sign-ins already granted keep the expiry they were given** (one approved before the cap fell but not yet picked up is clamped when it is picked up). "This session only" (at most 12 hours) is always allowed. Changing the cap asks your password.
 
 ## Personal access tokens
 

@@ -164,12 +164,14 @@ export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<Flo
         if (!isActiveUser(user)) return ok({ persist: [], response: plainResult(RedeemKind.enum.invalid) });
 
         const token = deps.secrets.randomAccessToken();
+        // The cap in force now bounds the sign-in too: one approved before it fell is still minted within it.
+        const grant = { ...plan.grant, duration: clampToCap(plan.grant.duration, await instanceCap(deps)) };
         const entity = newStdioSignIn(
           {
             id: deps.newId(),
             tokenHash: deps.secrets.hashSecret(token),
             prefix: tokenDisplayPrefix(token),
-            grant: plan.grant,
+            grant,
           },
           now,
         );
@@ -185,7 +187,7 @@ export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<Flo
             tokenId: entity.id,
             scopes: entity.scopes,
             principal: tokenPrincipal(entity, user, PrincipalVia.enum.stdio),
-            duration: plan.grant.duration,
+            duration: grant.duration,
             expiresAt: entity.expiresAt,
           },
         });

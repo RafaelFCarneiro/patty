@@ -9,6 +9,7 @@ import {
   enableUser,
   inviteUser,
   listUsers,
+  pruneExpiredInvites,
   reissueInvite,
   resolveUserId,
   setRole,
@@ -151,6 +152,7 @@ const depsFor = ({
       findByHash: async (hash) => invites.find((i) => i.codeHash === hash) ?? null,
       listUnclaimed: async () => invites.filter((i) => i.usedAt === null),
       listUnclaimedByUser: async (userId) => invites.filter((i) => i.userId === userId && i.usedAt === null),
+      listExpiredUnclaimed: async (nowIso) => invites.filter((i) => i.usedAt === null && i.expiresAt <= nowIso),
     },
     instanceSettings: { get: async () => settings },
     setupCodes: { findByHash: async () => null, current: async () => null },
@@ -215,7 +217,7 @@ describe('who may run a user-management flow', () => {
     expect(await errorOf(flow(deps, sessionActor('root')))).toEqual(authErrors.adminRequired);
   });
 
-  const stepUpFlows = everyFlow.filter(([name]) => !['listUsers', 'enableUser'].includes(name));
+  const stepUpFlows = everyFlow.filter(([name]) => name !== 'listUsers');
 
   it.each(stepUpFlows)(
     '%s re-asks the admin’s password: a wrong or missing one changes nothing',
@@ -234,11 +236,18 @@ describe('who may run a user-management flow', () => {
     expect(result.isErr() ? result.error.code : '').not.toMatch(/admin_required|session_required|invalid_credentials/);
   });
 
-  it('lets listing and enabling go without a password: neither widens anyone’s access', async () => {
+  it('lets listing go without a password: it changes nothing', async () => {
+    const deps = depsFor({ users: [ROOT, ANA] });
+    expect((await listUsers(deps, sessionActor('root', null))).isOk()).toBe(true);
+  });
+
+  it('asks for the password to enable too: a wrong one leaves the user disabled, nothing written', async () => {
     const disabled = user('ana', { disabledAt: NOW.toISOString() });
     const deps = depsFor({ users: [ROOT, disabled] });
-    expect((await listUsers(deps, sessionActor('root', null))).isOk()).toBe(true);
-    expect((await enableUser(deps, sessionActor('root', null), 'ana')).isOk()).toBe(true);
+    expect(await errorOf(enableUser(deps, sessionActor('root', 'wrong wrong wrong'), 'ana'))).toEqual(
+      authErrors.invalidCredentials,
+    );
+    expect((await enableUser(deps, sessionActor('root'), 'ana')).isOk()).toBe(true);
   });
 });
 
@@ -607,5 +616,18 @@ describe('resolveUserId', () => {
     const deps = depsFor({ users: [ROOT, ANA] });
     expect((await resolveUserId(deps, 'ana'))._unsafeUnwrap()).toBe('ana');
     expect(await errorOf(resolveUserId(deps, 'nobody'))).toEqual(authErrors.unknownUser('nobody'));
+  });
+});
+
+describe('pruneExpiredInvites', () => {
+  it('deletes unclaimed invites past their window and nothing else', async () => {
+    const lapsed = invite('bob', { expiresAt: new Date(NOW.getTime() - 1).toISOString() });
+    const world = {
+      users: [ROOT],
+      invites: [lapsed, invite('ana'), invite('used', { usedAt: NOW.toISOString(), expiresAt: lapsed.expiresAt })],
+    };
+    const { persist, response } = await outcomeOf(pruneExpiredInvites(depsFor(world)));
+    expect(response).toBe(1);
+    expect(opsOf(persist)).toEqual([`${PersistOp.enum.delete}:${INVITE_ENTITY_TAG}`]);
   });
 });

@@ -37,6 +37,9 @@ export const AUTH_MESSAGES = {
     '::1. To use another hostname, set PUBLIC_URL (which turns authentication on).',
 } as const;
 
+/** The headings of the user-management result pages. */
+export const USER_PAGE_HEADINGS = { inviteCreated: 'Invite created', newInvite: 'New invite' } as const;
+
 export const HTTP_ENV_VAR = 'FINTRACK_HTTP';
 
 /** What a stdio session says when it cannot act as anyone (ADR-034 §2). One template per situation, built here so

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { err, type ResultAsync } from 'neverthrow';
+import type { FlowOutcome } from '@rfc0/effect-runner';
 import type { z } from 'zod';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import {
@@ -15,7 +16,7 @@ import {
 import { inviteLink } from '../../../logic/auth/users.js';
 import { resourceOrigin } from '../../../logic/auth/origin.js';
 import { authErrors } from '../../../models/auth/errors.js';
-import { AUTH_MESSAGES } from '../../../models/auth/message.js';
+import { AUTH_MESSAGES, USER_PAGE_HEADINGS } from '../../../models/auth/message.js';
 import { ActorKind, type Actor, type IssuedInvite } from '../../../models/auth/users.js';
 import { validation } from '../../../models/error.js';
 import {
@@ -101,83 +102,89 @@ const attemptAs = async <T>(
   return result;
 };
 
-const invitedPage = async (
-  pages: UserPages,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  heading: string,
-  issued: IssuedInvite,
-) => {
-  const origin = resourceOrigin(pages.ctx.publicUrl, req.headers.host);
-  const link = origin === null ? null : inviteLink(origin, issued.code);
-  return page(reply, 200, await renderInvitedPage({ heading, issued, link }));
+type Replier = (req: FastifyRequest, reply: FastifyReply) => FastifyReply | Promise<FastifyReply>;
+
+const showInvited =
+  (pages: UserPages, heading: string) => async (issued: IssuedInvite, req: FastifyRequest, reply: FastifyReply) => {
+    const origin = resourceOrigin(pages.ctx.publicUrl, req.headers.host);
+    const link = origin === null ? null : inviteLink(origin, issued.code);
+    return page(reply, 200, await renderInvitedPage({ heading, issued, link }));
+  };
+
+const redirectToUsers = (_value: unknown, _req: FastifyRequest, reply: FastifyReply) =>
+  reply.redirect(USERS_PATH, SEE_OTHER);
+
+type StepUpAction<P, F extends { password: string }, T> = {
+  /** The path parameters, for a route about one user. */
+  params?: z.ZodType<P, z.ZodTypeDef, unknown>;
+  form: z.ZodType<F, z.ZodTypeDef, unknown>;
+  /** The flow, given the actor (who typed the password) and the form without it. */
+  run: (actor: Actor, params: P, input: Omit<F, 'password'>) => ResultAsync<T, AppError>;
+  onSuccess: (value: T, req: FastifyRequest, reply: FastifyReply) => FastifyReply | Promise<FastifyReply>;
 };
 
-const listPage = (pages: UserPages) => (req: FastifyRequest, reply: FastifyReply) => showUsers(pages, req, reply);
+/**
+ * One state-changing admin action: decode the params and the form, run the flow as the typed-password actor through the
+ * throttled `attemptAs`, then render the success or the refusal on the users page. Every action that changes who can
+ * sign in or what they can do goes through here, so none can skip the password.
+ */
+const stepUpAction =
+  <P, F extends { password: string }, T>(pages: UserPages, action: StepUpAction<P, F, T>): Replier =>
+  async (req, reply) => {
+    const params = action.params ? action.params.safeParse(req.params) : undefined;
+    const form = action.form.safeParse(req.body);
+    if (params && !params.success) return showUsers(pages, req, reply, INVALID_FORM_STATUS, AUTH_MESSAGES.tryAgain);
+    if (!form.success) return showUsers(pages, req, reply, INVALID_FORM_STATUS, firstIssue(form.error));
+    const { password, ...input } = form.data;
+    const result = await attemptAs(pages, req, password, (actor) => action.run(actor, params?.data as P, input));
+    return result.isErr() ? refused(pages, req, reply, result.error) : action.onSuccess(result.value, req, reply);
+  };
 
-const invitePage = (pages: UserPages) => async (req: FastifyRequest, reply: FastifyReply) => {
-  const parsed = InviteUserFormSchema.safeParse(req.body);
-  if (!parsed.success) return showUsers(pages, req, reply, INVALID_FORM_STATUS, firstIssue(parsed.error));
-  const { password, ...input } = parsed.data;
-  const issued = await attemptAs(pages, req, password, (actor) =>
-    pages.ctx.runEffects(() => inviteUser(pages.ctx.deps, actor, input)),
-  );
-  return issued.isErr()
-    ? refused(pages, req, reply, issued.error)
-    : invitedPage(pages, req, reply, 'Invite created', issued.value);
-};
+const runIn = <T>(pages: UserPages, flow: () => ResultAsync<FlowOutcome<T>, AppError>) => pages.ctx.runEffects(flow);
 
-const reissuePage = (pages: UserPages) => async (req: FastifyRequest, reply: FastifyReply) => {
-  const params = UserParamsSchema.safeParse(req.params);
-  const parsed = StepUpFormSchema.safeParse(req.body);
-  if (!params.success || !parsed.success)
-    return showUsers(pages, req, reply, INVALID_FORM_STATUS, AUTH_MESSAGES.tryAgain);
-  const issued = await attemptAs(pages, req, parsed.data.password, (actor) =>
-    pages.ctx.runEffects(() => reissueInvite(pages.ctx.deps, actor, params.data.id)),
-  );
-  return issued.isErr()
-    ? refused(pages, req, reply, issued.error)
-    : invitedPage(pages, req, reply, 'New invite', issued.value);
-};
+const listPage =
+  (pages: UserPages): Replier =>
+  (req, reply) =>
+    showUsers(pages, req, reply);
 
-const disablePage = (pages: UserPages) => async (req: FastifyRequest, reply: FastifyReply) => {
-  const params = UserParamsSchema.safeParse(req.params);
-  const parsed = StepUpFormSchema.safeParse(req.body);
-  if (!params.success || !parsed.success)
-    return showUsers(pages, req, reply, INVALID_FORM_STATUS, AUTH_MESSAGES.tryAgain);
-  const changed = await attemptAs(pages, req, parsed.data.password, (actor) =>
-    pages.ctx.runEffects(() => disableUser(pages.ctx.deps, actor, params.data.id)),
-  );
-  return changed.isErr() ? refused(pages, req, reply, changed.error) : reply.redirect(USERS_PATH, SEE_OTHER);
-};
-
-// Enabling only restores the ability to log in, so it does not re-ask the password.
-const enablePage = (pages: UserPages) => async (req: FastifyRequest, reply: FastifyReply) => {
-  const params = UserParamsSchema.safeParse(req.params);
-  if (!params.success) return showUsers(pages, req, reply, INVALID_FORM_STATUS, AUTH_MESSAGES.tryAgain);
-  const changed = await pages.ctx.runEffects(() => enableUser(pages.ctx.deps, sessionActor(req), params.data.id));
-  return changed.isErr() ? refused(pages, req, reply, changed.error) : reply.redirect(USERS_PATH, SEE_OTHER);
-};
-
-const rolePage = (pages: UserPages) => async (req: FastifyRequest, reply: FastifyReply) => {
-  const params = UserParamsSchema.safeParse(req.params);
-  const parsed = SetRoleFormSchema.safeParse(req.body);
-  if (!params.success || !parsed.success)
-    return showUsers(pages, req, reply, INVALID_FORM_STATUS, AUTH_MESSAGES.tryAgain);
-  const changed = await attemptAs(pages, req, parsed.data.password, (actor) =>
-    pages.ctx.runEffects(() => setRole(pages.ctx.deps, actor, { userId: params.data.id, role: parsed.data.role })),
-  );
-  return changed.isErr() ? refused(pages, req, reply, changed.error) : reply.redirect(USERS_PATH, SEE_OTHER);
-};
-
-const capPage = (pages: UserPages) => async (req: FastifyRequest, reply: FastifyReply) => {
-  const parsed = SignInCapFormSchema.safeParse(req.body);
-  if (!parsed.success) return showUsers(pages, req, reply, INVALID_FORM_STATUS, firstIssue(parsed.error));
-  const { password, ...input } = parsed.data;
-  const saved = await attemptAs(pages, req, password, (actor) =>
-    pages.ctx.runEffects(() => setSignInCap(pages.ctx.deps, actor, input)),
-  );
-  return saved.isErr() ? refused(pages, req, reply, saved.error) : reply.redirect(USERS_PATH, SEE_OTHER);
+const userRoutes = (pages: UserPages) => {
+  const { deps } = pages.ctx;
+  return {
+    invite: stepUpAction(pages, {
+      form: InviteUserFormSchema,
+      run: (actor, _params, input) => runIn(pages, () => inviteUser(deps, actor, input)),
+      onSuccess: showInvited(pages, USER_PAGE_HEADINGS.inviteCreated),
+    }),
+    reissue: stepUpAction(pages, {
+      params: UserParamsSchema,
+      form: StepUpFormSchema,
+      run: (actor, params) => runIn(pages, () => reissueInvite(deps, actor, params.id)),
+      onSuccess: showInvited(pages, USER_PAGE_HEADINGS.newInvite),
+    }),
+    disable: stepUpAction(pages, {
+      params: UserParamsSchema,
+      form: StepUpFormSchema,
+      run: (actor, params) => runIn(pages, () => disableUser(deps, actor, params.id)),
+      onSuccess: redirectToUsers,
+    }),
+    enable: stepUpAction(pages, {
+      params: UserParamsSchema,
+      form: StepUpFormSchema,
+      run: (actor, params) => runIn(pages, () => enableUser(deps, actor, params.id)),
+      onSuccess: redirectToUsers,
+    }),
+    role: stepUpAction(pages, {
+      params: UserParamsSchema,
+      form: SetRoleFormSchema,
+      run: (actor, params, input) => runIn(pages, () => setRole(deps, actor, { userId: params.id, role: input.role })),
+      onSuccess: redirectToUsers,
+    }),
+    cap: stepUpAction(pages, {
+      form: SignInCapFormSchema,
+      run: (actor, _params, input) => runIn(pages, () => setSignInCap(deps, actor, input)),
+      onSuccess: redirectToUsers,
+    }),
+  };
 };
 
 /**
@@ -195,12 +202,13 @@ export const registerUserRoutes = (app: FastifyInstance, ctx: AuthRoutesContext)
     addFormParser(scope);
     scope.addHook('preHandler', requireSession);
     scope.addHook('preHandler', requireAdmin);
+    const routes = userRoutes(pages);
     scope.get(USERS_PATH, listPage(pages));
-    scope.post(USERS_PATH, formRoute, invitePage(pages));
-    scope.post(USER_REISSUE_PATH, formRoute, reissuePage(pages));
-    scope.post(USER_DISABLE_PATH, formRoute, disablePage(pages));
-    scope.post(USER_ENABLE_PATH, formRoute, enablePage(pages));
-    scope.post(USER_ROLE_PATH, formRoute, rolePage(pages));
-    scope.post(USERS_CAP_PATH, formRoute, capPage(pages));
+    scope.post(USERS_PATH, formRoute, routes.invite);
+    scope.post(USER_REISSUE_PATH, formRoute, routes.reissue);
+    scope.post(USER_DISABLE_PATH, formRoute, routes.disable);
+    scope.post(USER_ENABLE_PATH, formRoute, routes.enable);
+    scope.post(USER_ROLE_PATH, formRoute, routes.role);
+    scope.post(USERS_CAP_PATH, formRoute, routes.cap);
   });
 };

@@ -16,16 +16,13 @@ import { renderInvitePage } from '../userPages.js';
 
 const INVALID_FORM_STATUS = httpStatus(validation([]));
 
-const messageFor = (error: AppError): string => {
-  switch (error.code) {
-    case 'invalid_invite':
-      return AUTH_MESSAGES.invalidInvite;
-    case 'rate_limited':
-      return AUTH_MESSAGES.rateLimited;
-    default:
-      return AUTH_MESSAGES.tryAgain;
-  }
+// What each refusal says on the claim page; every other failure is the generic "try again".
+const REFUSAL_MESSAGE: Readonly<Partial<Record<AppError['code'], string>>> = {
+  [authErrors.invalidInvite.code]: AUTH_MESSAGES.invalidInvite,
+  [authErrors.rateLimited.code]: AUTH_MESSAGES.rateLimited,
 };
+
+const messageFor = (error: AppError): string => REFUSAL_MESSAGE[error.code] ?? AUTH_MESSAGES.tryAgain;
 
 // The link carries the code in its query string, so every answer from this page — the form and its failures — keeps
 // the path and query out of any `Referer`.

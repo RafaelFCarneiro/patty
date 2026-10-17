@@ -219,13 +219,14 @@ describe('step-up: the admin’s password is asked again', () => {
     expect(await inviteRows(ctx)).toEqual([]);
   });
 
-  it('asks again for reissue, disable, role and the sign-in cap — and not for enable', async () => {
+  it('asks again for reissue, disable, enable, role and the sign-in cap', async () => {
     const { ctx, owner } = await withOwner();
     const ana = await addUser(ctx, owner, 'ana');
     const id = ana.userId;
     const attempts: Array<[string, Record<string, string>]> = [
       [`${USERS_URL}/${id}/reissue`, {}],
       [`${USERS_URL}/${id}/disable`, {}],
+      [`${USERS_URL}/${id}/enable`, {}],
       [`${USERS_URL}/${id}/role`, { role: 'admin' }],
       [`${USERS_URL}/sign-in-cap`, { maxSignInDuration: '24h' }],
     ];
@@ -239,9 +240,18 @@ describe('step-up: the admin’s password is asked again', () => {
     expect(await userRow(ctx, 'ana')).toMatchObject({ role: 'member', disabled_at: null });
     expect((await get(ctx, ana.cookie, '/ui/access/tokens')).statusCode).toBe(200);
     expect(await ctx.db.all(sql`SELECT * FROM settings`)).toEqual([]);
+  });
 
-    // Enabling only restores access, so it re-asks nothing (here: a no-op on an enabled user).
-    expect((await post(ctx, owner, `${USERS_URL}/${id}/enable`, {})).statusCode).toBe(303);
+  it('leaves a disabled user disabled when the password typed to enable them is wrong', async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    await post(ctx, owner, `${USERS_URL}/${ana.userId}/disable`, { password: PASSWORD });
+
+    const wrong = await post(ctx, owner, `${USERS_URL}/${ana.userId}/enable`, { password: 'not the password' });
+
+    expect(wrong.statusCode).toBe(403);
+    expect(await userRow(ctx, 'ana')).toMatchObject({ disabled_at: expect.any(String) });
+    expect((await loginAs(ctx, 'ana')).statusCode).toBe(401);
   });
 
   it('counts wrong step-up passwords like wrong logins: a run of them is throttled', async () => {
@@ -409,7 +419,7 @@ describe('disable and enable', () => {
     const stdio = await stdioSignedIn(ctx, ana.cookie);
     await post(ctx, owner, `${USERS_URL}/${ana.userId}/disable`, { password: PASSWORD });
 
-    const enabled = await post(ctx, owner, `${USERS_URL}/${ana.userId}/enable`, {});
+    const enabled = await post(ctx, owner, `${USERS_URL}/${ana.userId}/enable`, { password: PASSWORD });
 
     expect(enabled.statusCode).toBe(303);
     expect(await userRow(ctx, 'ana')).toMatchObject({ disabled_at: null });
@@ -564,7 +574,7 @@ describe('who can reach user management', () => {
     [`${USERS_URL}/sign-in-cap`, { maxSignInDuration: '24h', password: PASSWORD }],
     [`${USERS_URL}/${ownerId}/reissue`, { password: PASSWORD }],
     [`${USERS_URL}/${ownerId}/disable`, { password: PASSWORD }],
-    [`${USERS_URL}/${ownerId}/enable`, {}],
+    [`${USERS_URL}/${ownerId}/enable`, { password: PASSWORD }],
     [`${USERS_URL}/${ownerId}/role`, { role: 'member', password: PASSWORD }],
   ];
 
@@ -819,7 +829,7 @@ describe('the sign-in cap (ADR-034 §4)', () => {
     expect(Date.parse(before!.expires_at) - Date.parse(before!.created_at)).toBeGreaterThan(29 * 24 * HOUR_MS);
   });
 
-  it('keeps a duration an earlier approval already recorded, even if the cap fell before it was redeemed', async () => {
+  it('clamps a sign-in approved before the cap fell when it is redeemed after', async () => {
     const { ctx, owner } = await withOwner();
     const { session, code } = await pendingConsentPage(ctx, owner);
     await approveConnect(ctx, owner, code, { duration: '30d' });
@@ -827,7 +837,7 @@ describe('the sign-in cap (ADR-034 §4)', () => {
 
     expect((await session.resolve()).kind).toBe('granted');
     const [token] = await tokenExpiries(ctx);
-    expect(Date.parse(token!.expires_at) - Date.parse(token!.created_at)).toBeGreaterThan(29 * 24 * HOUR_MS);
+    expect(Date.parse(token!.expires_at) - Date.parse(token!.created_at)).toBeLessThanOrEqual(24 * HOUR_MS);
   });
 });
 

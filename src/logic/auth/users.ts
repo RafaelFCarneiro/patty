@@ -6,6 +6,7 @@ import { type UserEntity, UserRole } from '../../models/auth/owner.js';
 import { PrincipalVia } from '../../models/auth/principal.js';
 import {
   ActorKind,
+  AdminChange,
   INVITE_TTL_MS,
   type Actor,
   type InviteEntity,
@@ -101,13 +102,12 @@ export const authorizeActor = (actor: Actor, acting: UserEntity | null): AppErro
   return isActiveAdmin(acting) ? null : authErrors.adminRequired;
 };
 
-/** The actions that can take an admin away. Each says whether the acting admin may do it to themself. */
-export type AdminChange = 'disable' | 'demote' | 'reissue';
+/** Each admin change says whether the acting admin may do it to themself. */
 const CHANGE_BLOCKS_SELF: Readonly<Record<AdminChange, boolean>> = {
-  disable: true,
-  demote: true,
+  [AdminChange.enum.disable]: true,
+  [AdminChange.enum.demote]: true,
   // A reissued admin keeps the page that shows them their new invite: locking oneself out is recoverable.
-  reissue: false,
+  [AdminChange.enum.reissue]: false,
 };
 
 /** Every active admin other than `target` — who is left to administer, and the rows a decision must witness. */
