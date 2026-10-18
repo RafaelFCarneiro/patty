@@ -234,6 +234,33 @@ describe('the owner cannot be claimed into a name another user holds', () => {
   });
 });
 
+describe('a user invited before the owner was set up can still sign in', () => {
+  it('reaches the login form, not setup, from /ui/login and any /ui page; setup stays open for the owner', async () => {
+    const ctx = await createApp();
+    const run = bindAuthRunEffects(ctx.authRunEffects);
+    const issued = (
+      await run(() =>
+        inviteUser(authDepsOf(ctx), { kind: ActorKind.enum.terminal }, { username: 'ana', role: 'member' }),
+      )
+    )._unsafeUnwrap();
+    const before = await ctx.app.inject({ method: 'GET', url: '/ui', headers: { host: LOOPBACK_HOST } });
+    expect(before.headers.location).toBe('/ui/setup'); // nobody can log in yet: still setup first
+
+    expect((await claim(ctx, issued.code)).statusCode).toBe(303);
+
+    // Logged out (no cookie): ana is sent to log in, and the login page is a form.
+    const page = await ctx.app.inject({ method: 'GET', url: '/ui', headers: { host: LOOPBACK_HOST } });
+    expect(page.statusCode).toBe(303);
+    expect(page.headers.location).toContain('/ui/login');
+    const login = await ctx.app.inject({ method: 'GET', url: '/ui/login', headers: { host: LOOPBACK_HOST } });
+    expect(login.statusCode).toBe(200);
+    expect((await loginAs(ctx, 'ana')).statusCode).toBe(303);
+    // The owner can still be claimed at the setup address.
+    const setup = await ctx.app.inject({ method: 'GET', url: '/ui/setup', headers: { host: LOOPBACK_HOST } });
+    expect(setup.statusCode).toBe(200);
+  });
+});
+
 describe('step-up: the admin’s password is asked again', () => {
   it('refuses an invite with a wrong or missing password and creates nobody', async () => {
     const { ctx, owner } = await withOwner();

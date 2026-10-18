@@ -44,6 +44,8 @@ const required = (principal: Principal | null | 'fails', ownerUnclaimed = true):
   deps: {
     users: {
       findById: async () => (ownerUnclaimed ? unclaimedOwner : { ...unclaimedOwner, username: 'x', passwordHash: 'h' }),
+      // Nobody else exists: the owner is the only user, so setup is where an unclaimed instance starts.
+      listAll: async () => [ownerUnclaimed ? unclaimedOwner : { ...unclaimedOwner, username: 'x', passwordHash: 'h' }],
     },
     secrets: { hashSecret: (secret: string) => `sha(${secret})` },
   } as unknown as AuthDeps,

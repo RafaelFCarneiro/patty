@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ownerNeedsSetup } from '../../../controllers/auth.js';
+import { startsAtSetup } from '../../../controllers/auth.js';
 import { acceptsBearer, credentialOf } from '../../../logic/auth/bearer.js';
 import { csrfVerdict, isLoopbackRequest, preSessionCsrfVerdict } from '../../../logic/auth/origin.js';
 import { defaultScopeForMethod, hasScope } from '../../../logic/auth/scope.js';
@@ -64,7 +64,7 @@ const admitOwnerOnLoopback = async (req: FastifyRequest, reply: FastifyReply) =>
 
 const rejectUnauthenticated = async (auth: RequiredAuth, req: FastifyRequest, reply: FastifyReply) => {
   if (!isUiPath(pathOf(req.url))) return rejectWithChallenge(req, reply, auth.publicUrl, authErrors.unauthenticated);
-  const target = (await ownerNeedsSetup(auth.deps)) ? SETUP_PATH : loginRedirectTarget(req);
+  const target = (await startsAtSetup(auth.deps)) ? SETUP_PATH : loginRedirectTarget(req);
   return reply.redirect(target, SEE_OTHER);
 };
 

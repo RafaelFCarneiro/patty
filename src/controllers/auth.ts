@@ -8,6 +8,7 @@ import {
   claimRaceWinner,
   formatSetupCode,
   hasCredentials,
+  isActiveUser,
   isNeverClaimed,
   isSetupCodeUsable,
   isUnclaimed,
@@ -254,6 +255,14 @@ export const ownerClaimPlan = async (deps: AuthDeps): Promise<ClaimPlan> => plan
 export const claimRaceWinnerOf = async (deps: AuthDeps, refusal: AppError): Promise<ClaimedOwner | null> =>
   claimRaceWinner(refusal, await claimedOwnerOf(deps));
 
-/** Read-only: does the owner still need claiming? Drives the setup-vs-login redirect. */
+/**
+ * Read-only: where an unauthenticated browser starts. Setup, while the owner was never claimed AND nobody else can log
+ * in; otherwise the login form — a user invited before the owner was set up must still be able to sign in (setup stays
+ * reachable at its own address for the owner).
+ */
+export const startsAtSetup = async (deps: AuthDeps): Promise<boolean> =>
+  (await ownerNeedsSetup(deps)) && !(await deps.users.listAll()).some(isActiveUser);
+
+/** Read-only: does the owner still need claiming? Drives whether `/ui/setup` is open. */
 export const ownerNeedsSetup = async (deps: AuthDeps): Promise<boolean> =>
   isNeverClaimed(await deps.users.findById(OWNER_USER_ID));
