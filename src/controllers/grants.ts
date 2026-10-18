@@ -109,6 +109,10 @@ export const approveGrant = (
 ): ResultAsync<FlowOutcome<void>, AppError> =>
   safeTry(async function* () {
     yield* requireSession(principal);
+    // The approver must still be able to sign in, and their row is re-written unchanged: a disable or reset racing
+    // this approval conflicts on its version, so an approval can never land after the user's grants were revoked.
+    const row = await deps.users.findById(principal.userId);
+    const approver = yield* okOr(isActiveUser(row) ? row : null, authErrors.unauthenticated);
     const grant = yield* answerableGrant(deps, input.userCode);
     yield* guard(durationAllowedFor(grant.channel, input.duration), authErrors.sessionDurationRefused);
     const duration = clampToCap(input.duration, await instanceCap(deps));
@@ -118,7 +122,10 @@ export const approveGrant = (
       deps.clock(),
     );
     return ok({
-      persist: [persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: approved })],
+      persist: [
+        persistence.update({ entity: USER_ENTITY_TAG, model: approver }),
+        persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: approved }),
+      ],
       response: undefined,
     });
   });

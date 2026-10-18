@@ -38,6 +38,8 @@ type Held = HeldCredentials;
 
 type Facts = {
   actingUserId: string | null;
+  /** The acting admin as admitted (the row that authorized the request); null for the terminal. */
+  acting: UserEntity | null;
   target: UserEntity;
   users: readonly UserEntity[];
   now: Date;
@@ -56,21 +58,33 @@ const unchanged = (target: UserEntity): UserPlan => ({
   revoked: NO_REVOCATIONS,
 });
 
+/**
+ * Everyone, with the acting admin as admitted: the decision and the witness writes are built from the row that
+ * authorized the request, so a change made to the actor after that (a demotion) conflicts on its version.
+ */
+const rosterOf = (facts: Facts): UserEntity[] =>
+  R.map(facts.users, (user) => (facts.acting !== null && user.id === facts.acting.id ? facts.acting : user));
+
 /** The admins an action leaves standing — written unchanged, so their `version` is part of the decision. */
 const witnesses = (users: readonly UserEntity[], target: UserEntity): UserEntity[] =>
   isActiveAdmin(target) ? remainingAdmins(users, target) : [];
+
+/** The user writes of an action, plus the admitted actor's row unchanged unless it is already among them. */
+const writesWithActor = (writes: UserEntity[], acting: UserEntity | null): UserEntity[] =>
+  acting === null || writes.some((user) => user.id === acting.id) ? writes : [...writes, acting];
 
 /** Disabling ends every credential and every pending invite in the same plan that disables. Idempotent. */
 export const planDisable = (
   facts: Facts & { held: Held; openInvites: readonly InviteEntity[]; approvedGrants: readonly ClientGrantEntity[] },
 ): Result<UserPlan, AppError> => {
   if (facts.target.disabledAt !== null) return ok(unchanged(facts.target));
-  const refusal = guardAdminChange(AdminChange.enum.disable, facts);
+  const roster = rosterOf(facts);
+  const refusal = guardAdminChange(AdminChange.enum.disable, { ...facts, users: roster });
   if (refusal !== null) return err(refusal);
   const disabled = disabledUser(facts.target, facts.now);
   const ended = endedCredentials(facts.held, facts.now);
   return ok({
-    userWrites: [disabled, ...witnesses(facts.users, facts.target)],
+    userWrites: writesWithActor([disabled, ...witnesses(roster, facts.target)], facts.acting),
     sessions: ended.sessions,
     tokens: ended.tokens,
     expiredGrants: R.map(facts.approvedGrants, expiredGrant),
@@ -94,7 +108,8 @@ export const planReissue = (
   },
 ): Result<UserPlan, AppError> => {
   if (facts.target.disabledAt !== null) return err(authErrors.userDisabled);
-  const refusal = guardAdminChange(AdminChange.enum.reissue, facts);
+  const roster = rosterOf(facts);
+  const refusal = guardAdminChange(AdminChange.enum.reissue, { ...facts, users: roster });
   if (refusal !== null) return err(refusal);
   const claimed = hasCredentials(facts.target);
   const after = claimed ? withoutPassword(facts.target) : facts.target;
@@ -104,7 +119,7 @@ export const planReissue = (
   return ok({
     // The target row is always written (unchanged for an unclaimed user), so a claim or reissue racing this one
     // conflicts on its version instead of leaving a code that can never work.
-    userWrites: [after, ...witnesses(facts.users, facts.target)],
+    userWrites: writesWithActor([after, ...witnesses(roster, facts.target)], facts.acting),
     sessions: ended.sessions,
     tokens: ended.tokens,
     expiredGrants: R.map(facts.approvedGrants, expiredGrant),
@@ -118,11 +133,13 @@ export const planReissue = (
 /** A role change. Demoting an active admin is an admin change; promoting, or a role the user already has, is not. */
 export const planRole = (facts: Facts & { role: UserRole }): Result<UserPlan, AppError> => {
   if (facts.target.role === facts.role) return ok(unchanged(facts.target));
-  const refusal = facts.role === UserRole.enum.member ? guardAdminChange(AdminChange.enum.demote, facts) : null;
+  const roster = rosterOf(facts);
+  const refusal =
+    facts.role === UserRole.enum.member ? guardAdminChange(AdminChange.enum.demote, { ...facts, users: roster }) : null;
   if (refusal !== null) return err(refusal);
   const changed = withRole(facts.target, facts.role);
   return ok({
     ...unchanged(changed),
-    userWrites: [changed, ...witnesses(facts.users, facts.target)],
+    userWrites: writesWithActor([changed, ...witnesses(roster, facts.target)], facts.acting),
   });
 };

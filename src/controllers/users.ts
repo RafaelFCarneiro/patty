@@ -86,18 +86,31 @@ const stepUpMatches = async (deps: AuthDeps, acting: UserEntity | null, password
  * The gate every flow passes first: session-only and admin-only (the browser admin), or the trusted terminal. `stepUp`
  * flows also re-ask the admin's password; the terminal has none. Answers who is acting (`null` = the terminal).
  */
-const admit = (deps: AuthDeps, actor: Actor, options: { stepUp: boolean }): ResultAsync<string | null, AppError> =>
+type Admitted = {
+  /** Who is acting (`null` = the terminal). */
+  actingUserId: string | null;
+  /** The row that authorized the request. Every write the flow makes carries its version, so a change to the actor
+   *  after this read (a demotion, a disable) conflicts and the flow re-runs against the new world. */
+  acting: UserEntity | null;
+};
+
+const admit = (deps: AuthDeps, actor: Actor, options: { stepUp: boolean }): ResultAsync<Admitted, AppError> =>
   safeTry(async function* () {
     const acting = actor.kind === ActorKind.enum.session ? await deps.users.findById(actor.principal.userId) : null;
     yield* orRefuse(authorizeActor(actor, acting));
     if (actor.kind === ActorKind.enum.session && options.stepUp) {
       yield* guard(await stepUpMatches(deps, acting, actor.password), authErrors.invalidCredentials);
     }
-    return ok(actor.kind === ActorKind.enum.session ? actor.principal.userId : null);
+    return ok({ actingUserId: acting?.id ?? null, acting });
   });
 
-const targetOf = (deps: AuthDeps, userId: string): ResultAsync<UserEntity, AppError> =>
+/** The admitted actor's row, unchanged, for a flow whose own writes do not already carry it. */
+const actorWitness = ({ acting }: Admitted): Persistable[] => (acting === null ? [] : [updateUser(acting)]);
+
+/** The user an action is about. When it is the acting admin, the admitted row itself: one snapshot, one version. */
+const targetOf = ({ acting }: Admitted, deps: AuthDeps, userId: string): ResultAsync<UserEntity, AppError> =>
   safeTry(async function* () {
+    if (acting !== null && acting.id === userId) return ok(acting);
     return ok(yield* okOr(await deps.users.findById(userId), authErrors.unknownUser(userId)));
   });
 
@@ -141,18 +154,18 @@ export const inviteUser = (
   input: InviteUserInput,
 ): ResultAsync<FlowOutcome<IssuedInvite>, AppError> =>
   safeTry(async function* () {
-    const actingUserId = yield* admit(deps, actor, { stepUp: true });
+    const admitted = yield* admit(deps, actor, { stepUp: true });
     yield* guard((await deps.users.findByUsername(input.username)) === null, authErrors.usernameTaken(input.username));
 
     const now = deps.clock();
     const user = newInvitedUser({ id: deps.newId(), ...input }, now);
-    const invite = freshInvite(deps, { userId: user.id, createdBy: actingUserId }, now);
+    const invite = freshInvite(deps, { userId: user.id, createdBy: admitted.actingUserId }, now);
     const summary = {
       ...summarizeUser({ ...user, version: INITIAL_VERSION }, [], now),
       inviteExpiresAt: invite.invite.expiresAt,
     };
     return ok({
-      persist: [persistence.insert({ entity: USER_ENTITY_TAG, model: user }), invite.insert],
+      persist: [persistence.insert({ entity: USER_ENTITY_TAG, model: user }), invite.insert, ...actorWitness(admitted)],
       response: { user: summary, code: invite.code, expiresAt: invite.invite.expiresAt, revoked: NO_REVOCATIONS },
     });
   });
@@ -168,12 +181,12 @@ export const reissueInvite = (
   userId: string,
 ): ResultAsync<FlowOutcome<IssuedInvite>, AppError> =>
   safeTry(async function* () {
-    const actingUserId = yield* admit(deps, actor, { stepUp: true });
-    const target = yield* targetOf(deps, userId);
+    const admitted = yield* admit(deps, actor, { stepUp: true });
+    const target = yield* targetOf(admitted, deps, userId);
     const now = deps.clock();
-    const invite = freshInvite(deps, { userId: target.id, createdBy: actingUserId }, now);
+    const invite = freshInvite(deps, { userId: target.id, createdBy: admitted.actingUserId }, now);
     const plan = yield* planReissue({
-      actingUserId,
+      ...admitted,
       target,
       users: await deps.users.listAll(),
       held: await heldCredentials(deps, target.id),
@@ -237,11 +250,11 @@ export const disableUser = (
   userId: string,
 ): ResultAsync<FlowOutcome<UserChange>, AppError> =>
   safeTry(async function* () {
-    const actingUserId = yield* admit(deps, actor, { stepUp: true });
-    const target = yield* targetOf(deps, userId);
+    const admitted = yield* admit(deps, actor, { stepUp: true });
+    const target = yield* targetOf(admitted, deps, userId);
     const now = deps.clock();
     const plan = yield* planDisable({
-      actingUserId,
+      ...admitted,
       target,
       users: await deps.users.listAll(),
       held: await heldCredentials(deps, target.id),
@@ -259,12 +272,15 @@ export const enableUser = (
   userId: string,
 ): ResultAsync<FlowOutcome<UserChange>, AppError> =>
   safeTry(async function* () {
-    yield* admit(deps, actor, { stepUp: true });
-    const target = yield* targetOf(deps, userId);
+    const admitted = yield* admit(deps, actor, { stepUp: true });
+    const target = yield* targetOf(admitted, deps, userId);
     const now = deps.clock();
     if (target.disabledAt === null) return ok({ persist: [], response: reportOf(target, NO_REVOCATIONS, now) });
     const enabled = enabledUser(target);
-    return ok({ persist: [updateUser(enabled)], response: reportOf(enabled, NO_REVOCATIONS, now) });
+    return ok({
+      persist: [updateUser(enabled), ...actorWitness(admitted)],
+      response: reportOf(enabled, NO_REVOCATIONS, now),
+    });
   });
 
 export const setRole = (
@@ -273,10 +289,10 @@ export const setRole = (
   input: SetRoleInput,
 ): ResultAsync<FlowOutcome<UserChange>, AppError> =>
   safeTry(async function* () {
-    const actingUserId = yield* admit(deps, actor, { stepUp: true });
-    const target = yield* targetOf(deps, input.userId);
+    const admitted = yield* admit(deps, actor, { stepUp: true });
+    const target = yield* targetOf(admitted, deps, input.userId);
     const now = deps.clock();
-    const plan = yield* planRole({ actingUserId, target, users: await deps.users.listAll(), role: input.role, now });
+    const plan = yield* planRole({ ...admitted, target, users: await deps.users.listAll(), role: input.role, now });
     return ok({ persist: persistOf(plan), response: reportOf(plan.after, plan.revoked, now) });
   });
 
@@ -287,14 +303,14 @@ export const setSignInCap = (
   input: SetSignInCapInput,
 ): ResultAsync<FlowOutcome<SignInCap>, AppError> =>
   safeTry(async function* () {
-    yield* admit(deps, actor, { stepUp: true });
+    const admitted = yield* admit(deps, actor, { stepUp: true });
     const current = await deps.instanceSettings.get();
     if (signInCapOf(current) === input.maxSignInDuration) return ok({ persist: [], response: input.maxSignInDuration });
     const model = { id: INSTANCE_SETTINGS_ID, maxSignInDuration: input.maxSignInDuration };
     const write = current
       ? persistence.update({ entity: INSTANCE_SETTINGS_ENTITY_TAG, model: { ...model, version: current.version } })
       : persistence.insert({ entity: INSTANCE_SETTINGS_ENTITY_TAG, model });
-    return ok({ persist: [write], response: input.maxSignInDuration });
+    return ok({ persist: [write, ...actorWitness(admitted)], response: input.maxSignInDuration });
   });
 
 /** Startup housekeeping, like sessions and grants: unclaimed invites past their window are deleted. */

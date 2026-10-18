@@ -3,8 +3,10 @@ import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { createToken } from '../../../src/controllers/accessTokens.js';
-import { disableUser } from '../../../src/controllers/users.js';
+import { approveGrant } from '../../../src/controllers/grants.js';
+import { disableUser, inviteUser } from '../../../src/controllers/users.js';
 import { UserRole } from '../../../src/models/auth/owner.js';
+import { ActorKind, type Actor } from '../../../src/models/auth/users.js';
 import { PrincipalVia, type Principal } from '../../../src/models/auth/principal.js';
 import { ALL_SCOPES } from '../../../src/models/auth/scope.js';
 import {
@@ -523,6 +525,66 @@ describe('a credential cannot be issued to a user after theirs were ended', () =
     // The stale batch conflicts on the user's version; its retry sees a disabled user and refuses.
     expect(minted.isErr()).toBe(true);
     expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
+  });
+});
+
+describe('a request authorized before a change to its author cannot outlive that change', () => {
+  it('refuses a sign-in approval that commits after the approver was disabled', async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    const deps = authDepsOf(ctx);
+    const run = bindAuthRunEffects(ctx.authRunEffects);
+    const { session } = stdioSessionFor(ctx);
+    const userCode = userCodeIn(await session.resolve());
+    const principal: Principal = {
+      userId: ana.userId,
+      role: UserRole.enum.member,
+      scopes: [...ALL_SCOPES],
+      via: PrincipalVia.enum.session,
+    };
+    const input = { userCode, access: 'read' as const, duration: '24h' as const };
+
+    const stale = (await approveGrant(deps, principal, input))._unsafeUnwrap();
+    await post(ctx, owner, `${USERS_URL}/${ana.userId}/disable`, { password: PASSWORD });
+    let first = true;
+    const approved = await run(() => {
+      if (!first) return approveGrant(deps, principal, input);
+      first = false;
+      return okAsync(stale);
+    });
+
+    expect(approved.isErr()).toBe(true);
+    expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'pending' }]);
+  });
+
+  it('refuses an invitation sent by an admin who was demoted after it was authorized', async () => {
+    const { ctx, owner } = await withOwner();
+    const boss = await addUser(ctx, owner, 'boss', 'admin');
+    const deps = authDepsOf(ctx);
+    const run = bindAuthRunEffects(ctx.authRunEffects);
+    const actor: Actor = {
+      kind: ActorKind.enum.session,
+      principal: {
+        userId: boss.userId,
+        role: UserRole.enum.admin,
+        scopes: [...ALL_SCOPES],
+        via: PrincipalVia.enum.session,
+      },
+      password: MEMBER_PASSWORD,
+    };
+    const input = { username: 'late-guest', role: UserRole.enum.member };
+
+    const stale = (await inviteUser(deps, actor, input))._unsafeUnwrap();
+    await post(ctx, owner, `${USERS_URL}/${boss.userId}/role`, { role: 'member', password: PASSWORD });
+    let first = true;
+    const invited = await run(() => {
+      if (!first) return inviteUser(deps, actor, input);
+      first = false;
+      return okAsync(stale);
+    });
+
+    expect(invited.isErr()).toBe(true);
+    expect(await userRow(ctx, 'late-guest')).toBeUndefined();
   });
 });
 
