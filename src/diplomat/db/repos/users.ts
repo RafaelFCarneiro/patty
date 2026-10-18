@@ -46,4 +46,14 @@ export const userApplier: EntityApplier = {
       throw cause;
     }
   },
+
+  // A claim sets the owner's username with an `update`, which can collide on the same unique column.
+  update: async (tx, model) => {
+    try {
+      return await versionedUserApplier.update(tx, model);
+    } catch (cause) {
+      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
+      throw cause;
+    }
+  },
 };

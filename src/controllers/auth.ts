@@ -90,6 +90,12 @@ const unclaimedOwner = (deps: AuthDeps): ResultAsync<UserEntity, AppError> =>
     return ok(owner);
   });
 
+/** The owner may take a name nobody else holds — or keep their own (recovering a reissued owner reclaims it). */
+const nameAvailableTo = async (deps: AuthDeps, owner: UserEntity, username: string) => {
+  const holder = await deps.users.findByUsername(username);
+  return guard(holder === null || holder.id === owner.id, authErrors.usernameTaken(username));
+};
+
 const claimOwnerUpdate = (owner: UserEntity, input: ClaimOwnerLocallyInput, passwordHash: string): Persistable =>
   persistence.update({
     entity: USER_ENTITY_TAG,
@@ -112,6 +118,8 @@ export const claimOwner = (
     const now = deps.clock();
     const stored = await deps.setupCodes.findByHash(deps.secrets.hashSecret(normalizeSetupCode(input.code)));
     const code = yield* okOr(isSetupCodeUsable(stored, now) ? stored : null, authErrors.invalidSetupCode);
+    // After the code: a name's availability is never an answer to someone without a valid setup code.
+    yield* await nameAvailableTo(deps, owner, input.username);
 
     const passwordHash = await deps.secrets.hashPassword(input.password);
     const { persistable: sessionInsert, started } = startSession(deps, owner.id, now);
@@ -133,6 +141,7 @@ export const claimOwnerLocally = (
 ): ResultAsync<FlowOutcome<ClaimedOwner>, AppError> =>
   safeTry(async function* () {
     const owner = yield* unclaimedOwner(deps);
+    yield* await nameAvailableTo(deps, owner, input.username);
 
     const now = deps.clock();
     const outstanding = await deps.setupCodes.current();

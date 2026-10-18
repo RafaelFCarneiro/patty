@@ -28,6 +28,8 @@ const messageFor = (e: AppError): string => {
       return AUTH_MESSAGES.invalidSetupCode;
     case 'setup_unavailable':
       return AUTH_MESSAGES.setupUnavailable;
+    case 'username_taken':
+      return AUTH_MESSAGES.usernameTaken;
     case 'rate_limited':
       return AUTH_MESSAGES.rateLimited;
     default:

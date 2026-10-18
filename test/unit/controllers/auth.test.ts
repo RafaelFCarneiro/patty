@@ -211,6 +211,21 @@ describe('issueSetupCode', () => {
 describe('claimOwner', () => {
   const input = { code: 'abcd-efgh-jkmn-pqrs-tvwx', username: 'rafael', password: PASSWORD };
 
+  const invitedRafael = (): UserEntity => ({
+    ...claimedOwner({ id: 'u-ana', passwordHash: null, role: UserRole.enum.member }),
+    username: 'rafael',
+  });
+
+  it('refuses a username an invited user already holds (the owner is not yet set up), writing nothing', async () => {
+    const deps = depsFor({ users: [unclaimedOwner(), invitedRafael()], codes: [codeRow()] });
+    expect(await errorOf(claimOwner(deps, input))).toEqual(authErrors.usernameTaken('rafael'));
+  });
+
+  it('does not say whether a name is taken to someone without a valid setup code', async () => {
+    const deps = depsFor({ users: [unclaimedOwner(), invitedRafael()], codes: [] });
+    expect(await errorOf(claimOwner(deps, input))).toEqual(authErrors.invalidSetupCode);
+  });
+
   it('updates the EXISTING owner and never inserts a user', async () => {
     const deps = depsFor({ users: [unclaimedOwner()], codes: [codeRow()] });
     const { persist, response } = await outcomeOf(claimOwner(deps, input));
@@ -423,6 +438,22 @@ const tokenRow = (overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity
 
 describe('claimOwnerLocally (ADR-034 §5)', () => {
   const input = { username: 'rafael', password: PASSWORD };
+
+  it('refuses a username another user holds, for a first claim and for recovering a reissued owner', async () => {
+    const other: UserEntity = { ...claimedOwner({ id: 'u-ana', role: UserRole.enum.member }), username: 'rafael' };
+    expect(await errorOf(claimOwnerLocally(depsFor({ users: [unclaimedOwner(), other] }), input))).toEqual(
+      authErrors.usernameTaken('rafael'),
+    );
+    const reissued = claimedOwner({ username: 'owner-name', passwordHash: null });
+    expect(await errorOf(claimOwnerLocally(depsFor({ users: [reissued, other] }), input))).toEqual(
+      authErrors.usernameTaken('rafael'),
+    );
+  });
+
+  it('lets a reissued owner take back their own name', async () => {
+    const reissued = claimedOwner({ passwordHash: null });
+    expect((await claimOwnerLocally(depsFor({ users: [reissued] }), input)).isOk()).toBe(true);
+  });
 
   it('updates the EXISTING owner — same id, no new user row, no session — and reports only the username', async () => {
     const { persist, response } = await outcomeOf(claimOwnerLocally(depsFor({ users: [unclaimedOwner()] }), input));

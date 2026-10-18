@@ -24,6 +24,8 @@ import {
   useAuthApp,
   userCodeIn,
   approveConnect,
+  codeFrom,
+  FORM_HEADERS,
 } from './helpers.js';
 import {
   addUser,
@@ -205,6 +207,30 @@ describe('invite → claim → login (ADR-033 §5)', () => {
     }
     expect(statuses.slice(0, 5)).toEqual([403, 403, 403, 403, 403]);
     expect(statuses.slice(5)).toEqual([429, 429]);
+  });
+});
+
+describe('the owner cannot be claimed into a name another user holds', () => {
+  it('refuses setup as a username invited before the owner was set up — a page, not a database error', async () => {
+    const ctx = await createApp();
+    const run = bindAuthRunEffects(ctx.authRunEffects);
+    (
+      await run(() =>
+        inviteUser(authDepsOf(ctx), { kind: ActorKind.enum.terminal }, { username: 'ana', role: 'member' }),
+      )
+    )._unsafeUnwrap();
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/ui/setup',
+      headers: { ...FORM_HEADERS, host: LOOPBACK_HOST, origin: LOOPBACK_ORIGIN },
+      payload: formBody({ code: codeFrom(ctx.announced), username: 'Ana', password: PASSWORD }),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toContain('already taken');
+    expect((await userRow(ctx, 'ana'))?.password_hash).toBeNull();
+    expect((await userRows(ctx)).filter((row) => row.username === null)).toHaveLength(1); // the owner, still unclaimed
   });
 });
 
