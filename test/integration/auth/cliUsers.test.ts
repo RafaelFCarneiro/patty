@@ -121,7 +121,7 @@ describe('users invite', () => {
 
     const text = cli.out.join('\n');
     const code = CODE.exec(text)![1]!;
-    expect(LINK.exec(text)![1]).toBe(`${LOOPBACK_ORIGIN}/ui/invite?code=${code}`);
+    expect(LINK.exec(text)![1]).toBe(`${LOOPBACK_ORIGIN}/ui/access/invite?code=${code}`);
     expect(text).toContain('"ana" (member)');
     expect(text).toContain('you never see it');
     expect(await userRow(ctx, 'ana')).toMatchObject({ role: 'member', password_hash: null });

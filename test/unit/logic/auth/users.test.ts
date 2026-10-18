@@ -114,8 +114,8 @@ describe('invite codes and links', () => {
   });
 
   it('builds the link from the origin and the code, encoded', () => {
-    expect(inviteLink('https://fin.example.com', 'JKMN-PQRS')).toBe('https://fin.example.com/ui/invite?code=JKMN-PQRS');
-    expect(inviteLink('http://127.0.0.1:51737', 'a b&c')).toBe('http://127.0.0.1:51737/ui/invite?code=a%20b%26c');
+    expect(inviteLink('https://fin.example.com', 'JKMN-PQRS')).toBe('https://fin.example.com/ui/access/invite?code=JKMN-PQRS');
+    expect(inviteLink('http://127.0.0.1:51737', 'a b&c')).toBe('http://127.0.0.1:51737/ui/access/invite?code=a%20b%26c');
   });
 });
 

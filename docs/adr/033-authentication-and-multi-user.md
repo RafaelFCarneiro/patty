@@ -338,7 +338,7 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
 4. [ ] Phase 3 — in-process OAuth 2.1 AS for MCP; non-loopback exposure supported behind TLS.
 5. [x] Phase 4 — multi-user tenancy.
    - [x] Step 1 (`feat/tenancy-data`): `user_id` on every owned row (migration `0021_tenancy_data`, backfilled to the owner, with the safety copy and integrity check), user-scoped deps and appliers, per-user settings and change events, the isolation suite.
-   - [x] Step 2 (`feat/user-management`): admin creates users by invitation (migration `0022_user_management`: `invites`, `users.last_login_at`, `settings.max_sign_in_duration`); claim at `/ui/invite`; reissue, disable, enable, set-role; the instance sign-in cap (ADR-034 §4); `fintrack users …` in the trusted terminal; the always-one-active-admin guard; the isolation suite also run against a user created through this product path.
+   - [x] Step 2 (`feat/user-management`): admin creates users by invitation (migration `0022_user_management`: `invites`, `users.last_login_at`, `settings.max_sign_in_duration`); claim at `/ui/access/invite`; reissue, disable, enable, set-role; the instance sign-in cap (ADR-034 §4); `fintrack users …` in the trusted terminal; the always-one-active-admin guard; the isolation suite also run against a user created through this product path.
 6. [ ] `fintrack key export` and the npm→Docker move guide (§7) — the tail of Phase 4 step 2 as first drawn, not built with it.
 
 Every phase is feature-sized (schema + multiple layers + security-sensitive). Each gets the DoD verification

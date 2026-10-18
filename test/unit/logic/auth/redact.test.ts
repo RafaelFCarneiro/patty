@@ -7,19 +7,19 @@ describe('redactSecretQuery', () => {
   });
 
   it.each([
-    ['/ui/invite?code=ABCD-EFGH', `/ui/invite?code=${REDACTED}`],
-    ['/ui/invite?x=1&code=ABCD-EFGH&y=2', `/ui/invite?x=1&code=${REDACTED}&y=2`],
-    ['/ui/invite?CODE=abcd', `/ui/invite?CODE=${REDACTED}`],
-    ['/ui/invite?code=a%20b#frag', `/ui/invite?code=${REDACTED}#frag`],
-    ['/ui/invite?code=', `/ui/invite?code=${REDACTED}`],
-    ['/ui/invite?%63ode=SECRET', `/ui/invite?%63ode=${REDACTED}`],
-    ['/ui/invite?x=1&%43%6F%64%65=SECRET&y=2', `/ui/invite?x=1&%43%6F%64%65=${REDACTED}&y=2`],
-    ['/ui/invite?code=a&code=b', `/ui/invite?code=${REDACTED}&code=${REDACTED}`],
+    ['/ui/access/invite?code=ABCD-EFGH', `/ui/access/invite?code=${REDACTED}`],
+    ['/ui/access/invite?x=1&code=ABCD-EFGH&y=2', `/ui/access/invite?x=1&code=${REDACTED}&y=2`],
+    ['/ui/access/invite?CODE=abcd', `/ui/access/invite?CODE=${REDACTED}`],
+    ['/ui/access/invite?code=a%20b#frag', `/ui/access/invite?code=${REDACTED}#frag`],
+    ['/ui/access/invite?code=', `/ui/access/invite?code=${REDACTED}`],
+    ['/ui/access/invite?%63ode=SECRET', `/ui/access/invite?%63ode=${REDACTED}`],
+    ['/ui/access/invite?x=1&%43%6F%64%65=SECRET&y=2', `/ui/access/invite?x=1&%43%6F%64%65=${REDACTED}&y=2`],
+    ['/ui/access/invite?code=a&code=b', `/ui/access/invite?code=${REDACTED}&code=${REDACTED}`],
   ])('redacts the value in %s', (url, expected) => {
     expect(redactSecretQuery(url)).toBe(expected);
   });
 
-  it.each(['/ui/invite', '/api/accounts?name=code', '/ui/x?barcode=123', '/ui/overview?month=9'])(
+  it.each(['/ui/access/invite', '/api/accounts?name=code', '/ui/x?barcode=123', '/ui/overview?month=9'])(
     'leaves %s alone',
     (url) => {
       expect(redactSecretQuery(url)).toBe(url);

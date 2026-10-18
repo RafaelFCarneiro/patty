@@ -24,7 +24,7 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | Bearer | `src/diplomat/http/bearer.ts` | Builds the `WWW-Authenticate` response (`logic/auth/bearer.ts`'s `bearerChallenge`; only the origin is resolved at the edge) — shared by the hook and the MCP route |
 | AuthRoutes | `src/diplomat/http/routes/auth.ts` | `/ui/setup`, `/ui/login`, `/ui/logout`: form parsing, rate limiting, cookies |
 | UserRoutes | `src/diplomat/http/routes/users.ts` (pages: `userPages.ts`) | `/ui/access/users` and its form posts: the admin-only, session-only user management; `requireAdmin` answers a non-admin with the framework's own not-found reply |
-| InviteRoutes | `src/diplomat/http/routes/invite.ts` | `/ui/invite`: where an invited person claims an invite - public like `/ui/setup`, `Referrer-Policy: strict-origin`, rate-limited per address and per code |
+| InviteRoutes | `src/diplomat/http/routes/invite.ts` | `/ui/access/invite`: where an invited person claims an invite - public like `/ui/setup`, `Referrer-Policy: strict-origin`, rate-limited per address and per code |
 | TokenRoutes | `src/diplomat/http/routes/tokens.ts` | `/ui/access/tokens`, `/ui/access/tokens/:id/revoke`: session-only token pages (personal access tokens and stdio sign-ins) |
 | ConnectRoutes | `src/diplomat/http/routes/connect.ts` | `/ui/connect`: the session-only consent page for a stdio / `login` sign-in; throttles failed code lookups |
 | WellKnown | `src/diplomat/http/routes/wellKnown.ts` | The two Protected Resource Metadata (RFC 9728) routes |
@@ -617,9 +617,9 @@ sequenceDiagram
     U-->>A: 200 page showing link and code ONCE (no-store). Link is PUBLIC_URL or the loopback origin
     A->>P: sends the link or the code, privately
 
-    P->>I: GET /ui/invite?code=ABCD-... (public)
+    P->>I: GET /ui/access/invite?code=ABCD-... (public)
     I-->>P: form with the code prefilled - Referrer-Policy strict-origin, CSP, no-store
-    P->>I: POST /ui/invite {code, password}
+    P->>I: POST /ui/access/invite {code, password}
     I->>I: hook - if the browser declared an Origin it must be ours. zod - password at least 12. Limiter per address and per code
     I->>Run: runEffects(claimInvite)
     Run->>Ctl: run the flow

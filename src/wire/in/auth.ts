@@ -122,7 +122,7 @@ export const UserParamsSchema = z.object({ id: z.string().min(1).max(LOGIN_FIELD
 
 const INVITE_CODE_INPUT_MAX_LENGTH = 64;
 
-/** `GET /ui/invite?code=…` — the code may also be typed. A bad value is simply not prefilled. */
+/** `GET /ui/access/invite?code=…` — the code may also be typed. A bad value is simply not prefilled. */
 export const InviteQuerySchema = z.object({
   [INVITE_CODE_PARAM]: z.string().max(INVITE_CODE_INPUT_MAX_LENGTH).optional().catch(undefined),
 });
@@ -132,7 +132,7 @@ export const ClaimedCodeEchoSchema = z
   .object({ code: z.string().max(INVITE_CODE_INPUT_MAX_LENGTH).catch('') })
   .catch({ code: '' });
 
-/** `POST /ui/invite`: the invited person's code and chosen password. */
+/** `POST /ui/access/invite`: the invited person's code and chosen password. */
 export const ClaimInviteFormSchema = z.object({
   code: z.string().min(1, 'Enter your invite code.').max(INVITE_CODE_INPUT_MAX_LENGTH),
   password: PasswordSchema,

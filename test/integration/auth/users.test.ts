@@ -74,7 +74,7 @@ describe('invite → claim → login (ADR-033 §5)', () => {
     const { res, code, link } = await invite(ctx, owner, { username: 'Ana' });
     expect(res.statusCode).toBe(200);
     expect(code).toMatch(/^[0-9A-Z]{4}(-[0-9A-Z]{4}){4}$/);
-    expect(link).toBe(`${LOOPBACK_ORIGIN}/ui/invite?code=${code}`);
+    expect(link).toBe(`${LOOPBACK_ORIGIN}/ui/access/invite?code=${code}`);
 
     // The unclaimed row exists with a username and role but no password; the invite stores only a hash.
     expect(await userRow(ctx, 'ana')).toMatchObject({ role: 'member', password_hash: null, disabled_at: null });
@@ -86,7 +86,7 @@ describe('invite → claim → login (ADR-033 §5)', () => {
 
     const page = await ctx.app.inject({
       method: 'GET',
-      url: `/ui/invite?code=${code}`,
+      url: `/ui/access/invite?code=${code}`,
       headers: { host: LOOPBACK_HOST },
     });
     expect(page.statusCode).toBe(200);
@@ -892,7 +892,7 @@ describe('the claim page', () => {
 
     const shown = await ctx.app.inject({
       method: 'GET',
-      url: `/ui/invite?code=${code}`,
+      url: `/ui/access/invite?code=${code}`,
       headers: { host: LOOPBACK_HOST },
     });
     const refused = await claim(ctx, 'ZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZ');
@@ -918,11 +918,36 @@ describe('the claim page', () => {
     expect((await claim(ctx, code)).statusCode).toBe(303);
   });
 
+  it('lives outside the one-segment dashboard namespace: a dashboard named "invite" still opens', async () => {
+    const { ctx, owner } = await withOwner();
+    const token = await mintFor(ctx, owner);
+    const saved = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      headers: bearer(token.token),
+      payload: { name: 'invite', html: '<section>MY DASHBOARD NAMED INVITE</section>' },
+    });
+    expect(saved.statusCode).toBeLessThan(300);
+
+    const dashboard = await get(ctx, owner, '/ui/invite');
+    expect(dashboard.statusCode).toBe(200);
+    // The dashboard shell, not the claim page (the dashboard's own HTML is loaded into the shell afterwards).
+    expect(dashboard.body).toContain('<title>FinTrack</title>');
+    expect(dashboard.body).not.toContain('Accept your invite');
+
+    const claimPage = await ctx.app.inject({
+      method: 'GET',
+      url: '/ui/access/invite',
+      headers: { host: LOOPBACK_HOST },
+    });
+    expect(claimPage.body).toContain('Accept your invite');
+  });
+
   it('escapes whatever the link carries', async () => {
     const { ctx } = await withOwner();
     const shown = await ctx.app.inject({
       method: 'GET',
-      url: `/ui/invite?code=${encodeURIComponent('"><script>alert(1)</script>')}`,
+      url: `/ui/access/invite?code=${encodeURIComponent('"><script>alert(1)</script>')}`,
       headers: { host: LOOPBACK_HOST },
     });
     expect(shown.body).not.toContain('<script>');
@@ -931,7 +956,7 @@ describe('the claim page', () => {
 
   it('is public, like /ui/setup, and shows no other page without a session', async () => {
     const { ctx } = await withOwner();
-    const shown = await ctx.app.inject({ method: 'GET', url: '/ui/invite', headers: { host: LOOPBACK_HOST } });
+    const shown = await ctx.app.inject({ method: 'GET', url: '/ui/access/invite', headers: { host: LOOPBACK_HOST } });
     expect(shown.statusCode).toBe(200);
   });
 

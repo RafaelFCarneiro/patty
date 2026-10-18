@@ -468,7 +468,7 @@ After authentication the hook checks **scope** against the matched route: `req.r
 
 The only exemptions are `PUBLIC_ROUTES` (`diplomat/http/authPaths.ts`), matched on the route's **registered pattern +
 method** (`req.routeOptions.url`), never the raw URL: `GET|HEAD /api/health`, `GET|HEAD|POST /ui/login`,
-`GET|HEAD|POST /ui/setup`, `GET|HEAD|POST /ui/invite` (an invited person has no login yet), `GET|HEAD /ui/assets/app.css`, and the two Protected Resource Metadata routes. A path with no route is protected. An integration test
+`GET|HEAD|POST /ui/setup`, `GET|HEAD|POST /ui/access/invite` (an invited person has no login yet), `GET|HEAD /ui/assets/app.css`, and the two Protected Resource Metadata routes. A path with no route is protected. An integration test
 enumerates every route Fastify registers (an `onRoute` listener attached before registration) and asserts each one
 outside the list is rejected without a credential (and, outside `/ui`, with a challenge). Controllers still do not take the principal: the edge turns it into that user's scoped `Deps` (§ Tenancy), so a controller can only ever see the caller's data.
 
@@ -622,7 +622,7 @@ There is no self-registration and an admin never learns a password:
 - *Edges.* Session-only and admin-only, never a tool and never a route under `/api` or `/mcp` — a bearer token of any scope reaches none of it (and `/ui` ignores a bearer altogether).
   `diplomat/http/routes/users.ts`: `GET|POST /ui/access/users` and `POST /ui/access/users/{sign-in-cap,:id/reissue,:id/disable,:id/enable,:id/role}`, server-rendered by `userPages.ts` / `ui/users.html`, behind the session, the CSRF check and `session.ts`'s `requireAdmin`:
   a non-admin gets Fastify's own not-found reply (`reply.callNotFound()`), the page and every form post alike, so the page does not announce itself. (A form POST to a path that really does not exist is a `415` — the urlencoded parser is registered only inside the form scopes — which is the one difference.)
-  The invite result page (`ui/userInvited.html`) is the only place the code and link are rendered. `diplomat/http/routes/invite.ts`: `GET|POST /ui/invite` (`ui/invite.html`), public like `/ui/setup`: `Referrer-Policy: strict-origin` on every answer (never `no-referrer`: a browser then sends `Origin: null` with the form and the CSRF check would refuse every claim), rate-limited per client address and per code (`AttemptLimiter`), Origin-checked when a browser declares one, and on success a session cookie and `303` to `/ui`.
+  The invite result page (`ui/userInvited.html`) is the only place the code and link are rendered. `diplomat/http/routes/invite.ts`: `GET|POST /ui/access/invite` (`ui/invite.html`), public like `/ui/setup`: `Referrer-Policy: strict-origin` on every answer (never `no-referrer`: a browser then sends `Origin: null` with the form and the CSRF check would refuse every claim), rate-limited per client address and per code (`AttemptLimiter`), Origin-checked when a browser declares one, and on success a session cookie and `303` to `/ui`.
   The logger's request serializer (`composition/http.ts`) replaces the value of the `code` query parameter (`logic/auth/redact.ts`), since redaction paths cannot reach inside a URL. The tokens page links to the users page for an admin only. The terminal: `diplomat/cli/commands/users.ts` (`users list | invite <u> [--admin] | reissue | disable | enable | role <u> <member|admin>`),
   routed like the auth commands (`Shell.deps`/`run`, `failed`/exit codes), printing the link built from `Shell.inviteOrigin` (`PUBLIC_URL`, else the sidecar's default origin).
 - *Errors.* `admin_required` (answered 404), `username_taken`, `cannot_change_self`, `last_admin`, `user_disabled`, `invalid_invite`, `unknown_user`. The messages are neutral (`AUTH_MESSAGES`); no `Remedy` is used, since the operation that fixes a refusal (enabling a user) is a button on the users page and a terminal command, never a tool or a route — each of those two edges words the next step itself (`REFUSAL_MESSAGE` in `routes/users.ts`, `REFUSAL_HINT` in `commands/users.ts`).
@@ -698,7 +698,7 @@ routes, not `RouteDefinition`s (no OpenAPI entry) — are mounted by `routes/ui.
 into open / forward / session-recheck steps. `routes/auth.ts`'s `registerAuthRoutes` (the `/ui/login`, `/ui/setup`,
 `/ui/logout` pages — browser HTML like `routes/ui.ts`, no OpenAPI entry; mounted only when auth is `required`) is called
 from `registerRoutes` too, as are `routes/tokens.ts`'s `registerTokenRoutes` (`/ui/access/tokens` pages, session-only),
-`routes/users.ts`'s `registerUserRoutes` (`/ui/access/users`, session-only and admin-only) and `routes/invite.ts`'s `registerInviteRoutes` (`/ui/invite`, public),
+`routes/users.ts`'s `registerUserRoutes` (`/ui/access/users`, session-only and admin-only) and `routes/invite.ts`'s `registerInviteRoutes` (`/ui/access/invite`, public),
 and `routes/wellKnown.ts`'s `registerProtectedResourceMetadataRoutes` (both likewise only when auth is `required`); each
 page is a named handler the registration function wires. `routes.ts` reduces to construction + aggregation:
 `buildRouteDefinitions` concatenates every domain's list into the one array `mountRoutes`/`buildOpenApiDocument`

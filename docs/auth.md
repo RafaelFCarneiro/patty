@@ -340,7 +340,7 @@ valid for **72 hours** and for a single use. Send them privately: whoever opens 
 
 ### Claiming an invite
 
-The link opens **`/ui/invite?code=…`** (the code may also be typed in): the page shows the form for the invite code and a password (at least 12 characters, no other rules —
+The link opens **`/ui/access/invite?code=…`** (two segments under `/ui/access`, like the token and user pages, so it can never shadow a dashboard — the one-segment `/ui/:name` namespace) (the code may also be typed in): the page shows the form for the invite code and a password (at least 12 characters, no other rules —
 the same as `/ui/setup`). Claiming **updates the row the invite created** (it sets the password and stamps the first login), spends the invite, and starts a session, so the person
 **lands signed in**.
 
@@ -481,7 +481,7 @@ Without a session, in `required` mode, exactly these answer:
 | Route | Why |
 |---|---|
 | `GET /api/health` | Liveness plus `db: ok \| error` — nothing else. The container `HEALTHCHECK` uses it. |
-| `GET`/`POST /ui/login`, `GET`/`POST /ui/setup`, `GET`/`POST /ui/invite` | They create the session (`/ui/invite` is where an invited person claims their invite). |
+| `GET`/`POST /ui/login`, `GET`/`POST /ui/setup`, `GET`/`POST /ui/access/invite` | They create the session (`/ui/access/invite` is where an invited person claims their invite). |
 | `GET /ui/assets/app.css` | The one stylesheet those two pages use. |
 | `GET /.well-known/oauth-protected-resource`, `GET /.well-known/oauth-protected-resource/mcp` | [Protected Resource Metadata](#protected-resource-metadata) (RFC 9728): a client reads it from the 401 challenge, before it holds any token. Only in `required` mode. |
 

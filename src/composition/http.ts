@@ -20,8 +20,8 @@ import { registerMcpRoute } from '../diplomat/mcp/route.js';
 const REDACTED_LOG_PATHS = ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'];
 const LOG_CENSOR = '[Redacted]';
 
-// Fastify's own `req` serializer, except that a secret in the query string (an invite code in `/ui/invite?code=…`) is
-// replaced: redaction paths cannot reach inside a URL.
+// Fastify's own `req` serializer, except that a secret in the query string (an invite code in
+// `/ui/access/invite?code=…`) is replaced: redaction paths cannot reach inside a URL.
 const requestForLog = (req: FastifyRequest) => ({
   method: req.method,
   url: redactSecretQuery(req.url),

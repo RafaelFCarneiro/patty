@@ -56,7 +56,7 @@ export const mustInvite = async (
   return code;
 };
 
-/** The invited person at `/ui/invite`, not signed in: a public page, so no cookie — just the browser's Host/Origin. */
+/** The invited person at `/ui/access/invite`, not signed in: a public page, so no cookie — just Host/Origin. */
 export const claim = (
   ctx: AppContext,
   code: string,
@@ -65,7 +65,7 @@ export const claim = (
 ) =>
   ctx.app.inject({
     method: 'POST',
-    url: '/ui/invite',
+    url: '/ui/access/invite',
     headers: { ...FORM_HEADERS, host: LOOPBACK_HOST, origin: LOOPBACK_ORIGIN, ...headers },
     payload: formBody({ code, password }),
   });
