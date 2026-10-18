@@ -54,6 +54,7 @@ const REFUSAL_MESSAGE: Readonly<Partial<Record<AppError['code'], string>>> = {
   last_admin: `${AUTH_MESSAGES.lastAdmin} Make another user an administrator first.`,
   user_disabled: `${AUTH_MESSAGES.userDisabled} Use the Enable button on that row.`,
   unknown_user: AUTH_MESSAGES.unknownUser,
+  owner_unclaimed: AUTH_MESSAGES.ownerUnclaimed,
   rate_limited: AUTH_MESSAGES.rateLimited,
 };
 

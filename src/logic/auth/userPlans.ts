@@ -7,7 +7,7 @@ import type { SessionEntity } from '../../models/auth/session.js';
 import type { AccessTokenEntity } from '../../models/auth/token.js';
 import type { ClientGrantEntity } from '../../models/auth/grant.js';
 import { AdminChange, type InviteEntity, type RevokedCredentials } from '../../models/auth/users.js';
-import { hasCredentials } from './owner.js';
+import { hasCredentials, isNeverClaimed } from './owner.js';
 import { expiredGrant } from './grant.js';
 import { endedCredentials, type HeldCredentials } from './revoke.js';
 import { disabledUser, guardAdminChange, isActiveAdmin, remainingAdmins, withoutPassword, withRole } from './users.js';
@@ -108,6 +108,8 @@ export const planReissue = (
   },
 ): Result<UserPlan, AppError> => {
   if (facts.target.disabledAt !== null) return err(authErrors.userDisabled);
+  // An owner nobody has set up has no username to claim into: it stays on the setup path.
+  if (isNeverClaimed(facts.target)) return err(authErrors.ownerUnclaimed);
   const roster = rosterOf(facts);
   const refusal = guardAdminChange(AdminChange.enum.reissue, { ...facts, users: roster });
   if (refusal !== null) return err(refusal);

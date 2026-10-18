@@ -197,6 +197,15 @@ describe('planReissue', () => {
     expect(planOf(planReissue({ ...facts, target: ANA })).userWrites.map((u) => u.id)).toEqual(['ana', 'root']);
   });
 
+  it('keeps a never-set-up owner (no username yet) on the setup path: reissuing it would claim into nothing', () => {
+    const unnamedOwner = admin('owner', { username: null, passwordHash: null });
+    expect(planReissue({ ...facts, users: [ROOT, unnamedOwner], target: unnamedOwner })._unsafeUnwrapErr()).toEqual(
+      authErrors.ownerUnclaimed,
+    );
+    // A user with a username but no password yet is an ordinary invited user: reissue stays available.
+    expect(planReissue({ ...facts, target: user('bob', { passwordHash: null }) }).isOk()).toBe(true);
+  });
+
   it('refuses a disabled user and the last active admin, but lets an admin reset themself if another stands', () => {
     expect(planReissue({ ...facts, target: user('ana', { disabledAt: 'x' }) })._unsafeUnwrapErr()).toEqual(
       authErrors.userDisabled,
