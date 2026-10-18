@@ -24,7 +24,12 @@ import {
 import { isActiveUser } from '../logic/auth/owner.js';
 import { tokenDisplayPrefix, tokenPrincipal } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
-import { ACCESS_TOKEN_ENTITY_TAG, CLIENT_GRANT_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
+import {
+  ACCESS_TOKEN_ENTITY_TAG,
+  CLIENT_GRANT_ENTITY_TAG,
+  INSTANCE_SETTINGS_ENTITY_TAG,
+  USER_ENTITY_TAG,
+} from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
 import {
   type ApproveGrantInput,
@@ -37,6 +42,7 @@ import {
   type StartedGrant,
   USER_CODE_ATTEMPTS,
 } from '../models/auth/grant.js';
+import { DEFAULT_SIGN_IN_CAP, INSTANCE_SETTINGS_ID, type InstanceSettingsEntity } from '../models/auth/users.js';
 import { type Principal, PrincipalVia } from '../models/auth/principal.js';
 import { TOKEN_ACCESS_SCOPES } from '../models/auth/token.js';
 import { conflict } from '../models/error.js';
@@ -74,6 +80,20 @@ export const startGrant = (deps: AuthDeps, input: StartGrantInput): ResultAsync<
   });
 
 const instanceCap = async (deps: AuthDeps) => signInCapOf(await deps.instanceSettings.get());
+
+/**
+ * The instance settings row the cap was read from, written back unchanged — or, while no admin has saved a setting,
+ * the default row inserted. Either way the cap read joins the batch's version checks: an admin lowering the cap
+ * meanwhile conflicts (an update on a stale version, or an insert on the row they just created), and the retry reads
+ * the new cap.
+ */
+const settingsWitness = (current: InstanceSettingsEntity | null): Persistable =>
+  current
+    ? persistence.update({ entity: INSTANCE_SETTINGS_ENTITY_TAG, model: current })
+    : persistence.insert({
+        entity: INSTANCE_SETTINGS_ENTITY_TAG,
+        model: { id: INSTANCE_SETTINGS_ID, maxSignInDuration: DEFAULT_SIGN_IN_CAP },
+      });
 
 /** What the consent page shows for a code, with the form's pre-selection and the durations it may offer (never above
  *  the instance cap) — `null` for an unknown, expired or already-answered code (indistinguishable on purpose).
@@ -172,7 +192,8 @@ export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<Flo
 
         const token = deps.secrets.randomAccessToken();
         // The cap in force now bounds the sign-in too: one approved before it fell is still minted within it.
-        const grant = { ...plan.grant, duration: clampToCap(plan.grant.duration, await instanceCap(deps)) };
+        const settings = await deps.instanceSettings.get();
+        const grant = { ...plan.grant, duration: clampToCap(plan.grant.duration, signInCapOf(settings)) };
         const entity = newStdioSignIn(
           {
             id: deps.newId(),
@@ -185,6 +206,7 @@ export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<Flo
         // The approver's row is re-written unchanged so a racing disable or reset conflicts and retries into a refusal.
         const persist: Persistable[] = [
           persistence.update({ entity: USER_ENTITY_TAG, model: user }),
+          settingsWitness(settings),
           persistence.insert({ entity: ACCESS_TOKEN_ENTITY_TAG, model: entity }),
           persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: redeemedGrant(plan.grant) }),
         ];

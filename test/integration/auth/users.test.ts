@@ -3,7 +3,7 @@ import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { createToken } from '../../../src/controllers/accessTokens.js';
-import { approveGrant } from '../../../src/controllers/grants.js';
+import { approveGrant, redeemGrant, startGrant } from '../../../src/controllers/grants.js';
 import { disableUser, inviteUser } from '../../../src/controllers/users.js';
 import { UserRole } from '../../../src/models/auth/owner.js';
 import { ActorKind, type Actor } from '../../../src/models/auth/users.js';
@@ -585,6 +585,54 @@ describe('a request authorized before a change to its author cannot outlive that
 
     expect(invited.isErr()).toBe(true);
     expect(await userRow(ctx, 'late-guest')).toBeUndefined();
+  });
+});
+
+describe('a redemption cannot outlive a cap lowered while it was in flight', () => {
+  const redeemRacingCap = async (settingBefore?: '30d') => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    const deps = authDepsOf(ctx);
+    const run = bindAuthRunEffects(ctx.authRunEffects);
+    if (settingBefore) {
+      await post(ctx, owner, `${USERS_URL}/sign-in-cap`, { maxSignInDuration: '7d', password: PASSWORD });
+      await post(ctx, owner, `${USERS_URL}/sign-in-cap`, { maxSignInDuration: settingBefore, password: PASSWORD });
+    }
+    const principal: Principal = {
+      userId: ana.userId,
+      role: UserRole.enum.member,
+      scopes: [...ALL_SCOPES],
+      via: PrincipalVia.enum.session,
+    };
+    const started = (
+      await run(() => startGrant(deps, { client: { name: 't', version: '1' }, profile: 'p', channel: 'stdio' }))
+    )._unsafeUnwrap();
+    const input = { userCode: started.userCode, access: 'read' as const, duration: '30d' as const };
+    (await run(() => approveGrant(deps, principal, input)))._unsafeUnwrap();
+
+    // The redemption reads the cap (30 days), then an admin — a different user — lowers it before it commits.
+    const stale = (await redeemGrant(deps, started.deviceCode))._unsafeUnwrap();
+    await post(ctx, owner, `${USERS_URL}/sign-in-cap`, { maxSignInDuration: '24h', password: PASSWORD });
+    let first = true;
+    const redeemed = await run(() => {
+      if (!first) return redeemGrant(deps, started.deviceCode);
+      first = false;
+      return okAsync(stale);
+    });
+    return { ctx, redeemed };
+  };
+
+  it.each([
+    ['no admin had saved a setting yet (the settings row is absent)', undefined],
+    ['the cap was already saved at 30 days', '30d' as const],
+  ])('retries and applies the new cap when %s', async (_label, settingBefore) => {
+    const { ctx, redeemed } = await redeemRacingCap(settingBefore);
+
+    expect(redeemed.isOk()).toBe(true);
+    const [token] = await ctx.db.all<{ expires_at: string; created_at: string }>(
+      sql`SELECT expires_at, created_at FROM access_tokens WHERE kind = 'stdio'`,
+    );
+    expect(Date.parse(token!.expires_at) - Date.parse(token!.created_at)).toBeLessThanOrEqual(24 * HOUR_MS);
   });
 });
 
