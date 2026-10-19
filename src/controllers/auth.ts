@@ -243,7 +243,7 @@ export const authenticate = (deps: AuthDeps, tokenHash: string): ResultAsync<Flo
     const persist: Persistable[] = verdict.touch
       ? [persistence.update({ entity: SESSION_ENTITY_TAG, model: touched(session, now) })]
       : [];
-    return ok({ persist, response: sessionPrincipal(user) });
+    return ok({ persist, response: sessionPrincipal(user, session) });
   });
 
 /** Startup housekeeping: delete every session past its expiry. */

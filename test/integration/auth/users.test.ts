@@ -6,6 +6,7 @@ import { createToken } from '../../../src/controllers/accessTokens.js';
 import { resetPassword } from '../../../src/controllers/auth.js';
 import { approveGrant, redeemGrant, startGrant } from '../../../src/controllers/grants.js';
 import { disableUser, enableUser, inviteUser, reissueInvite } from '../../../src/controllers/users.js';
+import { authErrors } from '../../../src/models/auth/errors.js';
 import { USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
 import { GrantStatus, SignInDuration } from '../../../src/models/auth/grant.js';
 import { UserRole } from '../../../src/models/auth/owner.js';
@@ -41,6 +42,7 @@ import {
   loginAs,
   MEMBER_PASSWORD,
   mintFor,
+  sessionPrincipalFor,
   mustClaim,
   mustInvite,
   post,
@@ -712,12 +714,6 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
     listApprovedByUser: typeof deps.clientGrants.listApprovedByUser,
   ) => ({ ...deps, clientGrants: { ...deps.clientGrants, listApprovedByUser } });
 
-  const anaPrincipal = (userId: string): Principal => ({
-    userId,
-    role: UserRole.enum.member,
-    scopes: [...ALL_SCOPES],
-    via: PrincipalVia.enum.session,
-  });
   const startedGrant = async (deps: ReturnType<typeof authDepsOf>, run: ReturnType<typeof bindAuthRunEffects>) =>
     (
       await run(() => startGrant(deps, { client: { name: 't', version: '1' }, profile: 'p', channel: 'stdio' }))
@@ -776,7 +772,8 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
     const { ctx, ana, deps, adminId, run } = await world();
     const started = await startedGrant(deps, run);
     const approval = approvalFor(started.userCode);
-    (await run(() => approveGrant(deps, anaPrincipal(ana.userId), approval)))._unsafeUnwrap();
+    const anaSession = await sessionPrincipalFor(ctx, ana.userId);
+    (await run(() => approveGrant(deps, anaSession, approval)))._unsafeUnwrap();
     const hook = issuingDuringFirstRead(deps.clientGrants.listApprovedByUser, async () => {
       expect((await run(() => redeemGrant(deps, started.deviceCode)))._unsafeUnwrap()).toMatchObject({
         kind: 'signed_in',
@@ -796,8 +793,9 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
     const { ctx, ana, deps, adminId, run } = await world();
     const started = await startedGrant(deps, run);
     const approval = approvalFor(started.userCode);
+    const anaSession = await sessionPrincipalFor(ctx, ana.userId);
     const hook = issuingDuringFirstRead(deps.clientGrants.listApprovedByUser, async () => {
-      (await run(() => approveGrant(deps, anaPrincipal(ana.userId), approval)))._unsafeUnwrap();
+      (await run(() => approveGrant(deps, anaSession, approval)))._unsafeUnwrap();
     });
 
     const disabled = await run(() => disableUser(withApprovedGrants(deps, hook.read), adminActor(adminId), ana.userId));
@@ -850,15 +848,8 @@ describe('a password reset ends every way in, approved sign-in requests included
       await run(() => startGrant(deps, { client: { name: 't', version: '1' }, profile: 'p', channel: 'stdio' }))
     )._unsafeUnwrap();
     const approval = approvalFor(started.userCode);
-    (
-      await run(() =>
-        approveGrant(
-          deps,
-          { userId: ana.userId, role: UserRole.enum.member, scopes: [...ALL_SCOPES], via: PrincipalVia.enum.session },
-          approval,
-        ),
-      )
-    )._unsafeUnwrap();
+    const anaSession = await sessionPrincipalFor(ctx, ana.userId);
+    (await run(() => approveGrant(deps, anaSession, approval)))._unsafeUnwrap();
 
     const reset = await run(() => resetPassword(deps, { username: 'ana', password: 'a brand new passphrase' }));
 
@@ -878,12 +869,7 @@ describe('a request authorized before a change to its author cannot outlive that
     const run = bindAuthRunEffects(ctx.authRunEffects);
     const { session } = stdioSessionFor(ctx);
     const userCode = userCodeIn(await session.resolve());
-    const principal: Principal = {
-      userId: ana.userId,
-      role: UserRole.enum.member,
-      scopes: [...ALL_SCOPES],
-      via: PrincipalVia.enum.session,
-    };
+    const principal = await sessionPrincipalFor(ctx, ana.userId);
     const input = { userCode, access: 'read' as const, duration: '24h' as const };
 
     const stale = (await approveGrant(deps, principal, input))._unsafeUnwrap();
@@ -897,6 +883,36 @@ describe('a request authorized before a change to its author cannot outlive that
 
     expect(approved.isErr()).toBe(true);
     expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'pending' }]);
+  });
+
+  it('refuses a sign-in approval retried through a session a password reset deleted, and mints nothing', async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    const deps = authDepsOf(ctx);
+    const run = bindAuthRunEffects(ctx.authRunEffects);
+    const { session } = stdioSessionFor(ctx);
+    const userCode = userCodeIn(await session.resolve());
+    const principal = await sessionPrincipalFor(ctx, ana.userId);
+    const input = approvalFor(userCode);
+
+    const stale = (await approveGrant(deps, principal, input))._unsafeUnwrap();
+    expect((await run(() => resetPassword(deps, { username: 'ana', password: 'a brand new passphrase' }))).isOk()).toBe(
+      true,
+    );
+    expect(await ctx.db.all(sql`SELECT id FROM sessions WHERE user_id = ${ana.userId}`)).toEqual([]);
+    let first = true;
+    const approved = await run(() => {
+      if (!first) return approveGrant(deps, principal, input);
+      first = false;
+      return okAsync(stale);
+    });
+
+    // The retry re-reads the approver's session, finds it gone and refuses — the same captured principal is not enough.
+    expect(approved._unsafeUnwrapErr()).toEqual(authErrors.unauthenticated);
+    expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: GrantStatus.enum.pending }]);
+    const redeemed = (await session.resolve()).kind;
+    expect(redeemed).toBe('not_signed_in');
+    expect(await ctx.db.all(sql`SELECT * FROM access_tokens WHERE kind = 'stdio'`)).toEqual([]);
   });
 
   it('refuses an invitation sent by an admin who was demoted after it was authorized', async () => {
@@ -940,12 +956,7 @@ describe('a redemption cannot outlive a cap lowered while it was in flight', () 
       await post(ctx, owner, `${USERS_URL}/sign-in-cap`, { maxSignInDuration: '7d', password: PASSWORD });
       await post(ctx, owner, `${USERS_URL}/sign-in-cap`, { maxSignInDuration: settingBefore, password: PASSWORD });
     }
-    const principal: Principal = {
-      userId: ana.userId,
-      role: UserRole.enum.member,
-      scopes: [...ALL_SCOPES],
-      via: PrincipalVia.enum.session,
-    };
+    const principal = await sessionPrincipalFor(ctx, ana.userId);
     const started = (
       await run(() => startGrant(deps, { client: { name: 't', version: '1' }, profile: 'p', channel: 'stdio' }))
     )._unsafeUnwrap();

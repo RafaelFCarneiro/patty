@@ -36,8 +36,9 @@ export const touched = (session: SessionEntity, now: Date): SessionEntity => ({
 });
 
 /** A signed-in user acting through the browser: every scope (the session is the owner's own). */
-export const sessionPrincipal = (user: UserEntity): Principal => ({
+export const sessionPrincipal = (user: UserEntity, session: SessionEntity): Principal => ({
   userId: user.id,
+  sessionId: session.id,
   role: user.role,
   scopes: [...ALL_SCOPES],
   via: PrincipalVia.enum.session,

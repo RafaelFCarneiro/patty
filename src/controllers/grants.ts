@@ -22,6 +22,7 @@ import {
   supersededGrants,
 } from '../logic/auth/grant.js';
 import { isActiveUser } from '../logic/auth/owner.js';
+import { isSessionExpired } from '../logic/auth/session.js';
 import { withCredentialsChanged } from '../logic/auth/users.js';
 import { tokenDisplayPrefix, tokenPrincipal } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
@@ -29,6 +30,7 @@ import {
   ACCESS_TOKEN_ENTITY_TAG,
   CLIENT_GRANT_ENTITY_TAG,
   INSTANCE_SETTINGS_ENTITY_TAG,
+  SESSION_ENTITY_TAG,
   USER_ENTITY_TAG,
 } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
@@ -121,14 +123,20 @@ export const approveGrant = (
 ): ResultAsync<FlowOutcome<void>, AppError> =>
   safeTry(async function* () {
     yield* requireSession(principal);
-    // The approver must still be able to sign in. An approved request can mint a sign-in, so it is a change to their
+    // The approver must still be able to sign in, through the very session that asked: a retry after a password
+    // reset re-reads it and finds it gone. An approved request can mint a sign-in, so it is a change to their
     // credential set and their row is written: a disable or reset racing this approval conflicts, in either order.
     const row = await deps.users.findById(principal.userId);
     const approver = yield* okOr(isActiveUser(row) ? row : null, authErrors.unauthenticated);
+    const now = deps.clock();
+    const held = (await deps.sessions.listByUser(approver.id)).find((session) => session.id === principal.sessionId);
+    const session = yield* okOr(
+      held !== undefined && !isSessionExpired(held, now) ? held : null,
+      authErrors.unauthenticated,
+    );
     const grant = yield* answerableGrant(deps, input.userCode);
     yield* guard(durationAllowedFor(grant.channel, input.duration), authErrors.sessionDurationRefused);
     const duration = clampToCap(input.duration, await instanceCap(deps));
-    const now = deps.clock();
     const approved = approvedGrant(
       grant,
       { userId: principal.userId, scopes: TOKEN_ACCESS_SCOPES[input.access], duration },
@@ -136,6 +144,7 @@ export const approveGrant = (
     );
     return ok({
       persist: [
+        persistence.check({ entity: SESSION_ENTITY_TAG, id: session.id, version: session.version }),
         persistence.update({ entity: USER_ENTITY_TAG, model: withCredentialsChanged(approver, now) }),
         persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: approved }),
       ],

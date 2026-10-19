@@ -108,6 +108,7 @@ describe('auth hook — required mode', () => {
       role: UserRole.enum.admin,
       scopes: [...ALL_SCOPES],
       via: PrincipalVia.enum.session,
+      sessionId: expect.any(String),
     });
     await probe.close();
   });

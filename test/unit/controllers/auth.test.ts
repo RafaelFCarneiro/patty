@@ -362,6 +362,7 @@ describe('authenticate', () => {
       role: UserRole.enum.admin,
       scopes: [...ALL_SCOPES],
       via: PrincipalVia.enum.session,
+      sessionId: sessionRow().id,
     });
   });
 

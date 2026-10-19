@@ -1,6 +1,9 @@
 import { sql } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
 import type { AppContext } from '../app-builder.js';
+import { UserRole } from '../../../src/models/auth/owner.js';
+import { PrincipalVia, type Principal } from '../../../src/models/auth/principal.js';
+import { ALL_SCOPES } from '../../../src/models/auth/scope.js';
 import {
   browserHeaders,
   FORM_HEADERS,
@@ -145,3 +148,16 @@ export const liveTokenCount = async (ctx: AppContext, userId: string): Promise<n
 };
 
 export const mintFor = (ctx: AppContext, cookie: string): Promise<MintedToken> => mintToken(ctx, cookie);
+
+/** The principal a request carries after `userId` signed in: their live session's id included, as the edge sets it. */
+export const sessionPrincipalFor = async (
+  ctx: AppContext,
+  userId: string,
+  role: UserRole = UserRole.enum.member,
+): Promise<Principal> => {
+  const [row] = await ctx.db.all<{ id: string }>(
+    sql`SELECT id FROM sessions WHERE user_id = ${userId} ORDER BY created_at LIMIT 1`,
+  );
+  if (row === undefined) throw new Error(`no session for ${userId}`);
+  return { userId, role, scopes: [...ALL_SCOPES], via: PrincipalVia.enum.session, sessionId: row.id };
+};
