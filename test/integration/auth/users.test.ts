@@ -67,7 +67,7 @@ const stdioSignedIn = async (ctx: AppContext, cookie: string, choice: Parameters
   return session;
 };
 
-describe('invite → claim → login (ADR-033 §5)', () => {
+describe('invite → claim → login', () => {
   it('lets an admin invite a person who then chooses their own password and lands signed in', async () => {
     const { ctx, owner } = await withOwner();
 
@@ -997,7 +997,7 @@ describe('the claim page', () => {
   });
 });
 
-describe('the sign-in cap (ADR-034 §4)', () => {
+describe('the sign-in cap', () => {
   const setCap = (ctx: AppContext, cookie: string, maxSignInDuration: string) =>
     post(ctx, cookie, `${USERS_URL}/sign-in-cap`, { maxSignInDuration, password: PASSWORD });
   const radios = (html: string) => [...html.matchAll(/name="duration" value="([^"]+)"/g)].map((m) => m[1]);

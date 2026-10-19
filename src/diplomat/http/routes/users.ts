@@ -204,7 +204,7 @@ const userRoutes = (pages: UserPages) => {
 };
 
 /**
- * `/ui/access/users` (ADR-033 §2, §5): user management. Browser HTML behind the session cookie, the hook's CSRF check
+ * `/ui/access/users`: user management. Browser HTML behind the session cookie, the hook's CSRF check
  * AND an admin: a member's request to any of these routes — page or form post — is answered as if the route did not
  * exist. Never an `/api` route or an MCP tool, and a bearer token is never accepted on `/ui`. Thin: parse the form,
  * throttle the step-up password, run the `controllers/users.ts` flow, render a page or redirect. An invite's code and

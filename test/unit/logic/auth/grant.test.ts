@@ -386,7 +386,7 @@ describe('sessionOnlyLabel', () => {
   });
 });
 
-describe('the instance cap on sign-in durations (ADR-034 §4)', () => {
+describe('the instance cap on sign-in durations', () => {
   const settings = (maxSignInDuration: SignInCap) => ({ id: 'singleton', maxSignInDuration, version: 0 });
 
   it('is today’s maximum, 30 days, until an admin lowers it', () => {

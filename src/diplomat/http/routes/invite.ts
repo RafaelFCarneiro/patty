@@ -60,7 +60,7 @@ const submitClaim =
   };
 
 /**
- * `/ui/access/invite` (ADR-033 §5): where an invited person chooses their password. Public like `/ui/setup` — they have
+ * `/ui/access/invite`: where an invited person chooses their password. Public like `/ui/setup` — they have
  * no login yet — so it is rate-limited the same way and its POST is Origin-checked whenever a browser declares one. The
  * code may come in the link or be typed; it is single-use, expires, and is never logged. On success the person lands
  * signed in. Thin: parse the form, throttle, run the `controllers/users.ts` flow, set the cookie.

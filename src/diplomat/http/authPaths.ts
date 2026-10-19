@@ -33,7 +33,7 @@ const GET_METHODS = ['GET', 'HEAD'] as const;
 const FORM_METHODS = ['GET', 'HEAD', 'POST'] as const;
 
 /**
- * The ENTIRE unauthenticated surface (ADR-033 §6): liveness, the three pages that create a session, and
+ * The ENTIRE unauthenticated surface: liveness, the three pages that create a session, and
  * the one static asset those pages use. Matched against the route's registered pattern + method, never
  * the raw URL, so path tricks cannot reach it; anything absent here — including a path no route
  * matches — needs a credential. The Protected Resource Metadata (RFC 9728) is public by definition: a client

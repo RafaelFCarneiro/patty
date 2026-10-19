@@ -199,7 +199,7 @@ recurring_rules     (id PK, description, amount, type, period, next_due, currenc
                      null on rules created before the migration, no backfill)
 
 settings            (id PK DEFAULT 'singleton', max_sign_in_duration: 24h|7d|30d DEFAULT 30d — the longest a
-                     stdio sign-in may last on this instance (ADR-034 §4), set by an admin; no row means the
+                     stdio sign-in may last on this instance, set by an admin; no row means the
                      default —, version — instance-wide settings; a person's preferences live in user_settings)
 user_settings       (user_id PK FK→users, locale: en|es|pt DEFAULT en,
                      locale_source: default|inferred|explicit DEFAULT default,
@@ -398,7 +398,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     still reuses `correlationsRepo.spendingShifts` (a category-only, budget-unaware read — out of
     ADR-028's scope).
 
-23. **The owner is created by migration and claimed — never created — by setup; every other user is created by an invite, and only by an invite (ADR-033 §5, §7).**
+23. **The owner is created by migration and claimed — never created — by setup; every other user is created by an invite, and only by an invite.**
     Migration `0018_auth_identity` inserts one `users` row (`OWNER_USER_ID`, role `admin`, no username, no
     `password_hash`) on every database, fresh or existing, and touches no domain table; the owner is never created
     lazily at runtime. The owner is the "default user": stdio and every `disabled`-mode request act as it
@@ -600,7 +600,7 @@ holds a credential — except under an explicit `FINTRACK_AUTH=disabled`, where 
   in the keychain profile (revoked again if the keychain refuses); `fintrack logout [--profile]` revokes the saved sign-in (`revokeSignInByHash`) and deletes the entry, idempotently;
   `setup`'s last step offers the same flow for the client's profile. `src/composition/signIn/server.ts` starts the temporary loopback app (`buildHttpApp`, auth required, a free port of `localhost` — loopback only, and a host name of its own so its session cookie, keyed by host, never replaces another FinTrack's at `127.0.0.1`) that serves `/ui/connect` for the duration of the login — never a server already on `HOST:PORT`, which a healthy `/api/health` does not prove opened this database. The shared repos/appliers/runner assembly is `src/composition/runtime.ts`'s `createRuntime` (also what `composition/boot.ts` uses).
 
-**User management (ADR-033 §2, §5; ADR-034 §4).** Several people share one instance, each with a private set of finances (§ Tenancy).
+**User management.** Several people share one instance, each with a private set of finances (§ Tenancy).
 There is no self-registration and an admin never learns a password:
 
 - *Roles and status.* `UserRole` is `admin | member`. A user is `invited` (a username and role, no password yet), `active` or `disabled`

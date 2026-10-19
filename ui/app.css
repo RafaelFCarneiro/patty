@@ -716,7 +716,7 @@ header, .dashboard-header {
     border: 1px solid var(--panel-border);
 }
 
-/* --- User management (ADR-033 §5): /ui/access/users; each row's actions are small forms --- */
+/* --- User management: /ui/access/users; each row's actions are small forms --- */
 .user-actions { min-width: 21rem; }
 .user-actions form { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.4rem; }
 .user-actions input,

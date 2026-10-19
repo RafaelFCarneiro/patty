@@ -48,12 +48,7 @@ import {
 import { startSession } from './auth.js';
 import type { AuthDeps } from './deps.js';
 
-/**
- * User management (ADR-033 §2, §5). Every flow is the same sandwich: gather (who is asking, the users, their
- * credentials) → decide (`logic/auth/users.ts`: the guard tables) → persist (one batch, so a disable ends every
- * credential in the same write that disables). The actor is a browser admin session (user management is never
- * reachable by a token or over MCP) or the trusted terminal.
- */
+/** User management: gather → decide (`logic/auth/users.ts`) → persist in one batch. */
 
 const NO_REVOCATIONS: RevokedCredentials = { sessionsEnded: 0, tokensRevoked: 0 };
 
@@ -82,10 +77,7 @@ const stepUpMatches = async (deps: AuthDeps, acting: UserEntity | null, password
     await deps.secrets.verifyPassword(acting?.passwordHash ?? deps.secrets.dummyPasswordHash, password ?? ''),
   );
 
-/**
- * The gate every flow passes first: session-only and admin-only (the browser admin), or the trusted terminal. `stepUp`
- * flows also re-ask the admin's password; the terminal has none. Answers who is acting (`null` = the terminal).
- */
+/** The gate every flow passes first: an admin session or the trusted terminal; `stepUp` flows re-ask the password. */
 type Admitted = {
   /** Who is acting (`null` = the terminal). */
   actingUserId: string | null;
@@ -170,11 +162,7 @@ export const inviteUser = (
     });
   });
 
-/**
- * A new invite for a user who has not claimed one, or an admin-driven password reset for one who has: `planReissue`
- * decides, this gathers and persists. The previous unclaimed invite is removed in the same batch; a claimed user also
- * loses their password and every session, token and stdio sign-in.
- */
+/** A new invite, or for a claimed user an admin-driven reset (password, sessions, tokens and stdio sign-ins end). */
 export const reissueInvite = (
   deps: AuthDeps,
   actor: Actor,
@@ -204,12 +192,7 @@ export const reissueInvite = (
 const isClaimable = (user: UserEntity | null): user is UserEntity =>
   user !== null && user.disabledAt === null && !hasCredentials(user);
 
-/**
- * The invited person chooses their password: the invite is spent, the existing unclaimed row is UPDATED (never
- * inserted) and a session starts, so they land signed in. Single-use: a second claim — or a concurrent one that loses
- * the version race and retries — finds the invite spent. Wrong, expired, used, disabled and foreign invites read the
- * same.
- */
+/** The invited person chooses their password: the invite is spent and a session starts. */
 export const claimInvite = (
   deps: AuthDeps,
   input: ClaimInviteInput,
@@ -240,10 +223,7 @@ const reportOf = (user: UserEntity, revoked: RevokedCredentials, now: Date): Use
   revoked,
 });
 
-/**
- * Disabling ends everything the user holds, and any pending invite, in the same batch that disables them (`planDisable`
- * decides). Nothing is deleted from `users` — their rows stay theirs.
- */
+/** Disabling ends everything the user holds, and any pending invite, in the same batch. Nothing is deleted. */
 export const disableUser = (
   deps: AuthDeps,
   actor: Actor,

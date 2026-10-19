@@ -271,7 +271,7 @@ export const budgets = sqliteTable(
 );
 
 // Instance-wide settings (one row). Empty today; preferences live in user_settings.
-// The instance-wide singleton. `max_sign_in_duration` is the longest a stdio sign-in may last (ADR-034 §4); no row
+// The instance-wide singleton. `max_sign_in_duration` is the longest a stdio sign-in may last; no row
 // means the default (30d, today's maximum).
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
@@ -328,7 +328,7 @@ export const users = sqliteTable('users', {
   version: integer('version').notNull().default(0),
 });
 
-// An invitation to claim one unclaimed user (ADR-033 §5). Only sha256(code) is stored. Users are disabled, never
+// An invitation to claim one unclaimed user. Only sha256(code) is stored. Users are disabled, never
 // deleted, so both references are RESTRICT: an invite can never outlive its user's row or the admin's.
 export const invites = sqliteTable(
   'invites',
