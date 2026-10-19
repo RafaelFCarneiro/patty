@@ -3,6 +3,7 @@ import { SESSION_ABSOLUTE_MAX_MS } from '../../../../src/models/auth/session.js'
 import { escapeHtml } from '../../../../src/diplomat/http/authPages.js';
 import {
   HEALTH_PATH,
+  INVITE_PATH,
   isPublicRoute,
   LOGIN_PATH,
   LOGOUT_PATH,
@@ -27,9 +28,9 @@ import {
 } from '../../../../src/diplomat/http/rateLimiter.js';
 
 describe('PUBLIC_ROUTES (ADR-033 §6)', () => {
-  it('is exactly liveness, the two session-creating pages, their stylesheet and the resource metadata', () => {
+  it('is exactly liveness, the three session-creating pages, their stylesheet and the resource metadata', () => {
     expect(Object.keys(PUBLIC_ROUTES).sort()).toEqual(
-      [HEALTH_PATH, LOGIN_PATH, SETUP_PATH, UI_APP_CSS_PATH, PRM_WELL_KNOWN_PATH, MCP_PRM_PATH].sort(),
+      [HEALTH_PATH, INVITE_PATH, LOGIN_PATH, SETUP_PATH, UI_APP_CSS_PATH, PRM_WELL_KNOWN_PATH, MCP_PRM_PATH].sort(),
     );
   });
 

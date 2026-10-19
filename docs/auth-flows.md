@@ -1,4 +1,4 @@
-# Authentication flows (ADR-033 Phases 1–2, ADR-034 steps 1–2)
+# Authentication flows (ADR-033 Phases 1, 2 and 4, ADR-034 steps 1–2)
 
 These diagrams show the flows as built: who takes part in each one and what happens at each step.
 The operator guide is [`auth.md`](auth.md); the decision record is
@@ -13,7 +13,7 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | VersionGuard | `src/diplomat/db/versionGuard.ts` (rule: `src/logic/migration.ts`) | First thing `bootstrap` does: refuses a database a newer build has migrated, before anything is copied, migrated, seeded or written |
 | Bootstrap | `src/diplomat/db/bootstrap.ts`, `safetyCopy.ts`, `migrationJournal.ts`, `migrationLock.ts` | Migrations, the owner row, the pre-migration backup |
 | AuthRuntime | `src/composition/auth.ts` | Builds the identity deps (shared with the CLI and the stdio session), prunes sessions and expired sign-in requests, issues and prints the setup code |
-| Cli | `src/diplomat/cli/commands.ts` (router), `commands/{auth,login,setup}.ts` (handlers), `io.ts`, `messages.ts`, `prompt.ts`, `terminal.ts`; composed in `src/composition/cli.ts` | `fintrack setup [client]`, `auth setup`, `auth reset-password`, `login`, `logout`: opens the database like the server (no stdio), prompts with no echo, runs the controller flows or the sign-in protocol through the injected interpreter, prints what the protocol presents; an unknown command prints the usage and exits non-zero |
+| Cli | `src/diplomat/cli/commands.ts` (router), `commands/{auth,login,setup,users}.ts` (handlers), `io.ts`, `messages.ts`, `prompt.ts`, `terminal.ts`; composed in `src/composition/cli.ts` | `fintrack setup [client]`, `auth setup`, `auth reset-password`, `login`, `logout`, `users list|invite|reissue|disable|enable|role`: opens the database like the server (no stdio), prompts with no echo, runs the controller flows or the sign-in protocol through the injected interpreter, prints what the protocol presents; an unknown command prints the usage and exits non-zero |
 | SignInServer | `src/composition/signIn/server.ts` | Where `login` sends the browser — and a stdio session whose sidecar names no page: always a temporary loopback app of the asking process, on a free port, for the length of the request |
 | ClientConfig | `src/diplomat/clientConfig/{merge,clients}.ts` | The MCP clients' own config files `setup` writes (Claude Code, Claude Desktop, VS Code, Antigravity, Codex): pure merge helpers, file reads and writes |
 | SignInFlow | `src/logic/auth/signInFlow.ts` (data: `src/models/auth/signInFlow.ts`) | The sign-in protocol as a pure state machine, `nextStep(state, observation, config)` → new state + effects: every rule of a stdio sign-in and of `login`, decided once (diagram 11) |
@@ -23,15 +23,17 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | AuthHook | `src/diplomat/http/hooks/auth.ts` — `registerAuthHook` (decisions in `src/logic/auth/{origin,bearer,scope,token}.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, credential precedence (bearer vs. cookie), session/token resolution, the CSRF check, the route-scope check, challenges and redirects |
 | Bearer | `src/diplomat/http/bearer.ts` | Builds the `WWW-Authenticate` response (`logic/auth/bearer.ts`'s `bearerChallenge`; only the origin is resolved at the edge) — shared by the hook and the MCP route |
 | AuthRoutes | `src/diplomat/http/routes/auth.ts` | `/ui/setup`, `/ui/login`, `/ui/logout`: form parsing, rate limiting, cookies |
+| UserRoutes | `src/diplomat/http/routes/users.ts` (pages: `userPages.ts`) | `/ui/access/users` and its form posts: the admin-only, session-only user management; `requireAdmin` answers a non-admin with the framework's own not-found reply |
+| InviteRoutes | `src/diplomat/http/routes/invite.ts` | `/ui/access/invite`: where an invited person claims an invite - public like `/ui/setup`, `Referrer-Policy: strict-origin`, rate-limited per address and per code |
 | TokenRoutes | `src/diplomat/http/routes/tokens.ts` | `/ui/access/tokens`, `/ui/access/tokens/:id/revoke`: session-only token pages (personal access tokens and stdio sign-ins) |
 | ConnectRoutes | `src/diplomat/http/routes/connect.ts` | `/ui/connect`: the session-only consent page for a stdio / `login` sign-in; throttles failed code lookups |
 | WellKnown | `src/diplomat/http/routes/wellKnown.ts` | The two Protected Resource Metadata (RFC 9728) routes |
 | McpRoute | `src/diplomat/mcp/route.ts`, `scopes.ts` | `POST /mcp`: per-tool scope pre-check on the JSON-RPC body, `req.auth` for the transport, per-tool re-check |
-| Controller | `src/controllers/auth.ts`, `accessTokens.ts`, `grants.ts` | `issueSetupCode`, `claimOwner`, `claimOwnerLocally`, `resetPassword`, `login`, `logout`, `authenticate`; `createToken`, `listTokens`, `revokeToken`, `revokeSignInByHash`, `authenticateToken`; `startGrant`, `findConsent`, `approveGrant`, `denyGrant`, `redeemGrant`, `pruneExpiredGrants`; returns `{ persist, response }` |
-| Logic | `src/logic/auth/*.ts` — `owner`, `password`, `session`, `token`, `scope`, `bearer`, `origin`, `grant`, `keychain`, `signInFlow`, `message` | Pure rules: expiry, the sliding window, "can log in", origin comparison, scopes, the token verdict, credential parsing, challenges, the metadata document; the grant transitions, `signInExpiry`, the consent pre-selection, `redeemPlan`, the not-signed-in message, and the sign-in protocol |
-| Secrets | `src/diplomat/auth/credentials.ts` | argon2id, CSPRNG session tokens, access tokens (`ftk_…`), setup / user / device codes, sha256 |
+| Controller | `src/controllers/auth.ts`, `accessTokens.ts`, `grants.ts` | `issueSetupCode`, `claimOwner`, `claimOwnerLocally`, `resetPassword`, `login`, `logout`, `authenticate`; `createToken`, `listTokens`, `revokeToken`, `revokeSignInByHash`, `authenticateToken`; `startGrant`, `findConsent`, `approveGrant`, `denyGrant`, `redeemGrant`, `pruneExpiredGrants`; `controllers/users.ts`: `listUsers`, `inviteUser`, `reissueInvite`, `claimInvite`, `disableUser`, `enableUser`, `setRole`, `setSignInCap`; returns `{ persist, response }` |
+| Logic | `src/logic/auth/*.ts` — `owner`, `password`, `session`, `token`, `scope`, `bearer`, `origin`, `grant`, `keychain`, `signInFlow`, `message`, `users`, `revoke`, `redact` | Pure rules: expiry, the sliding window, "can log in", origin comparison, scopes, the token verdict, credential parsing, challenges, the metadata document; the grant transitions, `signInExpiry`, the consent pre-selection and the instance cap (`clampToCap`, `offeredDurations`), `redeemPlan`, the not-signed-in message, and the sign-in protocol; user status, the admin gate and the guard tables (`authorizeActor`, `guardAdminChange`), the credentials a disable ends (`endingCredentials`), and what may not reach a log (`redactSecretQuery`) |
+| Secrets | `src/diplomat/auth/credentials.ts` | argon2id, CSPRNG session tokens, access tokens (`ftk_…`), setup / invite / user / device codes, sha256 |
 | Runner | `@rfc0/effect-runner` via `runEffects` | Applies the persistables in one transaction (optimistic versions, retries) |
-| DB | `users`, `sessions`, `setup_codes`, `access_tokens`, `client_grants` | Stores only hashes, never a token or code in plaintext |
+| DB | `users`, `sessions`, `setup_codes`, `access_tokens`, `client_grants`, `invites`, `settings` | Stores only hashes, never a token or code in plaintext |
 
 ---
 
@@ -583,3 +585,97 @@ The rules are decided once, in `nextStep`:
 | Denied or expired ends the attempt | terminal state (`login`) / back to `idle` (stdio) |
 | An unexpected failure is "could not check", never a sign-out | `errored` → `present(cannot_verify)`, state unchanged |
 
+
+## 12. Invite a user → claim
+
+ADR-033 §5. The admin chooses a username and a role; the person chooses their own password. The only flow that inserts a user is `inviteUser` - claiming only updates that
+row. Everything below happens in one write each (`inviteUser`, then `claimInvite`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor A as Admin (browser, signed in)
+    participant U as UserRoutes
+    participant Ctl as Controller (users)
+    participant Run as Runner
+    participant DB
+    actor P as Invited person (browser, no login yet)
+    participant I as InviteRoutes
+
+    A->>U: POST /ui/access/users {username, role, password} (cookie + same Origin)
+    U->>U: hook - session cookie, CSRF Origin check. preHandlers - via is session, role is admin (a member gets the not-found reply)
+    U->>U: zod - normalized username, role, step-up password. Attempt limiter per address and admin
+    U->>Run: runEffects(inviteUser)
+    Run->>Ctl: run the flow
+    Ctl->>DB: acting user - active admin? (authorizeActor, else admin_required)
+    Ctl->>Ctl: argon2 verify the admin's password (same cost either way, else invalid_credentials)
+    Ctl->>DB: username already taken, case-insensitively? (else username_taken)
+    Ctl->>Ctl: 100-bit invite code, sha256 of its normalized form
+    Ctl-->>Run: persist - INSERT user (username, role, NO password) then INSERT invite (hash, 72 h, unused)
+    Run->>DB: one transaction (a racing invite for the same name conflicts, re-runs, answers username_taken)
+    Run-->>U: the plaintext code (in memory only)
+    U-->>A: 200 page showing link and code ONCE (no-store). Link is PUBLIC_URL or the loopback origin
+    A->>P: sends the link or the code, privately
+
+    P->>I: GET /ui/access/invite?code=ABCD-... (public)
+    I-->>P: form with the code prefilled - Referrer-Policy strict-origin, CSP, no-store
+    P->>I: POST /ui/access/invite {code, password}
+    I->>I: hook - if the browser declared an Origin it must be ours. zod - password at least 12. Limiter per address and per code
+    I->>Run: runEffects(claimInvite)
+    Run->>Ctl: run the flow
+    Ctl->>DB: invite by sha256 of the normalized code - unused and unexpired? user unclaimed and not disabled?
+    alt unknown, mistyped, used, expired, replaced, or user disabled
+        Ctl-->>I: invalid_invite - one answer for all of them
+        I-->>P: 403 page (strike kept)
+    else claimable
+        Ctl->>Ctl: argon2id(password), session token and its sha256
+        Ctl-->>Run: persist - UPDATE user (password hash, last login), UPDATE invite (used_at), INSERT session
+        Run->>DB: one transaction, versioned - a concurrent claim of the same code conflicts, re-runs, finds it spent
+        Run-->>I: the session token (in memory only)
+        I-->>P: 303 to /ui + Set-Cookie fintrack_session - signed in
+    end
+    Note over DB: the code exists in plaintext only on the admin's result page. The request log redacts the code query parameter
+```
+
+A reissue (`reissueInvite`) is the same first half for an existing user: the previous unclaimed invite is removed in the same batch, and for a user who had claimed one the password is cleared and every session, token
+and stdio sign-in ended too (diagram 13 shows that set).
+
+## 13. Disable a user
+
+`disableUser` ends every credential the user holds in the same write that disables them. The guards run first, and the admins left standing are checked (asserted still at the version the guard read, not written) so that two admins disabling each other
+cannot both commit.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor A as Admin (browser)
+    participant U as UserRoutes
+    participant Ctl as Controller (users)
+    participant Run as Runner
+    participant DB
+    actor T as The disabled user
+
+    A->>U: POST /ui/access/users/:id/disable {password}
+    U->>Run: runEffects(disableUser)
+    Run->>Ctl: run the flow
+    Ctl->>DB: acting user, step-up password (as in diagram 12)
+    Ctl->>DB: target, every user, the target's sessions and tokens
+    Ctl->>Ctl: guardAdminChange - not the admin themself, and an active admin remains (else cannot_change_self or last_admin)
+    Ctl-->>Run: persist - UPDATE user (disabled_at), DELETE each session, UPDATE each live token (revoked_at, personal and stdio alike), CHECK each remaining admin's version (read-only)
+    Run->>DB: ONE transaction, versioned
+    alt a concurrent change touched one of those rows
+        DB-->>Run: version conflict
+        Run->>Ctl: re-run the flow on fresh reads (may now be refused as last_admin)
+    end
+    Run-->>U: counts of sessions ended and tokens revoked
+    U-->>A: 303 to /ui/access/users
+
+    Note over T,DB: from the next request, on every channel
+    T->>DB: POST /ui/login - refused, same generic answer as a wrong password
+    T->>DB: request with the session cookie - no session row, redirect to login
+    T->>DB: request with a bearer token - revoked, 401 invalid_token
+    T->>DB: stdio tool call - the credential is revoked and the user disabled, not signed in
+    T->>DB: redeem a sign-in approved earlier - refused, a sign-in is minted only for a user who can log in
+```
+
+Enabling (`enableUser`) clears `disabled_at` and nothing else: the person logs in again and signs their clients in again; no earlier credential is revived.

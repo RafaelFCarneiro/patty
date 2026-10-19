@@ -3,6 +3,8 @@ export const SESSION_ENTITY_TAG = 'session';
 export const SETUP_CODE_ENTITY_TAG = 'setup_code';
 export const ACCESS_TOKEN_ENTITY_TAG = 'access_token';
 export const CLIENT_GRANT_ENTITY_TAG = 'client_grant';
+export const INVITE_ENTITY_TAG = 'invite';
+export const INSTANCE_SETTINGS_ENTITY_TAG = 'instance_settings';
 
 /** Entities the auth flows write — never worth telling a dashboard about. */
 export const AUTH_ENTITY_TAGS: readonly string[] = [
@@ -11,4 +13,6 @@ export const AUTH_ENTITY_TAGS: readonly string[] = [
   SETUP_CODE_ENTITY_TAG,
   ACCESS_TOKEN_ENTITY_TAG,
   CLIENT_GRANT_ENTITY_TAG,
+  INVITE_ENTITY_TAG,
+  INSTANCE_SETTINGS_ENTITY_TAG,
 ];

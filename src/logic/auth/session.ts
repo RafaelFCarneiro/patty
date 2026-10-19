@@ -36,12 +36,20 @@ export const touched = (session: SessionEntity, now: Date): SessionEntity => ({
 });
 
 /** A signed-in user acting through the browser: every scope (the session is the owner's own). */
-export const sessionPrincipal = (user: UserEntity): Principal => ({
+export const sessionPrincipal = (user: UserEntity, session: SessionEntity): Principal => ({
   userId: user.id,
+  sessionId: session.id,
   role: user.role,
   scopes: [...ALL_SCOPES],
   via: PrincipalVia.enum.session,
 });
+
+/** The unexpired session with this id among a user's sessions — the one a request claims to come through. */
+export const liveSessionOf = (
+  sessions: readonly SessionEntity[],
+  sessionId: string | undefined,
+  now: Date,
+): SessionEntity | null => sessions.find((s) => s.id === sessionId && !isSessionExpired(s, now)) ?? null;
 
 export const evaluateSession = (session: SessionEntity, user: UserEntity | null, now: Date): SessionVerdict =>
   isSessionExpired(session, now) || user === null || !hasCredentials(user) || user.disabledAt !== null

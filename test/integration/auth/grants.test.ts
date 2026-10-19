@@ -42,7 +42,8 @@ const world = async (overrides: Partial<AuthDeps> = {}) => {
   const deps: AuthDeps = { ...base, ...overrides };
   const run = bindAuthRunEffects(ctx.authRunEffects);
   const owner = (await deps.users.findById(OWNER_USER_ID))!;
-  return { ctx, deps, run, session: sessionPrincipal(owner), owner };
+  const [held] = await deps.sessions.listByUser(OWNER_USER_ID);
+  return { ctx, deps, run, session: sessionPrincipal(owner, held!), owner };
 };
 
 const start = async (w: Awaited<ReturnType<typeof world>>, input: StartGrantInput = STDIO_REQUEST) => {

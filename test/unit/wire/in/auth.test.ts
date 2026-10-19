@@ -2,11 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_LANDING_PATH } from '../../../../src/models/auth/origin.js';
 import { normalizeUsername } from '../../../../src/models/auth/password.js';
 import {
+  ClaimedCodeEchoSchema,
+  ClaimInviteFormSchema,
   CreateTokenFormSchema,
+  InviteQuerySchema,
+  InviteUserFormSchema,
   LoginFormSchema,
   NextQuerySchema,
   safeNextPath,
+  SetRoleFormSchema,
   SetupFormSchema,
+  SignInCapFormSchema,
+  StepUpFormSchema,
+  UserParamsSchema,
 } from '../../../../src/wire/in/auth.js';
 
 describe('normalizeUsername', () => {
@@ -144,5 +152,74 @@ describe('CreateTokenFormSchema', () => {
     [{ name: 'x', access: 'read', expiry: '30', password: '' }],
   ])('rejects %j', (body) => {
     expect(CreateTokenFormSchema.safeParse(body).success).toBe(false);
+  });
+});
+
+describe('the user-management forms', () => {
+  const PASSWORD = 'correct horse battery staple';
+
+  it('normalizes the invited username like every other username, and takes a role from the enum', () => {
+    expect(InviteUserFormSchema.parse({ username: '  Ana ', role: 'member', password: PASSWORD })).toEqual({
+      username: 'ana',
+      role: 'member',
+      password: PASSWORD,
+    });
+    expect(InviteUserFormSchema.safeParse({ username: 'ana', role: 'owner', password: PASSWORD }).success).toBe(false);
+    expect(InviteUserFormSchema.safeParse({ username: 'ab', role: 'member', password: PASSWORD }).success).toBe(false);
+    expect(InviteUserFormSchema.safeParse({ username: 'a b c', role: 'member', password: PASSWORD }).success).toBe(
+      false,
+    );
+  });
+
+  it.each([
+    [
+      'InviteUserFormSchema',
+      (password?: string) => InviteUserFormSchema.safeParse({ username: 'ana', role: 'admin', password }),
+    ],
+    ['StepUpFormSchema', (password?: string) => StepUpFormSchema.safeParse({ password })],
+    ['SetRoleFormSchema', (password?: string) => SetRoleFormSchema.safeParse({ role: 'member', password })],
+    [
+      'SignInCapFormSchema',
+      (password?: string) => SignInCapFormSchema.safeParse({ maxSignInDuration: '7d', password }),
+    ],
+  ])('%s asks for the admin’s password again: absent or empty is refused', (_name, parse) => {
+    expect(parse(PASSWORD).success).toBe(true);
+    expect(parse(undefined).success).toBe(false);
+    expect(parse('').success).toBe(false);
+    expect(parse('x'.repeat(2000)).success).toBe(false);
+  });
+
+  it('offers only the saved durations as a cap', () => {
+    for (const maxSignInDuration of ['24h', '7d', '30d']) {
+      expect(SignInCapFormSchema.safeParse({ maxSignInDuration, password: PASSWORD }).success).toBe(true);
+    }
+    for (const maxSignInDuration of ['session', '1h', '90d', '']) {
+      expect(SignInCapFormSchema.safeParse({ maxSignInDuration, password: PASSWORD }).success).toBe(false);
+    }
+  });
+
+  it('applies the setup password rule to a claim: 12 characters, no other rules', () => {
+    expect(ClaimInviteFormSchema.safeParse({ code: 'ABCD', password: 'short' }).success).toBe(false);
+    expect(ClaimInviteFormSchema.safeParse({ code: 'ABCD', password: 'a'.repeat(12) }).success).toBe(true);
+    expect(ClaimInviteFormSchema.safeParse({ code: '', password: PASSWORD }).success).toBe(false);
+    expect(ClaimInviteFormSchema.safeParse({ code: 'x'.repeat(65), password: PASSWORD }).success).toBe(false);
+  });
+
+  it('echoes back only what a person could have typed into the code field', () => {
+    expect(ClaimedCodeEchoSchema.parse({ code: 'ABCD-EFGH' })).toEqual({ code: 'ABCD-EFGH' });
+    for (const hostile of [{ code: 42 }, { code: 'x'.repeat(65) }, {}, null, 'text', []]) {
+      expect(ClaimedCodeEchoSchema.parse(hostile)).toEqual({ code: '' });
+    }
+  });
+
+  it('reads the invite code from the link, ignoring anything that is not text', () => {
+    expect(InviteQuerySchema.parse({ code: 'ABCD' })).toEqual({ code: 'ABCD' });
+    expect(InviteQuerySchema.parse({ code: ['a', 'b'] })).toEqual({});
+    expect(InviteQuerySchema.parse({})).toEqual({});
+  });
+
+  it('takes a user id from the path', () => {
+    expect(UserParamsSchema.safeParse({ id: 'user-1' }).success).toBe(true);
+    expect(UserParamsSchema.safeParse({ id: '' }).success).toBe(false);
   });
 });

@@ -61,6 +61,7 @@ const rig = async (setup: Setup = {}) => {
     close: vi.fn(),
     authRequired: setup.authRequired ?? true,
     defaultProfile: setup.defaultProfile ?? 'default',
+    inviteOrigin: LOOPBACK_ORIGIN,
     // The sign-in interpreter a real shell builds, over this rig's store and server; `run` is read at use, so a test
     // can swap `shell.run` after the fact.
     signIn: (profile) =>

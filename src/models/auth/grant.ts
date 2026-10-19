@@ -91,6 +91,9 @@ export type GrantRequest = {
 /** The consent form's pre-selection: the asker's hint, else what this user chose last time, else the defaults. */
 export type GrantChoice = { access: TokenAccess; duration: SignInDuration };
 
+/** What the consent page shows for a pending request: who asks, the form's pre-selection, and what may be chosen. */
+export type Consent = { request: GrantRequest; choice: GrantChoice; durations: SignInDuration[] };
+
 export type ApproveGrantInput = { userCode: string } & GrantChoice;
 
 export type SignedIn = {

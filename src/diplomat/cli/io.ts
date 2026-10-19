@@ -26,6 +26,9 @@ export type Shell = {
   authRequired: boolean;
   /** `FINTRACK_PROFILE` — the profile `login`/`logout` act on unless `--profile` says otherwise. */
   defaultProfile: string;
+  /** The origin an invite link names: `PUBLIC_URL`. Null without one: the terminal prints the code and the page path,
+   *  never a secret-bearing link to an address it cannot show serves this database. */
+  inviteOrigin: string | null;
   /** Runs the sign-in protocol for a profile: its keychain entry, and the page `/ui/connect` is served from (the
    *  running server, else a temporary one) while a login waits. */
   signIn: (profile: string) => SignInInterpreter;

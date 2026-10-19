@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { LoginDuration } from '../../models/auth/grant.js';
+import { UserRole } from '../../models/auth/owner.js';
 import { UsernameSchema, normalizeUsername } from '../../models/auth/password.js';
 import { DEFAULT_PROFILE, ProfileSchema } from '../../models/auth/signIn.js';
 import { TokenAccess } from '../../models/auth/token.js';
@@ -13,7 +14,7 @@ export const AUTH_POSITIONALS = 0;
 /** `login` and `logout` take flags only. */
 export const SIGN_IN_POSITIONALS = 0;
 
-export const CliCommand = z.enum(['setup', 'auth', 'login', 'logout']);
+export const CliCommand = z.enum(['setup', 'auth', 'login', 'logout', 'users']);
 export type CliCommand = z.infer<typeof CliCommand>;
 
 export const AuthSubcommand = z.enum(['setup', 'reset-password']);
@@ -63,3 +64,28 @@ export type LoginOptions = z.infer<typeof LoginOptionsSchema>;
 
 export const LogoutOptionsSchema = z.object({ profile: ProfileSchema.optional() });
 export type LogoutOptions = z.infer<typeof LogoutOptionsSchema>;
+
+export const UsersSubcommand = z.enum(['list', 'invite', 'reissue', 'disable', 'enable', 'role']);
+export type UsersSubcommand = z.infer<typeof UsersSubcommand>;
+
+/** How many positionals each `users` subcommand takes: none, one username, or a username and a role. */
+export const USERS_POSITIONALS: Readonly<Record<UsersSubcommand, number>> = {
+  list: 0,
+  invite: 1,
+  reissue: 1,
+  disable: 1,
+  enable: 1,
+  role: 2,
+};
+
+/** `users invite <username> [--admin]`: members unless `--admin`. */
+export const InviteOptionsSchema = z
+  .object({ admin: z.boolean().default(false) })
+  .transform((flags) => ({ role: flags.admin ? UserRole.enum.admin : UserRole.enum.member }));
+export type InviteOptions = z.infer<typeof InviteOptionsSchema>;
+
+/** A username named on the command line is only normalized: an unknown one is a clear "no such user". */
+export const TargetUsernameSchema = z
+  .string()
+  .transform(normalizeUsername)
+  .pipe(z.string().min(1).max(OPTION_MAX_LENGTH));

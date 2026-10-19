@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { type ClientInfo, SignInDuration } from '../../models/auth/grant.js';
-import { CONNECT_CODE_PARAM, DEFAULT_LANDING_PATH, isUiPath } from '../../models/auth/origin.js';
+import { CONNECT_CODE_PARAM, DEFAULT_LANDING_PATH, INVITE_CODE_PARAM, isUiPath } from '../../models/auth/origin.js';
+import { UserRole } from '../../models/auth/owner.js';
+import { SignInCap } from '../../models/auth/users.js';
 import { PASSWORD_MAX_LENGTH, PasswordSchema, UsernameSchema, normalizeUsername } from '../../models/auth/password.js';
 import {
   CLIENT_NAME_MAX_LENGTH,
@@ -102,3 +104,36 @@ export const clientInfoOf = (raw: unknown): ClientInfo =>
     name: UNKNOWN_CLIENT_NAME,
     version: UNKNOWN_CLIENT_VERSION,
   }).parse(raw ?? {});
+
+const STEP_UP_PASSWORD = z.string().min(1, 'Enter your password to confirm.').max(PASSWORD_MAX_LENGTH);
+
+/** `POST /ui/access/users`: invite a new user. */
+export const InviteUserFormSchema = z.object({ username: UsernameSchema, role: UserRole, password: STEP_UP_PASSWORD });
+
+/** The actions that only re-ask the admin's password: reissue, disable. */
+export const StepUpFormSchema = z.object({ password: STEP_UP_PASSWORD });
+
+export const SetRoleFormSchema = z.object({ role: UserRole, password: STEP_UP_PASSWORD });
+
+export const SignInCapFormSchema = z.object({ maxSignInDuration: SignInCap, password: STEP_UP_PASSWORD });
+
+/** `:id` of a user action. */
+export const UserParamsSchema = z.object({ id: z.string().min(1).max(LOGIN_FIELD_MAX_LENGTH) });
+
+const INVITE_CODE_INPUT_MAX_LENGTH = 64;
+
+/** `GET /ui/access/invite?code=…` — the code may also be typed. A bad value is simply not prefilled. */
+export const InviteQuerySchema = z.object({
+  [INVITE_CODE_PARAM]: z.string().max(INVITE_CODE_INPUT_MAX_LENGTH).optional().catch(undefined),
+});
+
+/** What the claim page shows back in its code field after a refusal: whatever was typed, if it was text. */
+export const ClaimedCodeEchoSchema = z
+  .object({ code: z.string().max(INVITE_CODE_INPUT_MAX_LENGTH).catch('') })
+  .catch({ code: '' });
+
+/** `POST /ui/access/invite`: the invited person's code and chosen password. */
+export const ClaimInviteFormSchema = z.object({
+  code: z.string().min(1, 'Enter your invite code.').max(INVITE_CODE_INPUT_MAX_LENGTH),
+  password: PasswordSchema,
+});

@@ -11,6 +11,8 @@ export type ClientGrantsRepo = {
   findPendingByUserCode: (userCode: string) => Promise<ClientGrantEntity | null>;
   /** The newest sign-in this user actually completed for this client on this profile — the consent form's memory. */
   lastRedeemed: (userId: string, profile: string, clientName: string) => Promise<ClientGrantEntity | null>;
+  /** Grants this user approved that no process has redeemed yet — each could still mint a sign-in as them. */
+  listApprovedByUser: (userId: string) => Promise<ClientGrantEntity[]>;
   /** Every redeemed grant — candidates for `supersededGrants`, which decides which still matter. */
   listRedeemed: () => Promise<ClientGrantEntity[]>;
   /** Grants that ran out their window without being redeemed (`expiresAt` is ISO, so it sorts chronologically). */
@@ -47,6 +49,14 @@ export const clientGrantsRepo = (db: Db): ClientGrantsRepo => ({
       .orderBy(desc(clientGrants.approvedAt), desc(clientGrants.id))
       .limit(1);
     return row ? clientGrantAdapters.dbToModel(row) : null;
+  },
+
+  listApprovedByUser: async (userId) => {
+    const rows = await db
+      .select()
+      .from(clientGrants)
+      .where(and(eq(clientGrants.userId, userId), eq(clientGrants.status, GrantStatus.enum.approved)));
+    return rows.map(clientGrantAdapters.dbToModel);
   },
 
   listRedeemed: async () => {

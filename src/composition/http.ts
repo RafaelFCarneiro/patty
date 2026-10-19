@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { version } from '../common/buildVersion.js';
 import type { Config } from '../config.js';
 import { boot } from './boot.js';
@@ -10,6 +10,7 @@ import { DISABLED_AUTH, type HttpAuth, type HttpContext } from '../diplomat/http
 import type { ChangeBus } from '@rfc0/effect-runner';
 import type { ChangeEvent } from '../models/tenancy.js';
 import type { DatabaseAhead } from '../models/database.js';
+import { redactSecretQuery } from '../logic/auth/redact.js';
 import { AuthMode } from '../models/auth/mode.js';
 import { registerAuthHook } from '../diplomat/http/hooks/auth.js';
 import { registerRoutes } from '../diplomat/http/routes.js';
@@ -19,8 +20,19 @@ import { registerMcpRoute } from '../diplomat/mcp/route.js';
 const REDACTED_LOG_PATHS = ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'];
 const LOG_CENSOR = '[Redacted]';
 
+// Fastify's own `req` serializer, except that a secret in the query string (an invite code in
+// `/ui/access/invite?code=…`) is replaced: redaction paths cannot reach inside a URL.
+const requestForLog = (req: FastifyRequest) => ({
+  method: req.method,
+  url: redactSecretQuery(req.url),
+  version: String(req.headers['accept-version'] ?? '') || undefined,
+  host: req.host,
+  remoteAddress: req.ip,
+  remotePort: req.socket?.remotePort,
+});
+
 export const httpLoggerOptions = (enabled: boolean) =>
-  enabled ? { redact: { paths: REDACTED_LOG_PATHS, censor: LOG_CENSOR } } : false;
+  enabled ? { redact: { paths: REDACTED_LOG_PATHS, censor: LOG_CENSOR }, serializers: { req: requestForLog } } : false;
 
 export type HttpSurface = Tenancy & {
   publicDeps: HttpContext['publicDeps'];

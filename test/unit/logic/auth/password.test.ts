@@ -12,6 +12,8 @@ const owner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
   role: UserRole.enum.admin,
   createdAt: NOW.toISOString(),
   disabledAt: null,
+  lastLoginAt: null,
+  credentialsChangedAt: null,
   version: 0,
   ...overrides,
 });
@@ -42,6 +44,8 @@ describe('withPasswordHash', () => {
     role: 'admin',
     createdAt: '2026-10-07T12:00:00.000Z',
     disabledAt: null,
+    lastLoginAt: null,
+    credentialsChangedAt: null,
     version: 7,
   } as const;
 

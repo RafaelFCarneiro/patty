@@ -12,7 +12,7 @@ import {
   TokenStatus,
 } from '../../models/auth/token.js';
 import { ACCESS_LABEL, errorBlock, escapeHtml, fillTemplate, formatMinute } from './authPages.js';
-import { TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from './authPaths.js';
+import { TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH, USERS_PATH } from './authPaths.js';
 import { readCached, UI_ROOT } from './uiFiles.js';
 
 const TOKENS_TEMPLATE_PATH = `${UI_ROOT}/tokens.html`;
@@ -89,14 +89,18 @@ const table = (tokens: readonly AccessTokenSummary[]): string =>
       '<th>Name</th><th>Token</th><th>Access</th><th>Created</th><th>Last used</th><th>Expires</th><th>Status</th><th></th>' +
       `</tr></thead><tbody>${tokens.map(row).join('')}</tbody></table></div>`;
 
+const usersLink = (show: boolean): string => (show ? `<a href="${USERS_PATH}">Users</a> · ` : '');
+
 export const renderTokensPage = async (fields: {
   tokens: readonly AccessTokenSummary[];
+  showUsersLink: boolean;
   error?: string;
 }): Promise<string> =>
   fillTemplate(await readCached(TOKENS_TEMPLATE_PATH), {
     stylesheet: UI_APP_CSS_PATH,
     action: TOKENS_PATH,
     dashboards: UI_ROOT_PATH,
+    usersLink: usersLink(fields.showUsersLink),
     nameMaxLength: String(TOKEN_NAME_MAX_LENGTH),
     accessOptions: accessOptions(),
     expiryOptions: expiryOptions(),

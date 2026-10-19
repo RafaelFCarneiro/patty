@@ -4,6 +4,7 @@ import { formatAppError } from '../common/errors.js';
 import { McpTransport, type Config } from '../config.js';
 import { issueSetupCode, pruneExpiredSessions } from '../controllers/auth.js';
 import { pruneExpiredGrants } from '../controllers/grants.js';
+import { pruneExpiredInvites } from '../controllers/users.js';
 import type { AuthDeps, RunEffects, SignInInterpreter } from '../controllers/deps.js';
 import type { RuntimeConfig } from './runtime.js';
 import { createSignInFor } from './signIn/wiring.js';
@@ -11,6 +12,8 @@ import type { Db } from '../diplomat/db/driver.js';
 import type { ApplierRegistry } from '../diplomat/db/effects.js';
 import { accessTokenApplier, accessTokensRepo } from '../diplomat/db/repos/accessTokens.js';
 import { clientGrantApplier, clientGrantsRepo } from '../diplomat/db/repos/clientGrants.js';
+import { instanceSettingsApplier, instanceSettingsRepo } from '../diplomat/db/repos/instanceSettings.js';
+import { inviteApplier, invitesRepo } from '../diplomat/db/repos/invites.js';
 import { sessionApplier, sessionsRepo } from '../diplomat/db/repos/sessions.js';
 import { setupCodeApplier, setupCodesRepo } from '../diplomat/db/repos/setupCodes.js';
 import { userApplier, usersRepo } from '../diplomat/db/repos/users.js';
@@ -20,6 +23,8 @@ import { setupBanner } from '../logic/auth/message.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
   CLIENT_GRANT_ENTITY_TAG,
+  INSTANCE_SETTINGS_ENTITY_TAG,
+  INVITE_ENTITY_TAG,
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
   USER_ENTITY_TAG,
@@ -32,7 +37,8 @@ import { AuthMode } from '../models/auth/mode.js';
  */
 const loadCredentialsModule = () => import('../diplomat/auth/credentials.js');
 
-/** The auth flows touch five entities (user, session, setup code, access token, client grant) and the shell
+/** The auth flows touch seven entities (user, session, setup code, access token, client grant, invite, instance
+ *  settings) and the shell
  *  adapts model→row for each exactly once, here, before the generic runner sees the batch
  *  (docs/write-path.md § From model to row). */
 export const bindAuthRunEffects =
@@ -46,6 +52,8 @@ export const AUTH_APPLIERS: ApplierRegistry = {
   [ACCESS_TOKEN_ENTITY_TAG]: accessTokenApplier,
   [CLIENT_GRANT_ENTITY_TAG]: clientGrantApplier,
   [SETUP_CODE_ENTITY_TAG]: setupCodeApplier,
+  [INVITE_ENTITY_TAG]: inviteApplier,
+  [INSTANCE_SETTINGS_ENTITY_TAG]: instanceSettingsApplier,
 };
 
 export const createAuthDeps = async (db: Db): Promise<AuthDeps> => {
@@ -55,6 +63,8 @@ export const createAuthDeps = async (db: Db): Promise<AuthDeps> => {
     sessions: sessionsRepo(db),
     accessTokens: accessTokensRepo(db),
     clientGrants: clientGrantsRepo(db),
+    invites: invitesRepo(db),
+    instanceSettings: instanceSettingsRepo(db),
     setupCodes: setupCodesRepo(db),
     clock: () => new Date(),
     newId: () => randomUUID(),
@@ -110,6 +120,8 @@ const housekeeping = async (run: RunEffects, deps: AuthDeps): Promise<void> => {
     throw new Error(`fintrack: could not prune expired sessions — ${formatAppError(sessions.error)}`);
   const grants = await run(() => pruneExpiredGrants(deps));
   if (grants.isErr()) throw new Error(`fintrack: could not prune expired sign-ins — ${formatAppError(grants.error)}`);
+  const invites = await run(() => pruneExpiredInvites(deps));
+  if (invites.isErr()) throw new Error(`fintrack: could not prune expired invites — ${formatAppError(invites.error)}`);
 };
 
 export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEffects): Promise<PreparedAuth> => {

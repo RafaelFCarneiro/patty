@@ -715,3 +715,20 @@ header, .dashboard-header {
     background: transparent;
     border: 1px solid var(--panel-border);
 }
+
+/* --- User management: /ui/access/users; each row's actions are small forms --- */
+.user-actions { min-width: 21rem; }
+.user-actions form { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.4rem; }
+.user-actions input,
+.user-actions select {
+    padding: 0.3rem 0.5rem;
+    color: var(--text-main);
+    font: inherit;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+}
+.user-actions select option { color: #111; }
+.user-status-active { color: var(--income-color); }
+.user-status-invited { color: var(--warning-color); }
+.user-status-disabled { color: var(--text-muted); }

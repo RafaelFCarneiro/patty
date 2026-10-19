@@ -1,3 +1,4 @@
+import { DEFAULT_SIGN_IN_CAP, INSTANCE_SETTINGS_ID } from '../../../src/models/auth/users.js';
 import { PersistOp, type FlowOutcome, type Persistable } from '@rfc0/effect-runner';
 import type { ResultAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
@@ -55,6 +56,7 @@ const secrets: AuthSecrets = {
   randomToken: () => 'TOKEN',
   randomAccessToken: () => 'ftk_TOKEN',
   randomSetupCode: () => 'ABCDEFGHJKMNPQRSTVWX',
+  randomInviteCode: () => 'JKMNPQRSTVWXABCDEFGH',
   randomUserCode: () => 'ABCDEFGH',
   randomDeviceCode: () => 'DEVICE',
   hashSecret: (secret) => `sha(${secret})`,
@@ -68,6 +70,8 @@ const unclaimedOwner = (): UserEntity => ({
   role: UserRole.enum.admin,
   createdAt: NOW.toISOString(),
   disabledAt: null,
+  lastLoginAt: null,
+  credentialsChangedAt: null,
   version: 0,
 });
 const claimedOwner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
@@ -92,6 +96,7 @@ const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW
     users: {
       findById: async (id) => users.find((user) => user.id === id) ?? null,
       findByUsername: async (username) => users.find((user) => user.username === username) ?? null,
+      listAll: async () => users,
     },
     sessions: {
       findByTokenHash: async (hash) => sessions.find((session) => session.tokenHash === hash) ?? null,
@@ -107,8 +112,18 @@ const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW
       findByDeviceCodeHash: async () => null,
       findPendingByUserCode: async () => null,
       lastRedeemed: async () => null,
+      listApprovedByUser: async () => [],
       listExpired: async () => [],
       listRedeemed: async () => [],
+    },
+    invites: {
+      findByHash: async () => null,
+      listUnclaimed: async () => [],
+      listUnclaimedByUser: async () => [],
+      listExpiredUnclaimed: async () => [],
+    },
+    instanceSettings: {
+      get: async () => ({ id: INSTANCE_SETTINGS_ID, maxSignInDuration: DEFAULT_SIGN_IN_CAP, version: 0 }),
     },
     setupCodes: {
       findByHash: async (hash) => codes.find((code) => code.codeHash === hash) ?? null,
@@ -200,6 +215,21 @@ describe('issueSetupCode', () => {
 describe('claimOwner', () => {
   const input = { code: 'abcd-efgh-jkmn-pqrs-tvwx', username: 'rafael', password: PASSWORD };
 
+  const invitedRafael = (): UserEntity => ({
+    ...claimedOwner({ id: 'u-ana', passwordHash: null, role: UserRole.enum.member }),
+    username: 'rafael',
+  });
+
+  it('refuses a username an invited user already holds (the owner is not yet set up), writing nothing', async () => {
+    const deps = depsFor({ users: [unclaimedOwner(), invitedRafael()], codes: [codeRow()] });
+    expect(await errorOf(claimOwner(deps, input))).toEqual(authErrors.usernameTaken('rafael'));
+  });
+
+  it('does not say whether a name is taken to someone without a valid setup code', async () => {
+    const deps = depsFor({ users: [unclaimedOwner(), invitedRafael()], codes: [] });
+    expect(await errorOf(claimOwner(deps, input))).toEqual(authErrors.invalidSetupCode);
+  });
+
   it('updates the EXISTING owner and never inserts a user', async () => {
     const deps = depsFor({ users: [unclaimedOwner()], codes: [codeRow()] });
     const { persist, response } = await outcomeOf(claimOwner(deps, input));
@@ -264,7 +294,15 @@ describe('login', () => {
 
   it('starts a session for the right credentials ', async () => {
     const { persist, response } = await outcomeOf(login(depsFor({ users: [claimedOwner()] }), credentials));
-    expect(opsOf(persist)).toEqual([`${PersistOp.enum.insert}:${SESSION_ENTITY_TAG}`]);
+    expect(opsOf(persist)).toEqual([
+      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
+      `${PersistOp.enum.insert}:${SESSION_ENTITY_TAG}`,
+    ]);
+    expect((persist[0] as Persistable & { model: unknown }).model).toMatchObject({
+      id: OWNER_USER_ID,
+      lastLoginAt: NOW.toISOString(),
+      credentialsChangedAt: NOW.toISOString(),
+    });
     expect(response.token).toBe('TOKEN');
     expect(JSON.stringify(persist)).not.toContain('"TOKEN"');
   });
@@ -274,6 +312,7 @@ describe('login', () => {
     const { persist } = await outcomeOf(login(depsFor({ users: [claimedOwner()], sessions: [expired] }), credentials));
     expect(opsOf(persist)).toEqual([
       `${PersistOp.enum.delete}:${SESSION_ENTITY_TAG}`,
+      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
       `${PersistOp.enum.insert}:${SESSION_ENTITY_TAG}`,
     ]);
   });
@@ -323,6 +362,7 @@ describe('authenticate', () => {
       role: UserRole.enum.admin,
       scopes: [...ALL_SCOPES],
       via: PrincipalVia.enum.session,
+      sessionId: sessionRow().id,
     });
   });
 
@@ -404,6 +444,22 @@ const tokenRow = (overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity
 
 describe('claimOwnerLocally (ADR-034 §5)', () => {
   const input = { username: 'rafael', password: PASSWORD };
+
+  it('refuses a username another user holds, for a first claim and for recovering a reissued owner', async () => {
+    const other: UserEntity = { ...claimedOwner({ id: 'u-ana', role: UserRole.enum.member }), username: 'rafael' };
+    expect(await errorOf(claimOwnerLocally(depsFor({ users: [unclaimedOwner(), other] }), input))).toEqual(
+      authErrors.usernameTaken('rafael'),
+    );
+    const reissued = claimedOwner({ username: 'owner-name', passwordHash: null });
+    expect(await errorOf(claimOwnerLocally(depsFor({ users: [reissued, other] }), input))).toEqual(
+      authErrors.usernameTaken('rafael'),
+    );
+  });
+
+  it('lets a reissued owner take back their own name', async () => {
+    const reissued = claimedOwner({ passwordHash: null });
+    expect((await claimOwnerLocally(depsFor({ users: [reissued] }), input)).isOk()).toBe(true);
+  });
 
   it('updates the EXISTING owner — same id, no new user row, no session — and reports only the username', async () => {
     const { persist, response } = await outcomeOf(claimOwnerLocally(depsFor({ users: [unclaimedOwner()] }), input));

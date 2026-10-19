@@ -16,6 +16,10 @@ export const DEFAULT_LANDING_PATH = UI_ROOT_PATH;
 export const CONNECT_PATH = `${UI_ROOT_PATH}/connect`;
 export const CONNECT_CODE_PARAM = 'code';
 
+/** The invite page: the link an admin hands a new user, `…/ui/access/invite?code=…`; the code may also be typed in. */
+export const INVITE_PATH = `${UI_ROOT_PATH}/access/invite`;
+export const INVITE_CODE_PARAM = 'code';
+
 /** Everything the same-origin (CSRF) decision reads from a request. */
 export type CsrfRequest = {
   method: string;

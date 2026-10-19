@@ -9,6 +9,7 @@ import { buildMcpServer } from '../../../src/diplomat/mcp/server.js';
 import { toolScopesOf } from '../../../src/diplomat/mcp/scopes.js';
 import { SHARED_DEFAULT_READ_ONLY_MESSAGE } from '../../../src/models/tenancy.js';
 import { buildApp, type AppContext } from '../app-builder.js';
+import { seedProductPath, type Seeded } from './productPath.js';
 import {
   callRoute,
   callTool,
@@ -515,260 +516,273 @@ const RESOURCE_CASES: Record<string, { contains: string[]; omits: string[] }> = 
   'fintrack://openapi': { contains: ['/api/accounts'], omits: ['ZZ-A'] },
 };
 
-let ctx: AppContext;
-let a: Actor;
-let b: Actor;
+/**
+ * The suite runs twice over the same table of attacks. First with B's row inserted straight into the database; then
+ * with B created through the PRODUCT path — invited by an admin, the invite claimed, B's Claude signed in over stdio at
+ * `/ui/connect` — so the isolation holds for a user that exists the way users really come to exist.
+ */
+const SETUPS: ReadonlyArray<readonly [string, (ctx: AppContext) => Promise<Seeded>]> = [
+  ['B inserted as a row', seedTwoUsers],
+  ['B invited, claimed and signed in over stdio', seedProductPath],
+];
 
-type Harness = { ctx: AppContext; a: Actor; b: Actor; dir: string };
+describe.each(SETUPS)('%s', (_setup, seed) => {
+  let ctx: AppContext;
+  let a: Actor;
+  let b: Actor;
 
-/** A fresh app and database holding the two users' worlds. */
-const startHarness = async (): Promise<Harness> => {
-  const dir = mkdtempSync(join(tmpdir(), 'fintrack-isolation-'));
-  const app = await buildApp({ dbPath: join(dir, 'test.db'), auth: {} });
-  await app.app.ready();
-  return { ctx: app, ...(await seedTwoUsers(app)), dir };
-};
+  type Harness = { ctx: AppContext; a: Actor; b: Actor; dir: string; close?: () => Promise<void> };
 
-const stopHarness = async (h: Harness): Promise<void> => {
-  await h.ctx.app.close();
-  rmSync(h.dir, { recursive: true, force: true });
-};
+  /** A fresh app and database holding the two users' worlds. */
+  const startHarness = async (): Promise<Harness> => {
+    const dir = mkdtempSync(join(tmpdir(), 'fintrack-isolation-'));
+    const app = await buildApp({ dbPath: join(dir, 'test.db'), auth: {} });
+    await app.app.ready();
+    return { ctx: app, ...(await seed(app)), dir };
+  };
 
-let main: Harness;
+  const stopHarness = async (h: Harness): Promise<void> => {
+    await h.close?.();
+    await h.ctx.app.close();
+    rmSync(h.dir, { recursive: true, force: true });
+  };
 
-beforeAll(async () => {
-  main = await startHarness();
-  ({ ctx, a, b } = main);
-});
+  let main: Harness;
 
-afterAll(async () => {
-  await stopHarness(main);
-});
+  beforeAll(async () => {
+    main = await startHarness();
+    ({ ctx, a, b } = main);
+  });
 
-const asList = <T>(value: T | T[]): T[] => (Array.isArray(value) ? value : [value]);
+  afterAll(async () => {
+    await stopHarness(main);
+  });
 
-/** A call that B is ALLOWED to make with A's names — it creates B's own thing under A's name (names are per user), or
- *  changes B's own preferences — runs after every attack in this suite. Before then it would hand B a same-named
- *  account, card or category of its own, and a later "A's name is not found" would no longer be a fair question. */
-const changesBsOwnState = (expected: Expected): boolean => expected.kind === 'ok';
+  const asList = <T>(value: T | T[]): T[] => (Array.isArray(value) ? value : [value]);
 
-const checkOutcome = (outcome: Outcome, expected: Expected, label: string, status?: number): void => {
-  switch (expected.kind) {
-    case 'refused':
-      expect(outcome.failed, `${label} should be refused: ${outcome.text.slice(0, 300)}`).toBe(true);
-      expect(errorCodeOf(outcome), label).toBe(expected.code);
-      if (status !== undefined) expect(outcome.status, label).toBe(status);
-      return;
-    case 'noop':
-      expect(outcome.failed, `${label} should answer deleted:false: ${outcome.text.slice(0, 300)}`).toBe(false);
-      expect((outcome.payload as { deleted?: boolean }).deleted, label).toBe(false);
-      return;
-    case 'itemsRefused': {
-      expect(outcome.failed, `${label} answers per line: ${outcome.text.slice(0, 300)}`).toBe(false);
-      const body = outcome.payload as {
-        summary: { created: number };
-        items: Array<{ status: string; error?: string }>;
-      };
-      expect(body.summary.created, label).toBe(0);
-      expect(body.items.length, label).toBeGreaterThan(0);
-      for (const item of body.items) {
-        expect(item.status, label).toBe('error');
-        expect(item.error, label).toMatch(new RegExp(`^${expected.code}`));
-        // The line's message repeats what B asked for; what it lists as candidates must be B's alone.
-        const candidates = item.error?.split('(candidates:')[1] ?? '';
-        expect(
-          markersOf(WORLD_A).filter((marker) => candidates.includes(marker)),
-          `${label} candidates`,
-        ).toEqual([]);
+  /** A call that B is ALLOWED to make with A's names — it creates B's own thing under A's name (names are per user), or
+   *  changes B's own preferences — runs after every attack in this suite. Before then it would hand B a same-named
+   *  account, card or category of its own, and a later "A's name is not found" would no longer be a fair question. */
+  const changesBsOwnState = (expected: Expected): boolean => expected.kind === 'ok';
+
+  const checkOutcome = (outcome: Outcome, expected: Expected, label: string, status?: number): void => {
+    switch (expected.kind) {
+      case 'refused':
+        expect(outcome.failed, `${label} should be refused: ${outcome.text.slice(0, 300)}`).toBe(true);
+        expect(errorCodeOf(outcome), label).toBe(expected.code);
+        if (status !== undefined) expect(outcome.status, label).toBe(status);
+        return;
+      case 'noop':
+        expect(outcome.failed, `${label} should answer deleted:false: ${outcome.text.slice(0, 300)}`).toBe(false);
+        expect((outcome.payload as { deleted?: boolean }).deleted, label).toBe(false);
+        return;
+      case 'itemsRefused': {
+        expect(outcome.failed, `${label} answers per line: ${outcome.text.slice(0, 300)}`).toBe(false);
+        const body = outcome.payload as {
+          summary: { created: number };
+          items: Array<{ status: string; error?: string }>;
+        };
+        expect(body.summary.created, label).toBe(0);
+        expect(body.items.length, label).toBeGreaterThan(0);
+        for (const item of body.items) {
+          expect(item.status, label).toBe('error');
+          expect(item.error, label).toMatch(new RegExp(`^${expected.code}`));
+          // The line's message repeats what B asked for; what it lists as candidates must be B's alone.
+          const candidates = item.error?.split('(candidates:')[1] ?? '';
+          expect(
+            markersOf(WORLD_A).filter((marker) => candidates.includes(marker)),
+            `${label} candidates`,
+          ).toEqual([]);
+        }
+        return;
       }
-      return;
+      case 'scoped':
+      case 'ok':
+        expect(outcome.failed, `${label} should succeed: ${outcome.text.slice(0, 300)}`).toBe(false);
+        if (expected.kind === 'scoped') {
+          for (const text of expected.contains ?? [])
+            expect(outcome.text, `${label} should show B's ${text}`).toContain(text);
+          for (const text of expected.omits ?? [])
+            expect(outcome.text, `${label} should omit ${text}`).not.toContain(text);
+        }
+        return;
     }
-    case 'scoped':
-    case 'ok':
-      expect(outcome.failed, `${label} should succeed: ${outcome.text.slice(0, 300)}`).toBe(false);
-      if (expected.kind === 'scoped') {
-        for (const text of expected.contains ?? [])
-          expect(outcome.text, `${label} should show B's ${text}`).toContain(text);
-        for (const text of expected.omits ?? [])
-          expect(outcome.text, `${label} should omit ${text}`).not.toContain(text);
+  };
+
+  /** What a case must satisfy beyond its own expectation: nothing of A's in the answer, A's rows and the shared
+   *  defaults exactly as they were. */
+  const isolated = async (
+    label: string,
+    expected: Expected,
+    run: () => Promise<Outcome>,
+    status?: number,
+  ): Promise<void> => {
+    const aBefore = await dumpOf(ctx.db, WORLD_A.userId);
+    const sharedBefore = await sharedDump(ctx.db);
+
+    const outcome = await run();
+
+    checkOutcome(outcome, expected, label, status);
+    if (!(expected.kind === 'ok' && expected.echoes) && expected.kind !== 'itemsRefused')
+      expectNoLeak(outcome, WORLD_A, label);
+    expect(await dumpOf(ctx.db, WORLD_A.userId), `${label} changed A's rows`).toEqual(aBefore);
+    expect(await sharedDump(ctx.db), `${label} changed the shared defaults`).toEqual(sharedBefore);
+  };
+
+  describe('the surface under test is the whole surface', () => {
+    const tools = [...toolScopesOf(buildMcpServer({} as never, '0', { gate: ownerGate })).keys()].sort();
+    const routes = buildRouteDefinitions(documentationContext('0')).map(
+      ({ method, path }) => `${method.toUpperCase()} ${path}`,
+    );
+
+    it('has an isolation case for every registered MCP tool, and none for a tool that no longer exists', () => {
+      expect(tools.length).toBeGreaterThan(50);
+      expect(Object.keys(TOOL_CASES).sort()).toEqual(tools);
+    });
+
+    it('has an isolation case for every REST route, and none for a route that no longer exists', () => {
+      expect(routes.length).toBeGreaterThan(45);
+      expect(Object.keys(ROUTE_CASES).sort()).toEqual([...routes].sort());
+    });
+
+    it('has an isolation case for every MCP resource the server lists', async () => {
+      const res = await postMcp(ctx.app, b, { jsonrpc: '2.0', id: 9, method: 'resources/list' });
+      const listed = (res.json as { result: { resources: Array<{ uri: string }> } }).result.resources.map((r) => r.uri);
+      expect(Object.keys(RESOURCE_CASES).sort()).toEqual([...listed].sort());
+    });
+
+    it('seeds two users whose worlds really are disjoint (the fixtures themselves are sound)', async () => {
+      for (const [mine, theirs] of [
+        [a.world, b.world],
+        [b.world, a.world],
+      ] as const) {
+        const dump = JSON.stringify(await dumpOf(ctx.db, mine.userId));
+        expect(markersOf(theirs).filter((marker) => dump.includes(marker))).toEqual([]);
+        expect(dump).toContain(`ZZ-${mine.label}`);
       }
-      return;
-  }
-};
-
-/** What a case must satisfy beyond its own expectation: nothing of A's in the answer, A's rows and the shared defaults
- *  exactly as they were. */
-const isolated = async (
-  label: string,
-  expected: Expected,
-  run: () => Promise<Outcome>,
-  status?: number,
-): Promise<void> => {
-  const aBefore = await dumpOf(ctx.db, WORLD_A.userId);
-  const sharedBefore = await sharedDump(ctx.db);
-
-  const outcome = await run();
-
-  checkOutcome(outcome, expected, label, status);
-  if (!(expected.kind === 'ok' && expected.echoes) && expected.kind !== 'itemsRefused')
-    expectNoLeak(outcome, WORLD_A, label);
-  expect(await dumpOf(ctx.db, WORLD_A.userId), `${label} changed A's rows`).toEqual(aBefore);
-  expect(await sharedDump(ctx.db), `${label} changed the shared defaults`).toEqual(sharedBefore);
-};
-
-describe('the surface under test is the whole surface', () => {
-  const tools = [...toolScopesOf(buildMcpServer({} as never, '0', { gate: ownerGate })).keys()].sort();
-  const routes = buildRouteDefinitions(documentationContext('0')).map(
-    ({ method, path }) => `${method.toUpperCase()} ${path}`,
-  );
-
-  it('has an isolation case for every registered MCP tool, and none for a tool that no longer exists', () => {
-    expect(tools.length).toBeGreaterThan(50);
-    expect(Object.keys(TOOL_CASES).sort()).toEqual(tools);
+    });
   });
 
-  it('has an isolation case for every REST route, and none for a route that no longer exists', () => {
-    expect(routes.length).toBeGreaterThan(45);
-    expect(Object.keys(ROUTE_CASES).sort()).toEqual([...routes].sort());
-  });
-
-  it('has an isolation case for every MCP resource the server lists', async () => {
-    const res = await postMcp(ctx.app, b, { jsonrpc: '2.0', id: 9, method: 'resources/list' });
-    const listed = (res.json as { result: { resources: Array<{ uri: string }> } }).result.resources.map((r) => r.uri);
-    expect(Object.keys(RESOURCE_CASES).sort()).toEqual([...listed].sort());
-  });
-
-  it('seeds two users whose worlds really are disjoint (the fixtures themselves are sound)', async () => {
-    for (const [mine, theirs] of [
-      [WORLD_A, WORLD_B],
-      [WORLD_B, WORLD_A],
-    ] as const) {
-      const dump = JSON.stringify(await dumpOf(ctx.db, mine.userId));
-      expect(markersOf(theirs).filter((marker) => dump.includes(marker))).toEqual([]);
-      expect(dump).toContain(`ZZ-${mine.label}`);
-    }
-  });
-});
-
-const toolSweep = (phase: 'attacks' | 'allowed'): void => {
-  for (const [tool, cases] of Object.entries(TOOL_CASES)) {
-    asList(cases)
-      .map((toolCase, index) => ({ toolCase, index }))
-      .filter(({ toolCase }) => changesBsOwnState(toolCase.expected) === (phase === 'allowed'))
-      .forEach(({ toolCase, index }) => {
-        it(`${tool}${asList(cases).length > 1 ? ` #${index + 1}` : ''}`, async () => {
-          await isolated(tool, toolCase.expected, () => callTool(ctx.app, b, tool, toolCase.args(WORLD_A, WORLD_B)));
+  const toolSweep = (phase: 'attacks' | 'allowed'): void => {
+    for (const [tool, cases] of Object.entries(TOOL_CASES)) {
+      asList(cases)
+        .map((toolCase, index) => ({ toolCase, index }))
+        .filter(({ toolCase }) => changesBsOwnState(toolCase.expected) === (phase === 'allowed'))
+        .forEach(({ toolCase, index }) => {
+          it(`${tool}${asList(cases).length > 1 ? ` #${index + 1}` : ''}`, async () => {
+            await isolated(tool, toolCase.expected, () => callTool(ctx.app, b, tool, toolCase.args(WORLD_A, WORLD_B)));
+          });
         });
-      });
-  }
-};
+    }
+  };
 
-const routeSweep = (phase: 'attacks' | 'allowed'): void => {
-  for (const [route, cases] of Object.entries(ROUTE_CASES)) {
-    asList(cases)
-      .map((routeCase, index) => ({ routeCase, index }))
-      .filter(({ routeCase }) => changesBsOwnState(routeCase.expected) === (phase === 'allowed'))
-      .forEach(({ routeCase, index }) => {
-        it(`${route}${asList(cases).length > 1 ? ` #${index + 1}` : ''}`, async () => {
-          const [method] = route.split(' ') as ['GET' | 'POST' | 'PATCH' | 'DELETE'];
-          const { url, body } = routeCase.call(WORLD_A, WORLD_B);
-          await isolated(route, routeCase.expected, () => callRoute(ctx.app, b, method, url, body), routeCase.status);
+  const routeSweep = (phase: 'attacks' | 'allowed'): void => {
+    for (const [route, cases] of Object.entries(ROUTE_CASES)) {
+      asList(cases)
+        .map((routeCase, index) => ({ routeCase, index }))
+        .filter(({ routeCase }) => changesBsOwnState(routeCase.expected) === (phase === 'allowed'))
+        .forEach(({ routeCase, index }) => {
+          it(`${route}${asList(cases).length > 1 ? ` #${index + 1}` : ''}`, async () => {
+            const [method] = route.split(' ') as ['GET' | 'POST' | 'PATCH' | 'DELETE'];
+            const { url, body } = routeCase.call(WORLD_A, WORLD_B);
+            await isolated(route, routeCase.expected, () => callRoute(ctx.app, b, method, url, body), routeCase.status);
+          });
         });
+    }
+  };
+
+  describe('user B against user A, through every MCP tool', () => {
+    toolSweep('attacks');
+  });
+
+  describe('user B against user A, through every REST route', () => {
+    routeSweep('attacks');
+  });
+
+  describe('user B against user A, through every MCP resource', () => {
+    for (const [uri, expectation] of Object.entries(RESOURCE_CASES)) {
+      it(uri, async () => {
+        const outcome = await readResource(ctx.app, b, uri);
+        expect(outcome.failed, outcome.text.slice(0, 300)).toBe(false);
+        for (const text of expectation.contains) expect(outcome.text).toContain(text);
+        for (const text of expectation.omits) expect(outcome.text).not.toContain(text);
+        expectNoLeak(outcome, WORLD_A, uri);
       });
-  }
-};
-
-describe('user B against user A, through every MCP tool', () => {
-  toolSweep('attacks');
-});
-
-describe('user B against user A, through every REST route', () => {
-  routeSweep('attacks');
-});
-
-describe('user B against user A, through every MCP resource', () => {
-  for (const [uri, expectation] of Object.entries(RESOURCE_CASES)) {
-    it(uri, async () => {
-      const outcome = await readResource(ctx.app, b, uri);
-      expect(outcome.failed, outcome.text.slice(0, 300)).toBe(false);
-      for (const text of expectation.contains) expect(outcome.text).toContain(text);
-      for (const text of expectation.omits) expect(outcome.text).not.toContain(text);
-      expectNoLeak(outcome, WORLD_A, uri);
-    });
-  }
-});
-
-/** Each surface gets a world of its own: the first to create "ZZ-A Checking" for B would make the second one a
- *  duplicate of B's own. */
-const inFreshWorld = (title: string, sweep: () => void): void => {
-  describe(title, () => {
-    let fresh: Harness;
-    beforeAll(async () => {
-      fresh = await startHarness();
-      ({ ctx, a, b } = fresh);
-    });
-    afterAll(async () => {
-      await stopHarness(fresh);
-      ({ ctx, a, b } = main);
-    });
-    sweep();
-  });
-};
-
-describe('what B may do with A’s names and ids (its own data, shared reference), after the attacks', () => {
-  inFreshWorld('MCP tools', () => toolSweep('allowed'));
-  inFreshWorld('REST routes', () => routeSweep('allowed'));
-});
-
-describe('the other direction: user A against user B (the suite is symmetric, not a one-way mirror)', () => {
-  it('A cannot reach B’s accounts, cards or transactions by name or id either', async () => {
-    const bBefore = await dumpOf(ctx.db, WORLD_B.userId);
-    const calls: Array<[string, Record<string, unknown>]> = [
-      ['delete_account', { name: WORLD_B.acc1.name }],
-      ['update_account', { name: WORLD_B.acc1.name, newName: 'stolen' }],
-      ['get_bill', { card: WORLD_B.card.name, month: 9, year: 2026 }],
-      ['delete_card_transaction', { id: WORLD_B.tx.cardPurchase, confirm: true }],
-      ['update_budget', { id: WORLD_B.budget.id, limit: 1 }],
-      ['rename_dashboard', { name: WORLD_B.dashboard.name, newName: 'stolen' }],
-    ];
-    for (const [tool, args] of calls) {
-      const outcome = await callTool(ctx.app, a, tool, args);
-      expect(outcome.failed, tool).toBe(true);
-      expect(errorCodeOf(outcome), tool).toMatch(/^unknown_/);
-      expectNoLeak(outcome, WORLD_B, tool);
     }
-    expect(await dumpOf(ctx.db, WORLD_B.userId)).toEqual(bBefore);
-  });
-});
-
-describe('the shared defaults are read-only for everyone', () => {
-  it.each([
-    ['A', () => a],
-    ['B', () => b],
-  ])('%s cannot delete a default category, or rename or delete a bundled dashboard', async (_who, actor) => {
-    const before = await sharedDump(ctx.db);
-
-    const category = await callTool(ctx.app, actor(), 'delete_category', { name: 'Food' });
-    const rename = await callTool(ctx.app, actor(), 'rename_dashboard', { name: 'overview', newName: 'mine' });
-    const remove = await callTool(ctx.app, actor(), 'delete_dashboard', { name: 'overview' });
-    const restRename = await callRoute(ctx.app, actor(), 'POST', '/api/dashboards/overview/rename', {
-      newName: 'mine',
-    });
-    const restDelete = await callRoute(ctx.app, actor(), 'DELETE', '/api/categories/Food');
-
-    for (const outcome of [category, rename, remove, restRename, restDelete]) {
-      expect(outcome.failed, outcome.text).toBe(true);
-      expect(JSON.stringify(outcome.payload)).toContain(SHARED_DEFAULT_READ_ONLY_MESSAGE);
-    }
-    expect(await sharedDump(ctx.db)).toEqual(before);
   });
 
-  it('both users see the same defaults', async () => {
-    for (const actor of [a, b]) {
-      const categoriesSeen = await callTool(ctx.app, actor, 'list_categories');
-      expect(categoriesSeen.text).toContain('cat-food');
-      const dashboardsSeen = await callTool(ctx.app, actor, 'list_dashboards');
-      expect(dashboardsSeen.text).toContain('overview');
-    }
+  /** Each surface gets a world of its own: the first to create "ZZ-A Checking" for B would make the second one a
+   *  duplicate of B's own. */
+  const inFreshWorld = (title: string, sweep: () => void): void => {
+    describe(title, () => {
+      let fresh: Harness;
+      beforeAll(async () => {
+        fresh = await startHarness();
+        ({ ctx, a, b } = fresh);
+      });
+      afterAll(async () => {
+        await stopHarness(fresh);
+        ({ ctx, a, b } = main);
+      });
+      sweep();
+    });
+  };
+
+  describe('what B may do with A’s names and ids (its own data, shared reference), after the attacks', () => {
+    inFreshWorld('MCP tools', () => toolSweep('allowed'));
+    inFreshWorld('REST routes', () => routeSweep('allowed'));
+  });
+
+  describe('the other direction: user A against user B (the suite is symmetric, not a one-way mirror)', () => {
+    it('A cannot reach B’s accounts, cards or transactions by name or id either', async () => {
+      const bBefore = await dumpOf(ctx.db, b.world.userId);
+      const calls: Array<[string, Record<string, unknown>]> = [
+        ['delete_account', { name: WORLD_B.acc1.name }],
+        ['update_account', { name: WORLD_B.acc1.name, newName: 'stolen' }],
+        ['get_bill', { card: WORLD_B.card.name, month: 9, year: 2026 }],
+        ['delete_card_transaction', { id: WORLD_B.tx.cardPurchase, confirm: true }],
+        ['update_budget', { id: WORLD_B.budget.id, limit: 1 }],
+        ['rename_dashboard', { name: WORLD_B.dashboard.name, newName: 'stolen' }],
+      ];
+      for (const [tool, args] of calls) {
+        const outcome = await callTool(ctx.app, a, tool, args);
+        expect(outcome.failed, tool).toBe(true);
+        expect(errorCodeOf(outcome), tool).toMatch(/^unknown_/);
+        expectNoLeak(outcome, WORLD_B, tool);
+      }
+      expect(await dumpOf(ctx.db, b.world.userId)).toEqual(bBefore);
+    });
+  });
+
+  describe('the shared defaults are read-only for everyone', () => {
+    it.each([
+      ['A', () => a],
+      ['B', () => b],
+    ])('%s cannot delete a default category, or rename or delete a bundled dashboard', async (_who, actor) => {
+      const before = await sharedDump(ctx.db);
+
+      const category = await callTool(ctx.app, actor(), 'delete_category', { name: 'Food' });
+      const rename = await callTool(ctx.app, actor(), 'rename_dashboard', { name: 'overview', newName: 'mine' });
+      const remove = await callTool(ctx.app, actor(), 'delete_dashboard', { name: 'overview' });
+      const restRename = await callRoute(ctx.app, actor(), 'POST', '/api/dashboards/overview/rename', {
+        newName: 'mine',
+      });
+      const restDelete = await callRoute(ctx.app, actor(), 'DELETE', '/api/categories/Food');
+
+      for (const outcome of [category, rename, remove, restRename, restDelete]) {
+        expect(outcome.failed, outcome.text).toBe(true);
+        expect(JSON.stringify(outcome.payload)).toContain(SHARED_DEFAULT_READ_ONLY_MESSAGE);
+      }
+      expect(await sharedDump(ctx.db)).toEqual(before);
+    });
+
+    it('both users see the same defaults', async () => {
+      for (const actor of [a, b]) {
+        const categoriesSeen = await callTool(ctx.app, actor, 'list_categories');
+        expect(categoriesSeen.text).toContain('cat-food');
+        const dashboardsSeen = await callTool(ctx.app, actor, 'list_dashboards');
+        expect(dashboardsSeen.text).toContain('overview');
+      }
+    });
   });
 });

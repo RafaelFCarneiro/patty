@@ -23,6 +23,12 @@ export const AUTH_MESSAGES = {
   unknownToken: 'No such access token.',
   sessionRequired: 'Access tokens can only be managed from a signed-in browser session.',
   invalidGrant: 'This sign-in request is not valid, has expired, or was already answered.',
+  adminRequired: 'Only an administrator can manage users.',
+  usernameTaken: 'That username is already taken.',
+  cannotChangeSelf: 'You cannot disable or demote yourself. Ask another administrator.',
+  lastAdmin: 'That would leave the instance without an active administrator.',
+  invalidInvite: 'That invite is not valid, has expired, or was already used. Ask an administrator for a new one.',
+  userDisabled: 'That user is disabled. Enable them first.',
   prmNeedsOrigin:
     'This instance cannot say what its own origin is — set PUBLIC_URL to its external URL to publish its ' +
     'Protected Resource Metadata.',
@@ -30,6 +36,9 @@ export const AUTH_MESSAGES = {
     'Request host/origin is not loopback — FinTrack without authentication only answers 127.0.0.1, localhost or ' +
     '::1. To use another hostname, set PUBLIC_URL (which turns authentication on).',
 } as const;
+
+/** The headings of the user-management result pages. */
+export const USER_PAGE_HEADINGS = { inviteCreated: 'Invite created', newInvite: 'New invite' } as const;
 
 export const HTTP_ENV_VAR = 'FINTRACK_HTTP';
 

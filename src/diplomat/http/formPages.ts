@@ -21,8 +21,24 @@ const PAGE_HEADERS = {
   'referrer-policy': 'same-origin',
 } as const;
 
-export const page = (reply: FastifyReply, status: number, html: string): FastifyReply =>
-  reply.status(status).headers(PAGE_HEADERS).type(HTML_CONTENT_TYPE).send(html);
+/**
+ * A page whose URL carries a secret (an invite code) must not leak it through `Referer`: `strict-origin` sends
+ * the origin and never the path or query. Deliberately not `no-referrer` — with that policy a browser sends
+ * `Origin: null` on the page's own form POST, which the CSRF origin check (rightly) cannot accept.
+ */
+export const SECRET_URL_HEADERS = { 'referrer-policy': 'strict-origin' } as const;
+
+export const page = (
+  reply: FastifyReply,
+  status: number,
+  html: string,
+  overrides: Readonly<Record<string, string>> = {},
+): FastifyReply =>
+  reply
+    .status(status)
+    .headers({ ...PAGE_HEADERS, ...overrides })
+    .type(HTML_CONTENT_TYPE)
+    .send(html);
 
 // An urlencoded body is only parsed in the scopes that call `addFormParser` — never app-wide, so `/api` keeps
 // rejecting it.

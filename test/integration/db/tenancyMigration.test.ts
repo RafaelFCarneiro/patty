@@ -260,9 +260,11 @@ describe('migration 0021 — tenancy data', () => {
     expect(await db.all(sql`SELECT user_id, locale, locale_source, base_currency, version FROM user_settings`)).toEqual(
       [{ user_id: OWNER_USER_ID, locale: 'pt', locale_source: 'explicit', base_currency: 'BRL', version: 2 }],
     );
+    // The instance cap (migration 0022) is the singleton's only setting; the preferences it used to hold are gone.
     expect(await db.all(sql`SELECT name FROM pragma_table_info('settings') ORDER BY cid`)).toEqual([
       { name: 'id' },
       { name: 'version' },
+      { name: 'max_sign_in_duration' },
     ]);
     expect(await countOf(db, 'settings')).toBe(1);
   });
@@ -343,7 +345,7 @@ describe('migration 0021 — tenancy data', () => {
         .filter((config) => config.columns.some((column) => column.name === 'user_id'))
         .map((config) => config.name);
     // Identity tables also have a user_id (a login's owner, not tenancy) and are not tenant data.
-    const IDENTITY = ['sessions', 'access_tokens', 'client_grants'];
+    const IDENTITY = ['sessions', 'access_tokens', 'client_grants', 'invites'];
 
     it('lists exactly the schema’s tenant tables, so a new owned table cannot be forgotten', () => {
       const listed = [...OWNED_TABLES, ...SHARED_OR_OWNED_TABLES, 'user_settings'].sort();

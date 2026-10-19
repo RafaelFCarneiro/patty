@@ -93,9 +93,9 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   `null` (clear it) — an asymmetry the uniform factory can't express.
 - **Exception — the auth flows (ADR-033) are adapted once at the composition root.** `login`/`claimOwner`/
   `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions`, the CLI's `claimOwnerLocally`/`resetPassword` (`composition/cli.ts` binds its own runner the same way) and the access-token flows (`createToken`/
-  `revokeToken`/`revokeSignInByHash`/`authenticateToken`, `controllers/accessTokens.ts`) and the stdio sign-in flows (`startGrant`/`approveGrant`/`denyGrant`/`redeemGrant`/`pruneExpiredGrants`, `controllers/grants.ts`) are run from several shell sites (the auth hook,
+  `revokeToken`/`revokeSignInByHash`/`authenticateToken`, `controllers/accessTokens.ts`) and the stdio sign-in flows (`startGrant`/`approveGrant`/`denyGrant`/`redeemGrant`/`pruneExpiredGrants`, `controllers/grants.ts`) and the user-management flows (`inviteUser`/`reissueInvite`/`claimInvite`/`disableUser`/`enableUser`/`setRole`/`setSignInCap`, `controllers/users.ts`, run from the users and invite pages and the `users` command) are run from several shell sites (the auth hook,
   the sign-in and token routes, startup), none of which is "the" handler, and a single batch can mix three entities
-  (`claimOwner`: user + setup code + session). So `adapters/auth.ts`'s `outcomeToDb` (the five entities'
+  (`claimOwner`: user + setup code + session; `inviteUser`: user + invite). So `adapters/auth.ts`'s `outcomeToDb` (the seven entities'
   `entityDbAdapter` pairs applied in turn — each rewrites only its own tag) is applied in `composition/auth.ts`'s
   `bindAuthRunEffects`, which wraps the shell's `RunEffects` once: `runEffects(() => flow().map(outcomeToDb))`.
   Every auth call site then holds that bound runner, never the raw one. Still exactly once, still outside
@@ -130,6 +130,23 @@ and its failure isolation) is the package's to document — see the pointer abov
   writes. The handler gets it, with the caller's `Deps`, from `Scoped` (`scopedFor(tenancy, principal)`).
   `resetLocale` (`diplomat/db/localeCache.ts`, keyed by user) is part of `Scoped` too, used by the one handler that
   needs it (`set_locale`), called only after the write commits.
+
+### Reading without writing — the read-version check
+
+A flow whose decision rests on a row it does not change (the admin acting, the admins left standing, the settings row a
+cap was read from) makes that read part of the batch's conflict set with a `check` persistable (`persistence.check`, over
+the package's `checkVersion`), never by rewriting the row unchanged. A check asserts the row is still at the version the
+flow read; it writes nothing, bumps no `version` and publishes no change. A stale check conflicts exactly like a stale
+update, and the engine re-runs the flow against the new world. The appliers in `diplomat/db/effects.ts` implement the
+port's `check` (one `SELECT` by `id` and `version`, scoped to the owner for owned tables), registered for every entity a
+flow checks. A flow lists its checks before its writes. See the `@rfc0/effect-runner` documentation for the contract.
+
+A check only guards a read that stays true. Issuing a credential is not that: it changes the user's credential set, which
+every revocation (disable, reissue, reset) read earlier and then ends. So an issuance WRITES the user row
+(`users.credentials_changed_at`, a real field: when the set of ways in last changed) and a revocation writes it too;
+with both sides writing the row's `version`, a revocation and an issuance conflict in either order and the loser
+re-reads. A flow that merely relies on a row staying as it is (the acting admin, the admins left standing, the settings
+row a cap was read from) keeps a check.
 
 ### Scoped appliers (ADR-033 §5)
 
@@ -200,9 +217,9 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   (`outcomeFor(TRANSACTION_TAG_ENTITY_TAG, outcomes).applied`) — not the transaction's. (Full reasoning:
   ADR-023 decision 3 / step 3.)
 
-- **Auth entities** (`user`, `session`, `setup_code`, `access_token`, `client_grant`;
-  `diplomat/db/repos/{users,sessions,setupCodes,accessTokens,clientGrants}.ts`). `userApplier`, `sessionApplier`,
-  and `accessTokenApplier` are plain `versionedTableApplier`s. `clientGrantApplier` is one too, except that its `insert`
+- **Auth entities** (`user`, `session`, `setup_code`, `access_token`, `client_grant`, `invite`, `instance_settings`;
+  `diplomat/db/repos/{users,sessions,setupCodes,accessTokens,clientGrants,invites,instanceSettings}.ts`). `sessionApplier`
+  and `accessTokenApplier` are plain `versionedTableApplier`s; `userApplier` and `inviteApplier` are too, except that their `insert` rethrows a unique-constraint violation as `VersionConflict` (`users.username`, and the partial index that keeps one unclaimed invite per user): two admins inviting the same name, or reissuing for the same user, at once — the loser's retry re-runs the flow, which then answers `username_taken` or replaces the winner's invite; `instanceSettingsApplier` is a plain `versionedTableApplier` (the `settings` singleton row is inserted by a migration, so it is only ever checked or updated). `clientGrantApplier` is one too, except that its `insert`
   rethrows a unique-constraint violation as `VersionConflict`: `user_code` is unique among PENDING grants (a partial index),
   so two requests drawing the same free code at once collide there, and the retry re-runs `startGrant`, whose
   `freshUserCode` sees the committed row and draws another code (the shape `tagApplier` uses for `tags.name`).
@@ -213,7 +230,7 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   `claimOwner` emits only an owner `update`, a setup-code `update` (consumed) and a session `insert` — never a user
   `insert`; the CLI's `claimOwnerLocally` emits the same owner `update` (one shared `claimedOwner`) plus a consuming setup-code `update`
   only when a code is still outstanding, and no session; `resetPassword` emits the user's hash `update`, a session `delete` per
-  session of that user and a `revoked_at` `update` per live access token of that user, in one batch; `authenticate` writes nothing unless the session is stale (`SESSION_TOUCH_INTERVAL_MS`) or must be
+  session of that user and a `revoked_at` `update` per live access token of that user and an `expired` `update` per approved, unredeemed sign-in request, in one batch (the shared rule: `endedCredentials` in `logic/auth/revoke.ts`); `authenticate` writes nothing unless the session is stale (`SESSION_TOUCH_INTERVAL_MS`) or must be
   deleted. The token flows: `createToken` emits one `access_token` `insert` (hash + display prefix; the plaintext
   exists only in the flow's response), `revokeToken` one version-guarded `update` setting `revoked_at` (nothing when
   already revoked — idempotent), and `authenticateToken` writes nothing unless `last_used_at` is stale
@@ -224,7 +241,8 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   grant's `redeemed` `update` in ONE batch — the version guard on that `update` is what makes the device code single-use: a
   second redeem built from the same stale read cannot commit, and the engine's retry re-reads a spent grant — plus, for an
   approved grant past its window, the `expired` `update` that settles it (terminal, written once); `pruneExpiredGrants` one
-  `delete` per unredeemed grant past its window and per redeemed grant superseded by a newer approval for the same user, profile and client (never a live pending/approved one, never the newest redeemed per key).
+  `delete` per unredeemed grant past its window and per redeemed grant superseded by a newer approval for the same user, profile and client (never a live pending/approved one, never the newest redeemed per key); `approveGrant` writes the chosen duration clamped to `settings.max_sign_in_duration`.
+  The user-management flows (`controllers/users.ts`): `inviteUser` emits a user `insert` (no password) and its invite `insert`; `claimInvite` the user `update` (password, first login), the invite `update` (`used_at`) and a session `insert`, in ONE batch — the version guard on the invite makes it single-use; `reissueInvite` emits the previous unclaimed invite's `delete`, the new invite's `insert` (in that order, the partial unique index would otherwise refuse the insert) and, for a claimed user, the `update` clearing the password and `endingCredentials` (a session `delete` and a `revoked_at` `update` per live token, personal access tokens and stdio sign-ins alike); `disableUser` the user's `disabled_at` `update` plus the same `endingCredentials` — every credential ends in the SAME batch that disables, so no instant exists in which the user is disabled but a credential works; `disable`, `reissue` and `resetPassword` also expire the user's approved-but-unredeemed `client_grant`s (`UserPlan.expiredGrants`), so a request approved earlier cannot mint a sign-in after an enable or a re-claim; an unclaimed reissue writes the target row (`credentials_changed_at`, so a racing claim or revocation conflicts); `createToken`, `approveGrant` and `redeemGrant` write the acting/approving user's row the same way, so a disable or reset racing an issuance conflicts and retries — into a refusal, or into a revocation that includes the new credential; `enableUser` only the `disabled_at` `update`. Every one of these also checks the admitted acting admin's row (`Admitted.acting`, or `UserPlan.checks`), `redeemGrant` also checks the instance settings row it read the cap from, so a cap lowered meanwhile conflicts and the retry applies it, and `approveGrant` writes the approving user's row and checks the session it was asked through (`createToken` does too, taking the `Principal` rather than a bare user id; every user-management flow does the same for the admin's session: `admit` re-reads it each attempt and each batch carries its check) (the `Principal` carries `sessionId`; every attempt re-reads that session, so a retry after a password reset that deleted it is refused), so a change to the author of a request that lands between its authorization and its commit conflicts and the retry is refused. **Checks:** an action that takes an active admin away (a disable, a demote, a reissue of a claimed admin) also emits a `check` of every admin it leaves standing (`logic/auth/userPlans.ts`) — the guard read "another admin stands", and checking that admin puts its `version` in the batch, so two such actions racing from the same stale read conflict instead of both committing; the engine re-runs the loser, whose fresh read refuses it. `setSignInCap` emits one version-guarded `instance_settings` `update` after the actor's check; `login`/`claimOwner` also `update` the user's `last_login_at`.
 
 ### Outcomes and responses
 

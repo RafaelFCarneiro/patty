@@ -47,6 +47,8 @@ const openShell = async (): Promise<Result<Shell, DatabaseAhead>> => {
     close: () => closeDatabase(db),
     authRequired: config.FINTRACK_AUTH === AuthMode.enum.required,
     defaultProfile: config.FINTRACK_PROFILE,
+    // The CLI binds nothing, so HOST:PORT is not known to serve THIS database: only a configured origin is named.
+    inviteOrigin: config.PUBLIC_URL ?? null,
     // `login` never reuses a server already on HOST:PORT: it names no page and serves its own, on this database.
     signIn: (profile) =>
       createSignInFor({ config, db, deps, run }, { profile, origin: () => null, canServePage: true }),

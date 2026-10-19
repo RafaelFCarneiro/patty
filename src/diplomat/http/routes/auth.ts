@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { claimOwner, login, logout, ownerNeedsSetup } from '../../../controllers/auth.js';
+import { claimOwner, login, logout, ownerNeedsSetup, startsAtSetup } from '../../../controllers/auth.js';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
@@ -28,6 +28,8 @@ const messageFor = (e: AppError): string => {
       return AUTH_MESSAGES.invalidSetupCode;
     case 'setup_unavailable':
       return AUTH_MESSAGES.setupUnavailable;
+    case 'username_taken':
+      return AUTH_MESSAGES.usernameTaken;
     case 'rate_limited':
       return AUTH_MESSAGES.rateLimited;
     default:
@@ -46,7 +48,7 @@ const startSession = (ctx: AuthRoutesContext, reply: FastifyReply, started: Star
   reply.header('set-cookie', sessionCookie(started.token, ctx.secureCookie)).redirect(next, SEE_OTHER);
 
 const loginPage = (ctx: AuthRoutesContext) => async (req: FastifyRequest, reply: FastifyReply) =>
-  (await ownerNeedsSetup(ctx.deps))
+  (await startsAtSetup(ctx.deps))
     ? reply.redirect(SETUP_PATH)
     : page(reply, 200, await renderLoginPage({ next: nextFrom(req.query) }));
 

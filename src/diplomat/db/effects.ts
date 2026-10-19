@@ -140,6 +140,17 @@ const applierFor = <T extends VersionedTable>(
         throw cause;
       }
     },
+
+    // Read-only: is the row still at the version the flow read? SQLite takes the write lock when the transaction
+    // begins, so no other writer can move the row before commit and a plain read holds the guarantee.
+    check: async (tx, id, version) => {
+      const [row] = await tx
+        .select({ id: table.id })
+        .from(table)
+        .where(and(eq(table.id, id), eq(table.version, version), ...ownedBy()))
+        .limit(1);
+      return { applied: row !== undefined };
+    },
   };
 };
 

@@ -18,6 +18,8 @@ export const PrincipalSchema = z.object({
   via: PrincipalVia,
   /** The access token this request presented — only when `via` is `token`. */
   tokenId: Id.optional(),
+  /** The browser session this request presented — only when `via` is `session`. */
+  sessionId: Id.optional(),
 });
 export type Principal = z.infer<typeof PrincipalSchema>;
 

@@ -47,6 +47,9 @@ const randomCode = (length: number): string =>
 
 export const randomSetupCode = (): string => randomCode(SETUP_CODE_LENGTH);
 
+/** An invite code is as strong as a setup code (100 bits): it is a bearer secret for up to 72 hours. */
+export const randomInviteCode = (): string => randomCode(SETUP_CODE_LENGTH);
+
 /** Short enough to type, valid only while pending (10 min) and single-use — the device code is the real secret. */
 export const randomUserCode = (): string => randomCode(USER_CODE_LENGTH);
 
@@ -62,6 +65,7 @@ export const createSecrets = async (): Promise<AuthSecrets> => ({
   randomToken,
   randomAccessToken,
   randomSetupCode,
+  randomInviteCode,
   randomUserCode,
   randomDeviceCode,
   hashSecret,

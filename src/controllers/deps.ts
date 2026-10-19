@@ -24,6 +24,8 @@ import type { SettingsRepo } from '../diplomat/db/repos/settings.js';
 import type { TagsRepo } from '../diplomat/db/repos/tags.js';
 import type { AccessTokensRepo } from '../diplomat/db/repos/accessTokens.js';
 import type { ClientGrantsRepo } from '../diplomat/db/repos/clientGrants.js';
+import type { InstanceSettingsRepo } from '../diplomat/db/repos/instanceSettings.js';
+import type { InvitesRepo } from '../diplomat/db/repos/invites.js';
 import type { SessionsRepo } from '../diplomat/db/repos/sessions.js';
 import type { SetupCodesRepo } from '../diplomat/db/repos/setupCodes.js';
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
@@ -67,6 +69,8 @@ export type AuthSecrets = {
   randomSetupCode: () => string;
   /** The raw characters of a fresh sign-in user code (8 symbols), before display grouping. */
   randomUserCode: () => string;
+  /** The raw characters of a fresh invite code (100 bits), before display grouping. */
+  randomInviteCode: () => string;
   /** A fresh device code (256 random bits, base64url) — held by the asking process, stored only as a hash. */
   randomDeviceCode: () => string;
   /** sha256 of a secret — what is stored instead of the session token or setup code. */
@@ -145,6 +149,8 @@ export type AuthDeps = {
   sessions: SessionsRepo;
   accessTokens: AccessTokensRepo;
   clientGrants: ClientGrantsRepo;
+  invites: InvitesRepo;
+  instanceSettings: InstanceSettingsRepo;
   setupCodes: SetupCodesRepo;
   clock: () => Date;
   newId: () => string;

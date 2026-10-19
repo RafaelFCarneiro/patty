@@ -27,6 +27,8 @@ export type AuthRoutesContext = {
   deps: AuthDeps;
   runEffects: RunEffects;
   secureCookie: boolean;
+  /** The external origin, when one is configured — the invite link names it. */
+  publicUrl?: string;
 };
 
 /**

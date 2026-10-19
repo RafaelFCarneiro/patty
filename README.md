@@ -135,6 +135,9 @@ Connect an MCP client or script with a **personal access token**: in the dashboa
 [`docs/mcp-clients.md`](docs/mcp-clients.md#docker-container-http-on-12700151737); how tokens, scopes and revocation work:
 [`docs/auth.md`](docs/auth.md#personal-access-tokens).
 
+Sharing the instance with someone else? Admins invite them at `/ui/access/users` (or `npx @rafaelfcarneiro/fintrack@latest users invite <name>`): they get a one-time
+link, choose their own password, and see only their own finances. See [`docs/auth.md`](docs/auth.md#users-roles-and-invitations).
+
 - **Loopback only.** `compose.yaml` publishes `127.0.0.1:51737:51737`. The login protects the API, but the
   container speaks plain HTTP — publishing as `51737:51737` would send your password and session across the network
   in the clear. Keep the publish on loopback until TLS-terminating proxy support is documented.
