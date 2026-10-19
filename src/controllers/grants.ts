@@ -22,13 +22,14 @@ import {
   supersededGrants,
 } from '../logic/auth/grant.js';
 import { isActiveUser } from '../logic/auth/owner.js';
-import { checkUser } from '../logic/auth/users.js';
+import { withCredentialsChanged } from '../logic/auth/users.js';
 import { tokenDisplayPrefix, tokenPrincipal } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
   CLIENT_GRANT_ENTITY_TAG,
   INSTANCE_SETTINGS_ENTITY_TAG,
+  USER_ENTITY_TAG,
 } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
 import {
@@ -120,20 +121,24 @@ export const approveGrant = (
 ): ResultAsync<FlowOutcome<void>, AppError> =>
   safeTry(async function* () {
     yield* requireSession(principal);
-    // The approver must still be able to sign in, and their row is checked, not written: a disable or reset racing
-    // this approval conflicts on its version, so an approval can never land after the user's grants were revoked.
+    // The approver must still be able to sign in. An approved request can mint a sign-in, so it is a change to their
+    // credential set and their row is written: a disable or reset racing this approval conflicts, in either order.
     const row = await deps.users.findById(principal.userId);
     const approver = yield* okOr(isActiveUser(row) ? row : null, authErrors.unauthenticated);
     const grant = yield* answerableGrant(deps, input.userCode);
     yield* guard(durationAllowedFor(grant.channel, input.duration), authErrors.sessionDurationRefused);
     const duration = clampToCap(input.duration, await instanceCap(deps));
+    const now = deps.clock();
     const approved = approvedGrant(
       grant,
       { userId: principal.userId, scopes: TOKEN_ACCESS_SCOPES[input.access], duration },
-      deps.clock(),
+      now,
     );
     return ok({
-      persist: [checkUser(approver), persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: approved })],
+      persist: [
+        persistence.update({ entity: USER_ENTITY_TAG, model: withCredentialsChanged(approver, now) }),
+        persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: approved }),
+      ],
       response: undefined,
     });
   });
@@ -191,9 +196,10 @@ export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<Flo
           },
           now,
         );
-        // The approver's row is asserted unchanged so a racing disable or reset conflicts and retries into a refusal.
+        // Minting changes the approver's credential set, so their row is written: a racing disable or reset conflicts,
+        // in either order, and its retry refuses this redemption or revokes the new sign-in.
         const persist: Persistable[] = [
-          checkUser(user),
+          persistence.update({ entity: USER_ENTITY_TAG, model: withCredentialsChanged(user, now) }),
           settingsCheck(settings),
           persistence.insert({ entity: ACCESS_TOKEN_ENTITY_TAG, model: entity }),
           persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: redeemedGrant(plan.grant) }),

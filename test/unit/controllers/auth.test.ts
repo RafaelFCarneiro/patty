@@ -71,6 +71,7 @@ const unclaimedOwner = (): UserEntity => ({
   createdAt: NOW.toISOString(),
   disabledAt: null,
   lastLoginAt: null,
+  credentialsChangedAt: null,
   version: 0,
 });
 const claimedOwner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
@@ -300,6 +301,7 @@ describe('login', () => {
     expect((persist[0] as Persistable & { model: unknown }).model).toMatchObject({
       id: OWNER_USER_ID,
       lastLoginAt: NOW.toISOString(),
+      credentialsChangedAt: NOW.toISOString(),
     });
     expect(response.token).toBe('TOKEN');
     expect(JSON.stringify(persist)).not.toContain('"TOKEN"');

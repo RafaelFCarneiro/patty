@@ -4,6 +4,7 @@ import {
   claimedByInvite,
   disabledUser,
   enabledUser,
+  loggedIn,
   formatInviteCode,
   guardAdminChange,
   inviteLink,
@@ -17,6 +18,7 @@ import {
   spentInvite,
   summarizeUser,
   userStatus,
+  withCredentialsChanged,
   withoutPassword,
   withRole,
 } from '../../../../src/logic/auth/users.js';
@@ -44,6 +46,7 @@ const user = (id: string, overrides: Partial<UserEntity> = {}): UserEntity => ({
   createdAt: '2026-01-01T00:00:00.000Z',
   disabledAt: null,
   lastLoginAt: null,
+  credentialsChangedAt: null,
   version: 0,
   ...overrides,
 });
@@ -114,8 +117,12 @@ describe('invite codes and links', () => {
   });
 
   it('builds the link from the origin and the code, encoded', () => {
-    expect(inviteLink('https://fin.example.com', 'JKMN-PQRS')).toBe('https://fin.example.com/ui/access/invite?code=JKMN-PQRS');
-    expect(inviteLink('http://127.0.0.1:51737', 'a b&c')).toBe('http://127.0.0.1:51737/ui/access/invite?code=a%20b%26c');
+    expect(inviteLink('https://fin.example.com', 'JKMN-PQRS')).toBe(
+      'https://fin.example.com/ui/access/invite?code=JKMN-PQRS',
+    );
+    expect(inviteLink('http://127.0.0.1:51737', 'a b&c')).toBe(
+      'http://127.0.0.1:51737/ui/access/invite?code=a%20b%26c',
+    );
   });
 });
 
@@ -178,6 +185,7 @@ describe('the rows an action produces', () => {
       createdAt: NOW.toISOString(),
       disabledAt: null,
       lastLoginAt: null,
+      credentialsChangedAt: NOW.toISOString(),
     });
   });
 
@@ -193,10 +201,21 @@ describe('the rows an action produces', () => {
 
   it('disables, enables, re-roles and clears the password without touching anything else', () => {
     const base = user('ana');
-    expect(disabledUser(base, NOW)).toEqual({ ...base, disabledAt: NOW.toISOString() });
-    expect(enabledUser(disabledUser(base, NOW))).toEqual(base);
+    const changed = { credentialsChangedAt: NOW.toISOString() };
+    expect(disabledUser(base, NOW)).toEqual({ ...base, ...changed, disabledAt: NOW.toISOString() });
+    expect(enabledUser(disabledUser(base, NOW))).toEqual({ ...base, ...changed });
     expect(withRole(base, UserRole.enum.admin)).toEqual({ ...base, role: 'admin' });
-    expect(withoutPassword(base)).toEqual({ ...base, passwordHash: null });
+    expect(withoutPassword(base, NOW)).toEqual({ ...base, ...changed, passwordHash: null });
+  });
+
+  it('stamps when the set of ways in changed: on a disable, a reset, a login — not on a role change', () => {
+    const base = user('ana');
+    expect(withCredentialsChanged(base, NOW).credentialsChangedAt).toBe(NOW.toISOString());
+    expect(loggedIn(base, NOW)).toMatchObject({
+      lastLoginAt: NOW.toISOString(),
+      credentialsChangedAt: NOW.toISOString(),
+    });
+    expect(withRole(base, UserRole.enum.admin).credentialsChangedAt).toBeNull();
   });
 });
 

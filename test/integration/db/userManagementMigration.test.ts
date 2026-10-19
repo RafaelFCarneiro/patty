@@ -177,3 +177,16 @@ describe('migration 0023 — the instance settings row', () => {
     expect(await settingsRows(db)).toEqual([{ id: 'singleton', max_sign_in_duration: '7d', version: 5 }]);
   });
 });
+
+describe('migration 0024 — credentials_changed_at', () => {
+  const CHANGED_TAG = '0024_credentials_changed_at';
+
+  it('adds a nullable column, is not data-rewriting, and leaves every existing user unstamped', async () => {
+    expect(DATA_REWRITING_MIGRATIONS).not.toContain(CHANGED_TAG);
+    const db = await previousRelease();
+    await bootstrap(db);
+    expect(await db.all(sql`SELECT id, credentials_changed_at FROM users`)).toEqual([
+      { id: OWNER_USER_ID, credentials_changed_at: null },
+    ]);
+  });
+});

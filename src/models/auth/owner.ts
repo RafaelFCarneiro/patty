@@ -30,6 +30,10 @@ export const UserEntitySchema = withPersistenceMeta(
     createdAt: z.string(),
     disabledAt: z.string().nullable(),
     lastLoginAt: z.string().nullable().describe('When this user last started a session — null until their first login'),
+    credentialsChangedAt: z
+      .string()
+      .nullable()
+      .describe('When this user’s set of ways in last changed — a credential was issued or ended; null if never'),
   }),
 );
 export type UserEntity = z.infer<typeof UserEntitySchema>;

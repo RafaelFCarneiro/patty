@@ -10,7 +10,15 @@ import { AdminChange, type InviteEntity, type RevokedCredentials } from '../../m
 import { hasCredentials, isNeverClaimed } from './owner.js';
 import { expiredGrant } from './grant.js';
 import { endedCredentials, type HeldCredentials } from './revoke.js';
-import { disabledUser, guardAdminChange, isActiveAdmin, remainingAdmins, withoutPassword, withRole } from './users.js';
+import {
+  disabledUser,
+  guardAdminChange,
+  isActiveAdmin,
+  remainingAdmins,
+  withoutPassword,
+  withCredentialsChanged,
+  withRole,
+} from './users.js';
 
 /**
  * What an admin action does to the world, as data: the rows to write, delete and revoke. A controller turns it into
@@ -127,14 +135,14 @@ export const planReissue = (
   const refusal = guardAdminChange(AdminChange.enum.reissue, { ...facts, users: roster });
   if (refusal !== null) return err(refusal);
   const claimed = hasCredentials(facts.target);
-  const after = claimed ? withoutPassword(facts.target) : facts.target;
+  const after = claimed ? withoutPassword(facts.target, facts.now) : facts.target;
   const ended = claimed
     ? endedCredentials(facts.held, facts.now)
     : { sessions: [], tokens: [], revoked: NO_REVOCATIONS };
   return ok({
-    // An unclaimed target is checked, not written, so a claim or reissue racing this one conflicts on its version
-    // instead of leaving a code that can never work.
-    ...rowsOf(facts, roster, claimed ? [after] : []),
+    // The new invite is a way in for the target, so its row is written either way (an unclaimed target gets
+    // `credentialsChangedAt`): a claim, reissue or revocation racing this one conflicts on its version.
+    ...rowsOf(facts, roster, [claimed ? after : withCredentialsChanged(after, facts.now)]),
     sessions: ended.sessions,
     tokens: ended.tokens,
     expiredGrants: R.map(facts.approvedGrants, expiredGrant),

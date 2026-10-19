@@ -33,6 +33,7 @@ const owner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
   createdAt: NOW.toISOString(),
   disabledAt: null,
   lastLoginAt: null,
+  credentialsChangedAt: null,
   version: 0,
   ...overrides,
 });

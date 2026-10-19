@@ -3,8 +3,9 @@ import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { createToken } from '../../../src/controllers/accessTokens.js';
+import { resetPassword } from '../../../src/controllers/auth.js';
 import { approveGrant, redeemGrant, startGrant } from '../../../src/controllers/grants.js';
-import { disableUser, inviteUser } from '../../../src/controllers/users.js';
+import { disableUser, enableUser, inviteUser, reissueInvite } from '../../../src/controllers/users.js';
 import { USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
 import { UserRole } from '../../../src/models/auth/owner.js';
 import { ActorKind, DEFAULT_SIGN_IN_CAP, INSTANCE_SETTINGS_ID, type Actor } from '../../../src/models/auth/users.js';
@@ -594,31 +595,236 @@ describe('a row that is only checked is not written or announced', () => {
     return events;
   };
 
-  it('leaves the user row at its version, and publishes no user change, when a token is minted', async () => {
+  it('leaves the acting admin’s row at its version when they invite someone', async () => {
     const { ctx, owner } = await withOwner();
-    const ana = await addUser(ctx, owner, 'ana');
-    const before = await versionOf(ctx, ana.userId);
+    const adminId = await userIdOf(ctx, 'rafael');
+    const before = await versionOf(ctx, adminId);
     const events = announced(ctx);
-    const run = bindAuthRunEffects(ctx.authRunEffects);
 
-    const input = { name: 'checked', access: 'read' as const, expiry: '30' as const, password: MEMBER_PASSWORD };
-    expect((await run(() => createToken(authDepsOf(ctx), ana.userId, input))).isOk()).toBe(true);
+    await addUser(ctx, owner, 'ana');
 
-    expect(await versionOf(ctx, ana.userId)).toBe(before);
-    expect(events.flatMap((event) => event.entities)).not.toContain(USER_ENTITY_TAG);
+    expect(await versionOf(ctx, adminId)).toBe(before);
+    expect(events.flatMap((event) => event.entities)).toContain(USER_ENTITY_TAG);
   });
 
-  it('leaves the approver’s row at its version when a sign-in request is approved', async () => {
+  it('leaves the admins left standing and the settings row at their versions, writing only what changed', async () => {
     const { ctx, owner } = await withOwner();
     const ana = await addUser(ctx, owner, 'ana');
-    const before = await versionOf(ctx, ana.userId);
-    const events = announced(ctx);
+    const boss = await addUser(ctx, owner, 'boss', 'admin');
+    const settingsVersion = () =>
+      ctx.db.all<{ version: number }>(sql`SELECT version FROM settings`).then((rows) => rows[0]?.version);
+    const [rootBefore, settingsBefore] = [await versionOf(ctx, await userIdOf(ctx, 'rafael')), await settingsVersion()];
+
+    // Disabling the other admin checks the owner (acting and left standing) and the sign-in redemption checks settings.
+    await post(ctx, owner, `${USERS_URL}/${boss.userId}/disable`, { password: PASSWORD });
     const { session } = stdioSessionFor(ctx);
     await approveConnect(ctx, ana.cookie, userCodeIn(await session.resolve()), {});
-    expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'approved' }]);
+    await session.resolve();
 
-    expect(await versionOf(ctx, ana.userId)).toBe(before);
-    expect(events.flatMap((event) => event.entities)).not.toContain(USER_ENTITY_TAG);
+    expect(await versionOf(ctx, await userIdOf(ctx, 'rafael'))).toBe(rootBefore);
+    expect(await settingsVersion()).toBe(settingsBefore);
+  });
+
+  it('stamps credentials_changed_at and moves the version of a user who is issued a credential', async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    const stamp = async () =>
+      (
+        await ctx.db.all<{ at: string | null; version: number }>(
+          sql`SELECT credentials_changed_at AS at, version FROM users WHERE id = ${ana.userId}`,
+        )
+      )[0];
+    const before = await stamp();
+    const events = announced(ctx);
+
+    await mintFor(ctx, ana.cookie);
+
+    const after = await stamp();
+    expect(after?.version).toBe((before?.version ?? 0) + 1);
+    expect(Date.parse(after?.at ?? '')).toBeGreaterThanOrEqual(Date.parse(before?.at ?? ''));
+    expect(events.flatMap((event) => event.entities)).toContain(USER_ENTITY_TAG);
+  });
+});
+
+describe('a revocation cannot miss a credential issued while it was reading', () => {
+  const adminActor = (userId: string) => ({
+    kind: 'session' as const,
+    principal: {
+      userId,
+      role: UserRole.enum.admin,
+      scopes: [...ALL_SCOPES],
+      via: PrincipalVia.enum.session,
+    } satisfies Principal,
+    password: PASSWORD,
+  });
+  const tokenInput = { name: 'late', access: 'write' as const, expiry: '30' as const, password: MEMBER_PASSWORD };
+  const status = (ctx: AppContext, token: string) =>
+    ctx.app.inject({ method: 'GET', url: '/api/status', headers: bearer(token) }).then((res) => res.statusCode);
+
+  /**
+   * Wraps one read so that on its FIRST call `issue` runs to completion after the read returned its snapshot: the
+   * revocation then holds a list that is already stale. The flow re-runs on a conflict, so the hook fires once.
+   */
+  const issuingDuringFirstRead = <A extends unknown[], R>(
+    read: (...args: A) => Promise<R>,
+    issue: () => Promise<void>,
+  ) => {
+    let calls = 0;
+    return {
+      read: async (...args: A): Promise<R> => {
+        calls += 1;
+        const snapshot = await read(...args);
+        if (calls === 1) await issue();
+        return snapshot;
+      },
+      calls: () => calls,
+    };
+  };
+
+  const world = async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    const deps = authDepsOf(ctx);
+    return {
+      ctx,
+      owner,
+      ana,
+      deps,
+      adminId: await userIdOf(ctx, 'rafael'),
+      run: bindAuthRunEffects(ctx.authRunEffects),
+    };
+  };
+  const withTokenList = (deps: ReturnType<typeof authDepsOf>, listByUser: typeof deps.accessTokens.listByUser) => ({
+    ...deps,
+    accessTokens: { ...deps.accessTokens, listByUser },
+  });
+  const withApprovedGrants = (
+    deps: ReturnType<typeof authDepsOf>,
+    listApprovedByUser: typeof deps.clientGrants.listApprovedByUser,
+  ) => ({ ...deps, clientGrants: { ...deps.clientGrants, listApprovedByUser } });
+
+  const anaPrincipal = (userId: string): Principal => ({
+    userId,
+    role: UserRole.enum.member,
+    scopes: [...ALL_SCOPES],
+    via: PrincipalVia.enum.session,
+  });
+  const startedGrant = async (deps: ReturnType<typeof authDepsOf>, run: ReturnType<typeof bindAuthRunEffects>) =>
+    (
+      await run(() => startGrant(deps, { client: { name: 't', version: '1' }, profile: 'p', channel: 'stdio' }))
+    )._unsafeUnwrap();
+
+  it('a. a personal token minted during a disable is revoked, and stays dead after enabling', async () => {
+    const { ctx, ana, deps, adminId, run } = await world();
+    let minted = '';
+    const hook = issuingDuringFirstRead(deps.accessTokens.listByUser, async () => {
+      minted = (await run(() => createToken(deps, ana.userId, tokenInput)))._unsafeUnwrap().token;
+    });
+
+    const disabled = await run(() => disableUser(withTokenList(deps, hook.read), adminActor(adminId), ana.userId));
+
+    expect(disabled.isOk()).toBe(true);
+    expect(hook.calls()).toBe(2);
+    expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
+    expect(await status(ctx, minted)).toBe(401);
+    expect((await run(() => enableUser(deps, adminActor(adminId), ana.userId))).isOk()).toBe(true);
+    expect(await status(ctx, minted)).toBe(401);
+  });
+
+  it('b. a personal token minted during the reissue of a claimed user is revoked', async () => {
+    const { ctx, ana, deps, adminId, run } = await world();
+    let minted = '';
+    const hook = issuingDuringFirstRead(deps.accessTokens.listByUser, async () => {
+      minted = (await run(() => createToken(deps, ana.userId, tokenInput)))._unsafeUnwrap().token;
+    });
+
+    const reissued = await run(() => reissueInvite(withTokenList(deps, hook.read), adminActor(adminId), ana.userId));
+
+    expect(reissued.isOk()).toBe(true);
+    expect(hook.calls()).toBe(2);
+    expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
+    expect(await status(ctx, minted)).toBe(401);
+  });
+
+  it('c. a personal token minted during a password reset is revoked', async () => {
+    const { ctx, ana, deps, run } = await world();
+    let minted = '';
+    const hook = issuingDuringFirstRead(deps.accessTokens.listByUser, async () => {
+      minted = (await run(() => createToken(deps, ana.userId, tokenInput)))._unsafeUnwrap().token;
+    });
+
+    const reset = await run(() =>
+      resetPassword(withTokenList(deps, hook.read), { username: 'ana', password: 'a brand new passphrase' }),
+    );
+
+    expect(reset.isOk()).toBe(true);
+    expect(hook.calls()).toBe(2);
+    expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
+    expect(await status(ctx, minted)).toBe(401);
+  });
+
+  it('d. a stdio sign-in redeemed during a disable, between its token and grant reads, is revoked', async () => {
+    const { ctx, ana, deps, adminId, run } = await world();
+    const started = await startedGrant(deps, run);
+    const approval = { userCode: started.userCode, access: 'read' as const, duration: '24h' as const };
+    (await run(() => approveGrant(deps, anaPrincipal(ana.userId), approval)))._unsafeUnwrap();
+    const hook = issuingDuringFirstRead(deps.clientGrants.listApprovedByUser, async () => {
+      expect((await run(() => redeemGrant(deps, started.deviceCode)))._unsafeUnwrap()).toMatchObject({
+        kind: 'signed_in',
+      });
+    });
+
+    const disabled = await run(() => disableUser(withApprovedGrants(deps, hook.read), adminActor(adminId), ana.userId));
+
+    expect(disabled.isOk()).toBe(true);
+    expect(hook.calls()).toBe(2);
+    expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
+    expect((await run(() => enableUser(deps, adminActor(adminId), ana.userId))).isOk()).toBe(true);
+    expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
+  });
+
+  it('e. a sign-in request approved during a disable is expired, so enabling later mints nothing', async () => {
+    const { ctx, ana, deps, adminId, run } = await world();
+    const started = await startedGrant(deps, run);
+    const approval = { userCode: started.userCode, access: 'read' as const, duration: '24h' as const };
+    const hook = issuingDuringFirstRead(deps.clientGrants.listApprovedByUser, async () => {
+      (await run(() => approveGrant(deps, anaPrincipal(ana.userId), approval)))._unsafeUnwrap();
+    });
+
+    const disabled = await run(() => disableUser(withApprovedGrants(deps, hook.read), adminActor(adminId), ana.userId));
+
+    expect(disabled.isOk()).toBe(true);
+    expect(hook.calls()).toBe(2);
+    expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'expired' }]);
+    expect((await run(() => enableUser(deps, adminActor(adminId), ana.userId))).isOk()).toBe(true);
+    const redeemed = (await run(() => redeemGrant(deps, started.deviceCode)))._unsafeUnwrap();
+    expect(redeemed.kind).not.toBe('signed_in');
+    expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
+  });
+
+  it('f. an invite issued to an unclaimed user during a disable (after pruning) is removed', async () => {
+    const { ctx, owner, deps, adminId, run } = await world();
+    await mustInvite(ctx, owner, { username: 'bob' });
+    const bobId = await userIdOf(ctx, 'bob');
+    await ctx.db.run(sql`DELETE FROM invites`);
+    let code = '';
+    const hook = issuingDuringFirstRead(deps.invites.listUnclaimedByUser, async () => {
+      code = (await run(() => reissueInvite(deps, adminActor(adminId), bobId)))._unsafeUnwrap().code;
+    });
+
+    const disabled = await run(() =>
+      disableUser(
+        { ...deps, invites: { ...deps.invites, listUnclaimedByUser: hook.read } },
+        adminActor(adminId),
+        bobId,
+      ),
+    );
+
+    expect(disabled.isOk()).toBe(true);
+    expect(hook.calls()).toBe(2);
+    expect(await inviteRows(ctx)).toEqual([]);
+    expect((await run(() => enableUser(deps, adminActor(adminId), bobId))).isOk()).toBe(true);
+    expect((await claim(ctx, code)).statusCode).toBe(403);
   });
 });
 

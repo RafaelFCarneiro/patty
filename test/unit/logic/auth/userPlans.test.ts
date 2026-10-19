@@ -18,6 +18,7 @@ const user = (id: string, overrides: Partial<UserEntity> = {}): UserEntity => ({
   createdAt: '2026-01-01T00:00:00.000Z',
   disabledAt: null,
   lastLoginAt: null,
+  credentialsChangedAt: null,
   version: 1,
   ...overrides,
 });
@@ -107,7 +108,9 @@ describe('planDisable', () => {
 
   it('disables the user and ends every session, live token and pending invite — and nothing else', () => {
     const plan = planOf(planDisable({ ...facts, target: ANA }));
-    expect(plan.userWrites).toEqual([{ ...ANA, disabledAt: NOW.toISOString() }]);
+    expect(plan.userWrites).toEqual([
+      { ...ANA, disabledAt: NOW.toISOString(), credentialsChangedAt: NOW.toISOString() },
+    ]);
     // The admitted actor is asserted, not rewritten.
     expect(plan.checks).toEqual([ROOT]);
     expect(plan.sessions.map((s) => s.id)).toEqual(['s1', 's2']);
@@ -180,9 +183,9 @@ describe('planReissue', () => {
     const plan = planOf(planReissue({ ...facts, target: waiting, held: NO_HELD }));
     expect(plan.removedInvites.map((i) => i.id)).toEqual(['i1']);
     expect(plan.newInvites).toEqual([freshInvite]);
-    // The row is checked, not written, so a claim racing this reissue conflicts on its version.
-    expect(plan.userWrites).toEqual([]);
-    expect(plan.checks).toEqual([waiting, ROOT]);
+    // The invite is a credential issued to the user: the epoch moves, so a claim or revocation racing this conflicts.
+    expect(plan.userWrites).toEqual([{ ...waiting, credentialsChangedAt: NOW.toISOString() }]);
+    expect(plan.checks).toEqual([ROOT]);
     expect(plan).toMatchObject({ sessions: [], tokens: [] });
     expect(plan.revoked).toEqual({ sessionsEnded: 0, tokensRevoked: 0 });
     expect(plan.after).toEqual(waiting);
@@ -190,7 +193,7 @@ describe('planReissue', () => {
 
   it('resets a claimed user: password cleared, every session and live token ended', () => {
     const plan = planOf(planReissue({ ...facts, target: ANA }));
-    expect(plan.userWrites).toEqual([{ ...ANA, passwordHash: null }]);
+    expect(plan.userWrites).toEqual([{ ...ANA, passwordHash: null, credentialsChangedAt: NOW.toISOString() }]);
     expect(plan.checks).toEqual([ROOT]);
     expect(plan.sessions).toHaveLength(2);
     expect(plan.tokens.map((t) => t.id)).toEqual(['pat', 'stdio']);

@@ -325,6 +325,7 @@ export const users = sqliteTable('users', {
   createdAt: text('created_at').notNull(),
   disabledAt: text('disabled_at'),
   lastLoginAt: text('last_login_at'),
+  credentialsChangedAt: text('credentials_changed_at'),
   version: integer('version').notNull().default(0),
 });
 

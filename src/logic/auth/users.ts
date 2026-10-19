@@ -69,6 +69,7 @@ export const newInvitedUser = (
   createdAt: now.toISOString(),
   disabledAt: null,
   lastLoginAt: null,
+  credentialsChangedAt: now.toISOString(),
 });
 
 export const newInvite = (
@@ -86,12 +87,23 @@ export const spentInvite = (invite: InviteEntity, now: Date): InviteEntity => ({
   usedAt: now.toISOString(),
 });
 
-export const disabledUser = (user: UserEntity, now: Date): UserEntity => ({ ...user, disabledAt: now.toISOString() });
+/** The user's set of ways in changed (one was issued or ended): a revocation that read it earlier now conflicts. */
+export const withCredentialsChanged = (user: UserEntity, now: Date): UserEntity => ({
+  ...user,
+  credentialsChangedAt: now.toISOString(),
+});
+
+export const disabledUser = (user: UserEntity, now: Date): UserEntity =>
+  withCredentialsChanged({ ...user, disabledAt: now.toISOString() }, now);
 export const enabledUser = (user: UserEntity): UserEntity => ({ ...user, disabledAt: null });
 export const withRole = (user: UserEntity, role: UserRole): UserEntity => ({ ...user, role });
 /** The password is gone: the new invite is the only way back in. */
-export const withoutPassword = (user: UserEntity): UserEntity => ({ ...user, passwordHash: null });
-export const loggedIn = (user: UserEntity, now: Date): UserEntity => ({ ...user, lastLoginAt: now.toISOString() });
+export const withoutPassword = (user: UserEntity, now: Date): UserEntity =>
+  withCredentialsChanged({ ...user, passwordHash: null }, now);
+
+/** A login starts a session, which is a way in. */
+export const loggedIn = (user: UserEntity, now: Date): UserEntity =>
+  withCredentialsChanged({ ...user, lastLoginAt: now.toISOString() }, now);
 /** The invited person chooses their password: the row that exists is updated, never created. */
 export const claimedByInvite = (user: UserEntity, passwordHash: string, now: Date): UserEntity => ({
   ...loggedIn(user, now),

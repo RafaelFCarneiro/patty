@@ -20,7 +20,7 @@ import {
 import { canLogin, withPasswordHash } from '../logic/auth/password.js';
 import { evaluateSession, newSession, sessionPrincipal, touched } from '../logic/auth/session.js';
 import { endingCredentials, removeSession } from '../logic/auth/revoke.js';
-import { loggedIn } from '../logic/auth/users.js';
+import { loggedIn, withCredentialsChanged } from '../logic/auth/users.js';
 import * as persistence from '../logic/persistence.js';
 import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
@@ -97,10 +97,15 @@ const nameAvailableTo = async (deps: AuthDeps, owner: UserEntity, username: stri
   return guard(holder === null || holder.id === owner.id, authErrors.usernameTaken(username));
 };
 
-const claimOwnerUpdate = (owner: UserEntity, input: ClaimOwnerLocallyInput, passwordHash: string): Persistable =>
+const claimOwnerUpdate = (
+  owner: UserEntity,
+  input: ClaimOwnerLocallyInput,
+  passwordHash: string,
+  now: Date,
+): Persistable =>
   persistence.update({
     entity: USER_ENTITY_TAG,
-    model: claimedOwner(owner, { username: input.username, passwordHash }),
+    model: withCredentialsChanged(claimedOwner(owner, { username: input.username, passwordHash }), now),
   });
 
 /**
@@ -125,7 +130,7 @@ export const claimOwner = (
     const passwordHash = await deps.secrets.hashPassword(input.password);
     const { persistable: sessionInsert, started } = startSession(deps, owner.id, now);
     const persist: Persistable[] = [
-      claimOwnerUpdate(loggedIn(owner, now), input, passwordHash),
+      claimOwnerUpdate(loggedIn(owner, now), input, passwordHash, now),
       persistence.update({ entity: SETUP_CODE_ENTITY_TAG, model: spentSetupCode(code, now) }),
       sessionInsert,
     ];
@@ -148,7 +153,7 @@ export const claimOwnerLocally = (
     const outstanding = await deps.setupCodes.current();
     const spent = outstanding !== null && outstanding.usedAt === null ? [spentSetupCode(outstanding, now)] : [];
     const persist: Persistable[] = [
-      claimOwnerUpdate(owner, input, await deps.secrets.hashPassword(input.password)),
+      claimOwnerUpdate(owner, input, await deps.secrets.hashPassword(input.password), now),
       ...spent.map((code) => persistence.update({ entity: SETUP_CODE_ENTITY_TAG, model: code })),
     ];
     return ok({ persist, response: { username: input.username } });
@@ -175,14 +180,15 @@ export const resetPassword = (
   safeTry(async function* () {
     const user = yield* findResetTarget(deps, input.username);
 
+    const now = deps.clock();
     const ended = endingCredentials(
       { sessions: await deps.sessions.listByUser(user.id), tokens: await deps.accessTokens.listByUser(user.id) },
-      deps.clock(),
+      now,
     );
     const persist: Persistable[] = [
       persistence.update({
         entity: USER_ENTITY_TAG,
-        model: withPasswordHash(user, await deps.secrets.hashPassword(input.password)),
+        model: withCredentialsChanged(withPasswordHash(user, await deps.secrets.hashPassword(input.password)), now),
       }),
       ...ended.persist,
     ];

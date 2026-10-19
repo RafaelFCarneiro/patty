@@ -63,6 +63,7 @@ const user = (id: string, overrides: Partial<UserEntity> = {}): UserEntity => ({
   createdAt: '2026-01-01T00:00:00.000Z',
   disabledAt: null,
   lastLoginAt: null,
+  credentialsChangedAt: null,
   version: 1,
   ...overrides,
 });
@@ -347,13 +348,14 @@ describe('reissueInvite', () => {
       reissueInvite(depsFor({ users: [ROOT, waiting], invites: [invite('bob')] }), sessionActor('root'), 'bob'),
     );
     expect(opsOf(persist)).toEqual([
-      // The target and the acting admin, asserted: a claim racing this reissue conflicts on the target's version.
-      CHECK_USER,
+      // The acting admin is asserted; the target's credential epoch moves with the new invite.
       CHECK_USER,
       `${PersistOp.enum.delete}:${INVITE_ENTITY_TAG}`,
       `${PersistOp.enum.insert}:${INVITE_ENTITY_TAG}`,
+      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
     ]);
-    expect(checkedIds(persist)).toEqual(['bob', 'root']);
+    expect(checkedIds(persist)).toEqual(['root']);
+    expect(modelOf(persist[3])).toMatchObject({ id: 'bob', credentialsChangedAt: NOW.toISOString() });
     expect(response.revoked).toEqual({ sessionsEnded: 0, tokensRevoked: 0 });
     expect(response.code).toBe('JKMN-PQRS-TVWX-ABCD-EFGH');
   });
@@ -547,7 +549,7 @@ describe('disableUser', () => {
     const { persist } = await outcomeOf(disableUser(depsFor({ users: [ROOT, ANA] }), sessionActor('root'), 'ana'));
     expect(checkedIds(persist)).toEqual(['root']);
     expect(persist.filter((p) => p.op === PersistOp.enum.update && p.entity === USER_ENTITY_TAG).map(modelOf)).toEqual([
-      { ...ANA, disabledAt: NOW.toISOString() },
+      { ...ANA, disabledAt: NOW.toISOString(), credentialsChangedAt: NOW.toISOString() },
     ]);
   });
 });

@@ -4,7 +4,7 @@ import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { AppError } from '../common/errors.js';
 import { okOr } from '../common/result.js';
 import { canLogin } from '../logic/auth/password.js';
-import { checkUser } from '../logic/auth/users.js';
+import { withCredentialsChanged } from '../logic/auth/users.js';
 import {
   evaluateToken,
   newAccessToken,
@@ -15,7 +15,7 @@ import {
   usedToken,
 } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
-import { ACCESS_TOKEN_ENTITY_TAG } from '../models/auth/entity.js';
+import { ACCESS_TOKEN_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
 import { type Principal, PrincipalVia } from '../models/auth/principal.js';
 import {
@@ -49,10 +49,10 @@ export const createToken = (
       { id: deps.newId(), userId, tokenHash: deps.secrets.hashSecret(token), prefix: tokenDisplayPrefix(token), input },
       now,
     );
-    // The user row is asserted unchanged: a disable or reset racing this mint conflicts on its version and retries
-    // into a refusal, so a credential can never be issued to a user after their credentials were ended.
+    // Issuing changes the user's credential set, so it is written: a disable or reset racing this mint, in either
+    // order, conflicts on the user's version and retries (into a refusal, or a revocation covering this token).
     const persist: Persistable[] = [
-      checkUser(account),
+      persistence.update({ entity: USER_ENTITY_TAG, model: withCredentialsChanged(account, now) }),
       persistence.insert({ entity: ACCESS_TOKEN_ENTITY_TAG, model: entity }),
     ];
     return ok({ persist, response: { token, summary: summarizeToken(entity, now) } });
