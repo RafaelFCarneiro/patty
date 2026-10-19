@@ -21,11 +21,11 @@ let dbPath: string;
 let beforeFolder: string;
 
 /** A copy of the real migrations whose journal stops just before this one: a database as the last release left it. */
-const journalBefore = (folder: string): void => {
+const journalBefore = (folder: string, tag = MIGRATION_TAG): void => {
   const journalPath = join(folder, 'meta', '_journal.json');
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: Array<{ tag: string }> };
-  const cutoff = journal.entries.findIndex((entry) => entry.tag === MIGRATION_TAG);
-  if (cutoff === -1) throw new Error(`${MIGRATION_TAG} not in ${journalPath}`);
+  const cutoff = journal.entries.findIndex((entry) => entry.tag === tag);
+  if (cutoff === -1) throw new Error(`${tag} not in ${journalPath}`);
   journal.entries = journal.entries.slice(0, cutoff);
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
@@ -168,12 +168,16 @@ describe('migration 0023 — the instance settings row', () => {
     expect(await settingsRows(db)).toEqual([{ id: 'singleton', max_sign_in_duration: '30d', version: 0 }]);
   });
 
-  it('keeps a row an admin already saved, and is idempotent', async () => {
+  it('keeps a row an admin already saved, and is idempotent when replayed', async () => {
+    // A journal that ends at 0023 itself, so the replay below is 0023 and nothing newer.
+    const upTo0023 = join(tmpDir, 'up-to-0023');
+    cpSync(REAL_MIGRATIONS_FOLDER, upTo0023, { recursive: true });
+    journalBefore(upTo0023, '0024_credentials_changed_at');
     const db = await previousRelease();
-    await bootstrap(db);
+    await migrate(db, { migrationsFolder: upTo0023 });
     await db.run(sql`UPDATE settings SET max_sign_in_duration = '7d', version = 5`);
     await db.run(sql`DELETE FROM __drizzle_migrations WHERE id = (SELECT MAX(id) FROM __drizzle_migrations)`);
-    await migrate(db, { migrationsFolder: REAL_MIGRATIONS_FOLDER });
+    await migrate(db, { migrationsFolder: upTo0023 });
     expect(await settingsRows(db)).toEqual([{ id: 'singleton', max_sign_in_duration: '7d', version: 5 }]);
   });
 });
