@@ -21,17 +21,19 @@ import {
   summarizeUser,
   checkUser,
 } from '../logic/auth/users.js';
+import { liveSessionOf } from '../logic/auth/session.js';
 import * as persistence from '../logic/persistence.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
   CLIENT_GRANT_ENTITY_TAG,
   INSTANCE_SETTINGS_ENTITY_TAG,
   INVITE_ENTITY_TAG,
+  SESSION_ENTITY_TAG,
   USER_ENTITY_TAG,
 } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
 import type { UserEntity } from '../models/auth/owner.js';
-import type { StartedSession } from '../models/auth/session.js';
+import type { SessionEntity, StartedSession } from '../models/auth/session.js';
 import {
   ActorKind,
   type Actor,
@@ -85,20 +87,40 @@ type Admitted = {
   /** The row that authorized the request. Every write the flow makes carries its version, so a change to the actor
    *  after this read (a demotion, a disable) conflicts and the flow re-runs against the new world. */
   acting: UserEntity | null;
+  /** The browser session the request came through (null for the terminal): re-read on every attempt, so a retry after
+   *  it was revoked (a disable, a reset) is refused, and it is checked in the batch so it cannot end before commit. */
+  session: SessionEntity | null;
 };
 
 const admit = (deps: AuthDeps, actor: Actor, options: { stepUp: boolean }): ResultAsync<Admitted, AppError> =>
   safeTry(async function* () {
     const acting = actor.kind === ActorKind.enum.session ? await deps.users.findById(actor.principal.userId) : null;
     yield* orRefuse(authorizeActor(actor, acting));
-    if (actor.kind === ActorKind.enum.session && options.stepUp) {
-      yield* guard(await stepUpMatches(deps, acting, actor.password), authErrors.invalidCredentials);
-    }
-    return ok({ actingUserId: acting?.id ?? null, acting });
+    if (actor.kind !== ActorKind.enum.session) return ok({ actingUserId: null, acting: null, session: null });
+    const sessions = await deps.sessions.listByUser(actor.principal.userId);
+    const session = yield* okOr(
+      liveSessionOf(sessions, actor.principal.sessionId, deps.clock()),
+      authErrors.unauthenticated,
+    );
+    if (options.stepUp) yield* guard(await stepUpMatches(deps, acting, actor.password), authErrors.invalidCredentials);
+    return ok({ actingUserId: acting?.id ?? null, acting, session });
   });
 
-/** Asserts the admitted actor's row is unchanged, for a flow whose own writes do not already carry it. */
-const actorCheck = ({ acting }: Admitted): Persistable[] => (acting === null ? [] : [checkUser(acting)]);
+/** Asserts the admitted actor's session is still the one that was read. */
+const sessionCheck = ({ session }: Admitted): Persistable[] =>
+  session === null ? [] : [persistence.check({ entity: SESSION_ENTITY_TAG, id: session.id, version: session.version })];
+
+/** A plan's batch, led by the admitted session's check — and empty when the plan changes nothing. */
+const batchOf = (admitted: Admitted, plan: UserPlan): Persistable[] => {
+  const writes = persistOf(plan);
+  return writes.length === 0 ? [] : [...sessionCheck(admitted), ...writes];
+};
+
+/** Asserts the admitted actor's row and session are unchanged, for a flow whose own writes do not carry them. */
+const actorCheck = (admitted: Admitted): Persistable[] => [
+  ...(admitted.acting === null ? [] : [checkUser(admitted.acting)]),
+  ...sessionCheck(admitted),
+];
 
 /** The user an action is about. When it is the acting admin, the admitted row itself: one snapshot, one version. */
 const targetOf = ({ acting }: Admitted, deps: AuthDeps, userId: string): ResultAsync<UserEntity, AppError> =>
@@ -186,7 +208,7 @@ export const reissueInvite = (
     });
     const user = { ...summarizeUser(plan.after, [], now), inviteExpiresAt: invite.invite.expiresAt };
     const response = { user, code: invite.code, expiresAt: invite.invite.expiresAt, revoked: plan.revoked };
-    return ok({ persist: persistOf(plan), response });
+    return ok({ persist: batchOf(admitted, plan), response });
   });
 
 /** An invite is claimable only by the unclaimed, enabled user it was issued for. */
@@ -242,7 +264,10 @@ export const disableUser = (
       openInvites: await deps.invites.listUnclaimedByUser(target.id),
       now,
     });
-    return ok({ persist: persistOf(plan), response: reportOf(plan.after, plan.revoked, now) });
+    return ok({
+      persist: batchOf(admitted, plan),
+      response: reportOf(plan.after, plan.revoked, now),
+    });
   });
 
 /** Enabling restores the ability to log in and nothing else (it re-asks the password: it widens who can sign in). */
@@ -273,7 +298,10 @@ export const setRole = (
     const target = yield* targetOf(admitted, deps, input.userId);
     const now = deps.clock();
     const plan = yield* planRole({ ...admitted, target, users: await deps.users.listAll(), role: input.role, now });
-    return ok({ persist: persistOf(plan), response: reportOf(plan.after, plan.revoked, now) });
+    return ok({
+      persist: batchOf(admitted, plan),
+      response: reportOf(plan.after, plan.revoked, now),
+    });
   });
 
 /** The instance-wide longest stdio sign-in. It limits future approvals only; granted sign-ins keep their expiry. */

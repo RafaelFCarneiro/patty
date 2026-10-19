@@ -22,7 +22,7 @@ import {
   supersededGrants,
 } from '../logic/auth/grant.js';
 import { isActiveUser } from '../logic/auth/owner.js';
-import { isSessionExpired } from '../logic/auth/session.js';
+import { liveSessionOf } from '../logic/auth/session.js';
 import { withCredentialsChanged } from '../logic/auth/users.js';
 import { tokenDisplayPrefix, tokenPrincipal } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
@@ -129,11 +129,8 @@ export const approveGrant = (
     const row = await deps.users.findById(principal.userId);
     const approver = yield* okOr(isActiveUser(row) ? row : null, authErrors.unauthenticated);
     const now = deps.clock();
-    const held = (await deps.sessions.listByUser(approver.id)).find((session) => session.id === principal.sessionId);
-    const session = yield* okOr(
-      held !== undefined && !isSessionExpired(held, now) ? held : null,
-      authErrors.unauthenticated,
-    );
+    const sessions = await deps.sessions.listByUser(approver.id);
+    const session = yield* okOr(liveSessionOf(sessions, principal.sessionId, now), authErrors.unauthenticated);
     const grant = yield* answerableGrant(deps, input.userCode);
     yield* guard(durationAllowedFor(grant.channel, input.duration), authErrors.sessionDurationRefused);
     const duration = clampToCap(input.duration, await instanceCap(deps));

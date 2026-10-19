@@ -12,8 +12,6 @@ import { GrantStatus, SignInDuration } from '../../../src/models/auth/grant.js';
 import { UserRole } from '../../../src/models/auth/owner.js';
 import { TokenAccess } from '../../../src/models/auth/token.js';
 import { ActorKind, DEFAULT_SIGN_IN_CAP, INSTANCE_SETTINGS_ID, type Actor } from '../../../src/models/auth/users.js';
-import { PrincipalVia, type Principal } from '../../../src/models/auth/principal.js';
-import { ALL_SCOPES } from '../../../src/models/auth/scope.js';
 import {
   authDepsOf,
   bearer,
@@ -658,14 +656,9 @@ describe('a row that is only checked is not written or announced', () => {
 });
 
 describe('a revocation cannot miss a credential issued while it was reading', () => {
-  const adminActor = (userId: string) => ({
+  const adminActorOf = async (ctx: AppContext, userId: string) => ({
     kind: 'session' as const,
-    principal: {
-      userId,
-      role: UserRole.enum.admin,
-      scopes: [...ALL_SCOPES],
-      via: PrincipalVia.enum.session,
-    } satisfies Principal,
+    principal: await sessionPrincipalFor(ctx, userId, UserRole.enum.admin),
     password: PASSWORD,
   });
   const tokenInput = { name: 'late', access: 'write' as const, expiry: '30' as const, password: MEMBER_PASSWORD };
@@ -696,12 +689,14 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
     const { ctx, owner } = await withOwner();
     const ana = await addUser(ctx, owner, 'ana');
     const deps = authDepsOf(ctx);
+    const adminId = await userIdOf(ctx, 'rafael');
     return {
       ctx,
       owner,
       ana,
       deps,
-      adminId: await userIdOf(ctx, 'rafael'),
+      adminId,
+      admin: await adminActorOf(ctx, adminId),
       run: bindAuthRunEffects(ctx.authRunEffects),
     };
   };
@@ -720,30 +715,30 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
     )._unsafeUnwrap();
 
   it('a. a personal token minted during a disable is revoked, and stays dead after enabling', async () => {
-    const { ctx, ana, deps, adminId, run } = await world();
+    const { ctx, ana, deps, admin, run } = await world();
     let minted = '';
     const hook = issuingDuringFirstRead(deps.accessTokens.listByUser, async () => {
       minted = (await run(() => createToken(deps, ana.userId, tokenInput)))._unsafeUnwrap().token;
     });
 
-    const disabled = await run(() => disableUser(withTokenList(deps, hook.read), adminActor(adminId), ana.userId));
+    const disabled = await run(() => disableUser(withTokenList(deps, hook.read), admin, ana.userId));
 
     expect(disabled.isOk()).toBe(true);
     expect(hook.calls()).toBe(2);
     expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
     expect(await status(ctx, minted)).toBe(401);
-    expect((await run(() => enableUser(deps, adminActor(adminId), ana.userId))).isOk()).toBe(true);
+    expect((await run(() => enableUser(deps, admin, ana.userId))).isOk()).toBe(true);
     expect(await status(ctx, minted)).toBe(401);
   });
 
   it('b. a personal token minted during the reissue of a claimed user is revoked', async () => {
-    const { ctx, ana, deps, adminId, run } = await world();
+    const { ctx, ana, deps, admin, run } = await world();
     let minted = '';
     const hook = issuingDuringFirstRead(deps.accessTokens.listByUser, async () => {
       minted = (await run(() => createToken(deps, ana.userId, tokenInput)))._unsafeUnwrap().token;
     });
 
-    const reissued = await run(() => reissueInvite(withTokenList(deps, hook.read), adminActor(adminId), ana.userId));
+    const reissued = await run(() => reissueInvite(withTokenList(deps, hook.read), admin, ana.userId));
 
     expect(reissued.isOk()).toBe(true);
     expect(hook.calls()).toBe(2);
@@ -769,7 +764,7 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
   });
 
   it('d. a stdio sign-in redeemed during a disable, between its token and grant reads, is revoked', async () => {
-    const { ctx, ana, deps, adminId, run } = await world();
+    const { ctx, ana, deps, admin, run } = await world();
     const started = await startedGrant(deps, run);
     const approval = approvalFor(started.userCode);
     const anaSession = await sessionPrincipalFor(ctx, ana.userId);
@@ -780,17 +775,17 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
       });
     });
 
-    const disabled = await run(() => disableUser(withApprovedGrants(deps, hook.read), adminActor(adminId), ana.userId));
+    const disabled = await run(() => disableUser(withApprovedGrants(deps, hook.read), admin, ana.userId));
 
     expect(disabled.isOk()).toBe(true);
     expect(hook.calls()).toBe(2);
     expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
-    expect((await run(() => enableUser(deps, adminActor(adminId), ana.userId))).isOk()).toBe(true);
+    expect((await run(() => enableUser(deps, admin, ana.userId))).isOk()).toBe(true);
     expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
   });
 
   it('e. a sign-in request approved during a disable is expired, so enabling later mints nothing', async () => {
-    const { ctx, ana, deps, adminId, run } = await world();
+    const { ctx, ana, deps, admin, run } = await world();
     const started = await startedGrant(deps, run);
     const approval = approvalFor(started.userCode);
     const anaSession = await sessionPrincipalFor(ctx, ana.userId);
@@ -798,39 +793,35 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
       (await run(() => approveGrant(deps, anaSession, approval)))._unsafeUnwrap();
     });
 
-    const disabled = await run(() => disableUser(withApprovedGrants(deps, hook.read), adminActor(adminId), ana.userId));
+    const disabled = await run(() => disableUser(withApprovedGrants(deps, hook.read), admin, ana.userId));
 
     expect(disabled.isOk()).toBe(true);
     expect(hook.calls()).toBe(2);
     expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: GrantStatus.enum.expired }]);
-    expect((await run(() => enableUser(deps, adminActor(adminId), ana.userId))).isOk()).toBe(true);
+    expect((await run(() => enableUser(deps, admin, ana.userId))).isOk()).toBe(true);
     const redeemed = (await run(() => redeemGrant(deps, started.deviceCode)))._unsafeUnwrap();
     expect(redeemed.kind).not.toBe('signed_in');
     expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
   });
 
   it('f. an invite issued to an unclaimed user during a disable (after pruning) is removed', async () => {
-    const { ctx, owner, deps, adminId, run } = await world();
+    const { ctx, owner, deps, admin, run } = await world();
     await mustInvite(ctx, owner, { username: 'bob' });
     const bobId = await userIdOf(ctx, 'bob');
     await ctx.db.run(sql`DELETE FROM invites`);
     let code = '';
     const hook = issuingDuringFirstRead(deps.invites.listUnclaimedByUser, async () => {
-      code = (await run(() => reissueInvite(deps, adminActor(adminId), bobId)))._unsafeUnwrap().code;
+      code = (await run(() => reissueInvite(deps, admin, bobId)))._unsafeUnwrap().code;
     });
 
     const disabled = await run(() =>
-      disableUser(
-        { ...deps, invites: { ...deps.invites, listUnclaimedByUser: hook.read } },
-        adminActor(adminId),
-        bobId,
-      ),
+      disableUser({ ...deps, invites: { ...deps.invites, listUnclaimedByUser: hook.read } }, admin, bobId),
     );
 
     expect(disabled.isOk()).toBe(true);
     expect(hook.calls()).toBe(2);
     expect(await inviteRows(ctx)).toEqual([]);
-    expect((await run(() => enableUser(deps, adminActor(adminId), bobId))).isOk()).toBe(true);
+    expect((await run(() => enableUser(deps, admin, bobId))).isOk()).toBe(true);
     expect((await claim(ctx, code)).statusCode).toBe(403);
   });
 });
@@ -922,12 +913,7 @@ describe('a request authorized before a change to its author cannot outlive that
     const run = bindAuthRunEffects(ctx.authRunEffects);
     const actor: Actor = {
       kind: ActorKind.enum.session,
-      principal: {
-        userId: boss.userId,
-        role: UserRole.enum.admin,
-        scopes: [...ALL_SCOPES],
-        via: PrincipalVia.enum.session,
-      },
+      principal: await sessionPrincipalFor(ctx, boss.userId, UserRole.enum.admin),
       password: MEMBER_PASSWORD,
     };
     const input = { username: 'late-guest', role: UserRole.enum.member };
@@ -943,6 +929,36 @@ describe('a request authorized before a change to its author cannot outlive that
 
     expect(invited.isErr()).toBe(true);
     expect(await userRow(ctx, 'late-guest')).toBeUndefined();
+  });
+
+  it('refuses an invitation retried through an admin session that a disable and re-enable ended', async () => {
+    const { ctx, owner } = await withOwner();
+    const boss = await addUser(ctx, owner, 'boss', 'admin');
+    const deps = authDepsOf(ctx);
+    const run = bindAuthRunEffects(ctx.authRunEffects);
+    const actor: Actor = {
+      kind: ActorKind.enum.session,
+      principal: await sessionPrincipalFor(ctx, boss.userId, UserRole.enum.admin),
+      password: MEMBER_PASSWORD,
+    };
+    const input = { username: 'late-guest', role: UserRole.enum.member };
+
+    const invitesBefore = await inviteRows(ctx);
+    const stale = (await inviteUser(deps, actor, input))._unsafeUnwrap();
+    await post(ctx, owner, `${USERS_URL}/${boss.userId}/disable`, { password: PASSWORD });
+    await post(ctx, owner, `${USERS_URL}/${boss.userId}/enable`, { password: PASSWORD });
+    // Same user, same password, active again — but the session the request came through is gone.
+    expect(await ctx.db.all(sql`SELECT id FROM sessions WHERE user_id = ${boss.userId}`)).toEqual([]);
+    let first = true;
+    const invited = await run(() => {
+      if (!first) return inviteUser(deps, actor, input);
+      first = false;
+      return okAsync(stale);
+    });
+
+    expect(invited._unsafeUnwrapErr()).toEqual(authErrors.unauthenticated);
+    expect(await userRow(ctx, 'late-guest')).toBeUndefined();
+    expect(await inviteRows(ctx)).toEqual(invitesBefore);
   });
 });
 
@@ -990,12 +1006,6 @@ describe('a redemption cannot outlive a cap lowered while it was in flight', () 
 });
 
 describe('the last active admin survives concurrent changes (version conflict)', () => {
-  const principalOf = (userId: string): Principal => ({
-    userId,
-    role: UserRole.enum.admin,
-    scopes: [...ALL_SCOPES],
-    via: PrincipalVia.enum.session,
-  });
   const adminRows = (ctx: AppContext) =>
     ctx.db.all<{ username: string }>(
       sql`SELECT username FROM users WHERE role = 'admin' AND disabled_at IS NULL AND password_hash IS NOT NULL`,
@@ -1008,9 +1018,13 @@ describe('the last active admin survives concurrent changes (version conflict)',
     const run = bindAuthRunEffects(ctx.authRunEffects);
     const rootId = await userIdOf(ctx, 'rafael');
     const bossId = await userIdOf(ctx, 'boss');
+    const principals = new Map([
+      [rootId, await sessionPrincipalFor(ctx, rootId, UserRole.enum.admin)],
+      [bossId, await sessionPrincipalFor(ctx, bossId, UserRole.enum.admin)],
+    ]);
     const actor = (userId: string) => ({
       kind: 'session' as const,
-      principal: principalOf(userId),
+      principal: principals.get(userId)!,
       password: PASSWORD,
     });
 

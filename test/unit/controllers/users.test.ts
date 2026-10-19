@@ -80,6 +80,9 @@ const session = (userId: string, id = `s-${userId}`): SessionEntity => ({
   version: 0,
 });
 
+const ACTOR_SESSION_ID = 'actor-session';
+const actorSession = (userId: string): SessionEntity => session(userId, ACTOR_SESSION_ID);
+
 const token = (userId: string, overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity => ({
   id: `t-${userId}`,
   userId,
@@ -137,7 +140,11 @@ const depsFor = ({
     sessions: {
       findByTokenHash: async () => null,
       listExpired: async () => [],
-      listByUser: async (userId) => sessions.filter((s) => s.userId === userId),
+      // Every admin also holds the browser session the sessionActor below acts through.
+      listByUser: async (userId) => [
+        ...sessions.filter((s) => s.userId === userId),
+        ...(users.some((u) => u.id === userId && u.role === UserRole.enum.admin) ? [actorSession(userId)] : []),
+      ],
     },
     accessTokens: {
       findByTokenHash: async () => null,
@@ -166,10 +173,16 @@ const depsFor = ({
   };
 };
 
-const outcomeOf = async <T>(result: ResultAsync<FlowOutcome<T>, AppError>) => {
+const isSessionCheck = (p: Persistable) => p.op === PersistOp.enum.check && p.entity === SESSION_ENTITY_TAG;
+/** The batch as the flow reasons about it: the admitted session's check is asserted once, in its own test below. */
+const outcomeWithSessionCheck = async <T>(result: ResultAsync<FlowOutcome<T>, AppError>) => {
   const { persist, response } = (await result)._unsafeUnwrap();
   if (typeof response === 'function') throw new Error('expected a plain response');
   return { persist, response };
+};
+const outcomeOf = async <T>(result: ResultAsync<FlowOutcome<T>, AppError>) => {
+  const { persist, response } = await outcomeWithSessionCheck(result);
+  return { persist: persist.filter((p) => !isSessionCheck(p)), response };
 };
 const errorOf = async <T>(result: ResultAsync<T, AppError>): Promise<AppError> => (await result)._unsafeUnwrapErr();
 const modelOf = (persistable: Persistable | undefined): unknown =>
@@ -177,14 +190,22 @@ const modelOf = (persistable: Persistable | undefined): unknown =>
 
 const CHECK_USER = `${PersistOp.enum.check}:${USER_ENTITY_TAG}`;
 const checkedIds = (persist: Persistable[]) =>
-  persist.filter((p) => p.op === PersistOp.enum.check).map((p) => ('id' in p ? p.id : undefined));
+  persist
+    .filter((p) => p.op === PersistOp.enum.check && p.entity === USER_ENTITY_TAG)
+    .map((p) => ('id' in p ? p.id : undefined));
 const opsOf = (persist: Persistable[]) => persist.map(({ op, entity }) => `${op}:${entity}`);
 const countOf = (persist: Persistable[], op: string, entity: string) =>
   persist.filter((p) => p.op === op && p.entity === entity).length;
 
 const sessionActor = (userId: string, password: string | null = PASSWORD): Actor => ({
   kind: 'session',
-  principal: { userId, role: UserRole.enum.admin, scopes: [...ALL_SCOPES], via: PrincipalVia.enum.session },
+  principal: {
+    userId,
+    role: UserRole.enum.admin,
+    scopes: [...ALL_SCOPES],
+    via: PrincipalVia.enum.session,
+    sessionId: ACTOR_SESSION_ID,
+  },
   password: password ?? undefined,
 });
 const TERMINAL: Actor = { kind: 'terminal' };
@@ -218,6 +239,31 @@ describe('who may run a user-management flow', () => {
       expect(await errorOf(flow(depsFor(world), actor))).toEqual(authErrors.sessionRequired);
     }
   });
+
+  it.each(everyFlow)(
+    '%s refuses an admin whose browser session is gone, however the rest still holds',
+    async (_name, flow) => {
+      const actor = sessionActor('root');
+      const revoked: Actor =
+        actor.kind === 'session' ? { ...actor, principal: { ...actor.principal, sessionId: 'revoked' } } : actor;
+      expect(await errorOf(flow(depsFor(world), revoked))).toEqual(authErrors.unauthenticated);
+    },
+  );
+
+  it.each(everyFlow.filter(([name]) => name !== 'listUsers'))(
+    '%s asserts the admitted session in its batch (and only the session, once)',
+    async (_name, flow) => {
+      const result = await flow(depsFor({ users: [ROOT, ANA, admin('two')] }), sessionActor('root'));
+      const outcome = (result as { _unsafeUnwrap: () => FlowOutcome<unknown> })._unsafeUnwrap();
+      const checks = outcome.persist.filter(isSessionCheck);
+      // A flow that changes nothing (already so) writes nothing and needs no check.
+      if (outcome.persist.length > 0) {
+        expect(checks).toEqual([
+          { op: PersistOp.enum.check, entity: SESSION_ENTITY_TAG, id: ACTOR_SESSION_ID, version: 0 },
+        ]);
+      }
+    },
+  );
 
   it.each(everyFlow)('%s refuses an admin who has since been disabled', async (_name, flow) => {
     const deps = depsFor({ users: [admin('root', { disabledAt: NOW.toISOString() }), ANA] });

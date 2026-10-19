@@ -44,6 +44,13 @@ export const sessionPrincipal = (user: UserEntity, session: SessionEntity): Prin
   via: PrincipalVia.enum.session,
 });
 
+/** The unexpired session with this id among a user's sessions — the one a request claims to come through. */
+export const liveSessionOf = (
+  sessions: readonly SessionEntity[],
+  sessionId: string | undefined,
+  now: Date,
+): SessionEntity | null => sessions.find((s) => s.id === sessionId && !isSessionExpired(s, now)) ?? null;
+
 export const evaluateSession = (session: SessionEntity, user: UserEntity | null, now: Date): SessionVerdict =>
   isSessionExpired(session, now) || user === null || !hasCredentials(user) || user.disabledAt !== null
     ? { kind: 'invalid' }
