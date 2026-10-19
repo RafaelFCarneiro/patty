@@ -19,6 +19,7 @@ import {
   normalizeInviteCode,
   spentInvite,
   summarizeUser,
+  checkUser,
 } from '../logic/auth/users.js';
 import * as persistence from '../logic/persistence.js';
 import {
@@ -32,7 +33,6 @@ import { authErrors } from '../models/auth/errors.js';
 import type { UserEntity } from '../models/auth/owner.js';
 import type { StartedSession } from '../models/auth/session.js';
 import {
-  INSTANCE_SETTINGS_ID,
   ActorKind,
   type Actor,
   type ClaimInviteInput,
@@ -60,8 +60,9 @@ const updateUser = (user: UserEntity): Persistable => persistence.update({ entit
 const removeInvite = (invite: InviteEntity): Persistable =>
   persistence.remove({ entity: INVITE_ENTITY_TAG, id: invite.id, version: invite.version });
 
-/** A plan as the batch the engine applies: invites out then in (the one-open-invite index), then users, credentials. */
+/** A plan as the batch the engine applies: checks first, then invites out and in (one-open-invite index), the rest. */
 const persistOf = (plan: UserPlan): Persistable[] => [
+  ...R.map(plan.checks, checkUser),
   ...R.map(plan.removedInvites, removeInvite),
   ...R.map(plan.newInvites, (invite) => persistence.insert({ entity: INVITE_ENTITY_TAG, model: invite })),
   ...R.map(plan.userWrites, updateUser),
@@ -96,8 +97,8 @@ const admit = (deps: AuthDeps, actor: Actor, options: { stepUp: boolean }): Resu
     return ok({ actingUserId: acting?.id ?? null, acting });
   });
 
-/** The admitted actor's row, unchanged, for a flow whose own writes do not already carry it. */
-const actorWitness = ({ acting }: Admitted): Persistable[] => (acting === null ? [] : [updateUser(acting)]);
+/** Asserts the admitted actor's row is unchanged, for a flow whose own writes do not already carry it. */
+const actorCheck = ({ acting }: Admitted): Persistable[] => (acting === null ? [] : [checkUser(acting)]);
 
 /** The user an action is about. When it is the acting admin, the admitted row itself: one snapshot, one version. */
 const targetOf = ({ acting }: Admitted, deps: AuthDeps, userId: string): ResultAsync<UserEntity, AppError> =>
@@ -157,7 +158,7 @@ export const inviteUser = (
       inviteExpiresAt: invite.invite.expiresAt,
     };
     return ok({
-      persist: [persistence.insert({ entity: USER_ENTITY_TAG, model: user }), invite.insert, ...actorWitness(admitted)],
+      persist: [...actorCheck(admitted), persistence.insert({ entity: USER_ENTITY_TAG, model: user }), invite.insert],
       response: { user: summary, code: invite.code, expiresAt: invite.invite.expiresAt, revoked: NO_REVOCATIONS },
     });
   });
@@ -258,7 +259,7 @@ export const enableUser = (
     if (target.disabledAt === null) return ok({ persist: [], response: reportOf(target, NO_REVOCATIONS, now) });
     const enabled = enabledUser(target);
     return ok({
-      persist: [updateUser(enabled), ...actorWitness(admitted)],
+      persist: [...actorCheck(admitted), updateUser(enabled)],
       response: reportOf(enabled, NO_REVOCATIONS, now),
     });
   });
@@ -286,11 +287,11 @@ export const setSignInCap = (
     const admitted = yield* admit(deps, actor, { stepUp: true });
     const current = await deps.instanceSettings.get();
     if (signInCapOf(current) === input.maxSignInDuration) return ok({ persist: [], response: input.maxSignInDuration });
-    const model = { id: INSTANCE_SETTINGS_ID, maxSignInDuration: input.maxSignInDuration };
-    const write = current
-      ? persistence.update({ entity: INSTANCE_SETTINGS_ENTITY_TAG, model: { ...model, version: current.version } })
-      : persistence.insert({ entity: INSTANCE_SETTINGS_ENTITY_TAG, model });
-    return ok({ persist: [write, ...actorWitness(admitted)], response: input.maxSignInDuration });
+    const write = persistence.update({
+      entity: INSTANCE_SETTINGS_ENTITY_TAG,
+      model: { ...current, maxSignInDuration: input.maxSignInDuration },
+    });
+    return ok({ persist: [...actorCheck(admitted), write], response: input.maxSignInDuration });
   });
 
 /** Startup housekeeping, like sessions and grants: unclaimed invites past their window are deleted. */

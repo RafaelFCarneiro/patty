@@ -17,6 +17,7 @@ export const persistableToDb = (p: Persistable): Persistable => {
     case PersistOp.enum.update:
       return p;
     case PersistOp.enum.delete:
+    case PersistOp.enum.check:
       return p;
     default: {
       const _exhaustive: never = p;

@@ -18,8 +18,11 @@ import { disabledUser, guardAdminChange, isActiveAdmin, remainingAdmins, without
  * assembling the batch is plain concatenation.
  */
 export type UserPlan = {
-  /** User rows to write, the changed user first, then the admins left standing (re-written unchanged as witnesses). */
+  /** User rows that change. */
   userWrites: UserEntity[];
+  /** User rows the decision read and did not change (the acting admin, the admins left standing, an unchanged target):
+   *  asserted still at their version, so a concurrent change conflicts and the flow re-runs. */
+  checks: UserEntity[];
   sessions: SessionEntity[];
   /** Live tokens, already revoked. */
   tokens: AccessTokenEntity[];
@@ -49,6 +52,7 @@ const NO_REVOCATIONS: RevokedCredentials = { sessionsEnded: 0, tokensRevoked: 0 
 
 const unchanged = (target: UserEntity): UserPlan => ({
   userWrites: [],
+  checks: [],
   sessions: [],
   tokens: [],
   expiredGrants: [],
@@ -59,19 +63,28 @@ const unchanged = (target: UserEntity): UserPlan => ({
 });
 
 /**
- * Everyone, with the acting admin as admitted: the decision and the witness writes are built from the row that
+ * Everyone, with the acting admin as admitted: the decision and the checks are built from the row that
  * authorized the request, so a change made to the actor after that (a demotion) conflicts on its version.
  */
 const rosterOf = (facts: Facts): UserEntity[] =>
   R.map(facts.users, (user) => (facts.acting !== null && user.id === facts.acting.id ? facts.acting : user));
 
-/** The admins an action leaves standing — written unchanged, so their `version` is part of the decision. */
-const witnesses = (users: readonly UserEntity[], target: UserEntity): UserEntity[] =>
+/** The admins an action leaves standing: part of the decision, so their `version` is asserted. */
+const standing = (users: readonly UserEntity[], target: UserEntity): UserEntity[] =>
   isActiveAdmin(target) ? remainingAdmins(users, target) : [];
 
-/** The user writes of an action, plus the admitted actor's row unchanged unless it is already among them. */
-const writesWithActor = (writes: UserEntity[], acting: UserEntity | null): UserEntity[] =>
-  acting === null || writes.some((user) => user.id === acting.id) ? writes : [...writes, acting];
+/** The rows an action reads and does not change: the target, the admins left standing and the admitted actor. */
+const assertedRows = (facts: Facts, roster: readonly UserEntity[]): UserEntity[] =>
+  R.pipe(
+    [facts.target, ...standing(roster, facts.target), ...(facts.acting === null ? [] : [facts.acting])],
+    R.uniqueBy((user) => user.id),
+  );
+
+/** The user writes and checks of an action; a row that is written is not also checked. */
+const rowsOf = (facts: Facts, roster: readonly UserEntity[], writes: UserEntity[]) => ({
+  userWrites: writes,
+  checks: R.differenceWith(assertedRows(facts, roster), writes, (user, written) => user.id === written.id),
+});
 
 /** Disabling ends every credential and every pending invite in the same plan that disables. Idempotent. */
 export const planDisable = (
@@ -84,7 +97,7 @@ export const planDisable = (
   const disabled = disabledUser(facts.target, facts.now);
   const ended = endedCredentials(facts.held, facts.now);
   return ok({
-    userWrites: writesWithActor([disabled, ...witnesses(roster, facts.target)], facts.acting),
+    ...rowsOf(facts, roster, [disabled]),
     sessions: ended.sessions,
     tokens: ended.tokens,
     expiredGrants: R.map(facts.approvedGrants, expiredGrant),
@@ -119,9 +132,9 @@ export const planReissue = (
     ? endedCredentials(facts.held, facts.now)
     : { sessions: [], tokens: [], revoked: NO_REVOCATIONS };
   return ok({
-    // The target row is always written (unchanged for an unclaimed user), so a claim or reissue racing this one
-    // conflicts on its version instead of leaving a code that can never work.
-    userWrites: writesWithActor([after, ...witnesses(roster, facts.target)], facts.acting),
+    // An unclaimed target is checked, not written, so a claim or reissue racing this one conflicts on its version
+    // instead of leaving a code that can never work.
+    ...rowsOf(facts, roster, claimed ? [after] : []),
     sessions: ended.sessions,
     tokens: ended.tokens,
     expiredGrants: R.map(facts.approvedGrants, expiredGrant),
@@ -142,6 +155,6 @@ export const planRole = (facts: Facts & { role: UserRole }): Result<UserPlan, Ap
   const changed = withRole(facts.target, facts.role);
   return ok({
     ...unchanged(changed),
-    userWrites: writesWithActor([changed, ...witnesses(roster, facts.target)], facts.acting),
+    ...rowsOf(facts, roster, [changed]),
   });
 };

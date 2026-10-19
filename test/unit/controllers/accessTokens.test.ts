@@ -88,9 +88,9 @@ describe('createToken', () => {
     const { persist, response } = await outcomeOf(createToken(depsFor(), OWNER_USER_ID, input));
 
     expect(response.token).toBe(PLAINTEXT);
-    // The user's own row first, unchanged: a disable racing this mint conflicts on its version and retries.
+    // The user's own row first, asserted unchanged: a disable racing this mint conflicts on its version and retries.
     expect(persist).toHaveLength(2);
-    expect(persist[0]).toMatchObject({ op: PersistOp.enum.update, entity: USER_ENTITY_TAG });
+    expect(persist[0]).toMatchObject({ op: PersistOp.enum.check, entity: USER_ENTITY_TAG, id: OWNER_USER_ID });
     expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: ACCESS_TOKEN_ENTITY_TAG });
     const stored = (persist[1] as { model: Record<string, unknown> }).model;
     expect(stored).toMatchObject({

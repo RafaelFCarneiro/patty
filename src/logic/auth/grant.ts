@@ -16,7 +16,7 @@ import {
 import { Scope, WRITE_SCOPE } from '../../models/auth/scope.js';
 import { SESSION_ONLY_LABEL, UNKNOWN_CLIENT_NAME } from '../../models/auth/signIn.js';
 import { AccessTokenKind, TOKEN_NAME_MAX_LENGTH, TokenAccess } from '../../models/auth/token.js';
-import { DEFAULT_SIGN_IN_CAP, type InstanceSettingsEntity, type SignInCap } from '../../models/auth/users.js';
+import { type InstanceSettingsEntity, type SignInCap } from '../../models/auth/users.js';
 import { formatSetupCode, normalizeSetupCode } from './owner.js';
 import { millis, toIso } from './time.js';
 
@@ -32,9 +32,8 @@ export const signInExpiry = (approvedAt: string, duration: SignInDuration): stri
 /** `session` lives in the stdio process's memory only; every other duration is saved to the keychain. */
 export const persistsToKeychain = (duration: SignInDuration): boolean => duration !== SignInDuration.enum.session;
 
-/** The longest sign-in this instance allows: the admin's setting, else today's maximum (30 days). */
-export const signInCapOf = (settings: InstanceSettingsEntity | null): SignInCap =>
-  settings?.maxSignInDuration ?? DEFAULT_SIGN_IN_CAP;
+/** The longest sign-in this instance allows: the admin's setting (30 days until they change it). */
+export const signInCapOf = (settings: InstanceSettingsEntity): SignInCap => settings.maxSignInDuration;
 
 export const withinCap = (duration: SignInDuration, cap: SignInCap): boolean =>
   SIGN_IN_DURATION_MS[duration] <= SIGN_IN_DURATION_MS[cap];

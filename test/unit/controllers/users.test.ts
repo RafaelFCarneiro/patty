@@ -34,6 +34,8 @@ import {
   type Actor,
   type InstanceSettingsEntity,
   type InviteEntity,
+  DEFAULT_SIGN_IN_CAP,
+  INSTANCE_SETTINGS_ID,
 } from '../../../src/models/auth/users.js';
 
 const NOW = new Date('2026-10-14T12:00:00.000Z');
@@ -112,7 +114,7 @@ type World = {
   sessions?: SessionEntity[];
   tokens?: AccessTokenEntity[];
   invites?: InviteEntity[];
-  settings?: InstanceSettingsEntity | null;
+  settings?: InstanceSettingsEntity;
   now?: Date;
 };
 
@@ -121,7 +123,7 @@ const depsFor = ({
   sessions = [],
   tokens = [],
   invites = [],
-  settings = null,
+  settings = { id: INSTANCE_SETTINGS_ID, maxSignInDuration: DEFAULT_SIGN_IN_CAP, version: 0 },
   now = NOW,
 }: World = {}): AuthDeps => {
   let ids = 0;
@@ -172,6 +174,9 @@ const errorOf = async <T>(result: ResultAsync<T, AppError>): Promise<AppError> =
 const modelOf = (persistable: Persistable | undefined): unknown =>
   persistable !== undefined && 'model' in persistable ? persistable.model : undefined;
 
+const CHECK_USER = `${PersistOp.enum.check}:${USER_ENTITY_TAG}`;
+const checkedIds = (persist: Persistable[]) =>
+  persist.filter((p) => p.op === PersistOp.enum.check).map((p) => ('id' in p ? p.id : undefined));
 const opsOf = (persist: Persistable[]) => persist.map(({ op, entity }) => `${op}:${entity}`);
 const countOf = (persist: Persistable[], op: string, entity: string) =>
   persist.filter((p) => p.op === op && p.entity === entity).length;
@@ -272,18 +277,18 @@ describe('inviteUser', () => {
       inviteUser(depsFor({ users: [ROOT] }), sessionActor('root'), { username: 'bob', role: UserRole.enum.member }),
     );
     expect(opsOf(persist)).toEqual([
+      // The acting admin's row, asserted: demoted meanwhile, this invite conflicts and is refused.
+      CHECK_USER,
       `${PersistOp.enum.insert}:${USER_ENTITY_TAG}`,
       `${PersistOp.enum.insert}:${INVITE_ENTITY_TAG}`,
-      // The acting admin's own row, unchanged: demoted meanwhile, this invite conflicts and is refused.
-      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
     ]);
-    expect(modelOf(persist[0])).toMatchObject({
+    expect(modelOf(persist[1])).toMatchObject({
       username: 'bob',
       passwordHash: null,
       role: 'member',
       disabledAt: null,
     });
-    expect(modelOf(persist[1])).toMatchObject({
+    expect(modelOf(persist[2])).toMatchObject({
       userId: 'id-1',
       createdBy: 'root',
       usedAt: null,
@@ -301,13 +306,15 @@ describe('inviteUser', () => {
     const stored = JSON.stringify(persist);
     expect(stored).toContain('sha(JKMNPQRSTVWXABCDEFGH)');
     expect(stored).not.toContain('JKMN-PQRS');
-    expect(modelOf(persist[0])).toMatchObject({ role: 'admin' });
+    expect(modelOf(persist[1])).toMatchObject({ role: 'admin' });
   });
 
   it('attributes a terminal invite to nobody', async () => {
     const { persist } = await outcomeOf(
       inviteUser(depsFor({ users: [ROOT] }), TERMINAL, { username: 'bob', role: UserRole.enum.member }),
     );
+    // The terminal has no row to assert, so the batch starts with the inserts.
+    expect(opsOf(persist)).not.toContain(CHECK_USER);
     expect(modelOf(persist[1])).toMatchObject({ createdBy: null });
   });
 
@@ -340,12 +347,13 @@ describe('reissueInvite', () => {
       reissueInvite(depsFor({ users: [ROOT, waiting], invites: [invite('bob')] }), sessionActor('root'), 'bob'),
     );
     expect(opsOf(persist)).toEqual([
+      // The target and the acting admin, asserted: a claim racing this reissue conflicts on the target's version.
+      CHECK_USER,
+      CHECK_USER,
       `${PersistOp.enum.delete}:${INVITE_ENTITY_TAG}`,
       `${PersistOp.enum.insert}:${INVITE_ENTITY_TAG}`,
-      // The target row, unchanged: a claim racing this reissue conflicts on its version. Then the acting admin's.
-      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
-      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
     ]);
+    expect(checkedIds(persist)).toEqual(['bob', 'root']);
     expect(response.revoked).toEqual({ sessionsEnded: 0, tokensRevoked: 0 });
     expect(response.code).toBe('JKMN-PQRS-TVWX-ABCD-EFGH');
   });
@@ -375,7 +383,9 @@ describe('reissueInvite', () => {
       NOW.toISOString(),
       NOW.toISOString(),
     ]);
-    const cleared = persist.find((p) => p.entity === USER_ENTITY_TAG && (modelOf(p) as UserEntity).id === 'ana');
+    const cleared = persist.find(
+      (p) => p.op === PersistOp.enum.update && p.entity === USER_ENTITY_TAG && (modelOf(p) as UserEntity).id === 'ana',
+    );
     expect((modelOf(cleared) as UserEntity).passwordHash).toBeNull();
     expect(response.user.status).toBe('invited');
   });
@@ -409,11 +419,12 @@ describe('reissueInvite', () => {
     expect(await errorOf(reissueInvite(deps, TERMINAL, 'root'))).toEqual(authErrors.lastAdmin);
   });
 
-  it('lets an admin reset another admin, re-writing the admins left standing (so races conflict)', async () => {
+  it('lets an admin reset another admin, checking the admins left standing (so races conflict)', async () => {
     const two = admin('two');
     const { persist } = await outcomeOf(reissueInvite(depsFor({ users: [ROOT, two] }), sessionActor('root'), 'two'));
-    const touched = persist.filter((p) => p.entity === USER_ENTITY_TAG).map((p) => (modelOf(p) as UserEntity).id);
-    expect(touched).toEqual(['two', 'root']);
+    expect(checkedIds(persist)).toEqual(['root']);
+    const written = persist.filter((p) => p.op === PersistOp.enum.update && p.entity === USER_ENTITY_TAG);
+    expect(written.map((p) => (modelOf(p) as UserEntity).id)).toEqual(['two']);
   });
 });
 
@@ -478,13 +489,13 @@ describe('disableUser', () => {
     const { persist, response } = await outcomeOf(disableUser(depsFor(world), sessionActor('root'), 'ana'));
 
     expect(opsOf(persist)).toEqual([
-      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
+      CHECK_USER,
       `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
       `${PersistOp.enum.delete}:${SESSION_ENTITY_TAG}`,
       `${PersistOp.enum.update}:${ACCESS_TOKEN_ENTITY_TAG}`,
       `${PersistOp.enum.update}:${ACCESS_TOKEN_ENTITY_TAG}`,
     ]);
-    expect(modelOf(persist[0])).toMatchObject({ id: 'ana', disabledAt: NOW.toISOString() });
+    expect(modelOf(persist[1])).toMatchObject({ id: 'ana', disabledAt: NOW.toISOString() });
     expect(response.revoked).toEqual({ sessionsEnded: 1, tokensRevoked: 2 });
     expect(response.user.status).toBe('disabled');
   });
@@ -512,13 +523,16 @@ describe('disableUser', () => {
     expect(await errorOf(disableUser(deps, TERMINAL, 'root'))).toEqual(authErrors.lastAdmin);
   });
 
-  it('re-writes the remaining admins so two admins disabling each other cannot both commit', async () => {
+  it('checks the remaining admins so two admins disabling each other cannot both commit', async () => {
     const two = admin('two');
     const { persist } = await outcomeOf(disableUser(depsFor({ users: [ROOT, two] }), sessionActor('root'), 'two'));
-    const users = persist.filter((p) => p.entity === USER_ENTITY_TAG).map((p) => (modelOf(p) as UserEntity).id);
-    expect(users).toEqual(['two', 'root']);
-    const witness = persist.find((p) => (modelOf(p) as UserEntity | undefined)?.id === 'root');
-    expect(modelOf(witness)).toEqual(ROOT);
+    expect(persist[0]).toEqual({
+      op: PersistOp.enum.check,
+      entity: USER_ENTITY_TAG,
+      id: 'root',
+      version: ROOT.version,
+    });
+    expect(persist.filter((p) => p.op === PersistOp.enum.update && p.entity === USER_ENTITY_TAG)).toHaveLength(1);
   });
 
   it('removes a pending invite in the same batch, so enabling later revives nothing', async () => {
@@ -529,11 +543,11 @@ describe('disableUser', () => {
     expect(countOf(persist, PersistOp.enum.delete, INVITE_ENTITY_TAG)).toBe(1);
   });
 
-  it('adds no admin witnesses when the disabled user is not an admin, only the acting admin’s own row', async () => {
+  it('checks no other admin when the disabled user is not an admin, only the acting admin’s own row', async () => {
     const { persist } = await outcomeOf(disableUser(depsFor({ users: [ROOT, ANA] }), sessionActor('root'), 'ana'));
-    expect(persist.filter((p) => p.entity === USER_ENTITY_TAG).map((p) => modelOf(p))).toEqual([
+    expect(checkedIds(persist)).toEqual(['root']);
+    expect(persist.filter((p) => p.op === PersistOp.enum.update && p.entity === USER_ENTITY_TAG).map(modelOf)).toEqual([
       { ...ANA, disabledAt: NOW.toISOString() },
-      ROOT,
     ]);
   });
 });
@@ -544,12 +558,9 @@ describe('enableUser', () => {
   it('restores the ability to log in and writes nothing else: no credential is revived', async () => {
     const world = { users: [ROOT, disabled], tokens: [token('ana', { revokedAt: '2026-10-01T00:00:00.000Z' })] };
     const { persist, response } = await outcomeOf(enableUser(depsFor(world), sessionActor('root'), 'ana'));
-    expect(opsOf(persist)).toEqual([
-      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
-      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
-    ]);
-    expect(modelOf(persist[0])).toMatchObject({ id: 'ana', disabledAt: null });
-    expect(modelOf(persist[1])).toEqual(ROOT);
+    expect(opsOf(persist)).toEqual([CHECK_USER, `${PersistOp.enum.update}:${USER_ENTITY_TAG}`]);
+    expect(checkedIds(persist)).toEqual(['root']);
+    expect(modelOf(persist[1])).toMatchObject({ id: 'ana', disabledAt: null });
     expect(response.revoked).toEqual({ sessionsEnded: 0, tokensRevoked: 0 });
   });
 
@@ -560,20 +571,21 @@ describe('enableUser', () => {
 });
 
 describe('setRole', () => {
-  it('promotes a member without any guard or witness', async () => {
+  it('promotes a member without any guard, checking only the acting admin', async () => {
     const { persist, response } = await outcomeOf(
       setRole(depsFor({ users: [ROOT, ANA] }), sessionActor('root'), { userId: 'ana', role: UserRole.enum.admin }),
     );
-    expect(persist.map((p) => modelOf(p))).toEqual([{ ...ANA, role: 'admin' }, ROOT]);
+    expect(checkedIds(persist)).toEqual(['root']);
+    expect(persist.map((p) => modelOf(p))).toEqual([undefined, { ...ANA, role: 'admin' }]);
     expect(response.user.role).toBe('admin');
   });
 
-  it('demotes another admin and re-writes the admins left standing', async () => {
+  it('demotes another admin and checks the admins left standing', async () => {
     const { persist } = await outcomeOf(
       setRole(depsFor({ users: [ROOT, admin('two')] }), sessionActor('root'), { userId: 'two', role: 'member' }),
     );
-    expect(persist.map((p) => (modelOf(p) as UserEntity).id)).toEqual(['two', 'root']);
-    expect(modelOf(persist[0])).toMatchObject({ role: 'member' });
+    expect(checkedIds(persist)).toEqual(['root']);
+    expect(modelOf(persist[1])).toMatchObject({ id: 'two', role: 'member' });
   });
 
   it('is idempotent for a role the user already has', async () => {
@@ -597,25 +609,13 @@ describe('setRole', () => {
 });
 
 describe('setSignInCap', () => {
-  it('inserts the singleton the first time and updates it afterwards', async () => {
-    const first = await outcomeOf(
-      setSignInCap(depsFor({ users: [ROOT] }), sessionActor('root'), { maxSignInDuration: '7d' }),
-    );
-    expect(opsOf(first.persist)).toEqual([
-      `${PersistOp.enum.insert}:${INSTANCE_SETTINGS_ENTITY_TAG}`,
-      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
-    ]);
-    expect(modelOf(first.persist[0])).toEqual({ id: 'singleton', maxSignInDuration: '7d' });
-
-    const settings = { id: 'singleton', maxSignInDuration: '7d' as const, version: 3 };
-    const again = await outcomeOf(
+  it('updates the existing singleton at the version read, asserting the acting admin first', async () => {
+    const settings = { id: INSTANCE_SETTINGS_ID, maxSignInDuration: '7d' as const, version: 3 };
+    const changed = await outcomeOf(
       setSignInCap(depsFor({ users: [ROOT], settings }), sessionActor('root'), { maxSignInDuration: '24h' }),
     );
-    expect(opsOf(again.persist)).toEqual([
-      `${PersistOp.enum.update}:${INSTANCE_SETTINGS_ENTITY_TAG}`,
-      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
-    ]);
-    expect(modelOf(again.persist[0])).toEqual({ id: 'singleton', maxSignInDuration: '24h', version: 3 });
+    expect(opsOf(changed.persist)).toEqual([CHECK_USER, `${PersistOp.enum.update}:${INSTANCE_SETTINGS_ENTITY_TAG}`]);
+    expect(modelOf(changed.persist[1])).toEqual({ id: INSTANCE_SETTINGS_ID, maxSignInDuration: '24h', version: 3 });
   });
 
   it('changes nothing when the cap is already that value, including the default', async () => {
@@ -626,7 +626,7 @@ describe('setSignInCap', () => {
   it('reads the default (30 days) until an admin sets one', async () => {
     expect(await currentSignInCap(depsFor())).toBe('30d');
     expect(
-      await currentSignInCap(depsFor({ settings: { id: 'singleton', maxSignInDuration: '24h', version: 0 } })),
+      await currentSignInCap(depsFor({ settings: { id: INSTANCE_SETTINGS_ID, maxSignInDuration: '24h', version: 0 } })),
     ).toBe('24h');
   });
 });

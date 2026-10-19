@@ -1,6 +1,7 @@
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { authErrors } from '../../models/auth/errors.js';
+import { USER_ENTITY_TAG } from '../../models/auth/entity.js';
 import { INVITE_PATH, INVITE_CODE_PARAM } from '../../models/auth/origin.js';
 import { type UserEntity, UserRole } from '../../models/auth/owner.js';
 import { PrincipalVia } from '../../models/auth/principal.js';
@@ -15,6 +16,8 @@ import {
 } from '../../models/auth/users.js';
 import { hasCredentials, isActiveUser, formatSetupCode, normalizeSetupCode } from './owner.js';
 import { millis, toIso } from './time.js';
+import * as persistence from '../persistence.js';
+import type { Persistable } from '@rfc0/effect-runner';
 
 /** An invite code is typed and printed exactly like a setup code: case, dashes and spaces never matter. */
 export const normalizeInviteCode = normalizeSetupCode;
@@ -110,7 +113,7 @@ const CHANGE_BLOCKS_SELF: Readonly<Record<AdminChange, boolean>> = {
   [AdminChange.enum.reissue]: false,
 };
 
-/** Every active admin other than `target` — who is left to administer, and the rows a decision must witness. */
+/** Every active admin other than `target` — who is left to administer, and the rows a decision must check. */
 export const remainingAdmins = (users: readonly UserEntity[], target: UserEntity): UserEntity[] =>
   R.filter(users, (user) => user.id !== target.id && isActiveAdmin(user));
 
@@ -126,3 +129,7 @@ export const guardAdminChange = (
   const reduces = isActiveAdmin(fields.target);
   return reduces && remainingAdmins(fields.users, fields.target).length === 0 ? authErrors.lastAdmin : null;
 };
+
+/** Asserts a user row is still at the version the flow read, without writing it. */
+export const checkUser = (user: UserEntity): Persistable =>
+  persistence.check({ entity: USER_ENTITY_TAG, id: user.id, version: user.version });

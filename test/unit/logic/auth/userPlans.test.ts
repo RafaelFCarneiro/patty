@@ -107,8 +107,9 @@ describe('planDisable', () => {
 
   it('disables the user and ends every session, live token and pending invite — and nothing else', () => {
     const plan = planOf(planDisable({ ...facts, target: ANA }));
-    // Then the admitted actor, unchanged.
-    expect(plan.userWrites).toEqual([{ ...ANA, disabledAt: NOW.toISOString() }, ROOT]);
+    expect(plan.userWrites).toEqual([{ ...ANA, disabledAt: NOW.toISOString() }]);
+    // The admitted actor is asserted, not rewritten.
+    expect(plan.checks).toEqual([ROOT]);
     expect(plan.sessions.map((s) => s.id)).toEqual(['s1', 's2']);
     expect(plan.tokens.map((t) => [t.id, t.revokedAt])).toEqual([
       ['pat', NOW.toISOString()],
@@ -125,16 +126,23 @@ describe('planDisable', () => {
     expect(plan.expiredGrants).toEqual([{ ...approvedGrant, status: GrantStatus.enum.expired }]);
   });
 
-  it('adds no witnesses for a member, and every other active admin for an admin', () => {
-    expect(planOf(planDisable({ ...facts, target: ANA })).userWrites.map((u) => u.id)).toEqual(['ana', 'root']);
+  it('checks only the acting admin for a member, and every other active admin for an admin', () => {
+    expect(planOf(planDisable({ ...facts, target: ANA })).checks.map((u) => u.id)).toEqual(['root']);
     const plan = planOf(planDisable({ ...facts, users: [ROOT, TWO, ANA], target: TWO }));
-    expect(plan.userWrites.map((u) => u.id)).toEqual(['two', 'root']);
-    expect(plan.userWrites[1]).toEqual(ROOT);
+    expect(plan.userWrites.map((u) => u.id)).toEqual(['two']);
+    expect(plan.checks).toEqual([ROOT]);
   });
 
   it('is a no-op for a user already disabled', () => {
     const plan = planOf(planDisable({ ...facts, target: user('ana', { disabledAt: 'x' }) }));
-    expect(plan).toMatchObject({ userWrites: [], sessions: [], tokens: [], removedInvites: [], newInvites: [] });
+    expect(plan).toMatchObject({
+      userWrites: [],
+      checks: [],
+      sessions: [],
+      tokens: [],
+      removedInvites: [],
+      newInvites: [],
+    });
     expect(plan.revoked).toEqual({ sessionsEnded: 0, tokensRevoked: 0 });
   });
 
@@ -172,8 +180,9 @@ describe('planReissue', () => {
     const plan = planOf(planReissue({ ...facts, target: waiting, held: NO_HELD }));
     expect(plan.removedInvites.map((i) => i.id)).toEqual(['i1']);
     expect(plan.newInvites).toEqual([freshInvite]);
-    // The row is written unchanged, so a claim racing this reissue conflicts on its version.
-    expect(plan.userWrites).toEqual([waiting, ROOT]);
+    // The row is checked, not written, so a claim racing this reissue conflicts on its version.
+    expect(plan.userWrites).toEqual([]);
+    expect(plan.checks).toEqual([waiting, ROOT]);
     expect(plan).toMatchObject({ sessions: [], tokens: [] });
     expect(plan.revoked).toEqual({ sessionsEnded: 0, tokensRevoked: 0 });
     expect(plan.after).toEqual(waiting);
@@ -181,7 +190,8 @@ describe('planReissue', () => {
 
   it('resets a claimed user: password cleared, every session and live token ended', () => {
     const plan = planOf(planReissue({ ...facts, target: ANA }));
-    expect(plan.userWrites).toEqual([{ ...ANA, passwordHash: null }, ROOT]);
+    expect(plan.userWrites).toEqual([{ ...ANA, passwordHash: null }]);
+    expect(plan.checks).toEqual([ROOT]);
     expect(plan.sessions).toHaveLength(2);
     expect(plan.tokens.map((t) => t.id)).toEqual(['pat', 'stdio']);
     expect(plan.revoked).toEqual({ sessionsEnded: 2, tokensRevoked: 2 });
@@ -192,9 +202,9 @@ describe('planReissue', () => {
     expect(planOf(planReissue({ ...facts, target: ANA })).expiredGrants.map((g) => g.status)).toEqual(['expired']);
   });
 
-  it('witnesses the admins left standing when it resets an admin, and only then', () => {
-    expect(planOf(planReissue({ ...facts, target: TWO })).userWrites.map((u) => u.id)).toEqual(['two', 'root']);
-    expect(planOf(planReissue({ ...facts, target: ANA })).userWrites.map((u) => u.id)).toEqual(['ana', 'root']);
+  it('checks the admins left standing when it resets an admin, and only then', () => {
+    expect(planOf(planReissue({ ...facts, target: TWO })).checks.map((u) => u.id)).toEqual(['root']);
+    expect(planOf(planReissue({ ...facts, target: ANA })).checks.map((u) => u.id)).toEqual(['root']);
   });
 
   it('keeps a never-set-up owner (no username yet) on the setup path: reissuing it would claim into nothing', () => {
@@ -220,18 +230,17 @@ describe('planReissue', () => {
 describe('planRole', () => {
   const facts = { actingUserId: 'root', acting: ROOT, users: [ROOT, TWO, ANA], now: NOW };
 
-  it('promotes a member with no witness and no guard', () => {
+  it('promotes a member with no guard, checking only the acting admin', () => {
     const plan = planOf(planRole({ ...facts, target: ANA, role: UserRole.enum.admin }));
-    expect(plan.userWrites).toEqual([{ ...ANA, role: 'admin' }, ROOT]);
+    expect(plan.userWrites).toEqual([{ ...ANA, role: 'admin' }]);
+    expect(plan.checks).toEqual([ROOT]);
     expect(plan).toMatchObject({ sessions: [], tokens: [], removedInvites: [], newInvites: [] });
   });
 
-  it('demotes another admin and witnesses the admins left standing', () => {
+  it('demotes another admin and checks the admins left standing', () => {
     const plan = planOf(planRole({ ...facts, target: TWO, role: UserRole.enum.member }));
-    expect(plan.userWrites.map((u) => [u.id, u.role])).toEqual([
-      ['two', 'member'],
-      ['root', 'admin'],
-    ]);
+    expect(plan.userWrites.map((u) => [u.id, u.role])).toEqual([['two', 'member']]);
+    expect(plan.checks.map((u) => [u.id, u.role])).toEqual([['root', 'admin']]);
   });
 
   it('is a no-op for the role the user already has', () => {
@@ -259,7 +268,7 @@ describe('the admitted actor is the snapshot every write is built from', () => {
   const staleRoot = { ...ROOT, version: 1 };
   const freshRoot = { ...ROOT, version: 5 };
 
-  it('writes the admin witnesses at the admitted version, not at a fresher one read afterwards', () => {
+  it('checks the admins at the admitted version, not at a fresher one read afterwards', () => {
     const plan = planOf(
       planDisable({
         ...facts,
@@ -271,19 +280,18 @@ describe('the admitted actor is the snapshot every write is built from', () => {
         approvedGrants: [],
       }),
     );
-    expect(plan.userWrites.map((u) => [u.id, u.version])).toEqual([
-      ['two', 1],
-      ['root', 1],
-    ]);
+    expect(plan.checks.map((u) => [u.id, u.version])).toEqual([['root', 1]]);
   });
 
-  it('writes the actor’s own row too when nothing else would, exactly once', () => {
+  it('checks the actor’s own row when nothing else would, exactly once, and never writes it', () => {
     const plan = planOf(planRole({ ...facts, acting: staleRoot, target: ANA, role: UserRole.enum.admin }));
-    expect(plan.userWrites.filter((u) => u.id === 'root')).toEqual([staleRoot]);
+    expect(plan.checks.filter((u) => u.id === 'root')).toEqual([staleRoot]);
+    expect(plan.userWrites.map((u) => u.id)).toEqual(['ana']);
   });
 
   it('does not let an admin undo a demotion that landed after their admission by setting their own role', () => {
     const plan = planOf(planRole({ ...facts, acting: staleRoot, target: staleRoot, role: UserRole.enum.admin }));
     expect(plan.userWrites).toEqual([]);
+    expect(plan.checks).toEqual([]);
   });
 });

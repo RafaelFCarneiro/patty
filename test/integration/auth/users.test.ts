@@ -5,8 +5,9 @@ import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { createToken } from '../../../src/controllers/accessTokens.js';
 import { approveGrant, redeemGrant, startGrant } from '../../../src/controllers/grants.js';
 import { disableUser, inviteUser } from '../../../src/controllers/users.js';
+import { USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
 import { UserRole } from '../../../src/models/auth/owner.js';
-import { ActorKind, type Actor } from '../../../src/models/auth/users.js';
+import { ActorKind, DEFAULT_SIGN_IN_CAP, INSTANCE_SETTINGS_ID, type Actor } from '../../../src/models/auth/users.js';
 import { PrincipalVia, type Principal } from '../../../src/models/auth/principal.js';
 import { ALL_SCOPES } from '../../../src/models/auth/scope.js';
 import {
@@ -66,6 +67,9 @@ const stdioSignedIn = async (ctx: AppContext, cookie: string, choice: Parameters
   if (outcome.kind !== 'granted') throw new Error(`stdio sign-in did not complete: ${JSON.stringify(outcome)}`);
   return session;
 };
+
+/** The instance settings row a migration guarantees: the default cap, never written until an admin changes it. */
+const DEFAULT_SETTINGS_ROW = { id: INSTANCE_SETTINGS_ID, max_sign_in_duration: DEFAULT_SIGN_IN_CAP, version: 0 };
 
 describe('invite → claim → login', () => {
   it('lets an admin invite a person who then chooses their own password and lands signed in', async () => {
@@ -295,7 +299,7 @@ describe('step-up: the admin’s password is asked again', () => {
 
     expect(await userRow(ctx, 'ana')).toMatchObject({ role: 'member', disabled_at: null });
     expect((await get(ctx, ana.cookie, '/ui/access/tokens')).statusCode).toBe(200);
-    expect(await ctx.db.all(sql`SELECT * FROM settings`)).toEqual([]);
+    expect(await ctx.db.all(sql`SELECT * FROM settings`)).toEqual([DEFAULT_SETTINGS_ROW]);
   });
 
   it('leaves a disabled user disabled when the password typed to enable them is wrong', async () => {
@@ -581,6 +585,43 @@ describe('a credential cannot be issued to a user after theirs were ended', () =
   });
 });
 
+describe('a row that is only checked is not written or announced', () => {
+  const versionOf = async (ctx: AppContext, id: string) =>
+    (await ctx.db.all<{ version: number }>(sql`SELECT version FROM users WHERE id = ${id}`))[0]?.version;
+  const announced = (ctx: AppContext) => {
+    const events: Array<{ entities: readonly string[] }> = [];
+    ctx.changeBus.subscribe((event) => events.push(event));
+    return events;
+  };
+
+  it('leaves the user row at its version, and publishes no user change, when a token is minted', async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    const before = await versionOf(ctx, ana.userId);
+    const events = announced(ctx);
+    const run = bindAuthRunEffects(ctx.authRunEffects);
+
+    const input = { name: 'checked', access: 'read' as const, expiry: '30' as const, password: MEMBER_PASSWORD };
+    expect((await run(() => createToken(authDepsOf(ctx), ana.userId, input))).isOk()).toBe(true);
+
+    expect(await versionOf(ctx, ana.userId)).toBe(before);
+    expect(events.flatMap((event) => event.entities)).not.toContain(USER_ENTITY_TAG);
+  });
+
+  it('leaves the approver’s row at its version when a sign-in request is approved', async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    const before = await versionOf(ctx, ana.userId);
+    const events = announced(ctx);
+    const { session } = stdioSessionFor(ctx);
+    await approveConnect(ctx, ana.cookie, userCodeIn(await session.resolve()), {});
+    expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'approved' }]);
+
+    expect(await versionOf(ctx, ana.userId)).toBe(before);
+    expect(events.flatMap((event) => event.entities)).not.toContain(USER_ENTITY_TAG);
+  });
+});
+
 describe('a request authorized before a change to its author cannot outlive that change', () => {
   it('refuses a sign-in approval that commits after the approver was disabled', async () => {
     const { ctx, owner } = await withOwner();
@@ -676,7 +717,7 @@ describe('a redemption cannot outlive a cap lowered while it was in flight', () 
   };
 
   it.each([
-    ['no admin had saved a setting yet (the settings row is absent)', undefined],
+    ['no admin had changed the setting yet (the default row)', undefined],
     ['the cap was already saved at 30 days', '30d' as const],
   ])('retries and applies the new cap when %s', async (_label, settingBefore) => {
     const { ctx, redeemed } = await redeemRacingCap(settingBefore);
@@ -719,7 +760,7 @@ describe('the last active admin survives concurrent changes (version conflict)',
     const staleBossDisablesRoot = (await disableUser(deps, actor(bossId), rootId))._unsafeUnwrap();
 
     // … then they commit one after the other. The engine re-runs a flow whose reads went stale; the second re-run
-    // sees the first's effect and is refused. Without the admins re-written as witnesses, both stale batches would
+    // sees the first's effect and is refused. Without the admins checked, both stale batches would
     // commit and nobody would be left to administer.
     const fresh = (adminId: string, targetId: string) => () => disableUser(deps, actor(adminId), targetId);
     let first = true;
@@ -803,7 +844,7 @@ describe('who can reach user management', () => {
     // The forged posts did nothing: nobody invited, nobody promoted or disabled, no cap saved.
     expect(await userRows(ctx)).toEqual(before.users);
     expect(await inviteRows(ctx)).toEqual(before.invites);
-    expect(await ctx.db.all(sql`SELECT * FROM settings`)).toEqual([]);
+    expect(await ctx.db.all(sql`SELECT * FROM settings`)).toEqual([DEFAULT_SETTINGS_ROW]);
   });
 
   it('does not even link to the page for a member, and does for an admin', async () => {
@@ -1023,7 +1064,7 @@ describe('the sign-in cap', () => {
     expect((await setCap(ctx, owner, '24h')).statusCode).toBe(303);
     expect(radios((await pendingConsentPage(ctx, owner)).html)).toEqual(['session', '24h']);
     expect(await ctx.db.all(sql`SELECT id, max_sign_in_duration FROM settings`)).toEqual([
-      { id: 'singleton', max_sign_in_duration: '24h' },
+      { id: INSTANCE_SETTINGS_ID, max_sign_in_duration: '24h' },
     ]);
   });
 

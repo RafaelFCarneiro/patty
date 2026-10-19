@@ -366,8 +366,8 @@ Users are **disabled, never deleted**: their rows stay theirs, and their usernam
 ### Guards
 
 - An admin **cannot disable or demote themself** — ask another admin.
-- **The instance always keeps at least one active admin** (an admin who can log in right now): disabling, demoting or resetting the last one is refused, from the browser and from the terminal alike. Two admins acting on each other at the same moment cannot both succeed: each action re-writes
-  the admins it leaves standing, so one of the two finds the world changed, re-checks, and is refused.
+- **The instance always keeps at least one active admin** (an admin who can log in right now): disabling, demoting or resetting the last one is refused, from the browser and from the terminal alike. Two admins acting on each other at the same moment cannot both succeed: each action checks
+  the admins it leaves standing are unchanged, so one of the two finds the world changed, re-checks, and is refused.
 - Role changes, disables and resets take effect on the person's very next request (their role is read from the database every time).
 
 ### The sign-in cap

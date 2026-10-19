@@ -22,13 +22,13 @@ import {
   supersededGrants,
 } from '../logic/auth/grant.js';
 import { isActiveUser } from '../logic/auth/owner.js';
+import { checkUser } from '../logic/auth/users.js';
 import { tokenDisplayPrefix, tokenPrincipal } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
   CLIENT_GRANT_ENTITY_TAG,
   INSTANCE_SETTINGS_ENTITY_TAG,
-  USER_ENTITY_TAG,
 } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
 import {
@@ -42,7 +42,7 @@ import {
   type StartedGrant,
   USER_CODE_ATTEMPTS,
 } from '../models/auth/grant.js';
-import { DEFAULT_SIGN_IN_CAP, INSTANCE_SETTINGS_ID, type InstanceSettingsEntity } from '../models/auth/users.js';
+import { type InstanceSettingsEntity } from '../models/auth/users.js';
 import { type Principal, PrincipalVia } from '../models/auth/principal.js';
 import { TOKEN_ACCESS_SCOPES } from '../models/auth/token.js';
 import { conflict } from '../models/error.js';
@@ -81,19 +81,10 @@ export const startGrant = (deps: AuthDeps, input: StartGrantInput): ResultAsync<
 
 const instanceCap = async (deps: AuthDeps) => signInCapOf(await deps.instanceSettings.get());
 
-/**
- * The instance settings row the cap was read from, written back unchanged — or, while no admin has saved a setting,
- * the default row inserted. Either way the cap read joins the batch's version checks: an admin lowering the cap
- * meanwhile conflicts (an update on a stale version, or an insert on the row they just created), and the retry reads
- * the new cap.
- */
-const settingsWitness = (current: InstanceSettingsEntity | null): Persistable =>
-  current
-    ? persistence.update({ entity: INSTANCE_SETTINGS_ENTITY_TAG, model: current })
-    : persistence.insert({
-        entity: INSTANCE_SETTINGS_ENTITY_TAG,
-        model: { id: INSTANCE_SETTINGS_ID, maxSignInDuration: DEFAULT_SIGN_IN_CAP },
-      });
+/** Asserts the instance settings row the cap was read from is unchanged: an admin lowering the cap meanwhile
+ *  conflicts, and the retry reads the new cap. */
+const settingsCheck = (current: InstanceSettingsEntity): Persistable =>
+  persistence.check({ entity: INSTANCE_SETTINGS_ENTITY_TAG, id: current.id, version: current.version });
 
 /** What the consent page shows for a code, with the form's pre-selection and the durations it may offer (never above
  *  the instance cap) — `null` for an unknown, expired or already-answered code (indistinguishable on purpose).
@@ -129,7 +120,7 @@ export const approveGrant = (
 ): ResultAsync<FlowOutcome<void>, AppError> =>
   safeTry(async function* () {
     yield* requireSession(principal);
-    // The approver must still be able to sign in, and their row is re-written unchanged: a disable or reset racing
+    // The approver must still be able to sign in, and their row is checked, not written: a disable or reset racing
     // this approval conflicts on its version, so an approval can never land after the user's grants were revoked.
     const row = await deps.users.findById(principal.userId);
     const approver = yield* okOr(isActiveUser(row) ? row : null, authErrors.unauthenticated);
@@ -142,10 +133,7 @@ export const approveGrant = (
       deps.clock(),
     );
     return ok({
-      persist: [
-        persistence.update({ entity: USER_ENTITY_TAG, model: approver }),
-        persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: approved }),
-      ],
+      persist: [checkUser(approver), persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: approved })],
       response: undefined,
     });
   });
@@ -203,10 +191,10 @@ export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<Flo
           },
           now,
         );
-        // The approver's row is re-written unchanged so a racing disable or reset conflicts and retries into a refusal.
+        // The approver's row is asserted unchanged so a racing disable or reset conflicts and retries into a refusal.
         const persist: Persistable[] = [
-          persistence.update({ entity: USER_ENTITY_TAG, model: user }),
-          settingsWitness(settings),
+          checkUser(user),
+          settingsCheck(settings),
           persistence.insert({ entity: ACCESS_TOKEN_ENTITY_TAG, model: entity }),
           persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: redeemedGrant(plan.grant) }),
         ];

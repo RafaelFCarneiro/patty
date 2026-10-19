@@ -642,7 +642,7 @@ and stdio sign-in ended too (diagram 13 shows that set).
 
 ## 13. Disable a user
 
-`disableUser` ends every credential the user holds in the same write that disables them. The guards run first, and the admins left standing are re-written so that two admins disabling each other
+`disableUser` ends every credential the user holds in the same write that disables them. The guards run first, and the admins left standing are checked (asserted still at the version the guard read, not written) so that two admins disabling each other
 cannot both commit.
 
 ```mermaid
@@ -661,7 +661,7 @@ sequenceDiagram
     Ctl->>DB: acting user, step-up password (as in diagram 12)
     Ctl->>DB: target, every user, the target's sessions and tokens
     Ctl->>Ctl: guardAdminChange - not the admin themself, and an active admin remains (else cannot_change_self or last_admin)
-    Ctl-->>Run: persist - UPDATE user (disabled_at), DELETE each session, UPDATE each live token (revoked_at, personal and stdio alike), UPDATE each remaining admin unchanged (witness)
+    Ctl-->>Run: persist - UPDATE user (disabled_at), DELETE each session, UPDATE each live token (revoked_at, personal and stdio alike), CHECK each remaining admin's version (read-only)
     Run->>DB: ONE transaction, versioned
     alt a concurrent change touched one of those rows
         DB-->>Run: version conflict

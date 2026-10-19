@@ -1,5 +1,6 @@
 import * as R from 'remeda';
 import {
+  checkVersion,
   INITIAL_VERSION,
   PersistOp,
   type FlowOutcome,
@@ -34,6 +35,10 @@ export const remove = <Tag extends string>(fields: { entity: Tag; id: string; ve
   op: PersistOp.enum.delete,
   ...fields,
 });
+
+/** Asserts a row is still at the version read, without writing it: the batch conflicts and retries if it moved. */
+export const check = <Tag extends string>(fields: { entity: Tag; id: string; version: number }): Persistable<Tag> =>
+  checkVersion(fields.entity, fields.id, fields.version);
 
 /** Extracts a flow's own outcome — the one whose `entity` matches `tag` — from a flow's
  *  idempotency-aware `response` function (`docs/functional-core-imperative-shell.md` rule 6).
@@ -86,6 +91,7 @@ export const entityDbAdapter = <Tag extends string, Model, Row extends { version
       case PersistOp.enum.update:
         return { ...p, model: modelToDb(p.model as Model & { version: number }) };
       case PersistOp.enum.delete:
+      case PersistOp.enum.check:
         return p;
       default: {
         const _exhaustive: never = p;

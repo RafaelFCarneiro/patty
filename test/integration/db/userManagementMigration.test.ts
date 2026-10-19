@@ -89,13 +89,6 @@ describe('migration 0022 — user management', () => {
     expect(await db.all(sql`SELECT * FROM invites`)).toEqual([]);
   });
 
-  it('leaves a database without an instance row without one: the default applies until saved', async () => {
-    const db = await previousRelease();
-    await db.run(sql`DELETE FROM settings`);
-    await bootstrap(db);
-    expect(await db.all(sql`SELECT * FROM settings`)).toEqual([]);
-  });
-
   describe('the invites table', () => {
     const addUser = (db: Db, id: string) =>
       db.run(
@@ -160,5 +153,27 @@ describe('migration 0022 — user management', () => {
       await addInvite(db, 'i1', 'ana', null, null);
       expect(await db.all(sql`SELECT created_by FROM invites`)).toEqual([{ created_by: null }]);
     });
+  });
+});
+
+describe('migration 0023 — the instance settings row', () => {
+  const SETTINGS_TAG = '0023_instance_settings_row';
+  const settingsRows = (db: Db) => db.all(sql`SELECT id, max_sign_in_duration, version FROM settings`);
+
+  it('is not data-rewriting, and inserts exactly one default row into a database without one', async () => {
+    expect(DATA_REWRITING_MIGRATIONS).not.toContain(SETTINGS_TAG);
+    const db = await previousRelease();
+    await db.run(sql`DELETE FROM settings`);
+    await bootstrap(db);
+    expect(await settingsRows(db)).toEqual([{ id: 'singleton', max_sign_in_duration: '30d', version: 0 }]);
+  });
+
+  it('keeps a row an admin already saved, and is idempotent', async () => {
+    const db = await previousRelease();
+    await bootstrap(db);
+    await db.run(sql`UPDATE settings SET max_sign_in_duration = '7d', version = 5`);
+    await db.run(sql`DELETE FROM __drizzle_migrations WHERE id = (SELECT MAX(id) FROM __drizzle_migrations)`);
+    await migrate(db, { migrationsFolder: REAL_MIGRATIONS_FOLDER });
+    expect(await settingsRows(db)).toEqual([{ id: 'singleton', max_sign_in_duration: '7d', version: 5 }]);
   });
 });

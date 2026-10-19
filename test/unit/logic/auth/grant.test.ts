@@ -391,7 +391,7 @@ describe('the instance cap on sign-in durations', () => {
 
   it('is today’s maximum, 30 days, until an admin lowers it', () => {
     expect(DEFAULT_SIGN_IN_CAP).toBe('30d');
-    expect(signInCapOf(null)).toBe('30d');
+    expect(signInCapOf(settings(DEFAULT_SIGN_IN_CAP))).toBe('30d');
     expect(signInCapOf(settings('7d'))).toBe('7d');
   });
 

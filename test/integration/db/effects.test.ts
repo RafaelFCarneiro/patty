@@ -51,6 +51,7 @@ import {
 } from '../../../src/diplomat/db/effects.js';
 import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
 import {
+  checkVersion,
   MAX_RUN_EFFECTS_ATTEMPTS,
   PersistOp,
   runEffects,
@@ -697,6 +698,37 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
     );
 
     await expect(outcome).rejects.toThrow();
+  });
+});
+
+describe('the applier check — a read-version assertion that writes nothing', () => {
+  const tagRegistry = (userId: string): ApplierRegistry => ({ tag: ownedTableApplier(tags, userId) });
+  const seedTag = async (): Promise<string> => {
+    const tagId = randomUUID();
+    await runEffects({ runner, isTransientContention, conflictError }, tagRegistry(OWNER_USER_ID), () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: 'tag', model: { id: tagId, name: `Tag ${tagId}`, version: 0 } }],
+        response: null,
+      }),
+    );
+    return tagId;
+  };
+  const checking = (registry: ApplierRegistry, id: string, version: number) =>
+    runEffects({ runner, isTransientContention, conflictError }, registry, () =>
+      okAsync({ persist: [checkVersion('tag', id, version)], response: 'checked' }),
+    );
+
+  it('passes at the version read and leaves the row untouched', async () => {
+    const tagId = await seedTag();
+    expect((await checking(tagRegistry(OWNER_USER_ID), tagId, 0))._unsafeUnwrap()).toBe('checked');
+    const [row] = await db.all<{ version: number }>(sql`SELECT version FROM tags WHERE id = ${tagId}`);
+    expect(row).toEqual({ version: 0 });
+  });
+
+  it('conflicts on a stale version, and on a row another user owns', async () => {
+    const tagId = await seedTag();
+    expect((await checking(tagRegistry(OWNER_USER_ID), tagId, 7))._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    expect((await checking(tagRegistry(randomUUID()), tagId, 0))._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
   });
 });
 
