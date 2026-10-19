@@ -7,7 +7,9 @@ import { resetPassword } from '../../../src/controllers/auth.js';
 import { approveGrant, redeemGrant, startGrant } from '../../../src/controllers/grants.js';
 import { disableUser, enableUser, inviteUser, reissueInvite } from '../../../src/controllers/users.js';
 import { USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
+import { GrantStatus, SignInDuration } from '../../../src/models/auth/grant.js';
 import { UserRole } from '../../../src/models/auth/owner.js';
+import { TokenAccess } from '../../../src/models/auth/token.js';
 import { ActorKind, DEFAULT_SIGN_IN_CAP, INSTANCE_SETTINGS_ID, type Actor } from '../../../src/models/auth/users.js';
 import { PrincipalVia, type Principal } from '../../../src/models/auth/principal.js';
 import { ALL_SCOPES } from '../../../src/models/auth/scope.js';
@@ -68,6 +70,13 @@ const stdioSignedIn = async (ctx: AppContext, cookie: string, choice: Parameters
   if (outcome.kind !== 'granted') throw new Error(`stdio sign-in did not complete: ${JSON.stringify(outcome)}`);
   return session;
 };
+
+/** What a person approves in the consent page: read-only access for a day. */
+const approvalFor = (userCode: string) => ({
+  userCode,
+  access: TokenAccess.enum.read,
+  duration: SignInDuration.enum['24h'],
+});
 
 /** The instance settings row a migration guarantees: the default cap, never written until an admin changes it. */
 const DEFAULT_SETTINGS_ROW = { id: INSTANCE_SETTINGS_ID, max_sign_in_duration: DEFAULT_SIGN_IN_CAP, version: 0 };
@@ -766,7 +775,7 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
   it('d. a stdio sign-in redeemed during a disable, between its token and grant reads, is revoked', async () => {
     const { ctx, ana, deps, adminId, run } = await world();
     const started = await startedGrant(deps, run);
-    const approval = { userCode: started.userCode, access: 'read' as const, duration: '24h' as const };
+    const approval = approvalFor(started.userCode);
     (await run(() => approveGrant(deps, anaPrincipal(ana.userId), approval)))._unsafeUnwrap();
     const hook = issuingDuringFirstRead(deps.clientGrants.listApprovedByUser, async () => {
       expect((await run(() => redeemGrant(deps, started.deviceCode)))._unsafeUnwrap()).toMatchObject({
@@ -786,7 +795,7 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
   it('e. a sign-in request approved during a disable is expired, so enabling later mints nothing', async () => {
     const { ctx, ana, deps, adminId, run } = await world();
     const started = await startedGrant(deps, run);
-    const approval = { userCode: started.userCode, access: 'read' as const, duration: '24h' as const };
+    const approval = approvalFor(started.userCode);
     const hook = issuingDuringFirstRead(deps.clientGrants.listApprovedByUser, async () => {
       (await run(() => approveGrant(deps, anaPrincipal(ana.userId), approval)))._unsafeUnwrap();
     });
@@ -795,7 +804,7 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
 
     expect(disabled.isOk()).toBe(true);
     expect(hook.calls()).toBe(2);
-    expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'expired' }]);
+    expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: GrantStatus.enum.expired }]);
     expect((await run(() => enableUser(deps, adminActor(adminId), ana.userId))).isOk()).toBe(true);
     const redeemed = (await run(() => redeemGrant(deps, started.deviceCode)))._unsafeUnwrap();
     expect(redeemed.kind).not.toBe('signed_in');
@@ -825,6 +834,39 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
     expect(await inviteRows(ctx)).toEqual([]);
     expect((await run(() => enableUser(deps, adminActor(adminId), bobId))).isOk()).toBe(true);
     expect((await claim(ctx, code)).statusCode).toBe(403);
+  });
+});
+
+describe('a password reset ends every way in, approved sign-in requests included', () => {
+  const worldWithAna = async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    return { ctx, ana, deps: authDepsOf(ctx), run: bindAuthRunEffects(ctx.authRunEffects) };
+  };
+
+  it('expires an approved, unredeemed sign-in request, so redeeming it mints nothing', async () => {
+    const { ctx, ana, deps, run } = await worldWithAna();
+    const started = (
+      await run(() => startGrant(deps, { client: { name: 't', version: '1' }, profile: 'p', channel: 'stdio' }))
+    )._unsafeUnwrap();
+    const approval = approvalFor(started.userCode);
+    (
+      await run(() =>
+        approveGrant(
+          deps,
+          { userId: ana.userId, role: UserRole.enum.member, scopes: [...ALL_SCOPES], via: PrincipalVia.enum.session },
+          approval,
+        ),
+      )
+    )._unsafeUnwrap();
+
+    const reset = await run(() => resetPassword(deps, { username: 'ana', password: 'a brand new passphrase' }));
+
+    expect(reset.isOk()).toBe(true);
+    expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: GrantStatus.enum.expired }]);
+    const redeemed = (await run(() => redeemGrant(deps, started.deviceCode)))._unsafeUnwrap();
+    expect(redeemed.kind).not.toBe('signed_in');
+    expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
   });
 });
 

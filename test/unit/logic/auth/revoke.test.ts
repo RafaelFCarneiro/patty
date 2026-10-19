@@ -4,6 +4,8 @@ import { endedCredentials, endingCredentials, removeSession } from '../../../../
 import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG } from '../../../../src/models/auth/entity.js';
 import type { SessionEntity } from '../../../../src/models/auth/session.js';
 import { type AccessTokenEntity, AccessTokenKind } from '../../../../src/models/auth/token.js';
+import { GrantStatus, type ClientGrantEntity } from '../../../../src/models/auth/grant.js';
+import { CLIENT_GRANT_ENTITY_TAG } from '../../../../src/models/auth/entity.js';
 
 const NOW = new Date('2026-10-14T12:00:00.000Z');
 const LATER = '2026-10-20T00:00:00.000Z';
@@ -36,6 +38,26 @@ const token = (id: string, overrides: Partial<AccessTokenEntity> = {}): AccessTo
   ...overrides,
 });
 
+const grant = (id: string, status: GrantStatus): ClientGrantEntity => ({
+  id,
+  deviceCodeHash: `sha(${id})`,
+  userCode: 'ABCDEFGH',
+  clientName: 'Claude',
+  clientVersion: '1',
+  profile: 'default',
+  channel: 'stdio',
+  hintAccess: null,
+  hintDuration: null,
+  status,
+  userId: 'ana',
+  scopes: ['fintrack:read'],
+  duration: '24h',
+  createdAt: NOW.toISOString(),
+  approvedAt: NOW.toISOString(),
+  expiresAt: LATER,
+  version: 4,
+});
+
 const modelOf = (persistable: Persistable): AccessTokenEntity =>
   (persistable as unknown as { model: AccessTokenEntity }).model;
 
@@ -53,7 +75,10 @@ describe('removeSession', () => {
 describe('endingCredentials', () => {
   it('deletes every session and revokes every live token — personal and stdio alike — and reports the counts', () => {
     const stdio = token('stdio', { kind: AccessTokenKind.enum.stdio, clientName: 'Claude', profile: 'default' });
-    const ended = endingCredentials({ sessions: [session('s1'), session('s2')], tokens: [token('pat'), stdio] }, NOW);
+    const ended = endingCredentials(
+      { sessions: [session('s1'), session('s2')], tokens: [token('pat'), stdio], approvedGrants: [] },
+      NOW,
+    );
 
     expect(ended.revoked).toEqual({ sessionsEnded: 2, tokensRevoked: 2 });
     expect(ended.persist.map((p) => `${p.op}:${p.entity}`)).toEqual([
@@ -72,6 +97,7 @@ describe('endingCredentials', () => {
     const ended = endingCredentials(
       {
         sessions: [],
+        approvedGrants: [],
         tokens: [
           token('revoked', { revokedAt: '2026-10-01T00:00:00.000Z' }),
           token('lapsed', { expiresAt: '2026-10-01T00:00:00.000Z' }),
@@ -86,7 +112,7 @@ describe('endingCredentials', () => {
   });
 
   it('writes nothing for a user who holds nothing', () => {
-    expect(endingCredentials({ sessions: [], tokens: [] }, NOW)).toEqual({
+    expect(endingCredentials({ sessions: [], tokens: [], approvedGrants: [] }, NOW)).toEqual({
       persist: [],
       revoked: { sessionsEnded: 0, tokensRevoked: 0 },
     });
@@ -97,7 +123,11 @@ describe('endedCredentials — the one rule', () => {
   it('returns every session, the live tokens already revoked, and the counts — as data, no writes', () => {
     const stdio = token('stdio', { kind: AccessTokenKind.enum.stdio });
     const ended = endedCredentials(
-      { sessions: [session('s1')], tokens: [token('pat'), stdio, token('old', { revokedAt: 'x' })] },
+      {
+        sessions: [session('s1')],
+        tokens: [token('pat'), stdio, token('old', { revokedAt: 'x' })],
+        approvedGrants: [],
+      },
       NOW,
     );
     expect(ended.sessions.map((s) => s.id)).toEqual(['s1']);
@@ -109,8 +139,26 @@ describe('endedCredentials — the one rule', () => {
   });
 
   it('is what the writes are built from: same counts, one delete and one update per item', () => {
-    const held = { sessions: [session('s1'), session('s2')], tokens: [token('pat')] };
+    const held = { sessions: [session('s1'), session('s2')], tokens: [token('pat')], approvedGrants: [] };
     expect(endingCredentials(held, NOW).revoked).toEqual(endedCredentials(held, NOW).revoked);
     expect(endingCredentials(held, NOW).persist).toHaveLength(3);
+  });
+
+  it('expires an approved sign-in request (it could still mint a sign-in), leaving other statuses alone', () => {
+    const held = {
+      sessions: [],
+      tokens: [],
+      approvedGrants: [
+        grant('approved', GrantStatus.enum.approved),
+        grant('pending', GrantStatus.enum.pending),
+        grant('redeemed', GrantStatus.enum.redeemed),
+      ],
+    };
+    const ended = endedCredentials(held, NOW);
+    expect(ended.expiredGrants.map((g) => [g.id, g.status])).toEqual([['approved', GrantStatus.enum.expired]]);
+
+    const writes = endingCredentials(held, NOW).persist;
+    expect(writes.map((p) => `${p.op}:${p.entity}`)).toEqual([`${PersistOp.enum.update}:${CLIENT_GRANT_ENTITY_TAG}`]);
+    expect(writes.map((p) => (p as unknown as { model: ClientGrantEntity }).model.version)).toEqual([4]);
   });
 });

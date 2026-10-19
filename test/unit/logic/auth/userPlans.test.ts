@@ -86,10 +86,11 @@ const ROOT = admin('root');
 const TWO = admin('two');
 const ANA = user('ana');
 const actingOf = (id: string | null): UserEntity | null => ({ root: ROOT, two: TWO, ana: ANA })[id ?? ''] ?? null;
-const NO_HELD = { sessions: [], tokens: [] };
+const NO_HELD = { sessions: [], tokens: [], approvedGrants: [] };
 const HELD = {
   sessions: [session('s1'), session('s2')],
   tokens: [token('pat'), token('stdio', { kind: AccessTokenKind.enum.stdio }), token('old', { revokedAt: 'x' })],
+  approvedGrants: [approvedGrant],
 };
 
 const planOf = <T>(result: { isOk: () => boolean; _unsafeUnwrap: () => T; _unsafeUnwrapErr: () => unknown }): T =>
@@ -102,7 +103,6 @@ describe('planDisable', () => {
     users: [ROOT, ANA],
     held: HELD,
     openInvites: [invite('i1')],
-    approvedGrants: [approvedGrant],
     now: NOW,
   };
 
@@ -173,7 +173,6 @@ describe('planReissue', () => {
     users: [ROOT, TWO, ANA],
     held: HELD,
     openInvites: [invite('i1')],
-    approvedGrants: [approvedGrant],
     invite: freshInvite,
     now: NOW,
   };
@@ -280,7 +279,6 @@ describe('the admitted actor is the snapshot every write is built from', () => {
         target: TWO,
         held: NO_HELD,
         openInvites: [],
-        approvedGrants: [],
       }),
     );
     expect(plan.checks.map((u) => [u.id, u.version])).toEqual([['root', 1]]);

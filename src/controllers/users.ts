@@ -117,6 +117,7 @@ export const resolveUserId = (deps: AuthDeps, username: string): ResultAsync<str
 const heldCredentials = async (deps: AuthDeps, userId: string) => ({
   sessions: await deps.sessions.listByUser(userId),
   tokens: await deps.accessTokens.listByUser(userId),
+  approvedGrants: await deps.clientGrants.listApprovedByUser(userId),
 });
 
 /** Admins, members and invited people alike, oldest first, with where each stands. */
@@ -180,7 +181,6 @@ export const reissueInvite = (
       users: await deps.users.listAll(),
       held: await heldCredentials(deps, target.id),
       openInvites: await deps.invites.listUnclaimedByUser(target.id),
-      approvedGrants: await deps.clientGrants.listApprovedByUser(target.id),
       invite: invite.invite,
       now,
     });
@@ -240,7 +240,6 @@ export const disableUser = (
       users: await deps.users.listAll(),
       held: await heldCredentials(deps, target.id),
       openInvites: await deps.invites.listUnclaimedByUser(target.id),
-      approvedGrants: await deps.clientGrants.listApprovedByUser(target.id),
       now,
     });
     return ok({ persist: persistOf(plan), response: reportOf(plan.after, plan.revoked, now) });

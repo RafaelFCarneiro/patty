@@ -609,7 +609,7 @@ There is no self-registration and an admin never learns a password:
   user's rows stay theirs.
 - *The flows* (`controllers/users.ts`, each gather → decide → persist through `runEffects`, `Actor` first; `disableUser`, `reissueInvite` and `setRole` gather facts, ask a pure plan in `logic/auth/userPlans.ts` — which rows to write, delete and revoke, as data, or a refusal — and the controller only concatenates that plan into the batch; startup also prunes unclaimed invites past their window, `pruneExpiredInvites`): `inviteUser` (inserts the unclaimed `users` row and its `invites`
   row; the plaintext code `JKMN-…` is in the response and nowhere else, only its sha256 is stored; username uniqueness is checked on the normalized name),
-  `reissueInvite` (a new invite for an unclaimed user; for a claimed one it is an admin-driven password reset — `password_hash` cleared and every session, token
+  `reissueInvite` (a new invite for an unclaimed user; for a claimed one it is an admin-driven password reset — `password_hash` cleared and every session, token, approved sign-in request
   and stdio sign-in ended in the same batch; the previous unclaimed invite is removed in the same batch), `claimInvite` (the one public flow: the invite must be unused and unexpired,
   its user unclaimed and not disabled — otherwise the single `invalid_invite`; it `update`s the user's password, spends the invite and starts a session in one batch), `disableUser`
   (the user's `disabled_at` **and** `endingCredentials` — every session deleted, every live token and stdio sign-in revoked — in one batch), `enableUser` (clears `disabled_at` only; nothing is revived), `setRole`,

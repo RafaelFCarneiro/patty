@@ -182,7 +182,11 @@ export const resetPassword = (
 
     const now = deps.clock();
     const ended = endingCredentials(
-      { sessions: await deps.sessions.listByUser(user.id), tokens: await deps.accessTokens.listByUser(user.id) },
+      {
+        sessions: await deps.sessions.listByUser(user.id),
+        tokens: await deps.accessTokens.listByUser(user.id),
+        approvedGrants: await deps.clientGrants.listApprovedByUser(user.id),
+      },
       now,
     );
     const persist: Persistable[] = [

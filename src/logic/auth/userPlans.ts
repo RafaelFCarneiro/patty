@@ -8,7 +8,6 @@ import type { AccessTokenEntity } from '../../models/auth/token.js';
 import type { ClientGrantEntity } from '../../models/auth/grant.js';
 import { AdminChange, type InviteEntity, type RevokedCredentials } from '../../models/auth/users.js';
 import { hasCredentials, isNeverClaimed } from './owner.js';
-import { expiredGrant } from './grant.js';
 import { endedCredentials, type HeldCredentials } from './revoke.js';
 import {
   disabledUser,
@@ -96,7 +95,7 @@ const rowsOf = (facts: Facts, roster: readonly UserEntity[], writes: UserEntity[
 
 /** Disabling ends every credential and every pending invite in the same plan that disables. Idempotent. */
 export const planDisable = (
-  facts: Facts & { held: Held; openInvites: readonly InviteEntity[]; approvedGrants: readonly ClientGrantEntity[] },
+  facts: Facts & { held: Held; openInvites: readonly InviteEntity[] },
 ): Result<UserPlan, AppError> => {
   if (facts.target.disabledAt !== null) return ok(unchanged(facts.target));
   const roster = rosterOf(facts);
@@ -108,7 +107,7 @@ export const planDisable = (
     ...rowsOf(facts, roster, [disabled]),
     sessions: ended.sessions,
     tokens: ended.tokens,
-    expiredGrants: R.map(facts.approvedGrants, expiredGrant),
+    expiredGrants: ended.expiredGrants,
     removedInvites: [...facts.openInvites],
     newInvites: [],
     after: disabled,
@@ -124,7 +123,6 @@ export const planReissue = (
   facts: Facts & {
     held: Held;
     openInvites: readonly InviteEntity[];
-    approvedGrants: readonly ClientGrantEntity[];
     invite: Omit<InviteEntity, 'version'>;
   },
 ): Result<UserPlan, AppError> => {
@@ -138,14 +136,14 @@ export const planReissue = (
   const after = claimed ? withoutPassword(facts.target, facts.now) : facts.target;
   const ended = claimed
     ? endedCredentials(facts.held, facts.now)
-    : { sessions: [], tokens: [], revoked: NO_REVOCATIONS };
+    : { sessions: [], tokens: [], expiredGrants: [], revoked: NO_REVOCATIONS };
   return ok({
     // The new invite is a way in for the target, so its row is written either way (an unclaimed target gets
     // `credentialsChangedAt`): a claim, reissue or revocation racing this one conflicts on its version.
     ...rowsOf(facts, roster, [claimed ? after : withCredentialsChanged(after, facts.now)]),
     sessions: ended.sessions,
     tokens: ended.tokens,
-    expiredGrants: R.map(facts.approvedGrants, expiredGrant),
+    expiredGrants: ended.expiredGrants,
     removedInvites: [...facts.openInvites],
     newInvites: [facts.invite],
     after,
