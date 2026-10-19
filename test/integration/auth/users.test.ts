@@ -580,17 +580,44 @@ describe('a credential cannot be issued to a user after theirs were ended', () =
     const run = bindAuthRunEffects(ctx.authRunEffects);
     const input = { name: 'raced', access: 'write' as const, expiry: '30' as const, password: MEMBER_PASSWORD };
 
-    const stale = (await createToken(deps, ana.userId, input))._unsafeUnwrap();
+    const anaSession = await sessionPrincipalFor(ctx, ana.userId);
+    const stale = (await createToken(deps, anaSession, input))._unsafeUnwrap();
     await post(ctx, owner, `${USERS_URL}/${ana.userId}/disable`, { password: PASSWORD });
     let first = true;
     const minted = await run(() => {
-      if (!first) return createToken(deps, ana.userId, input);
+      if (!first) return createToken(deps, anaSession, input);
       first = false;
       return okAsync(stale);
     });
 
     // The stale batch conflicts on the user's version; its retry sees a disabled user and refuses.
     expect(minted.isErr()).toBe(true);
+    expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
+  });
+});
+
+describe('a token request cannot outlive the session it came through', () => {
+  it('refuses a token retried after a disable and re-enable ended its session, and mints nothing', async () => {
+    const { ctx, owner } = await withOwner();
+    const ana = await addUser(ctx, owner, 'ana');
+    const deps = authDepsOf(ctx);
+    const run = bindAuthRunEffects(ctx.authRunEffects);
+    const anaSession = await sessionPrincipalFor(ctx, ana.userId);
+    const input = { name: 'raced', access: 'write' as const, expiry: '30' as const, password: MEMBER_PASSWORD };
+
+    const stale = (await createToken(deps, anaSession, input))._unsafeUnwrap();
+    await post(ctx, owner, `${USERS_URL}/${ana.userId}/disable`, { password: PASSWORD });
+    await post(ctx, owner, `${USERS_URL}/${ana.userId}/enable`, { password: PASSWORD });
+    // Active again, same password — but the session the request came through is gone.
+    expect(await ctx.db.all(sql`SELECT id FROM sessions WHERE user_id = ${ana.userId}`)).toEqual([]);
+    let first = true;
+    const minted = await run(() => {
+      if (!first) return createToken(deps, anaSession, input);
+      first = false;
+      return okAsync(stale);
+    });
+
+    expect(minted._unsafeUnwrapErr()).toEqual(authErrors.unauthenticated);
     expect(await liveTokenCount(ctx, ana.userId)).toBe(0);
   });
 });
@@ -697,6 +724,7 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
       deps,
       adminId,
       admin: await adminActorOf(ctx, adminId),
+      anaSession: await sessionPrincipalFor(ctx, ana.userId),
       run: bindAuthRunEffects(ctx.authRunEffects),
     };
   };
@@ -715,10 +743,10 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
     )._unsafeUnwrap();
 
   it('a. a personal token minted during a disable is revoked, and stays dead after enabling', async () => {
-    const { ctx, ana, deps, admin, run } = await world();
+    const { ctx, ana, deps, admin, run, anaSession } = await world();
     let minted = '';
     const hook = issuingDuringFirstRead(deps.accessTokens.listByUser, async () => {
-      minted = (await run(() => createToken(deps, ana.userId, tokenInput)))._unsafeUnwrap().token;
+      minted = (await run(() => createToken(deps, anaSession, tokenInput)))._unsafeUnwrap().token;
     });
 
     const disabled = await run(() => disableUser(withTokenList(deps, hook.read), admin, ana.userId));
@@ -732,10 +760,10 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
   });
 
   it('b. a personal token minted during the reissue of a claimed user is revoked', async () => {
-    const { ctx, ana, deps, admin, run } = await world();
+    const { ctx, ana, deps, admin, run, anaSession } = await world();
     let minted = '';
     const hook = issuingDuringFirstRead(deps.accessTokens.listByUser, async () => {
-      minted = (await run(() => createToken(deps, ana.userId, tokenInput)))._unsafeUnwrap().token;
+      minted = (await run(() => createToken(deps, anaSession, tokenInput)))._unsafeUnwrap().token;
     });
 
     const reissued = await run(() => reissueInvite(withTokenList(deps, hook.read), admin, ana.userId));
@@ -747,10 +775,10 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
   });
 
   it('c. a personal token minted during a password reset is revoked', async () => {
-    const { ctx, ana, deps, run } = await world();
+    const { ctx, ana, deps, run, anaSession } = await world();
     let minted = '';
     const hook = issuingDuringFirstRead(deps.accessTokens.listByUser, async () => {
-      minted = (await run(() => createToken(deps, ana.userId, tokenInput)))._unsafeUnwrap().token;
+      minted = (await run(() => createToken(deps, anaSession, tokenInput)))._unsafeUnwrap().token;
     });
 
     const reset = await run(() =>

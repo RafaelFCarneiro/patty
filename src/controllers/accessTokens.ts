@@ -2,8 +2,9 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { AppError } from '../common/errors.js';
-import { okOr } from '../common/result.js';
+import { guard, okOr } from '../common/result.js';
 import { canLogin } from '../logic/auth/password.js';
+import { liveSessionOf } from '../logic/auth/session.js';
 import { withCredentialsChanged } from '../logic/auth/users.js';
 import {
   evaluateToken,
@@ -15,7 +16,7 @@ import {
   usedToken,
 } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
-import { ACCESS_TOKEN_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
+import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
 import { type Principal, PrincipalVia } from '../models/auth/principal.js';
 import {
@@ -31,10 +32,11 @@ import type { AuthDeps } from './deps.js';
  *  else: only its sha256 and a display prefix are persisted. */
 export const createToken = (
   deps: AuthDeps,
-  userId: string,
+  principal: Principal,
   input: CreateTokenInput,
 ): ResultAsync<FlowOutcome<CreatedAccessToken>, AppError> =>
   safeTry(async function* () {
+    const userId = principal.userId;
     const user = await deps.users.findById(userId);
     // Same cost whether or not the user has a password, like login.
     const passwordMatches = await deps.secrets.verifyPassword(
@@ -43,7 +45,14 @@ export const createToken = (
     );
     const account = yield* okOr(canLogin(user, passwordMatches) ? user : null, authErrors.invalidCredentials);
 
+    // Token management is session-only, and the session is re-read on every attempt: a retry after a disable that
+    // deleted it (and a re-enable that left the password as it was) is refused.
+    yield* guard(principal.via === PrincipalVia.enum.session, authErrors.sessionRequired);
     const now = deps.clock();
+    const session = yield* okOr(
+      liveSessionOf(await deps.sessions.listByUser(userId), principal.sessionId, now),
+      authErrors.unauthenticated,
+    );
     const token = deps.secrets.randomAccessToken();
     const entity = newAccessToken(
       { id: deps.newId(), userId, tokenHash: deps.secrets.hashSecret(token), prefix: tokenDisplayPrefix(token), input },
@@ -52,6 +61,7 @@ export const createToken = (
     // Issuing changes the user's credential set, so it is written: a disable or reset racing this mint, in either
     // order, conflicts on the user's version and retries (into a refusal, or a revocation covering this token).
     const persist: Persistable[] = [
+      persistence.check({ entity: SESSION_ENTITY_TAG, id: session.id, version: session.version }),
       persistence.update({ entity: USER_ENTITY_TAG, model: withCredentialsChanged(account, now) }),
       persistence.insert({ entity: ACCESS_TOKEN_ENTITY_TAG, model: entity }),
     ];

@@ -4,12 +4,12 @@ import { describe, expect, it } from 'vitest';
 import type { AppError } from '../../../src/common/errors.js';
 import { authenticateToken, createToken, listTokens, revokeToken } from '../../../src/controllers/accessTokens.js';
 import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
-import { ACCESS_TOKEN_ENTITY_TAG, USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
+import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG, USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
 import { authErrors } from '../../../src/models/auth/errors.js';
 import { OWNER_USER_ID, type UserEntity, UserRole } from '../../../src/models/auth/owner.js';
-import { PrincipalVia } from '../../../src/models/auth/principal.js';
+import { type Principal, PrincipalVia } from '../../../src/models/auth/principal.js';
 import { Scope } from '../../../src/models/auth/scope.js';
-import { SESSION_TOUCH_INTERVAL_MS } from '../../../src/models/auth/session.js';
+import { type SessionEntity, SESSION_TOUCH_INTERVAL_MS } from '../../../src/models/auth/session.js';
 import { type AccessTokenEntity, AccessTokenKind } from '../../../src/models/auth/token.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
@@ -58,10 +58,35 @@ const tokenRow = (overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity
   ...overrides,
 });
 
-type World = { users?: UserEntity[]; tokens?: AccessTokenEntity[]; now?: Date };
+type World = { users?: UserEntity[]; tokens?: AccessTokenEntity[]; sessions?: SessionEntity[]; now?: Date };
 
-const depsFor = ({ users = [claimedOwner()], tokens = [], now = NOW }: World = {}): AuthDeps =>
+const SESSION_ID = 's1';
+const sessionRow = (overrides: Partial<SessionEntity> = {}): SessionEntity => ({
+  id: SESSION_ID,
+  userId: OWNER_USER_ID,
+  tokenHash: 'sha(TOKEN)',
+  createdAt: NOW.toISOString(),
+  lastSeenAt: NOW.toISOString(),
+  expiresAt: new Date(NOW.getTime() + 60_000).toISOString(),
+  version: 4,
+  ...overrides,
+});
+const SESSION_PRINCIPAL: Principal = {
+  userId: OWNER_USER_ID,
+  role: UserRole.enum.admin,
+  scopes: [READ, WRITE],
+  via: PrincipalVia.enum.session,
+  sessionId: SESSION_ID,
+};
+
+const depsFor = ({
+  users = [claimedOwner()],
+  tokens = [],
+  sessions = [sessionRow()],
+  now = NOW,
+}: World = {}): AuthDeps =>
   ({
+    sessions: { listByUser: async (userId: string) => sessions.filter((session) => session.userId === userId) },
     users: { findById: async (id: string) => users.find((user) => user.id === id) ?? null },
     accessTokens: {
       findByTokenHash: async (hash: string) => tokens.find((token) => token.tokenHash === hash) ?? null,
@@ -86,18 +111,24 @@ describe('createToken', () => {
   const input = { name: 'laptop', access: 'write', expiry: '90', password: PASSWORD } as const;
 
   it('returns the plaintext once and persists only its hash and a display prefix', async () => {
-    const { persist, response } = await outcomeOf(createToken(depsFor(), OWNER_USER_ID, input));
+    const { persist, response } = await outcomeOf(createToken(depsFor(), SESSION_PRINCIPAL, input));
 
     expect(response.token).toBe(PLAINTEXT);
     // The user's own row first, its credential epoch moved: a disable racing this mint conflicts and retries.
-    expect(persist).toHaveLength(2);
-    expect(persist[0]).toMatchObject({
+    expect(persist).toHaveLength(3);
+    expect(persist[0]).toEqual({
+      op: PersistOp.enum.check,
+      entity: SESSION_ENTITY_TAG,
+      id: SESSION_ID,
+      version: 4,
+    });
+    expect(persist[1]).toMatchObject({
       op: PersistOp.enum.update,
       entity: USER_ENTITY_TAG,
       model: { id: OWNER_USER_ID, credentialsChangedAt: NOW.toISOString() },
     });
-    expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: ACCESS_TOKEN_ENTITY_TAG });
-    const stored = (persist[1] as { model: Record<string, unknown> }).model;
+    expect(persist[2]).toMatchObject({ op: PersistOp.enum.insert, entity: ACCESS_TOKEN_ENTITY_TAG });
+    const stored = (persist[2] as { model: Record<string, unknown> }).model;
     expect(stored).toMatchObject({
       id: 'new-id',
       userId: OWNER_USER_ID,
@@ -115,13 +146,33 @@ describe('createToken', () => {
 
   it('gives a read-only token only the read scope, and every new token an expiry', async () => {
     const { persist } = await outcomeOf(
-      createToken(depsFor(), OWNER_USER_ID, { name: 'ro', access: 'read', expiry: '30', password: PASSWORD }),
+      createToken(depsFor(), SESSION_PRINCIPAL, { name: 'ro', access: 'read', expiry: '30', password: PASSWORD }),
     );
     const thirtyDays = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    expect((persist[1] as { model: AccessTokenEntity }).model).toMatchObject({
+    expect((persist[2] as { model: AccessTokenEntity }).model).toMatchObject({
       scopes: [READ],
       expiresAt: thirtyDays,
     });
+  });
+});
+
+describe('createToken — the session it comes through', () => {
+  const input = { name: 'laptop', access: 'write', expiry: '90', password: PASSWORD } as const;
+
+  it('refuses a session that is gone or expired, even for an active user with the right password', async () => {
+    const gone = await createToken(depsFor({ sessions: [] }), SESSION_PRINCIPAL, input);
+    const expired = await createToken(
+      depsFor({ sessions: [sessionRow({ expiresAt: NOW.toISOString() })] }),
+      SESSION_PRINCIPAL,
+      input,
+    );
+    expect(gone._unsafeUnwrapErr()).toEqual(authErrors.unauthenticated);
+    expect(expired._unsafeUnwrapErr()).toEqual(authErrors.unauthenticated);
+  });
+
+  it('refuses a request that did not come through a browser session', async () => {
+    const viaToken: Principal = { ...SESSION_PRINCIPAL, via: PrincipalVia.enum.token };
+    expect((await createToken(depsFor(), viaToken, input))._unsafeUnwrapErr()).toEqual(authErrors.sessionRequired);
   });
 });
 
@@ -135,7 +186,7 @@ describe('createToken — step-up password', () => {
     ['a disabled user', { users: [claimedOwner({ disabledAt: NOW.toISOString() })] }, PASSWORD],
     ['an unknown user', { users: [] }, PASSWORD],
   ] as const)('refuses %s and persists nothing', async (_label, world, password) => {
-    const result = await createToken(depsFor(world as unknown as World), OWNER_USER_ID, { ...spec, password });
+    const result = await createToken(depsFor(world as unknown as World), SESSION_PRINCIPAL, { ...spec, password });
     expect(result._unsafeUnwrapErr()).toEqual(authErrors.invalidCredentials);
   });
 });

@@ -60,7 +60,7 @@ const createPage = (ctx: AuthRoutesContext, limiter: Limiter) => async (req: Fas
     return showTokens(ctx, reply, principal, RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
   }
   const created = await limiter.attempt(req.ip, userId, () =>
-    ctx.runEffects(() => createToken(ctx.deps, userId, parsed.data)),
+    ctx.runEffects(() => createToken(ctx.deps, principal, parsed.data)),
   );
   if (created.isErr()) {
     if (created.error.code !== authErrors.invalidCredentials.code) limiter.forgive(req.ip, userId);
