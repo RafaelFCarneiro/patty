@@ -5,6 +5,7 @@ import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { runCli } from '../../../src/diplomat/cli/commands.js';
 import { EXIT_FAILURE, EXIT_OK, type CliIo } from '../../../src/diplomat/cli/io.js';
 import { runUsersCommand, USERS_HELP } from '../../../src/diplomat/cli/commands/users.js';
+import { INVITE_PATH } from '../../../src/models/auth/origin.js';
 import { DEFAULT_PROFILE } from '../../../src/models/auth/signIn.js';
 import { NPX_COMMAND } from '../../../src/models/package.js';
 import type { AppContext } from '../app-builder.js';
@@ -29,7 +30,7 @@ type Harness = { out: string[]; err: string[]; run: (...args: string[]) => Promi
 
 /** The CLI against the test app's own database — what `main.ts` wires with `openShell`, minus the process. It has no
  *  password to give: the terminal is the trusted operator, so reading one is a test failure. */
-const harness = (ctx: AppContext): Harness => {
+const harness = (ctx: AppContext, inviteOrigin: string | null = LOOPBACK_ORIGIN): Harness => {
   const out: string[] = [];
   const err: string[] = [];
   const io: CliIo = {
@@ -40,7 +41,7 @@ const harness = (ctx: AppContext): Harness => {
         close: () => undefined,
         authRequired: true,
         defaultProfile: DEFAULT_PROFILE,
-        inviteOrigin: LOOPBACK_ORIGIN,
+        inviteOrigin,
         signIn: () => {
           throw new Error('users commands never sign anything in');
         },
@@ -131,6 +132,21 @@ describe('users invite', () => {
     const claimed = await claim(ctx, code);
     expect(claimed.statusCode).toBe(303);
     expect(sessionCookieOf(claimed)).toBeDefined();
+  });
+
+  it('prints only the code and the page path, never a link, when no public origin is configured', async () => {
+    const ctx = await createApp();
+    await claimOwner(ctx);
+    const cli = harness(ctx, null);
+
+    expect(await cli.run('invite', 'Ana')).toBe(EXIT_OK);
+    expect(await cli.run('reissue', 'ana')).toBe(EXIT_OK);
+
+    const text = cli.out.join('\n');
+    expect(text).not.toMatch(/Link:|https?:\/\//);
+    expect(text).not.toContain('?code=');
+    expect(text).toContain(`Page: ${INVITE_PATH}`);
+    expect(CODE.exec(text)).not.toBeNull();
   });
 
   it('invites an administrator with --admin, in either order', async () => {

@@ -88,7 +88,9 @@ const aboutUser = (
   );
 
 const printIssued = (io: CliIo, shell: Shell, issued: IssuedInvite): void => {
-  io.out(CLI_MESSAGES.invited(issued, inviteLink(shell.inviteOrigin, issued.code)));
+  io.out(
+    CLI_MESSAGES.invited(issued, shell.inviteOrigin === null ? null : inviteLink(shell.inviteOrigin, issued.code)),
+  );
 };
 
 const list = (io: CliIo): Promise<number> =>

@@ -1,3 +1,4 @@
+import { INVITE_PATH } from '../../models/auth/origin.js';
 import type { PasswordReset } from '../../models/auth/password.js';
 import type { IssuedInvite, RevokedCredentials, UserSummary } from '../../models/auth/users.js';
 
@@ -21,10 +22,12 @@ export const CLI_MESSAGES = {
       user.status.padEnd(9),
       `last login: ${user.lastLoginAt ?? 'never'}`,
     ].join(' '),
-  invited: (issued: IssuedInvite, link: string) =>
+  invited: (issued: IssuedInvite, link: string | null) =>
     [
       `Invite for "${issued.user.username}" (${issued.user.role}) — valid until ${issued.expiresAt}, single use, shown only now:`,
-      `  Link: ${link}`,
+      link === null
+        ? `  Page: ${INVITE_PATH} on the server that runs this database (set PUBLIC_URL to print a link)`
+        : `  Link: ${link}`,
       `  Code: ${issued.code}`,
       'They choose their own password; you never see it.',
     ].join('\n'),

@@ -335,8 +335,9 @@ valid for **72 hours** and for a single use. Send them privately: whoever opens 
 - The user exists straight away as `invited`: a username and a role, no password, so nobody can log in as them yet. Usernames are unique, case-insensitively, among everyone —
   invited and disabled users included.
 - **At most one unclaimed invite per user:** issuing a new one removes the previous one in the same write.
-- From a terminal: `npx @rafaelfcarneiro/fintrack@latest users invite ana [--admin]` prints the link and the code (no password — the terminal holds the database key). The link names `PUBLIC_URL`, else
-  this install's default address; the code can always be typed instead.
+- From a terminal: `npx @rafaelfcarneiro/fintrack@latest users invite ana [--admin]` prints the code (no password — the terminal holds the database key) and, when `PUBLIC_URL` is set, the link. Without it the
+  terminal prints only the claim page's path, `/ui/access/invite`: it starts no server, so it cannot know which process on
+  `HOST:PORT` serves this database, and a link there could hand the code to another one. Type the code on that page.
 
 ### Claiming an invite
 
