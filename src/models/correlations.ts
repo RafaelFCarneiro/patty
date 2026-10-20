@@ -321,3 +321,10 @@ export const findCorrelationsErrors = {
     issues: [`analysis "${analysis}" requires month and year`],
   }),
 };
+
+export type CadenceResult = {
+  typicalAmount: number;
+  occurrences: number;
+  lastDate: string;
+  suggestedNextDue: string;
+};

@@ -24,7 +24,7 @@ import { loggedIn, withCredentialsChanged } from '../logic/auth/users.js';
 import * as persistence from '../logic/persistence.js';
 import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
-import { type AuthMode } from '../models/auth/mode.js';
+import type { AuthMode } from '../models/auth/mode.js';
 import {
   type ClaimedOwner,
   type ClaimedUserEntity,
@@ -35,15 +35,15 @@ import {
   SETUP_CODE_TTL_MS,
   type UserEntity,
 } from '../models/auth/owner.js';
-import {
-  type ClaimOwnerInput,
-  type ClaimOwnerLocallyInput,
-  type LoginInput,
-  type PasswordReset,
-  type ResetPasswordInput,
+import type {
+  ClaimOwnerInput,
+  ClaimOwnerLocallyInput,
+  LoginInput,
+  PasswordReset,
+  ResetPasswordInput,
 } from '../models/auth/password.js';
-import { type Principal } from '../models/auth/principal.js';
-import { type StartedSession } from '../models/auth/session.js';
+import type { Principal } from '../models/auth/principal.js';
+import type { StartedSession } from '../models/auth/session.js';
 import type { AuthDeps } from './deps.js';
 
 export const startSession = (deps: AuthDeps, userId: string, now: Date) => {
@@ -54,9 +54,6 @@ export const startSession = (deps: AuthDeps, userId: string, now: Date) => {
   return { persistable, started };
 };
 
-/** Startup: while auth is on and the owner has no credentials, mint a fresh one-time setup code, replacing the
- *  single setup-code row in place (a restart — or a concurrent starter — invalidates the previous code).
- *  Otherwise issue nothing. */
 export const issueSetupCode = (
   deps: AuthDeps,
   mode: AuthMode,
@@ -91,7 +88,6 @@ const unclaimedOwner = (deps: AuthDeps): ResultAsync<UserEntity, AppError> =>
     return ok(owner);
   });
 
-/** The owner may take a name nobody else holds — or keep their own (recovering a reissued owner reclaims it). */
 const nameAvailableTo = async (deps: AuthDeps, owner: UserEntity, username: string) => {
   const holder = await deps.users.findByUsername(username);
   return guard(holder === null || holder.id === owner.id, authErrors.usernameTaken(username));
@@ -108,11 +104,6 @@ const claimOwnerUpdate = (
     model: withCredentialsChanged(claimedOwner(owner, { username: input.username, passwordHash }), now),
   });
 
-/**
- * `/ui/setup`: the setup code claims the EXISTING owner row — sets its username and password — and
- * starts its first session. It emits an `update` of the owner and never an `insert` of any user, so
- * no path can create a second, empty user the data doesn't belong to (ADR-033 §2, §7).
- */
 export const claimOwner = (
   deps: AuthDeps,
   input: ClaimOwnerInput,
@@ -124,7 +115,6 @@ export const claimOwner = (
     const now = deps.clock();
     const stored = await deps.setupCodes.findByHash(deps.secrets.hashSecret(normalizeSetupCode(input.code)));
     const code = yield* okOr(isSetupCodeUsable(stored, now) ? stored : null, authErrors.invalidSetupCode);
-    // After the code: a name's availability is never an answer to someone without a valid setup code.
     yield* await nameAvailableTo(deps, owner, input.username);
 
     const passwordHash = await deps.secrets.hashPassword(input.password);
@@ -137,10 +127,6 @@ export const claimOwner = (
     return ok({ persist, response: started });
   });
 
-/**
- * The CLI's owner claim: `claimOwner` without a setup code or a session. Reachable only by someone who can open the
- * database with its key, who already controls the data. An outstanding setup code is spent in the same batch.
- */
 export const claimOwnerLocally = (
   deps: AuthDeps,
   input: ClaimOwnerLocallyInput,
@@ -172,7 +158,6 @@ export const findResetTarget = (
     return ok(yield* okOr(owner !== null && hasCredentials(owner) ? owner : null, authErrors.ownerUnclaimed));
   });
 
-/** CLI-only, like `claimOwnerLocally`: a new password, plus the end of that user's sessions and live tokens. */
 export const resetPassword = (
   deps: AuthDeps,
   input: ResetPasswordInput,
@@ -199,8 +184,6 @@ export const resetPassword = (
     return ok({ persist, response: { username: user.username, ...ended.revoked } });
   });
 
-/** `/ui/login`: verifies against the real hash — or the dummy one for an unknown/unclaimed/disabled
- *  user, so every failure costs the same — and fails with one generic error. */
 export const login = (deps: AuthDeps, input: LoginInput): ResultAsync<FlowOutcome<StartedSession>, AppError> =>
   safeTry(async function* () {
     const user = await deps.users.findByUsername(input.username);
@@ -217,18 +200,12 @@ export const login = (deps: AuthDeps, input: LoginInput): ResultAsync<FlowOutcom
     return ok({ persist: [...expired, seen, sessionInsert], response: started });
   });
 
-/** Logout: delete the session row. Idempotent — an unknown or already-gone token is not an error. */
 export const logout = (deps: AuthDeps, tokenHash: string): ResultAsync<FlowOutcome<void>, AppError> =>
   safeTry(async function* () {
     const session = await deps.sessions.findByTokenHash(tokenHash);
     return ok({ persist: session ? [removeSession(session)] : [], response: undefined });
   });
 
-/**
- * The auth hook's per-request question: whose session is this? A valid one slides forward (throttled
- * to `SESSION_TOUCH_INTERVAL_MS` so the common request writes nothing); an expired one, or one whose
- * user can no longer log in, is deleted. `null` = unauthenticated.
- */
 export const authenticate = (deps: AuthDeps, tokenHash: string): ResultAsync<FlowOutcome<Principal | null>, AppError> =>
   safeTry(async function* () {
     const session = await deps.sessions.findByTokenHash(tokenHash);
@@ -246,7 +223,6 @@ export const authenticate = (deps: AuthDeps, tokenHash: string): ResultAsync<Flo
     return ok({ persist, response: sessionPrincipal(user, session) });
   });
 
-/** Startup housekeeping: delete every session past its expiry. */
 export const pruneExpiredSessions = (deps: AuthDeps): ResultAsync<FlowOutcome<number>, AppError> =>
   safeTry(async function* () {
     const expired = await deps.sessions.listExpired(deps.clock().toISOString());
@@ -258,21 +234,13 @@ export const claimedOwnerOf = async (deps: AuthDeps): Promise<ClaimedOwner | nul
   return owner !== null && hasCredentials(owner) ? { username: owner.username } : null;
 };
 
-/** Read-only: what a terminal claim should do now — claim, or leave alone an owner who already holds the login. */
 export const ownerClaimPlan = async (deps: AuthDeps): Promise<ClaimPlan> => planOwnerClaim(await claimedOwnerOf(deps));
 
-/** Read-only, after a refused claim: the owner who won the race for it, if that is why it was refused. */
 export const claimRaceWinnerOf = async (deps: AuthDeps, refusal: AppError): Promise<ClaimedOwner | null> =>
   claimRaceWinner(refusal, await claimedOwnerOf(deps));
 
-/**
- * Read-only: where an unauthenticated browser starts. Setup, while the owner was never claimed AND nobody else can log
- * in; otherwise the login form — a user invited before the owner was set up must still be able to sign in (setup stays
- * reachable at its own address for the owner).
- */
 export const startsAtSetup = async (deps: AuthDeps): Promise<boolean> =>
   (await ownerNeedsSetup(deps)) && !(await deps.users.listAll()).some(isActiveUser);
 
-/** Read-only: does the owner still need claiming? Drives whether `/ui/setup` is open. */
 export const ownerNeedsSetup = async (deps: AuthDeps): Promise<boolean> =>
   isNeverClaimed(await deps.users.findById(OWNER_USER_ID));

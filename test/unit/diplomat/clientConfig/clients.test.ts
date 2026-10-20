@@ -109,6 +109,13 @@ describe('what each client reports', () => {
     expect(error).not.toHaveBeenCalled();
   });
 
+  it('finds a client ignoring surrounding space and case; an unknown name is undefined', async () => {
+    const { clientConfigs } = await withHome();
+    expect(clientConfigs.find('  Claude-Code ')).toBe(clientConfigs.find('claude-code'));
+    expect(clientConfigs.find('claude-code')).toBeDefined();
+    expect(clientConfigs.find('no-such-client')).toBeUndefined();
+  });
+
   it('carries the warning of a config it had to replace, and still writes', async () => {
     const { clientConfigs } = await withHome();
     mkdirSync(join(home, '.claude'), { recursive: true });

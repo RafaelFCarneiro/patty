@@ -2,18 +2,16 @@ import { createRequire } from 'node:module';
 import type { FastifyInstance } from 'fastify';
 import { inject } from 'vitest';
 import { bootstrap } from '../../src/diplomat/db/bootstrap.js';
-import { openDatabase } from '../../src/diplomat/db/driver.js';
+import { openDatabase, type Db } from '../../src/diplomat/db/driver.js';
 import { httpOrigin } from '../../src/common/net.js';
 import { prepareAuth, type AuthConfig } from '../../src/composition/auth.js';
 import { createRuntime, type Runtime } from '../../src/composition/runtime.js';
-import type { HttpAuth } from '../../src/diplomat/http/context.js';
-import { DISABLED_AUTH } from '../../src/diplomat/http/context.js';
+import { type HttpAuth, DISABLED_AUTH } from '../../src/diplomat/http/context.js';
 import { buildHttpApp, registerHttpApp } from '../../src/composition/http.js';
 import { AuthMode } from '../../src/models/auth/mode.js';
 import { OWNER_PRINCIPAL, type Principal } from '../../src/models/auth/principal.js';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import type { ChangeEvent } from '../../src/models/tenancy.js';
-import type { Db } from '../../src/diplomat/db/driver.js';
 import {
   scopedFor,
   type Deps,

@@ -1,4 +1,4 @@
-import { type ParseArgsConfig } from 'node:util';
+import type { ParseArgsConfig } from 'node:util';
 import type { SignInHooks } from '../../../controllers/deps.js';
 import { GrantChannel } from '../../../models/auth/grant.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
@@ -14,7 +14,7 @@ import {
   type SignInObservation,
   type SignInState,
 } from '../../../models/auth/signInFlow.js';
-import { type TokenAccess } from '../../../models/auth/token.js';
+import type { TokenAccess } from '../../../models/auth/token.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import {
   LoginOptionsSchema,

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Currency } from '../../../src/models/money.js';
-import { CurrencyCode } from '../../../src/models/money.js';
+import { type Currency, CurrencyCode } from '../../../src/models/money.js';
 import { decimalsLookup, resolveCurrency, roundMoney, roundToDecimals } from '../../../src/logic/money.js';
 
 describe('resolveCurrency', () => {

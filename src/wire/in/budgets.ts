@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 import * as modelBudget from '../../models/budget.js';
 import { CurrencyCode } from '../../models/money.js';
 import { CoercedPeriodSchema } from './period.js';

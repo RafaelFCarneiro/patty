@@ -1,8 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
-import type { MerchantMatch } from '../../../logic/classify.js';
+import { type MerchantMatch, ClassificationMethod } from '../../../models/transaction.js';
 import type { Merchant, MerchantCategoryEdge } from '../../../models/merchant.js';
-import { ClassificationMethod } from '../../../models/transaction.js';
 import { MerchantTopDbRowSchema, type MerchantTopDbRow } from '../../../wire/db/merchants.js';
 import type { Db } from '../driver.js';
 import { merchantCategory, merchants } from '../schema.js';

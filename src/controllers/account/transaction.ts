@@ -1,20 +1,10 @@
-// Account aggregate: owns the account-movement entry points. Validates (category/sub-category
-// exclusivity, non-credit account), then hands the write off as a `Persistable` — the core never
-// depends on this module (the reverse is fine and expected).
-
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertNonCreditType, guardTransferMutability, isAccountOwnedType } from '../../logic/account.js';
-import { pickClassification, userClassification } from '../../logic/classify.js';
 import { resolveCurrency } from '../../logic/money.js';
-import {
-  normalizeMerchant,
-  resolveMerchantCorrection,
-  withMerchant,
-  withMerchantLearning,
-} from '../../logic/merchant.js';
+import { resolveMerchantCorrection, withMerchant, withMerchantLearning } from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { overlayResolvedTags } from '../../logic/tag.js';
@@ -24,116 +14,85 @@ import {
   buildTransactionView,
   buildUpsertResult,
   defaultStatementLines,
-  defaultStatusFor,
-  deriveIdempotencyKey,
+  mergePatch,
+  planNewTransaction,
 } from '../../logic/transaction.js';
 import {
   accountErrors,
+  type Account,
   type AddAccountMovement,
   type ImportAccountStatement,
   type ImportAccountStatementItem,
   type UpdateAccountTransaction,
 } from '../../models/account.js';
-import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
+import type { FlowOutcome, Persistable, PersistOutcome } from '@rfc0/effect-runner';
 import {
-  ClassificationMethod,
   DELETE_TRANSACTION_CONFIRM_HINT,
   TRANSACTION_ENTITY_TAG,
   transactionErrors,
   MovementType,
+  type NewTransactionPlan,
   type ClassifiedUpsertResult,
-  type ClassifyOutcome,
   type DeleteTransactionResult,
-  type TransactionEntity,
   type TransactionSource,
   type TransactionView,
 } from '../../models/transaction.js';
 import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
-import { resolveAccountRef, resolveDecimals, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
+import {
+  matchCandidatesFor,
+  resolveAccountRef,
+  resolveDecimals,
+  resolveLegAccounts,
+  resolveTagLinks,
+} from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
-/**
- * Repo-touching precondition: true when every leg the transaction has resolves to one of *this*
- * aggregate's own account types — a positive scope test (`isAccountOwnedType`), not the negation
- * of the credit-card aggregate's test. The account domain doesn't ask "does the credit-card
- * aggregate own this instead"; it asks "is every leg mine", vacuously true for an unattached movement.
- */
 const assertAccountOwnedLegs = (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
 ): ResultAsync<boolean, AppError> =>
   resolveLegAccounts(deps, tx).map((legs) => legs.every((account) => isAccountOwnedType(account.type)));
 
-type MovementPlan = { entity: TransactionEntity; classification: ClassifyOutcome; idempotencyKey: string };
+const resolveFundingAccount = (deps: Deps, ref: string | undefined): ResultAsync<Account | null, AppError> =>
+  safeTry(async function* () {
+    if (!R.isNonNullish(ref)) return ok(null);
+    const account = yield* resolveAccountRef(deps, ref);
+    yield* guard(assertNonCreditType(account.type), accountErrors.creditPostRejected);
+    return ok(account);
+  });
 
 const planAccountMovement = (
   deps: Deps,
   input: AddAccountMovement,
   type: MovementType,
   source: TransactionSource,
-): ResultAsync<MovementPlan, AppError> =>
+): ResultAsync<NewTransactionPlan, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory);
 
-    const account = R.isNonNullish(input.account) ? yield* resolveAccountRef(deps, input.account) : null;
-    if (account) {
-      yield* guard(assertNonCreditType(account.type), accountErrors.creditPostRejected);
-    }
-
-    const today = toIsoDate(deps.clock());
-    const date = input.date ?? today;
-    const status = input.status ?? defaultStatusFor(date, today);
+    const account = yield* resolveFundingAccount(deps, input.account);
     const currency = resolveCurrency(account, input);
-
     const categorySelection = yield* resolveCategorySelection(deps, input, type);
-    const normalizedMerchant = normalizeMerchant(input.description);
-    const classification: ClassifyOutcome = categorySelection
-      ? userClassification({ id: categorySelection.categoryId, name: categorySelection.categoryName })
-      : pickClassification(await deps.merchants.matchCandidates(normalizedMerchant));
-    const subCategoryId = categorySelection?.subCategoryId;
-    // A match reuses the (possibly partial) key merchant_category already learned under — reusing
-    // it keeps future corrections reinforcing that same generalized key. Unmatched still needs a
-    // key stored on the row, or a later correction has nothing to attach to (it can only ever
-    // strengthen a merchant this transaction is already linked to) — falls back to the full
-    // normalized description, empty-string guarded since that can't back a merchants FK row.
-    const merchantKey = classification.merchantKey ?? (normalizedMerchant || undefined);
 
-    const entity: TransactionEntity = {
-      id: deps.newId(),
-      description: input.description,
-      amount: input.amount,
-      type,
-      status,
-      date,
-      currency,
-      source,
-      classification,
-      rawInput: input.rawInput,
-      note: input.note,
-      refs: {
-        accountId: account?.id,
-        categoryId: classification.categoryId,
-        subCategoryId,
-        merchantKey,
-      },
-    };
-
-    const decimals = await resolveDecimals(deps, currency);
-    const idempotencyKey = deriveIdempotencyKey(
-      { fundingSourceId: account?.id, type, currency, date, description: input.description, amount: input.amount },
-      decimals,
-      input.discriminator,
+    return ok(
+      planNewTransaction({
+        id: deps.newId(),
+        today: toIsoDate(deps.clock()),
+        input,
+        type,
+        source,
+        currency,
+        decimals: await resolveDecimals(deps, currency),
+        funding: { refs: { accountId: account?.id }, sourceId: account?.id },
+        categorySelection,
+        candidates: await matchCandidatesFor(deps, input.description, categorySelection),
+        keepsUnmatchedMerchant: true,
+      }),
     );
-
-    return ok({ entity, classification, idempotencyKey });
   });
 
-/** Shared by addAccountExpense/addAccountIncome — everything but the fixed movement type. Returns
- *  the write as data: the shell applies the insert and reports back whether it actually landed
- *  (vs. an idempotent duplicate replay), which is what `created` reflects here — never faked by
- *  the domain. */
 const addAccountMovement = (
   deps: Deps,
   input: AddAccountMovement,
@@ -175,15 +134,12 @@ export const addAccountIncome = (
 ): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> =>
   addAccountMovement(deps, input, MovementType.enum.income, source);
 
-// Single-source: every item belongs to the ONE account named in `input.account` (or unattached).
 export const importAccountStatement = async (
   deps: Deps,
   input: ImportAccountStatement,
   source: TransactionSource,
 ): Promise<StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult>> => {
   const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
-  // Cached once for the whole batch — every line's own flow reads locale/currencies, and refetching
-  // per line would mean N identical currency-list queries for an N-line import.
   const localePromise = deps.locale();
   const currenciesPromise = deps.currencies.list();
   const cachedDeps: Deps = {
@@ -200,16 +156,6 @@ export const importAccountStatement = async (
   return { lines, flowFor };
 };
 
-/**
- * Update an account transaction: asserts every leg the target has is one of this aggregate's own
- * account types (`assertAccountOwnedLegs`) — a transaction with a leg outside that scope is
- * rejected with a redirect to the card-transaction update — then enforces transfer mutability, and
- * merges the result onto `existing` to build the full desired end-state entity the shell applies
- * as a version-guarded update. Merchant learning (a correction strengthens the merchant→category
- * association) is composed into the SAME `persist` batch via `withMerchantLearning` — not a side
- * effect performed from `response` — so it commits only when the update does, and never fires on
- * a version-conflict attempt that gets rolled back and retried.
- */
 export const updateAccountTransaction = (
   deps: Deps,
   input: UpdateAccountTransaction,
@@ -220,38 +166,11 @@ export const updateAccountTransaction = (
     yield* guard(isAccountOwned, transactionErrors.wrongOperation(Remedy.enum.update_card_transaction));
     yield* guardTransferMutability(existing, input);
 
-    const { account, effectiveType, categorySelection } = yield* decideTransactionUpdate(deps, input, existing);
-    const categoryId = categorySelection?.categoryId ?? existing.categoryId;
-    const subCategoryId = categorySelection ? categorySelection.subCategoryId : existing.subCategoryId;
-    const isUserCorrection = !!categorySelection;
-
-    const entity: TransactionEntity = {
-      id: existing.id,
-      description: input.description ?? existing.description,
-      amount: input.amount ?? existing.amount,
-      type: effectiveType ?? existing.type,
-      status: existing.status,
-      date: input.date ?? existing.date,
-      currency: account?.currency ?? existing.currency,
-      source: existing.source,
-      classification: isUserCorrection
-        ? { method: ClassificationMethod.enum.user, confidence: 1 }
-        : existing.classification,
-      rawInput: existing.rawInput,
-      note: input.note !== undefined ? (input.note === '' ? undefined : input.note) : existing.note,
-      refs: {
-        accountId: account?.id ?? existing.accountId,
-        toAccountId: existing.toAccountId,
-        cardId: existing.cardId,
-        billId: existing.billId,
-        categoryId,
-        subCategoryId,
-        merchantKey: existing.merchant,
-      },
-    };
+    const { account, categorySelection } = yield* decideTransactionUpdate(deps, input, existing);
+    const entity = mergePatch(existing, input, categorySelection, { account });
 
     const locale = await deps.locale();
-    const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
+    const merchantCorrection = resolveMerchantCorrection(existing, entity.refs.categoryId);
     const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
     const persist: Persistable[] = [
       ...withMerchantLearning(
@@ -267,11 +186,6 @@ export const updateAccountTransaction = (
     return ok({ persist, response });
   });
 
-/**
- * Delete an account transaction: same ownership guard as updateAccountTransaction, then a dry-run
- * preview (no writes at all — an empty `persist` batch) or a version-guarded remove the shell
- * applies.
- */
 export const deleteAccountTransaction = (
   deps: Deps,
   input: { id: string; confirm: boolean },

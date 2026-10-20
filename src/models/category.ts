@@ -93,3 +93,5 @@ export const categoryErrors = {
     references,
   }),
 };
+
+export type HasKind = { kind: Category['kind'] };

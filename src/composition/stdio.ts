@@ -2,7 +2,7 @@ import type { AddressInfo } from 'node:net';
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import { version } from '../common/buildVersion.js';
 import { httpOrigin } from '../common/net.js';
-import { type Config } from '../config.js';
+import type { Config } from '../config.js';
 import { connectStdio, type StdioAuth } from '../diplomat/mcp/stdio.js';
 import { signInOrigin } from '../logic/auth/origin.js';
 import type { DatabaseAhead } from '../models/database.js';

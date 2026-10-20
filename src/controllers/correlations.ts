@@ -11,10 +11,10 @@ import {
   shapeSpendingShifts,
   shapeUnbudgetedSpend,
 } from '../logic/correlations.js';
-import { consolidateInCurrency, type CurrencyAmount } from '../logic/currencyRate.js';
+import { consolidateInCurrency } from '../logic/currencyRate.js';
 import { decimalsLookup } from '../logic/money.js';
 import { baselineRange, hasPeriod, lookbackFrom, periodRange, toIsoDate } from '../logic/period.js';
-import type { ConvertedTotal } from '../models/currencyRate.js';
+import type { ConvertedTotal, CurrencyAmount } from '../models/currencyRate.js';
 import {
   findCorrelationsErrors,
   FindCorrelationsAnalysis,
@@ -27,7 +27,6 @@ import type { CurrencyCode, DecimalsFor } from '../models/money.js';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef } from './resolve.js';
 
-// Safe only where the caller already ran `guard(hasPeriod(input), ...)`.
 const resolvePeriod = (input: ResolvedFindCorrelations): Period => ({ month: input.month!, year: input.year! });
 
 const resolveWindows = (
@@ -39,9 +38,6 @@ const resolveWindows = (
   return { baselineFrom, currentFrom, currentTo };
 };
 
-/** Converts a mode's own per-currency amounts to `displayCurrency` — correlates a second aggregate
- *  (`currency_rates`), so it's orchestrated here rather than in a repo, mirroring
- *  `getSpendingSummary`/`getBudgetStatus`. */
 const convertedTotal = async (
   deps: Deps,
   amounts: readonly CurrencyAmount[],
@@ -97,7 +93,6 @@ const budgetFit: AnalysisHandler = (deps, input, locale, decimalsFor) =>
     yield* guard(hasPeriod(input), findCorrelationsErrors.missingPeriod(input.analysis));
     const period = resolvePeriod(input);
     const { baselineFrom, currentFrom, currentTo } = resolveWindows(period, input.baselineMonths);
-    // shiftRows reuses spendingShifts' own query to find unbudgeted candidates, excluding what `budgeted` covers.
     const [budgets, windowedSpend, shiftRows] = await Promise.all([
       deps.budgets.list(),
       deps.transactions.spendByCategoryWindowed(baselineFrom, currentFrom, currentTo),
@@ -113,32 +108,17 @@ const budgetFit: AnalysisHandler = (deps, input, locale, decimalsFor) =>
       decimalsFor,
     );
     const unbudgeted = shapeUnbudgetedSpend(shiftRows, budgeted, input.baselineMonths, locale, decimalsFor);
-    if (!input.displayCurrency) {
-      return ok({
-        analysis: FindCorrelationsAnalysis.enum.budget_fit,
-        month: period.month,
-        year: period.year,
-        budgeted,
-        unbudgeted,
-      });
-    }
-    // A fresh committed-spend read (get_budget_status's own measure), not windowedSpend above
-    // (current-vs-baseline only) — so the two surfaces' converted totals agree.
-    const committedSpend = await deps.transactions.spendByCategory(currentFrom, currentTo);
-    const converted = await convertedTotal(
-      deps,
-      budgetedCommittedByCurrency(budgets, committedSpend),
-      input.displayCurrency,
-      decimalsFor,
-    );
-    return ok({
+    const result = {
       analysis: FindCorrelationsAnalysis.enum.budget_fit,
       month: period.month,
       year: period.year,
       budgeted,
       unbudgeted,
-      converted,
-    });
+    };
+    if (!input.displayCurrency) return ok(result);
+    const committedSpend = await deps.transactions.spendByCategory(currentFrom, currentTo);
+    const committed = budgetedCommittedByCurrency(budgets, committedSpend);
+    return ok({ ...result, converted: await convertedTotal(deps, committed, input.displayCurrency, decimalsFor) });
   });
 
 const merchantConcentration: AnalysisHandler = (deps, input, locale, decimalsFor) =>

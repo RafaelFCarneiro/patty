@@ -159,3 +159,7 @@ export const budgetErrors = {
     period,
   }),
 };
+
+export type BudgetTargetFields = { category?: string; subCategory?: string };
+
+export type SpendCategoryKey = { categoryId: string; subCategoryId: string | null };

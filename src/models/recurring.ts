@@ -2,9 +2,9 @@ import { z } from 'zod';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
-import { withPersistenceMeta } from '@rfc0/effect-runner';
+import { withPersistenceMeta, type Persistable } from '@rfc0/effect-runner';
 import type { LabelMap } from './locale.js';
-import { MovementType } from './transaction.js';
+import { MovementType, type MerchantMatch, type TransactionView } from './transaction.js';
 
 export const RecurringPeriod = z.enum(['weekly', 'monthly', 'yearly']);
 export type RecurringPeriod = z.infer<typeof RecurringPeriod>;
@@ -66,3 +66,28 @@ export const CreateRecurringSchema = z.object({
     ),
 });
 export type CreateRecurring = z.infer<typeof CreateRecurringSchema>;
+
+export type RuleFacts = {
+  id: string;
+  input: CreateRecurring;
+  account: { id: string; currency: CurrencyCode } | null;
+  category: { id: string } | null;
+  candidates: readonly MerchantMatch[];
+};
+
+export type ApplyDueResult = {
+  applied: Array<{ rule: string; date: string; transaction: TransactionView }>;
+  count: number;
+};
+
+export type RulePlan = {
+  occurrences: Array<{ rule: string; date: string; persistable: Persistable }>;
+  advance: Persistable;
+};
+
+export const MAX_RECURRING_OCCURRENCES_PER_RUN = 36;
+
+export type DueSchedule = {
+  dates: readonly string[];
+  next: string;
+};

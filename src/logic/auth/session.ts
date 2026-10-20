@@ -1,4 +1,4 @@
-import { type UserEntity } from '../../models/auth/owner.js';
+import type { UserEntity } from '../../models/auth/owner.js';
 import { PrincipalVia, type Principal } from '../../models/auth/principal.js';
 import { ALL_SCOPES } from '../../models/auth/scope.js';
 import {
@@ -11,7 +11,6 @@ import {
 import { hasCredentials } from './owner.js';
 import { millis, toIso } from './time.js';
 
-/** Idle expiry, capped so a session can never outlive its absolute maximum. */
 export const slidingExpiry = (createdAt: string, now: Date): string =>
   toIso(Math.min(now.getTime() + SESSION_IDLE_TTL_MS, millis(createdAt) + SESSION_ABSOLUTE_MAX_MS));
 
@@ -28,14 +27,12 @@ export const isSessionExpired = (session: SessionEntity, now: Date): boolean =>
 export const isStale = (session: SessionEntity, now: Date): boolean =>
   now.getTime() - millis(session.lastSeenAt) >= SESSION_TOUCH_INTERVAL_MS;
 
-/** Slide the window forward — same row, later `last_seen_at`/`expires_at`. */
 export const touched = (session: SessionEntity, now: Date): SessionEntity => ({
   ...session,
   lastSeenAt: now.toISOString(),
   expiresAt: slidingExpiry(session.createdAt, now),
 });
 
-/** A signed-in user acting through the browser: every scope (the session is the owner's own). */
 export const sessionPrincipal = (user: UserEntity, session: SessionEntity): Principal => ({
   userId: user.id,
   sessionId: session.id,
@@ -44,7 +41,6 @@ export const sessionPrincipal = (user: UserEntity, session: SessionEntity): Prin
   via: PrincipalVia.enum.session,
 });
 
-/** The unexpired session with this id among a user's sessions — the one a request claims to come through. */
 export const liveSessionOf = (
   sessions: readonly SessionEntity[],
   sessionId: string | undefined,

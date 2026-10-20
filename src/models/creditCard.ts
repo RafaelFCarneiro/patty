@@ -1,13 +1,14 @@
 import { z } from 'zod';
-import { BillQuerySchema } from './bill.js';
+import { BillQuerySchema, type BillPeriod, type RawBill } from './bill.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
-import { withPersistenceMeta } from '@rfc0/effect-runner';
+import { withPersistenceMeta, type Persistable } from '@rfc0/effect-runner';
 import {
   CreateTransactionSchema,
   STATEMENT_ITEMS_DESCRIPTION,
   STATEMENT_RAW_INPUT_DESCRIPTION,
   UpdateTransactionSchema,
+  type NewTransactionPlan,
 } from './transaction.js';
 import {
   validationWithRemedy,
@@ -200,3 +201,20 @@ export const cardErrors = {
     issues: ["cannot change a credit card's currency; it is fixed at creation"],
   } satisfies CardError,
 };
+
+export type CardPurchasePlan = NewTransactionPlan & {
+  billPeriod: BillPeriod;
+  existingBill: RawBill | null;
+  cardId: string;
+};
+
+export type DeleteCreditCardResult =
+  | { deleted: true; card: string }
+  | {
+      deleted: false;
+      dryRun: true;
+      wouldDelete: { card: string; account: string; transactions: number; bills: number };
+      hint: string;
+    };
+
+export type BillReassignment = { reassignedBillId: string | undefined; billPersistables: Persistable[] };

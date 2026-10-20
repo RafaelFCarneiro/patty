@@ -27,9 +27,6 @@ import {
 } from '../models/auth/token.js';
 import type { AuthDeps } from './deps.js';
 
-/** Mint a personal access token for `userId` (ADR-033 §3) after re-checking their password (step-up: a script in
- *  the dashboard origin has the session cookie but not the password). The plaintext is in the response and nowhere
- *  else: only its sha256 and a display prefix are persisted. */
 export const createToken = (
   deps: AuthDeps,
   principal: Principal,
@@ -38,15 +35,12 @@ export const createToken = (
   safeTry(async function* () {
     const userId = principal.userId;
     const user = await deps.users.findById(userId);
-    // Same cost whether or not the user has a password, like login.
     const passwordMatches = await deps.secrets.verifyPassword(
       user?.passwordHash ?? deps.secrets.dummyPasswordHash,
       input.password,
     );
     const account = yield* okOr(canLogin(user, passwordMatches) ? user : null, authErrors.invalidCredentials);
 
-    // Token management is session-only, and the session is re-read on every attempt: a retry after a disable that
-    // deleted it (and a re-enable that left the password as it was) is refused.
     yield* guard(principal.via === PrincipalVia.enum.session, authErrors.sessionRequired);
     const now = deps.clock();
     const session = yield* okOr(
@@ -58,8 +52,6 @@ export const createToken = (
       { id: deps.newId(), userId, tokenHash: deps.secrets.hashSecret(token), prefix: tokenDisplayPrefix(token), input },
       now,
     );
-    // Issuing changes the user's credential set, so it is written: a disable or reset racing this mint, in either
-    // order, conflicts on the user's version and retries (into a refusal, or a revocation covering this token).
     const persist: Persistable[] = [
       persistence.check({ entity: SESSION_ENTITY_TAG, id: session.id, version: session.version }),
       persistence.update({ entity: USER_ENTITY_TAG, model: withCredentialsChanged(account, now) }),
@@ -68,13 +60,11 @@ export const createToken = (
     return ok({ persist, response: { token, summary: summarizeToken(entity, now) } });
   });
 
-/** Metadata only — never a hash. Newest first. */
 export const listTokens = async (deps: AuthDeps, userId: string): Promise<AccessTokenSummary[]> => {
   const now = deps.clock();
   return R.map(await deps.accessTokens.listByUser(userId), (token) => summarizeToken(token, now));
 };
 
-/** Set `revoked_at` and keep the row. Idempotent: revoking an already-revoked token changes nothing. */
 export const revokeToken = (deps: AuthDeps, userId: string, id: string): ResultAsync<FlowOutcome<void>, AppError> =>
   safeTry(async function* () {
     const token = yield* okOr(await deps.accessTokens.findById(userId, id), authErrors.unknownToken(id));
@@ -85,11 +75,6 @@ export const revokeToken = (deps: AuthDeps, userId: string, id: string): ResultA
     return ok({ persist, response: undefined });
   });
 
-/**
- * The auth hook's per-request question for a bearer token: whose is this, and with which scopes? Unknown,
- * revoked, expired, or belonging to an owner who is unclaimed or disabled → `null`. A valid token's
- * `last_used_at` is rewritten at most every `SESSION_TOUCH_INTERVAL_MS`, so the common request writes nothing.
- */
 export const authenticateToken = (
   deps: AuthDeps,
   tokenHash: string,
@@ -107,8 +92,6 @@ export const authenticateToken = (
     return ok({ persist, response: tokenPrincipal(token, user, via) });
   });
 
-/** Revoke a stdio sign-in by the credential itself — `fintrack logout` holds the token, not a session. Idempotent,
- *  and a no-op for anything but a stdio sign-in (a personal access token is revoked from the dashboard). */
 export const revokeSignInByHash = (deps: AuthDeps, tokenHash: string): ResultAsync<FlowOutcome<boolean>, AppError> =>
   safeTry(async function* () {
     const found = await deps.accessTokens.findByTokenHash(tokenHash);

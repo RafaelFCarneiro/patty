@@ -26,6 +26,10 @@ import {
   type SignInObservation,
   type SignInState,
   type SignInStep,
+  type Observed,
+  CLOSE_PAGE,
+  type ObservationHandlers,
+  type ObservationHandler,
 } from '../../models/auth/signInFlow.js';
 import { TokenAccess } from '../../models/auth/token.js';
 import { persistsToKeychain } from './grant.js';
@@ -33,25 +37,11 @@ import { connectUrl } from './origin.js';
 import { hasScope } from './scope.js';
 import { isTokenShaped } from './token.js';
 
-/**
- * The sign-in protocol (ADR-034), decided once for both of its edges — a stdio session that asks per gated request
- * and polls on a timer, and `fintrack login`, which loops until it ends. `nextStep(state, observation, config)` is a
- * pure function: it says what the new state is and which effects the shell must run, in order. A step ends with at
- * most one *asking* effect (`ASKING_EFFECT_KINDS`) and it is the last; the shell reports its answer back as the next
- * observation. Everything here that is a rule — an env token never falls back, an invalid saved credential is cleared
- * only if still the same, "this session only" never reaches the keychain, a refused save is revoked (cli) or kept in
- * memory (stdio), and a denied or expired request ends the attempt — lives in this file and nowhere else.
- */
-
 const S = SignInStateKind.enum;
 const O = ObservationKind.enum;
 const E = EffectKind.enum;
 const P = PresentationKind.enum;
 const CHANNEL = GrantChannel.enum;
-
-type Observed<K extends ObservationKind> = Extract<SignInObservation, { kind: K }>;
-
-// ─── State helpers ──────────────────────────────────────────────────────────
 
 export const pendingOf = (state: SignInState): PendingSignIn | null => {
   switch (state.kind) {
@@ -71,21 +61,15 @@ const withoutPending = (state: SignInState): SignInState => {
   return state.kind === S.signed_in ? { ...state, pending: null } : state;
 };
 
-/** Once a credential is no longer good, only the request still open behind it (if any) remains. */
 const withoutHeld = (state: SignInState): SignInState => {
   const pending = pendingOf(state);
   return pending === null ? IDLE : { kind: S.pending, pending };
 };
-
-// ─── Step helpers ───────────────────────────────────────────────────────────
-
-const CLOSE_PAGE: SignInEffect = { kind: E.close_page };
 const present = (presentation: Presentation): SignInEffect => ({ kind: E.present, presentation });
 const step = (state: SignInState, ...effects: SignInEffect[]): SignInStep => ({ state, effects });
 const tell = (state: SignInState, presentation: Presentation): SignInStep => step(state, present(presentation));
 const ask = (state: SignInState, effect: SignInEffect): SignInStep => step(state, effect);
 
-/** An attempt ends: the page it served is released first, then the person is told. */
 const ended = (kind: typeof S.denied | typeof S.expired | typeof S.cancelled | typeof S.failed, what: Presentation) =>
   step({ kind }, CLOSE_PAGE, present(what));
 
@@ -104,16 +88,11 @@ const accessOf = (signedIn: SignedIn): TokenAccess =>
 const loadSaved = (purpose: typeof LoadPurpose.enum.resolve | typeof LoadPurpose.enum.logout): SignInEffect => ({
   kind: E.load_saved,
   purpose,
-  // An unreadable keychain is "nothing saved" to a session that can ask in the browser instead, but `logout` must
-  // not claim a sign-out it could not check.
   tolerateUnreadable: purpose === LoadPurpose.enum.resolve,
 });
 
-// ─── A gated stdio request ──────────────────────────────────────────────────
-
 const onRequested = (state: SignInState, config: SignInConfig): SignInStep => {
   if (config.envToken !== undefined) {
-    // The environment's token is the only credential: no fallback to the keychain or to a new request, ever.
     return isTokenShaped(config.envToken)
       ? ask(state, { kind: E.check_credential, source: CredentialSource.enum.env, token: config.envToken })
       : tell(state, { kind: P.invalid_env_token });
@@ -140,7 +119,6 @@ const checkedHeld = (state: SignInState, result: Observed<typeof O.credential_ch
     case CheckKind.enum.failure:
       return tell(state, { kind: P.cannot_verify });
     case CheckKind.enum.invalid: {
-      // Forget it. A saved one goes from the keychain too — but only if the keychain still holds this very credential.
       const dropped = withoutHeld(state);
       return held.ephemeral
         ? ask(dropped, loadSaved(LoadPurpose.enum.resolve))
@@ -172,7 +150,6 @@ const checkedSaved = (
     case CheckKind.enum.failure:
       return tell(state, { kind: P.cannot_verify });
     case CheckKind.enum.invalid:
-      // A concurrent `login` may have replaced the entry while the database was asked: drop only the one found invalid.
       return ask(state, {
         kind: E.clear_saved_if,
         token,
@@ -193,9 +170,6 @@ const onCredentialChecked = (state: SignInState, observation: Observed<typeof O.
   }
 };
 
-// ─── Not signed in: ask once, reuse the request until it is answered or runs out ───────
-
-/** The page to name, or none at all when no HTTP server is involved. Always read right before it is shown. */
 const showInstructions = (state: SignInState): SignInStep =>
   ask(state, { kind: E.name_page, purpose: PagePurpose.enum.instructions });
 
@@ -228,7 +202,6 @@ const onSavedCleared = (state: SignInState, observation: Observed<typeof O.saved
   }
 };
 
-/** No page can be named or served: `login` cannot go on at all; a stdio session says how else to sign in. */
 const withoutPage = (state: SignInState, purpose: PagePurpose): SignInStep =>
   purpose === PagePurpose.enum.login
     ? step({ kind: S.failed }, present(failedWith(STDIO_MESSAGES.notSignedInWithoutHttp)))
@@ -243,7 +216,6 @@ const onPageNamed = (state: SignInState, observation: Observed<typeof O.page_nam
     return ask(state, { kind: E.check_owner, purpose: OwnerPurpose.enum.instructions, origin });
   }
   if (origin !== null) return startRequestAt(state, origin, config);
-  // Nothing names a page: serve one from this process, if it can.
   return observation.canServe ? ask(state, { kind: E.serve_page, purpose }) : withoutPage(state, purpose);
 };
 
@@ -286,9 +258,6 @@ const onOwnerChecked = (state: SignInState, observation: Observed<typeof O.owner
   });
 };
 
-// ─── A request's answer ─────────────────────────────────────────────────────
-
-/** The request is spent (answered or out of time): a stdio session is back to asking, `login` has its outcome. */
 const gone = (state: SignInState, then: Continuation): SignInStep => {
   const next = withoutPending(state);
   return then === Continuation.enum.ask
@@ -296,13 +265,11 @@ const gone = (state: SignInState, then: Continuation): SignInStep => {
     : step(next, CLOSE_PAGE);
 };
 
-/** Still waiting for a person (or the lookup failed, which a stdio session treats the same). */
 const stillPending = (state: SignInState, config: SignInConfig, then: Continuation): SignInStep => {
   if (config.channel === CHANNEL.cli) return step(state, { kind: E.wait, ms: GRANT_POLL_INTERVAL_MS });
   return then === Continuation.enum.ask ? showInstructions(state) : step(state);
 };
 
-/** The credential is in hand: kept in the keychain, or in memory only when it must (or the keychain won't have it). */
 const adopted = (signedIn: SignedIn, ephemeral: boolean, then: Continuation, config: SignInConfig): SignInStep => {
   const held: HeldSignIn = { token: signedIn.token, principal: signedIn.principal, ephemeral };
   const next: SignInState = { kind: S.signed_in, held, pending: null };
@@ -323,16 +290,16 @@ const adopted = (signedIn: SignedIn, ephemeral: boolean, then: Continuation, con
     : step(next, CLOSE_PAGE);
 };
 
+const keepSignIn = (state: SignInState, signedIn: SignedIn, then: Continuation, config: SignInConfig): SignInStep =>
+  persistsToKeychain(signedIn.duration)
+    ? ask(state, { kind: E.save_credential, signedIn, then })
+    : adopted(signedIn, true, then, config);
+
 const onRedeemed = (state: SignInState, observation: Observed<typeof O.redeemed>, config: SignInConfig) => {
   const { result, then } = observation;
   switch (result.kind) {
-    case RedeemKind.enum.signed_in: {
-      const signedIn: SignedIn = R.omit(result, ['kind']);
-      // "This session only" never reaches the keychain.
-      return persistsToKeychain(signedIn.duration)
-        ? ask(state, { kind: E.save_credential, signedIn, then })
-        : adopted(signedIn, true, then, config);
-    }
+    case RedeemKind.enum.signed_in:
+      return keepSignIn(state, R.omit(result, ['kind']), then, config);
     case REDEEM_ERROR_KIND:
       return config.channel === CHANNEL.cli
         ? ended(S.failed, failedWith(result.error))
@@ -350,8 +317,6 @@ const onRedeemed = (state: SignInState, observation: Observed<typeof O.redeemed>
 const onSaved = (state: SignInState, observation: Observed<typeof O.saved>, config: SignInConfig) => {
   const { signedIn, then } = observation;
   if (observation.ok) return adopted(signedIn, false, then, config);
-  // A sign-in nothing can find again is just a live secret: `login` takes it back, a stdio session keeps it in memory
-  // and revokes it at close.
   return config.channel === CHANNEL.cli
     ? ask(state, { kind: E.revoke_credential, token: signedIn.token, reason: RevokeReason.enum.keychain_refused })
     : adopted(signedIn, true, then, config);
@@ -360,7 +325,6 @@ const onSaved = (state: SignInState, observation: Observed<typeof O.saved>, conf
 const onRevoked = (state: SignInState, observation: Observed<typeof O.revoked>) => {
   switch (observation.reason) {
     case RevokeReason.enum.keychain_refused:
-      // Never claim a cleanup that did not commit: an unrevoked credential nothing references is the one to flag.
       return ended(S.failed, { kind: observation.ok ? P.keychain_refused : P.keychain_refused_still_active });
     case RevokeReason.enum.logout:
       return observation.ok
@@ -375,8 +339,6 @@ const onRevoked = (state: SignInState, observation: Observed<typeof O.revoked>) 
       return step(state);
   }
 };
-
-// ─── Edge-fed observations ──────────────────────────────────────────────────
 
 const onTicked = (state: SignInState): SignInStep => {
   const pending = pendingOf(state);
@@ -395,7 +357,6 @@ const onLogoutRequested = (): SignInStep => ask(IDLE, loadSaved(LoadPurpose.enum
 const onInterrupted = (state: SignInState): SignInStep =>
   state.kind === S.pending ? ended(S.cancelled, { kind: P.cancelled }) : step(state);
 
-/** Shutdown: stop asking, release the page, and take back a credential that lives in memory only. */
 const onClosed = (state: SignInState): SignInStep => {
   const base = withoutPending(state);
   if (base.kind === S.signed_in && base.held.ephemeral) {
@@ -408,12 +369,6 @@ const onClosed = (state: SignInState): SignInStep => {
   return step(base, CLOSE_PAGE);
 };
 
-type ObservationHandlers = {
-  [K in ObservationKind]: (state: SignInState, observation: Observed<K>, config: SignInConfig) => SignInStep;
-};
-
-type ObservationHandler = (state: SignInState, observation: SignInObservation, config: SignInConfig) => SignInStep;
-
 const OBSERVATION_HANDLERS = {
   [O.requested]: (state, _observation, config) => onRequested(state, config),
   [O.ticked]: onTicked,
@@ -421,8 +376,6 @@ const OBSERVATION_HANDLERS = {
   [O.logout_requested]: onLogoutRequested,
   [O.interrupted]: onInterrupted,
   [O.closed]: onClosed,
-  // An unexpected failure (the database is busy, the keychain misbehaves) is "could not check", never a sign-out:
-  // nothing is forgotten or deleted on the strength of an error we did not understand.
   [O.errored]: (state) => tell(state, { kind: P.cannot_verify }),
   [O.credential_checked]: onCredentialChecked,
   [O.saved_loaded]: onSavedLoaded,
@@ -438,6 +391,5 @@ const OBSERVATION_HANDLERS = {
   [O.revoked]: onRevoked,
 } satisfies ObservationHandlers;
 
-/** What happens next, given what was just seen. Total: an observation the state has no use for changes nothing. */
 export const nextStep = (state: SignInState, observation: SignInObservation, config: SignInConfig): SignInStep =>
   (OBSERVATION_HANDLERS[observation.kind] as ObservationHandler)(state, observation, config);

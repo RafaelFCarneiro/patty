@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import { INCLUDE_TOTAL_DESCRIPTION, SortDirection } from '../../models/page.js';
 import * as modelTransaction from '../../models/transaction.js';
-import { SearchTransactionsSchema, TransactionSortField } from '../../models/transaction.js';
-import type { SearchTransactions } from '../../models/transaction.js';
+import { SearchTransactionsSchema, TransactionSortField, type SearchTransactions } from '../../models/transaction.js';
 import { BooleanQuerySchema } from './common.js';
 import { coerceToNumber } from './coerce.js';
 

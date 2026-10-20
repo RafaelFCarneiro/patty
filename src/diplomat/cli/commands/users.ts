@@ -9,12 +9,11 @@ import {
   reissueInvite,
   resolveUserId,
   setRole,
-  type UserChange,
 } from '../../../controllers/users.js';
 import { inviteLink } from '../../../logic/auth/users.js';
 import { UserRole } from '../../../models/auth/owner.js';
 import { UsernameSchema } from '../../../models/auth/password.js';
-import { ActorKind, type Actor, type IssuedInvite } from '../../../models/auth/users.js';
+import { ActorKind, type Actor, type IssuedInvite, type UserChange } from '../../../models/auth/users.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import {
   InviteOptionsSchema,

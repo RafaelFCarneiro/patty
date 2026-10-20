@@ -28,8 +28,6 @@ export const getPreferences = async (deps: Deps): Promise<Preferences> => {
   };
 };
 
-// The locale cache reset is shell bookkeeping, not a domain effect — the shell resets it after this flow's
-// write commits, never from here.
 export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<FlowOutcome<LocalePreferences>, AppError> =>
   safeTry(async function* () {
     const current = await deps.settings.getLocale();
@@ -53,8 +51,6 @@ export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<FlowOu
     return ok({ persist, response: { locale: input.locale, localeSource: input.source } });
   });
 
-/** Mirrors `setLocale`'s upsert-the-user's-row shape — no guardrail to enforce (any `CurrencyCode` is a
- *  valid base currency), so unlike `setLocale` there is no `guard`/anti-churn step. */
 export const setBaseCurrency = (
   deps: Deps,
   input: SetBaseCurrencyInput,

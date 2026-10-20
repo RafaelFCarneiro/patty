@@ -1,13 +1,5 @@
-/** Pure name → entity resolution with structured outcomes the AI agent can act on. */
-
 import * as R from 'remeda';
-
-export type Named = { id: string; name: string };
-
-export type Resolution<T extends Named> =
-  | { kind: 'found'; entity: T }
-  | { kind: 'none'; query: string; candidates: string[] }
-  | { kind: 'ambiguous'; query: string; candidates: string[] };
+import type { Named, Resolution } from '../models/resolution.js';
 
 export const fold = (s: string): string =>
   s
@@ -40,7 +32,6 @@ export const resolveByName = <T extends Named>(entities: readonly T[], query: st
   return toResolution(partial, query, entities);
 };
 
-/** Like resolveByName, but also checks synonym names for each entity. */
 export const resolveByNames = <T extends Named>(
   entities: readonly T[],
   query: string,

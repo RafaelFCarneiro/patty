@@ -7,6 +7,7 @@ import {
   hasPeriod,
   hasDateRange,
   lookbackFrom,
+  periodBounds,
   periodRange,
   resolveDateRange,
 } from '../../../src/logic/period.js';
@@ -62,7 +63,7 @@ describe('daysBetween', () => {
 });
 
 describe('lookbackFrom', () => {
-  it('rolls back N months from today\'s own month, day 01', () => {
+  it("rolls back N months from today's own month, day 01", () => {
     expect(lookbackFrom('2026-07-15', 6)).toBe('2026-01-01');
   });
 
@@ -185,5 +186,24 @@ describe('resolveDateRange', () => {
   it('partial from without to returns from with null to', () => {
     const result = resolveDateRange({ from: '2026-06-01' });
     expect(result).toEqual({ from: '2026-06-01', to: null });
+  });
+});
+
+describe('periodBounds', () => {
+  it('is the month range when a month and year are given', () => {
+    expect(periodBounds({ month: 6, year: 2026 })).toEqual({ from: '2026-06-01', to: '2026-07-01' });
+  });
+
+  it('is open on both sides without a period', () => {
+    expect(periodBounds({})).toEqual({ from: null, to: null });
+    expect(periodBounds({ month: 6 })).toEqual({ from: null, to: null });
+  });
+
+  it('ignores an explicit from/to — unlike resolveDateRange, which falls back to them', () => {
+    expect(periodBounds({ from: '2026-01-01', to: '2026-02-01' })).toEqual({ from: null, to: null });
+    expect(resolveDateRange({ from: '2026-01-01', to: '2026-02-01' })).toEqual({
+      from: '2026-01-01',
+      to: '2026-02-01',
+    });
   });
 });

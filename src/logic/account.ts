@@ -1,70 +1,83 @@
 import { err, ok, type Result } from 'neverthrow';
-import { purry } from 'remeda';
+import * as R from 'remeda';
 import { localizeAccountType } from './localize.js';
-import { accountErrors, AccountType } from '../models/account.js';
-import type { Account, AccountError, AccountReferences } from '../models/account.js';
+import {
+  accountErrors,
+  AccountType,
+  type Account,
+  type AccountEntity,
+  type AccountError,
+  type AccountReferences,
+  type TransferFacts,
+  type TransferPlan,
+  type UpdateAccount,
+  ACCOUNT_OWNED_TYPES,
+} from '../models/account.js';
 import type { Locale } from '../models/locale.js';
-import { TransactionType } from '../models/transaction.js';
-import type { TransactionView, UpdateTransaction } from '../models/transaction.js';
-import { isTransfer } from './transaction.js';
+import {
+  UNCLASSIFIED,
+  TransactionType,
+  type TransactionEntity,
+  type TransactionView,
+  type UpdateTransaction,
+} from '../models/transaction.js';
+import { defaultStatusFor, deriveIdempotencyKey, isTransfer } from './transaction.js';
 
 export const filterByType =
   (type?: AccountType) =>
   (a: Account): boolean =>
     !type || a.type === type;
 
-/**
- * Manual create/update may not target credit accounts — those are card-managed.
- * Pure guard condition (no I/O): `guard(assertNonCreditType(type), accountErrors.creditRejected)`.
- * `undefined` passes — an omitted type on update is not a credit assignment.
- */
 export const assertNonCreditType = (type?: AccountType): boolean => type !== AccountType.enum.credit;
 
-// Reference predicates — pure interpretations of AccountReferences, paired with `guard` at call sites.
-// Each reads as the precondition that must hold (true = the change is allowed).
 export const hasNoTransactions = (refs: AccountReferences): boolean => refs.transactions === 0;
 export const hasNoRecurring = (refs: AccountReferences): boolean => refs.recurring === 0;
 export const hasNoCards = (refs: AccountReferences): boolean => refs.cards === 0;
 export const isUnreferenced = (refs: AccountReferences): boolean =>
   hasNoTransactions(refs) && hasNoRecurring(refs) && hasNoCards(refs);
 
+export const isRename = (currentName: string, newName?: string): newName is string =>
+  newName !== undefined && newName.toLowerCase() !== currentName.toLowerCase();
+
+export const changesPinnedField = (input: Pick<UpdateAccount, 'type' | 'currency'>): boolean =>
+  R.isDefined(input.type) || R.isDefined(input.currency);
+
+export const guardPinnedFields = (
+  refs: AccountReferences,
+  input: Pick<UpdateAccount, 'type' | 'currency'>,
+): Result<void, AccountError> => {
+  const isChangingType = R.isDefined(input.type);
+  const isChangingCurrency = R.isDefined(input.currency);
+  const violations: ReadonlyArray<readonly [boolean, AccountError]> = [
+    [isChangingType && !hasNoTransactions(refs), accountErrors.typeImmutable(refs.transactions)],
+    [isChangingCurrency && !hasNoTransactions(refs), accountErrors.currencyImmutableTransactions(refs.transactions)],
+    [isChangingCurrency && !hasNoRecurring(refs), accountErrors.currencyImmutableRecurring],
+    [isChangingCurrency && !hasNoCards(refs), accountErrors.currencyImmutableCards],
+  ];
+  const violated = R.find(violations, ([isViolated]) => isViolated);
+  return violated ? err(violated[1]) : ok(undefined);
+};
+
+export const mergeAccountPatch = (raw: AccountEntity, input: UpdateAccount): AccountEntity => ({
+  ...raw,
+  name: input.newName ?? raw.name,
+  initialBalance: input.initialBalance ?? raw.initialBalance,
+  type: input.type ?? raw.type,
+  currency: input.currency ?? raw.currency,
+});
+
 export const areDifferentAccounts = (a: Pick<Account, 'id'>, b: Pick<Account, 'id'>): boolean => a.id !== b.id;
 
 export const assertCurrencyMatch = (a: Pick<Account, 'currency'>, b: Pick<Account, 'currency'>): boolean =>
   a.currency === b.currency;
 
-/**
- * The account aggregate's own types (ADR-020) — a positive enumeration of what it owns, not the
- * negation of what it doesn't (`assertNonCreditType` above answers a different question: "is this
- * one specific type disallowed", asked by create/update/payment/transfer-leg guards). Ownership
- * resolution wants "is this among the types I own", so it's defined here directly rather than by
- * excluding `credit` — the account domain shouldn't have to name the credit-card domain's type to
- * describe its own scope.
- */
-const ACCOUNT_OWNED_TYPES: ReadonlySet<AccountType> = new Set([
-  AccountType.enum.checking,
-  AccountType.enum.savings,
-  AccountType.enum.wallet,
-  AccountType.enum.investment,
-]);
-
 export const isAccountOwnedType = (type: AccountType): boolean => ACCOUNT_OWNED_TYPES.has(type);
-
-// ─── Transfer mutability guard (ADR-020 §4) ──────────────────────────────────
-// Only the account aggregate ever mutates a regular transfer — the credit-card aggregate's one
-// transfer (the bill-payment transfer) is blocked outright by its own bill-process guard and never
-// reaches this check.
 
 const wouldBeTransfer = (existing: Pick<TransactionView, 'type'>, input: Pick<UpdateTransaction, 'type'>) =>
   (input.type ?? existing.type) === TransactionType.enum.transfer;
 const hasCategoryInput = (input: Pick<UpdateTransaction, 'category' | 'subCategory'>) =>
   !!(input.category || input.subCategory);
 
-/**
- * Enforce transfer invariants on update:
- * - A transfer's type cannot be changed.
- * - A transfer cannot receive a category or sub-category.
- */
 export const guardTransferMutability = (
   existing: Pick<TransactionView, 'type'>,
   input: Pick<UpdateTransaction, 'type' | 'category' | 'subCategory'>,
@@ -82,5 +95,37 @@ const _withTypeLabel = <T extends Account>(account: T, locale: Locale): T => ({
 export function withTypeLabel<T extends Account>(account: T, locale: Locale): T;
 export function withTypeLabel(locale: Locale): <T extends Account>(account: T) => T;
 export function withTypeLabel(...args: readonly unknown[]) {
-  return purry(_withTypeLabel, args);
+  return R.purry(_withTypeLabel, args);
 }
+
+export const planTransfer = (facts: TransferFacts): TransferPlan => {
+  const { input, from, to } = facts;
+  const date = input.date ?? facts.today;
+  const entity: TransactionEntity = {
+    id: facts.id,
+    description: input.description ?? `Transferência: ${from.name} → ${to.name}`,
+    amount: input.amount,
+    type: TransactionType.enum.transfer,
+    status: input.status ?? defaultStatusFor(date, facts.today),
+    date,
+    currency: from.currency,
+    source: facts.source,
+    classification: UNCLASSIFIED,
+    refs: { accountId: from.id, toAccountId: to.id },
+  };
+  const idempotencyKey = deriveIdempotencyKey(
+    {
+      fundingSourceId: from.id,
+      counterpartyId: to.id,
+      type: entity.type,
+      currency: entity.currency,
+      date,
+      // Not entity.description: its placeholder embeds account names, so a rename would miss a real duplicate.
+      description: input.description ?? '',
+      amount: entity.amount,
+    },
+    facts.decimals,
+    input.discriminator,
+  );
+  return { entity, idempotencyKey };
+};

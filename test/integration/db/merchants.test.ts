@@ -4,10 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
-import type { Db } from '../../../src/diplomat/db/driver.js';
-import { openDatabase } from '../../../src/diplomat/db/driver.js';
+import { type Db, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { merchantsRepo, type MerchantsRepo } from '../../../src/diplomat/db/repos/merchants.js';
-import { categories, merchants, transactions } from '../../../src/diplomat/db/schema.js';
+import { categories, merchantCategory, merchants, transactions } from '../../../src/diplomat/db/schema.js';
 import { CategoryKind } from '../../../src/models/category.js';
 import {
   ClassificationMethod,
@@ -184,5 +183,32 @@ describe('merchantsRepo.top', () => {
     const rows = await repo.top(10);
 
     expect(rows).toEqual([]);
+  });
+});
+
+describe('merchantsRepo.matchCandidates', () => {
+  const insertEdge = async (merchantKey: string, categoryId: string, weight: number): Promise<void> => {
+    await insertMerchant(merchantKey);
+    await db
+      .insert(merchantCategory)
+      .values({ merchantKey, categoryId, weight, origin: ClassificationMethod.enum.history, userId: OWNER_USER_ID });
+  };
+
+  it('returns the best candidate first: heaviest weight, then the longest matching key', async () => {
+    const category = await insertCategory('Ranked');
+    await insertEdge('zzq', category, 1);
+    await insertEdge('zzq shop', category, 3);
+    await insertEdge('shop', category, 3);
+    await insertEdge('zzq shop br', category, 9);
+
+    const rows = await repo.matchCandidates('zzq shop br pedido');
+
+    expect(rows.map((r) => r.merchantKey)).toEqual(['zzq shop br', 'zzq shop', 'shop', 'zzq']);
+  });
+
+  it('matches only keys contained in the description', async () => {
+    await insertEdge('zzq', await insertCategory('Other'), 3);
+
+    expect(await repo.matchCandidates('unrelated trip')).toEqual([]);
   });
 });

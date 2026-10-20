@@ -7,20 +7,11 @@ import type { CurrencyCode } from '../models/money.js';
 import type { SpendingSummaryOut } from '../wire/out/summary.js';
 import type { Deps } from './deps.js';
 
-/** Converting to `displayCurrency` correlates two aggregates (the summary's own per-currency
- *  totals × `currency_rates`), so it is orchestrated here rather than inside a repo — the
- *  transactions repo returns its own aggregate unchanged, `currencyRatesRepo` returns rates, and
- *  the pure `logic/currencyRate.ts#consolidateInCurrency` correlates them. Omitting
- *  `displayCurrency` keeps the response byte-identical to before this option existed. */
 export const getSpendingSummary = async (
   deps: Deps,
   periodInput: Period,
   displayCurrency?: CurrencyCode,
 ): Promise<SpendingSummaryOut> => {
-  // Both diplomat callers pass their whole parsed query/args object as `periodInput`, which also
-  // carries `displayCurrency` when supplied — rebuild `period` from its two declared fields so
-  // that extra field never leaks into the response (`json`/`reply.send` serialize this object
-  // as-is, with no schema-driven stripping).
   const period: Period = { month: periodInput.month, year: periodInput.year };
   const { from, to } = periodRange(period);
   const [rows, locale, currencies] = await Promise.all([

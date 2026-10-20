@@ -1,9 +1,3 @@
-// Fixed-enum label resolvers only — never dynamic content.
-// Category names live on the entity (ADR-009); this module is for
-// closed, code-defined enum values whose display labels need localization.
-// Label maps live alongside their enum definitions in models/*.ts;
-// this module provides the pure resolvers.
-
 import { accountTypeLabels, type AccountType } from '../models/account.js';
 import { billStatusLabels, type BillStatus } from '../models/bill.js';
 import { categoryKindLabels, type CategoryKind } from '../models/category.js';

@@ -11,6 +11,8 @@ import {
   STATEMENT_RAW_INPUT_DESCRIPTION,
   TransactionStatus,
   UpdateTransactionSchema,
+  type TransactionEntity,
+  type TransactionSource,
 } from './transaction.js';
 import {
   validationWithRemedy,
@@ -87,7 +89,9 @@ export type AccountBalance = z.infer<typeof AccountBalanceSchema>;
 export const ConsolidatedNetWorthSchema = z.object({
   baseCurrency: CurrencyCode.describe('The base currency all included balances are summed in'),
   total: z.number().describe('Sum of every included balance converted value'),
-  excluded: z.array(Id).describe('Account ids left out of total because no exchange rate is on file for their currency'),
+  excluded: z
+    .array(Id)
+    .describe('Account ids left out of total because no exchange rate is on file for their currency'),
 });
 export type ConsolidatedNetWorth = z.infer<typeof ConsolidatedNetWorthSchema>;
 
@@ -257,3 +261,32 @@ export const accountErrors = {
     issues: ['transfer transactions cannot have a category or sub-category'],
   } satisfies AccountError,
 };
+
+export type TransferFacts = {
+  id: string;
+  today: string;
+  input: CreateTransfer;
+  from: Pick<Account, 'id' | 'name' | 'currency'>;
+  to: Pick<Account, 'id' | 'name'>;
+  source: TransactionSource;
+  decimals: number;
+};
+
+export type TransferPlan = { entity: TransactionEntity; idempotencyKey: string };
+
+export const ACCOUNT_OWNED_TYPES: ReadonlySet<AccountType> = new Set([
+  AccountType.enum.checking,
+  AccountType.enum.savings,
+  AccountType.enum.wallet,
+  AccountType.enum.investment,
+]);
+
+export type BalanceParts = {
+  initialBalance: number;
+  income: number;
+  expenses: number;
+  transfersIn: number;
+  transfersOut: number;
+};
+
+export type PendingParts = Omit<BalanceParts, 'initialBalance'>;

@@ -4,25 +4,28 @@ import { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
 import { roundToDecimals } from './money.js';
 import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDirection } from '../models/page.js';
-import type {
-  CategoryFields,
-  Classification,
-  ClassifiedUpsertResult,
-  ClassifyOutcome,
-  DefaultedStatementLine,
-  IdempotencyIdentity,
-  UpsertTransactionResult,
-  SearchTransactions,
-  StatementLine,
-  TransactionEntity,
-  TransactionError,
-  TransactionView,
-  UpdateTransaction,
-} from '../models/transaction.js';
-import type { RawTransactionView } from '../models/transaction.js';
-import type { PersistOutcome } from '@rfc0/effect-runner';
-import { outcomeFor } from './persistence.js';
 import {
+  type CategoryFields,
+  type CategorySelection,
+  type Classification,
+  type ClassifiedUpsertResult,
+  type ClassifyOutcome,
+  type DefaultedStatementLine,
+  type IdempotencyIdentity,
+  type MerchantMatch,
+  type NewTransactionFacts,
+  type NewTransactionPlan,
+  type PatchFields,
+  type PatchOverrides,
+  type UpsertTransactionResult,
+  type SearchTransactions,
+  type StatementLine,
+  type TransactionEntity,
+  type TransactionError,
+  type TransactionView,
+  type UpdateTransaction,
+  type RawTransactionView,
+  ClassificationMethod,
   transactionErrors,
   TRANSACTION_ENTITY_TAG,
   TransactionCursorSchema,
@@ -30,58 +33,40 @@ import {
   TransactionStatus,
   TransactionType,
   type MovementType,
+  LOW_CONFIDENCE_THRESHOLD,
+  type BulkItemResult,
 } from '../models/transaction.js';
+import type { PersistOutcome } from '@rfc0/effect-runner';
+import { outcomeFor } from './persistence.js';
+import type { CurrencyCode } from '../models/money.js';
 import { CategoryKind } from '../models/category.js';
 import { err, ok, type Result } from 'neverthrow';
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
+import { pickClassification, userClassification } from './classify.js';
 import { localizeTransactionStatus, localizeTransactionType } from './localize.js';
 import { normalizeMerchant } from './merchant.js';
 
-// ─── Status default ──────────────────────────────────────────────────────────
-
-/**
- * Single source of the date-aware default rule.
- * Future-dated → pending (not yet happened); today/past → effective (already happened).
- * An explicit caller-supplied status always wins — this is only the fallback.
- */
 export const defaultStatusFor = (date: IsoDate, today: IsoDate): TransactionStatus =>
   date > today ? TransactionStatus.enum.pending : TransactionStatus.enum.effective;
 
-/**
- * True when a category name was provided — a type guard, narrowing `category` to `string`. The
- * schema rejects empty strings (`.min(1)`), so this only needs to rule out null/undefined; using
- * isNonNullish (rather than `!== undefined`) means a `null` would also correctly count as absent.
- */
 export const hasCategory = (input: CategoryFields): input is CategoryFields & { category: string } =>
   R.isNonNullish(input.category);
 
-/** True when a subCategory name was provided — same reasoning as hasCategory. */
 export const hasSubCategory = (input: CategoryFields): input is CategoryFields & { subCategory: string } =>
   R.isNonNullish(input.subCategory);
 
-// Value-based (via hasCategory/hasSubCategory), not truthiness — so e.g. a caller-constructed
-// { category: undefined, subCategory: 'S' } is judged consistently with resolveCategorySelection.
 export const assertExclusiveCategorySubCategory = (input: CategoryFields): boolean =>
   !(hasCategory(input) && hasSubCategory(input));
 
 export const isCategoryKindAllowed = (txType: MovementType, categoryKind: CategoryKind): boolean =>
   categoryKind === CategoryKind.enum.both || categoryKind === txType;
 
-// ─── Pagination (ADR-014) ──────────────────────────────────────────────────────
-
-/** Validates `key.value` is actually well-formed for its own sort field — not just the right JS
- *  type. A tampered/stale cursor can carry a syntactically-typed but semantically bogus value
- *  (`{ sort: 'date', key: { value: 'not-a-date' } }`, or `{ sort: 'amount', key: { value: 1e309 } }`
- *  → `Infinity`, still `typeof 'number'`); either would otherwise reach the keyset predicate and
- *  silently mispage instead of being rejected as the malformed cursor it is. */
 const isValidCursorValue: Record<TransactionSortField, (value: string | number) => boolean> = {
   [TransactionSortField.enum.date]: (value) => typeof value === 'string' && IsoDate.safeParse(value).success,
   [TransactionSortField.enum.amount]: (value) => typeof value === 'number' && Number.isFinite(value),
 };
 
-/** Decodes + validates an opaque search cursor against the request's own sort/dir — a cursor
- *  only makes sense for the ordering that produced it. No cursor supplied → first page (null key). */
 export const resolveCursorKey = (
   input: Pick<SearchTransactions, 'cursor' | 'sort' | 'dir'>,
 ): Result<CursorKey | null, TransactionError> => {
@@ -96,8 +81,6 @@ export const resolveCursorKey = (
   return ok(decoded.key);
 };
 
-/** ADR-014 whitelist: the only column each sort field may resolve to when deriving a cursor's
- *  keyset value from a result row — kept as an exhaustive map, mirroring diplomat/db's ORDER BY map. */
 const CURSOR_VALUE_OF: Record<
   TransactionSortField,
   (row: Pick<TransactionView, 'date' | 'amount'>) => string | number
@@ -106,7 +89,6 @@ const CURSOR_VALUE_OF: Record<
   [TransactionSortField.enum.amount]: (row) => row.amount,
 };
 
-/** Builds the opaque cursor pointing to the page after `lastRow`, under the given sort/dir. */
 export const nextCursorAfter = (
   lastRow: Pick<TransactionView, 'date' | 'amount' | 'id'>,
   sort: TransactionSortField,
@@ -119,14 +101,8 @@ export const nextCursorAfter = (
     key: { value: CURSOR_VALUE_OF[sort](lastRow), id: lastRow.id },
   });
 
-// ─── Transfer row kind (ADR-019/ADR-020: policy lives in the account context; the row kind stays core) ───
-
-/** Transfers and bill-payment transactions are exactly `type === 'transfer'` (ADR-002) — a
- *  core-visible fact needing no ownership resolution, unlike transfer *mutation policy*
- *  (`guardTransferMutability`), which stays in the account context (ADR-020). */
 export const isTransfer = (t: Pick<TransactionView, 'type'>): boolean => t.type === TransactionType.enum.transfer;
 
-/** The effective movement type after applying an update, or undefined for transfers. */
 export const resolveEffectiveType = (
   existing: Pick<TransactionView, 'type'>,
   input: Pick<UpdateTransaction, 'type'>,
@@ -135,8 +111,6 @@ export const resolveEffectiveType = (
   return resolved !== TransactionType.enum.transfer ? resolved : undefined;
 };
 
-/** `RawTransactionView` → plain `TransactionEntity`, for a flow (`confirmTransaction`) that builds
- *  its `update` `Persistable` by overriding a few fields on top of the existing row. */
 export const entityFromExisting = (existing: RawTransactionView): TransactionEntity => ({
   id: existing.id,
   description: existing.description,
@@ -160,19 +134,103 @@ export const entityFromExisting = (existing: RawTransactionView): TransactionEnt
   },
 });
 
-// ─── Bulk ─────────────────────────────────────────────────────────────────────
+const patchedNote = (note: string | undefined, existing: string | undefined): string | undefined =>
+  note === undefined ? existing : note || undefined;
 
-/** Domain-owned idempotency key (ADR-029 Phase 2b): a sha256 hash of `identity` plus the caller's
- *  optional `discriminator`, the escape hatch for a genuinely-distinct transaction that would
- *  otherwise derive an identical key. The single derivation for single-add and bulk import alike —
- *  bulk reuses the same single-line flows, so it never derives its own key. */
+const patchedClassification = (existing: RawTransactionView, selection: CategorySelection | null): Classification =>
+  selection ? { method: ClassificationMethod.enum.user, confidence: 1 } : existing.classification;
+
+const patchedCategoryRefs = (
+  existing: RawTransactionView,
+  selection: CategorySelection | null,
+): Pick<TransactionEntity['refs'], 'categoryId' | 'subCategoryId'> =>
+  selection
+    ? { categoryId: selection.categoryId, subCategoryId: selection.subCategoryId }
+    : { categoryId: existing.categoryId, subCategoryId: existing.subCategoryId };
+
+const patchedFunding = (
+  existing: RawTransactionView,
+  overrides: PatchOverrides,
+): Pick<TransactionEntity['refs'], 'accountId' | 'billId'> & { currency: CurrencyCode } => ({
+  currency: overrides.account?.currency ?? existing.currency,
+  accountId: overrides.account?.id ?? existing.accountId,
+  billId: overrides.billId ?? existing.billId,
+});
+
+export const mergePatch = (
+  existing: RawTransactionView,
+  input: PatchFields,
+  categorySelection: CategorySelection | null,
+  overrides: PatchOverrides = {},
+): TransactionEntity => {
+  const base = entityFromExisting(existing);
+  const { currency, ...fundingRefs } = patchedFunding(existing, overrides);
+  return {
+    ...base,
+    description: input.description ?? existing.description,
+    amount: input.amount ?? existing.amount,
+    type: input.type ?? existing.type,
+    date: input.date ?? existing.date,
+    currency,
+    classification: patchedClassification(existing, categorySelection),
+    note: patchedNote(input.note, existing.note),
+    refs: { ...base.refs, ...fundingRefs, ...patchedCategoryRefs(existing, categorySelection) },
+  };
+};
+
+const classifyNew = (selection: CategorySelection | null, candidates: readonly MerchantMatch[]): ClassifyOutcome =>
+  selection
+    ? userClassification({ id: selection.categoryId, name: selection.categoryName })
+    : pickClassification(candidates);
+
+const merchantKeyFor = (classification: ClassifyOutcome, description: string, keepsUnmatched: boolean) =>
+  classification.merchantKey ?? (keepsUnmatched ? normalizeMerchant(description) || undefined : undefined);
+
+export const planNewTransaction = (facts: NewTransactionFacts): NewTransactionPlan => {
+  const { input, type, currency, funding } = facts;
+  const date = input.date ?? facts.today;
+  const classification = classifyNew(facts.categorySelection, facts.candidates);
+  const entity: TransactionEntity = {
+    id: facts.id,
+    description: input.description,
+    amount: input.amount,
+    type,
+    status: input.status ?? defaultStatusFor(date, facts.today),
+    date,
+    currency,
+    source: facts.source,
+    classification,
+    rawInput: input.rawInput,
+    note: input.note,
+    refs: {
+      ...funding.refs,
+      categoryId: classification.categoryId,
+      subCategoryId: facts.categorySelection?.subCategoryId,
+      merchantKey: merchantKeyFor(classification, input.description, facts.keepsUnmatchedMerchant),
+    },
+  };
+  const idempotencyKey = deriveIdempotencyKey(
+    {
+      fundingSourceId: funding.sourceId,
+      billPeriodKey: funding.billPeriodKey,
+      type,
+      currency,
+      date,
+      description: input.description,
+      amount: input.amount,
+    },
+    facts.decimals,
+    input.discriminator,
+  );
+  return { entity, classification, idempotencyKey };
+};
+
 export const deriveIdempotencyKey = (
   identity: IdempotencyIdentity,
   decimals: number,
   discriminator?: string,
 ): string => {
-  // JSON.stringify, not a plain-joined string — discriminator is unconstrained caller text, so a
-  // plain separator could let two different field combinations hash identically.
+  // JSON.stringify, not a joined string: the discriminator is free text and could forge a field boundary.
   const canonical = JSON.stringify([
     identity.fundingSourceId ?? null,
     identity.counterpartyId ?? null,
@@ -181,36 +239,23 @@ export const deriveIdempotencyKey = (
     identity.currency,
     identity.date,
     normalizeMerchant(identity.description),
-    // roundToDecimals, not a raw toFixed — toFixed truncates rather than rounds at a float
-    // boundary (e.g. 1.005 at 2 decimals), which would hash the wrong amount.
+    // Rounded first: toFixed alone truncates at a float boundary such as 1.005.
     roundToDecimals(identity.amount, decimals).toFixed(decimals),
     discriminator ?? null,
   ]);
   return createHash('sha256').update(canonical).digest('hex');
 };
 
-// today is the caller's already-resolved toIsoDate(deps.clock()) — logic never reads the clock.
 export const defaultStatementLines = <Line extends StatementLine>(
   today: string,
   lines: readonly Line[],
   rawInput: string | undefined,
 ): DefaultedStatementLine<Line>[] => lines.map((line) => ({ ...line, date: line.date ?? today, rawInput }));
 
-export const LOW_CONFIDENCE_THRESHOLD = 0.6;
-
-/** Items the agent should surface to the user for category confirmation. */
 export const needsReview = (c: Classification): boolean =>
-  c.method === 'none' || c.confidence < LOW_CONFIDENCE_THRESHOLD;
-
-export type BulkItemResult<E = unknown> =
-  | { status: 'created' | 'needs_review'; transaction: TransactionView; classification: ClassifyOutcome }
-  | { status: 'duplicate'; transaction: TransactionView }
-  | { status: 'error'; description: string; error: E };
+  c.method === ClassificationMethod.enum.none || c.confidence < LOW_CONFIDENCE_THRESHOLD;
 
 export const toBulkItemResult = <E>(
-  // Bulk import never represents a transfer (single-source: every line is a movement/card
-  // purchase — ADR-017 step 2), so `classification` is always present here — narrower than the
-  // general `UpsertTransactionResult` (`create_transfer` is the one flow that omits it).
   result: Result<ClassifiedUpsertResult, E>,
   description: string,
 ): BulkItemResult<E> =>
@@ -226,11 +271,6 @@ export const toBulkItemResult = <E>(
     (error) => ({ status: 'error', description, error }),
   );
 
-export type BulkResult<E = unknown> = {
-  summary: { created: number; needsReview: number; duplicates: number; errors: number };
-  items: BulkItemResult<E>[];
-};
-
 export const summarizeBulkItems = (
   items: BulkItemResult<unknown>[],
 ): { created: number; needsReview: number; duplicates: number; errors: number } => {
@@ -243,10 +283,7 @@ export const summarizeBulkItems = (
   };
 };
 
-// ─── Localized labels ───────────────────────────────────────────────────────
-
 const _addLocalizedLabels = (tx: RawTransactionView, locale: Locale): TransactionView => {
-  // version: internal concurrency token (ADR-021) — dropped here, never reaches wire/out.
   const { categoryNames, subCategoryNames, version, ...base } = tx;
   return {
     ...base,
@@ -263,12 +300,6 @@ export function addLocalizedLabels(...args: readonly unknown[]) {
   return purry(_addLocalizedLabels, args);
 }
 
-// ─── ADR-021: building a TransactionView from the shell's apply outcome (rule 6) ────────────────
-
-/** Resolves the entity's persisted, joined view from the shell's apply outcome and localizes it —
- *  the one place `PersistOutcome.read` gets cast back to `RawTransactionView` (trusting the entity
- *  contract) and turned into wire-ready shape. Pure model-building — no `created`/`classification`
- *  envelope here; that's each flow's own result shape to assemble, not this function's job. */
 const _viewFromOutcome = (outcome: PersistOutcome, locale: Locale): TransactionView =>
   addLocalizedLabels(outcome.read as RawTransactionView, locale);
 
@@ -278,11 +309,6 @@ export function viewFromOutcome(...args: readonly unknown[]) {
   return purry(_viewFromOutcome, args);
 }
 
-/** `viewFromOutcome`, resolved against the transaction's own outcome by entity tag — a flow like
- *  an account/card transaction update has no `created` flag to derive (an
- *  update either lands or the whole unit of work fails as a `conflict` before any outcome is ever
- *  reported — rule 4 — so there's no duplicate-replay case to distinguish the way there is for an
- *  insert). */
 const _buildTransactionView = (outcomes: PersistOutcome[], locale: Locale): TransactionView =>
   viewFromOutcome(outcomeFor(TRANSACTION_ENTITY_TAG, outcomes), locale);
 
@@ -292,16 +318,6 @@ export function buildTransactionView(...args: readonly unknown[]) {
   return purry(_buildTransactionView, args);
 }
 
-/**
- * Builds every insert-shaped flow's result (`UpsertTransactionResult` — `models/transaction.ts`):
- * the localized view, plus whether the shell's insert actually landed. `created` is never faked by
- * the domain — always read off the real apply outcome; on an idempotent duplicate replay,
- * `outcome.read` (and so `transaction`) is the EXISTING row, not this attempt's own values.
- * `classification` is the one field that genuinely varies per flow (present for a movement,
- * `undefined` for a transfer — transfers are never classified) — passed through as-is rather than
- * each flow assembling its own envelope around a shared `{ transaction, created }` core, since
- * `UpsertTransactionResult` is that one shape every insert-shaped flow already returns.
- */
 const _buildUpsertResult = (
   outcomes: PersistOutcome[],
   classification: ClassifyOutcome | undefined,
@@ -311,10 +327,6 @@ const _buildUpsertResult = (
   return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied, classification };
 };
 
-// Two overload pairs (data-first / data-last), each split on whether `classification` is a real
-// value or `undefined` — so a caller with a `ClassifyOutcome` in hand gets back
-// `ClassifiedUpsertResult` (no re-narrowing needed), and `create_transfer`'s explicit `undefined`
-// still gets the general `UpsertTransactionResult`.
 export function buildUpsertResult(
   outcomes: PersistOutcome[],
   classification: ClassifyOutcome,

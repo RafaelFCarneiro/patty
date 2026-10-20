@@ -1,26 +1,20 @@
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
 import { roundMoney, roundToDecimals } from './money.js';
-import { AggregateGroupBy, AggregateSort, type AggregateRow, type CurrencyBlock } from '../models/aggregate.js';
+import {
+  AggregateGroupBy,
+  AggregateMetric,
+  AggregateSort,
+  type AggregateRow,
+  type CurrencyBlock,
+  UNCATEGORIZED_KEY,
+  uncategorizedLabels,
+  UNKNOWN_KEY,
+  unknownLabels,
+} from '../models/aggregate.js';
 import type { CurrencyCode, DecimalsFor } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { AggregateDbRow } from '../wire/db/aggregate.js';
-
-const UNCATEGORIZED_KEY = 'uncategorized';
-const uncategorizedLabels: Record<Locale, string> = {
-  en: 'Uncategorized',
-  pt: 'Sem categoria',
-  es: 'Sin categoría',
-};
-
-const UNKNOWN_KEY = 'unknown';
-
-// Exported: also the "no merchant_key" fallback for merchant_concentration (logic/correlations.ts).
-export const unknownLabels: Record<Locale, string> = {
-  en: 'Unknown',
-  pt: 'Desconhecido',
-  es: 'Desconocido',
-};
 
 const resolveKey = (row: AggregateDbRow, groupBy: AggregateGroupBy): string => {
   if (R.isNonNullish(row.key)) return row.key;
@@ -54,7 +48,10 @@ export const shapeAggregateResult = (
     R.map(([currency, currencyRows]): CurrencyBlock => {
       const code = currency as CurrencyCode;
       const decimals = decimalsFor(code);
-      const total = roundToDecimals(R.sumBy(currencyRows, (r) => r.value), decimals);
+      const total = roundToDecimals(
+        R.sumBy(currencyRows, (r) => r.value),
+        decimals,
+      );
       const sorted =
         sort === AggregateSort.enum.asc
           ? R.sortBy(currencyRows, (r) => r.value)
@@ -71,3 +68,8 @@ export const shapeAggregateResult = (
     }),
     R.sortBy((b) => b.currency),
   );
+
+export const wantsDisplayConversion = <I extends { metric: AggregateMetric; displayCurrency?: CurrencyCode }>(
+  input: I,
+): input is I & { displayCurrency: CurrencyCode } =>
+  R.isNonNullish(input.displayCurrency) && input.metric === AggregateMetric.enum.sum;

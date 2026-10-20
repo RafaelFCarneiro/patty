@@ -8,19 +8,16 @@ import {
   RESOURCE_NAME,
   type Credential,
 } from '../../models/auth/bearer.js';
-import { type ChallengeableError } from '../../models/auth/errors.js';
-import { ALL_SCOPES, Scope } from '../../models/auth/scope.js';
+import type { ChallengeableError } from '../../models/auth/errors.js';
+import { ALL_SCOPES, type Scope } from '../../models/auth/scope.js';
 import { isTokenShaped } from './token.js';
 
-/** The `Authorization` header is authoritative when present: it must be `Bearer ftk_…`. Anything else
- *  (another scheme, no token, a token that is not ours) is `malformed` — never a reason to try the cookie. */
 export const credentialOf = (authorization: string | undefined): Credential => {
   if (authorization === undefined) return { kind: 'none' };
   const token = BEARER_HEADER.exec(authorization)?.[1];
   return token !== undefined && isTokenShaped(token) ? { kind: 'bearer', token } : { kind: 'malformed' };
 };
 
-/** Only `/api` and `/mcp` take a bearer token; `/ui` is the browser surface and stays session-only. */
 export const acceptsBearer = (path: string): boolean =>
   [API_PATH_PREFIX, MCP_PATH].some((root) => path === root || path.startsWith(`${root}/`));
 
@@ -30,13 +27,6 @@ const joinScopes = (scopes: readonly Scope[]): string => scopes.join(' ');
 
 export const resourceMetadataUrl = (origin: string): string => `${origin}${MCP_PRM_PATH}`;
 
-/**
- * The one place a `WWW-Authenticate` value is built.
- *   - no credential        → `resource_metadata` + every scope (what a client should request);
- *   - invalid/expired token → `error="invalid_token"` + `resource_metadata`;
- *   - too little scope      → `error="insufficient_scope"` + the scope that was needed + `resource_metadata`.
- * `resource_metadata` is left out when the instance cannot name its own origin.
- */
 export const bearerChallenge = (error: ChallengeableError, metadataUrl: string | null): string => {
   const metadata = metadataUrl === null ? [] : [param('resource_metadata', metadataUrl)];
   switch (error.code) {
@@ -53,11 +43,6 @@ export const bearerChallenge = (error: ChallengeableError, metadataUrl: string |
   }
 };
 
-/**
- * The metadata document for resource `<origin>/mcp`. `authorization_servers` is OPTIONAL in RFC 9728 and is
- * omitted until the in-process authorization server exists (ADR-033 Phase 3); `offline_access` is never listed
- * (MCP authorization: refresh tokens are not a resource requirement).
- */
 export const protectedResourceMetadata = (origin: string) => ({
   resource: `${origin}${MCP_PATH}`,
   scopes_supported: [...ALL_SCOPES],

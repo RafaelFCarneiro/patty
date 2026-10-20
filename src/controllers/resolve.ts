@@ -3,19 +3,20 @@ import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { okOr } from '../common/result.js';
 import { buildSynonyms, resolveAndSort } from '../logic/category.js';
+import { normalizeMerchant } from '../logic/merchant.js';
 import { decimalsLookup } from '../logic/money.js';
-import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js';
+import { resolveByName, resolveByNames } from '../logic/resolve.js';
 import { resolveTagIds, resolveTagNames, tagSetPersistable } from '../logic/tag.js';
 import type { Account } from '../models/account.js';
 import type { Category, SubCategory } from '../models/category.js';
 import type { CreditCard } from '../models/creditCard.js';
 import { ambiguous, notFound } from '../models/error.js';
 import type { CurrencyCode } from '../models/money.js';
-import type { Persistable } from '@rfc0/effect-runner';
-import type { TransactionView } from '../models/transaction.js';
+import type { CategorySelection, MerchantMatch, TransactionView } from '../models/transaction.js';
 import type { Deps } from './deps.js';
+import type { Named, Resolution } from '../models/resolution.js';
+import type { TagLinksResolution } from '../models/tag.js';
 
-/** Resolution → Result with the right structured error for the entity kind. */
 export const resolutionToResult = <T extends Named>(
   res: Resolution<T>,
   kind: 'account' | 'category' | 'sub_category' | 'card',
@@ -49,28 +50,16 @@ export const resolveCardRef = (deps: Deps, name: string): ResultAsync<CreditCard
     resolutionToResult(resolveByName(cards, name), 'card'),
   );
 
-/** A currency's own fractional digits off the live reference list. No `Result`: every
- *  `CurrencyCode` is a validated enum member, always present in the list. */
 export const resolveDecimals = async (deps: Deps, currency: CurrencyCode): Promise<number> =>
   decimalsLookup(await deps.currencies.list())(currency);
 
-/**
- * Resolves the account(s) referenced by a transaction's leg(s) (`accountId`/`toAccountId`) —
- * a neutral I/O helper (ADR-020) making no ownership judgment of its own: a card purchase's
- * `accountId` is the card's own internal account; the bill-payment transfer's `toAccountId` is
- * that same account. Each aggregate interprets the result against its own definition of what it
- * owns (`controllers/creditCard/transaction.ts`'s `assertCreditAccountLeg`, `controllers/account/
- * transaction.ts`'s `assertAccountOwnedLegs`) rather than sharing one judgment between them.
- *
- * Fails on the Result track (`unknown_account`) if a leg id doesn't resolve to an account — same
- * treatment as the analogous stale-`cardId` case in `controllers/creditCard/transaction.ts`'s
- * `updateCardTransaction` (`okOr(await deps.creditCards.findById(cardId), notFound('card', cardId,
- * []))`): an internal FK inconsistency that accounts/cards referenced by a transaction can't
- * normally produce (`accountErrors.inUse` blocks deleting a referenced account; `deleteCreditCard`
- * cascades every correlated transaction itself, as its own `Persistable`s), but is still routed
- * through `AppError` rather than a bare
- * throw, for the same reason it is there — consistency with every other resolver in this module.
- */
+export const matchCandidatesFor = async (
+  deps: Deps,
+  description: string,
+  categorySelection: CategorySelection | null,
+): Promise<MerchantMatch[]> =>
+  categorySelection ? [] : deps.merchants.matchCandidates(normalizeMerchant(description));
+
 export const resolveLegAccounts = (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
@@ -88,14 +77,6 @@ export const resolveLegAccounts = (
     ),
   );
 
-export type TagLinksResolution = { persistable: Persistable; tags: string[] };
-
-// `undefined` (the caller's `input.tags` omitted) means "leave tags alone" — returns null, no
-// Persistable, no deps.tags.list() read: a create/update that never mentions tags shouldn't pay
-// for one. Never fails otherwise — an unmatched name is dropped, not an error — so this is a
-// plain Promise rather than a ResultAsync, unlike this module's other resolvers. `transactionId`
-// is the flow's own `entity.id`; on a duplicate-idempotency replay the applier no-ops on it
-// (models/transactionTag.ts), so a duplicate never touches the surviving row's tags.
 export const resolveTagLinks = async (
   deps: Deps,
   transactionId: string,

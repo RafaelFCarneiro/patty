@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { Locale, LocaleSource, USER_SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
+import { Locale, LocaleSource, USER_SETTINGS_ENTITY_TAG, type UserSettingsEntity } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp } from '@rfc0/effect-runner';
 import { getPreferences, setBaseCurrency, setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
-import type { UserSettingsEntity } from '../../../src/models/locale.js';
 
 const makeDeps = (stored?: UserSettingsEntity, envLocale?: Locale): Deps => ({
   settings: {

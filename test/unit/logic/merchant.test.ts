@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MERCHANT_LEARNING_WEIGHT_DELTA,
   normalizeMerchant,
   resolveMerchantCorrection,
   withMerchant,
   withMerchantLearning,
 } from '../../../src/logic/merchant.js';
-import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../../../src/models/merchant.js';
+import {
+  MERCHANT_CATEGORY_ENTITY_TAG,
+  MERCHANT_ENTITY_TAG,
+  MERCHANT_LEARNING_WEIGHT_DELTA,
+} from '../../../src/models/merchant.js';
 import { PersistOp, type Persistable } from '@rfc0/effect-runner';
 import { TRANSACTION_ENTITY_TAG } from '../../../src/models/transaction.js';
 

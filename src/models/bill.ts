@@ -4,7 +4,8 @@ import { Id } from './id.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { ValidationError } from './error.js';
 import type { LabelMap } from './locale.js';
-import type { TransactionView } from './transaction.js';
+import type { CurrencyCode } from './money.js';
+import type { TransactionEntity, TransactionSource, TransactionView } from './transaction.js';
 
 export const BillStatus = z.enum(['open', 'closed', 'paid']);
 export type BillStatus = z.infer<typeof BillStatus>;
@@ -87,3 +88,22 @@ export const billErrors = {
     issues: [`payment date ${date} is in the future: a bill payment records a payment that already occurred`],
   }),
 };
+
+export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string };
+
+export const BILL_PAYMENT_KEY_PREFIX = 'billpay-';
+
+export type BillPaymentFacts = {
+  id: string;
+  card: { name: string; currency: CurrencyCode; accountId: string };
+  payer: { id: string };
+  bill: Pick<RawBill, 'id' | 'month' | 'year'>;
+  total: number;
+  date: string;
+  today: string;
+  source: TransactionSource;
+};
+
+export type BillPaymentPlan = { transferEntity: TransactionEntity; idempotencyKey: string };
+
+export type PayBillInput = PayBill & { source: TransactionSource };

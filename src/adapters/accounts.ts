@@ -4,14 +4,12 @@ import {
   type Account,
   type AccountEntity,
   AccountSchema,
-} from '../models/account.js';
-import type {
-  AddAccountMovement,
-  CreateAccount,
-  CreateTransfer,
-  ImportAccountStatement,
-  UpdateAccount,
-  UpdateAccountTransaction,
+  type AddAccountMovement,
+  type CreateAccount,
+  type CreateTransfer,
+  type ImportAccountStatement,
+  type UpdateAccount,
+  type UpdateAccountTransaction,
 } from '../models/account.js';
 import * as persistence from '../logic/persistence.js';
 import type { AccountRow } from '../wire/db/accounts.js';

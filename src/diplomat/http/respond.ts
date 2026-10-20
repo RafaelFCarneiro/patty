@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Result } from 'neverthrow';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { httpStatus, type AppError } from '../../common/errors.js';
 import { ConfirmQuerySchema, IdParamSchema, NameParamSchema } from '../../wire/in/common.js';
 import { ConflictErrorOut, NotFoundErrorOut, ValidationErrorOut } from '../../wire/out/errors.js';

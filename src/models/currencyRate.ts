@@ -100,3 +100,32 @@ export const currencyRateErrors = {
     issues: ['from and to currencies must differ'],
   } satisfies CurrencyRateError,
 };
+
+export type RateFields = Pick<SetExchangeRateInput, 'from' | 'to' | 'rate' | 'asOf' | 'source'>;
+
+export type CurrencyRateBulkItem<E = unknown> =
+  { status: 'ok'; rate: CurrencyRateView } | { status: 'error'; from: CurrencyCode; to: CurrencyCode; error: E };
+
+export const CRYPTO_CURRENCIES: ReadonlySet<CurrencyCode> = new Set([CurrencyCode.enum.USDC, CurrencyCode.enum.BTC]);
+
+export type StalenessThresholds = { fiatHours: number; cryptoHours: number };
+
+export const MS_PER_HOUR = 60 * 60 * 1000;
+
+export type ConversionResult = {
+  value: number | null;
+  rate: number | null;
+  asOf: string | null;
+  stale: boolean;
+  noRate: boolean;
+};
+
+export type ConvertOptions = { decimals: number; thresholds: StalenessThresholds };
+
+export type ValuableBalance = { id: string; currency: CurrencyCode; balance: number };
+
+export type ConsolidatedNetWorth = { baseCurrency: CurrencyCode; total: number; excluded: string[] };
+
+export type CurrencyAmount = { currency: CurrencyCode; amount: number };
+
+export type ConsolidatedInCurrency = Omit<ConvertedTotal, 'displayCurrency'>;

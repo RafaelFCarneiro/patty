@@ -9,7 +9,7 @@ come from real refactors; generating in the "don't" style means the code will be
 - `const` + expressions over `let` + mutation. Arrow functions. No classes anywhere in the domain
   (the only acceptable class usage is library-provided, e.g. the MCP SDK server).
 - Prefer small named functions over inline complexity; extract when a function does two things.
-- Comments explain *why* (invariants, trade-offs), never *what* the code already says.
+- Comments explain *why* (invariants, trade-offs), never *what* the code already says. A rule the code cannot show (a guarantee a port makes, a race a write closes, a column a revert must clear) is pinned by a test with a descriptive name, not only by a comment — a comment can rot, a failing test cannot.
 
 ## Controllers — safeTry composition (Railway-Oriented)
 
@@ -160,6 +160,31 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   writes, not all I/O. Only the write call moves from `await deps.<x>.create(...)` to
   `persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: account })`.
 
+### Controller shape — gather, decide, persist
+
+A controller reads in three named steps: **gather** (resolve refs, repo reads through `deps`), **decide** (one
+pure `logic/` call from the gathered values to an entity, guards and data), **persist** (build `{ persist, response }`).
+Rules belong in the decide step, where they are unit-tested without mocks; the function-shape lint limits
+(`docs/code-quality.md` § Function shape) hold the controller to it.
+
+```ts
+// ✅ DO — gather in the controller, the decision is a pure plan call, then persist
+const categorySelection = yield* resolveCategorySelection(deps, input, type)       // gather
+const plan = planNewTransaction({                                                    // decide (logic/transaction.ts)
+  id: deps.newId(), today: toIsoDate(deps.clock()), input, type, source, currency,
+  decimals: await resolveDecimals(deps, currency),
+  funding: { refs: { accountId: account?.id }, sourceId: account?.id },
+  categorySelection, candidates: await matchCandidatesFor(deps, input.description, categorySelection),
+  keepsUnmatchedMerchant: true,
+})
+const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: plan.entity, idempotencyKey: plan.idempotencyKey })]
+
+// ❌ DON'T — status default, classification, entity literal and key derivation written inline in the controller
+const status = input.status ?? defaultStatusFor(date, today)
+const classification = categorySelection ? userClassification(...) : pickClassification(await deps.merchants.matchCandidates(...))
+const entity: TransactionEntity = { id: deps.newId(), /* … 15 fields … */ }
+```
+
 ## logic/ — pure and declarative
 
 - No I/O, no `Date.now()`/`new Date()` (clock comes from deps), no imports from `controllers/` or `diplomat/`.
@@ -190,6 +215,8 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 - Prefer small, deterministic tests; avoid network/db side effects in unit tests.
 
 ## models/ — zod single source of truth
+
+- **Every type and constant lives in `models/`** — plan/facts shapes (`NewTransactionFacts`, `BillPaymentPlan`), `Extract`ed unions, sentinels (`INVALID_REDEEM`), key prefixes. `controllers/` and `logic/` hold functions only; a type a function needs is imported, never declared beside it. Plan/facts types are hand-written TypeScript — they are not domain data, so not zod; domain data stays `z.infer`. The exceptions are shapes that cannot live there: ports that name `diplomat/` types or the composed `AppError` (`controllers/deps.ts`, `StatementImportPlan`) and function-valued dispatch tables.
 
 - Types are ALWAYS `z.infer<typeof Schema>` — never hand-written interfaces for domain data.
 - **Naming: the zod value gets the `Schema` suffix; the inferred type gets the bare name.**

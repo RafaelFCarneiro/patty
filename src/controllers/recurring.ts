@@ -1,27 +1,25 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
-import { pickClassification } from '../logic/classify.js';
 import { normalizeMerchant, withMerchant } from '../logic/merchant.js';
 import * as persistence from '../logic/persistence.js';
-import { dueSchedule, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js';
+import { dueSchedule, newRule, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js';
 import { toIsoDate } from '../logic/period.js';
-import { resolveCurrency } from '../logic/money.js';
 import { defaultStatusFor, viewFromOutcome } from '../logic/transaction.js';
 import {
   RECURRING_ENTITY_TAG,
   type CreateRecurring,
-  type RecurringRule,
   type RecurringRuleEntity,
   type RecurringRuleView,
+  type ApplyDueResult,
+  type RulePlan,
 } from '../models/recurring.js';
-import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
+import type { FlowOutcome, Persistable, PersistOutcome } from '@rfc0/effect-runner';
 import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,
   TransactionSource,
   type TransactionEntity,
-  type TransactionView,
 } from '../models/transaction.js';
 import type { Deps } from './deps.js';
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js';
@@ -31,8 +29,6 @@ export const listRecurring = async (deps: Deps): Promise<RecurringRuleView[]> =>
   return rules.map(withPeriodLabel(locale));
 };
 
-/** No read-back needed — the response is built from the same model plus the already-resolved
- *  account/category names (rule 6). */
 export const createRecurring = (
   deps: Deps,
   input: CreateRecurring,
@@ -40,27 +36,8 @@ export const createRecurring = (
   safeTry(async function* () {
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
-    // Explicit `merchant` is stored as-is (the user's own naming, no lookup). Otherwise mirror
-    // `planAccountMovement`'s precedence — an already-learned `merchant_category` key wins over a
-    // fresh normalize, so the rule matches the identity a transaction would.
-    const normalizedDescription = normalizeMerchant(input.description);
-    const merchantKey = input.merchant
-      ? normalizeMerchant(input.merchant) || undefined
-      : (pickClassification(await deps.merchants.matchCandidates(normalizedDescription)).merchantKey ??
-        (normalizedDescription || undefined));
-
-    const rule: RecurringRule = {
-      id: deps.newId(),
-      description: input.description,
-      amount: input.amount,
-      type: input.type,
-      period: input.period,
-      nextDue: input.startDate,
-      currency: resolveCurrency(account, input),
-      accountId: account?.id,
-      categoryId: category?.id,
-      merchantKey,
-    };
+    const candidates = input.merchant ? [] : await deps.merchants.matchCandidates(normalizeMerchant(input.description));
+    const rule = newRule({ id: deps.newId(), input, account, category, candidates });
 
     const persist = withMerchant([persistence.insert({ entity: RECURRING_ENTITY_TAG, model: rule })], rule.merchantKey);
     const response: RecurringRuleView = {
@@ -71,18 +48,6 @@ export const createRecurring = (
     return ok({ persist, response });
   });
 
-export type ApplyDueResult = {
-  applied: Array<{ rule: string; date: string; transaction: TransactionView }>;
-  count: number;
-};
-
-type RulePlan = {
-  occurrences: Array<{ rule: string; date: string; persistable: Persistable }>;
-  advance: Persistable;
-};
-
-/** `rule.merchantKey`'s `merchants` row was already emitted when the rule was created (`withMerchant`
- *  in `createRecurring`), so occurrences just reference it — no merchant `Persistable` needed here. */
 const buildOccurrenceEntity = (
   deps: Deps,
   rule: RecurringRuleEntity,
@@ -101,9 +66,6 @@ const buildOccurrenceEntity = (
   refs: { accountId: rule.accountId, categoryId: rule.categoryId, merchantKey: rule.merchantKey },
 });
 
-/** `advance`'s model carries the rule's full desired end-state, not just `nextDue`, so the shell's
- *  generic versioned update can apply it (rule 3/4). Always advances, even when no new occurrence
- *  gets inserted (an idempotent replay). */
 const planRule = (deps: Deps, rule: RecurringRuleEntity, through: string, today: string): RulePlan => {
   const { dates, next } = dueSchedule(rule.nextDue, through, rule.period);
   const occurrences: RulePlan['occurrences'] = dates.map((date) => ({
@@ -119,16 +81,6 @@ const planRule = (deps: Deps, rule: RecurringRuleEntity, through: string, today:
   return { occurrences, advance };
 };
 
-/**
- * Materialize every rule due on/before `through` (default: today). Past/present occurrences land
- * effective; future ones land pending — via defaultStatusFor. Passing a future `through` pre-creates
- * upcoming salary/rent/subscriptions as pending, feeding projections without any extra monthly
- * effort. Idempotent: safe to re-run.
- *
- * Every due rule's occurrences and `advance` apply as one atomic batch: a conflict retries the
- * whole run, which is safe because `recurringIdempotencyKey`'s `rec-<ruleId>-<date>` keys make
- * re-materialization a no-op — already-created occurrences don't duplicate.
- */
 export const applyDueRecurring = (
   deps: Deps,
   options?: { through?: string },

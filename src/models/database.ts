@@ -20,3 +20,7 @@ export const STALE_GLOBAL_CHECK_COMMAND = `npm ls -g ${PACKAGE_NAME}`;
 export const databaseAheadMessage = (buildVersion: string): string =>
   `fintrack: this build (v${buildVersion}) is older than your database (it has migrations this version doesn't ` +
   `know). Update with \`${NPX_COMMAND}\`, or check for a stale global install: \`${STALE_GLOBAL_CHECK_COMMAND}\`.`;
+
+export type DatabaseState = 'ok' | 'error';
+
+export type Health = { status: 'ok'; db: DatabaseState };

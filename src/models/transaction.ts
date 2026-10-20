@@ -1,12 +1,10 @@
 import { z } from 'zod';
-import { LocalizedNamesSchema } from './category.js';
+import { LocalizedNamesSchema, type CategoryKind } from './category.js';
 import { IsoDate, PeriodSchema, RangeFrom, RangeTo } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
-import { cursorSchema, PageRequestSchema, SortDirection } from './page.js';
+import { cursorSchema, PageRequestSchema, SortDirection, type CursorKey } from './page.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
-import type { CursorKey } from './page.js';
-import type { CategoryKind } from './category.js';
 import { validationWithRemedy, type ValidationError } from './error.js';
 import { Remedy } from './remedy.js';
 import type { LabelMap } from './locale.js';
@@ -43,6 +41,8 @@ export const ClassificationSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 export type Classification = z.infer<typeof ClassificationSchema>;
+
+export const UNCLASSIFIED: Classification = { method: ClassificationMethod.enum.none, confidence: 0 };
 
 export const TransactionSource = z.enum(['mcp', 'rest', 'import']);
 export type TransactionSource = z.infer<typeof TransactionSource>;
@@ -454,4 +454,66 @@ export const transactionErrors = {
   // was used on a transaction it does not own — a guard, not a dispatcher (the caller re-addresses
   // the operation named by the remedy; nothing here re-routes on their behalf).
   wrongOperation: (remedy: Remedy): TransactionError => validationWithRemedy(WRONG_OPERATION_MESSAGE, remedy),
+};
+
+export type MerchantMatch = {
+  merchantKey: string;
+  categoryId: string;
+  categoryName: string;
+  weight: number;
+  origin: typeof ClassificationMethod.enum.rule | typeof ClassificationMethod.enum.history;
+};
+
+export type PatchFields = Pick<UpdateTransaction, 'description' | 'amount' | 'type' | 'date' | 'note'>;
+
+export type PatchOverrides = {
+  account?: { id: string; currency: CurrencyCode } | null;
+  billId?: string;
+};
+
+export type NewTransactionInput = Pick<
+  CreateTransaction,
+  'description' | 'amount' | 'date' | 'status' | 'note' | 'rawInput' | 'discriminator'
+>;
+
+export type NewTransactionFunding = {
+  refs: Pick<TransactionEntity['refs'], 'accountId' | 'cardId'>;
+  sourceId?: string;
+  billPeriodKey?: string;
+};
+
+export type NewTransactionFacts = {
+  id: string;
+  today: IsoDate;
+  input: NewTransactionInput;
+  type: MovementType;
+  source: TransactionSource;
+  currency: CurrencyCode;
+  decimals: number;
+  funding: NewTransactionFunding;
+  categorySelection: CategorySelection | null;
+  candidates: readonly MerchantMatch[];
+  keepsUnmatchedMerchant: boolean;
+};
+
+export type NewTransactionPlan = { entity: TransactionEntity; classification: ClassifyOutcome; idempotencyKey: string };
+
+export type UpdateTransactionPatch = UpdateTransaction & { account?: string };
+
+export type TransactionUpdateDecision = {
+  account: { id: string; currency: CurrencyCode } | null;
+  effectiveType: MovementType | undefined;
+  categorySelection: CategorySelection | null;
+};
+
+export const LOW_CONFIDENCE_THRESHOLD = 0.6;
+
+export type BulkItemResult<E = unknown> =
+  | { status: 'created' | 'needs_review'; transaction: TransactionView; classification: ClassifyOutcome }
+  | { status: 'duplicate'; transaction: TransactionView }
+  | { status: 'error'; description: string; error: E };
+
+export type BulkResult<E = unknown> = {
+  summary: { created: number; needsReview: number; duplicates: number; errors: number };
+  items: BulkItemResult<E>[];
 };

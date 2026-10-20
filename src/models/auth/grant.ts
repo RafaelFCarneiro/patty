@@ -117,3 +117,17 @@ export type RedeemResult =
  *  `mint`. */
 export const RedeemPlanKind = z.enum(['pending', 'denied', 'expired', 'invalid', 'mint']);
 export type RedeemPlanKind = z.infer<typeof RedeemPlanKind>;
+
+export type RedeemPlan =
+  | { kind: typeof RedeemPlanKind.enum.invalid }
+  | { kind: typeof RedeemPlanKind.enum.pending }
+  | { kind: typeof RedeemPlanKind.enum.denied }
+  | { kind: typeof RedeemPlanKind.enum.expired; settle: ClientGrantEntity | null }
+  | {
+      kind: typeof RedeemPlanKind.enum.mint;
+      grant: ClientGrantEntity & { userId: string; scopes: Scope[]; duration: SignInDuration; approvedAt: string };
+    };
+
+export const INVALID_REDEEM: RedeemPlan = { kind: RedeemPlanKind.enum.invalid };
+
+export type MintableGrant = Extract<RedeemPlan, { kind: typeof RedeemPlanKind.enum.mint }>['grant'];

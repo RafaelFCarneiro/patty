@@ -4,11 +4,12 @@ import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import {
   assertNonCreditType,
+  changesPinnedField,
   filterByType,
-  hasNoCards,
-  hasNoRecurring,
-  hasNoTransactions,
+  guardPinnedFields,
+  isRename,
   isUnreferenced,
+  mergeAccountPatch,
   withTypeLabel,
 } from '../../logic/account.js';
 import { computeBalance, computeProjectedBalance } from '../../logic/balance.js';
@@ -17,15 +18,15 @@ import { resolveBaseCurrency } from '../../logic/locale.js';
 import { decimalsLookup } from '../../logic/money.js';
 import * as persistence from '../../logic/persistence.js';
 import { resolveByName } from '../../logic/resolve.js';
-import { accountErrors, ACCOUNT_ENTITY_TAG } from '../../models/account.js';
-import type {
-  Account,
-  AccountBalance,
-  AccountBalancesResult,
-  AccountEntity,
-  AccountType,
-  CreateAccount,
-  UpdateAccount,
+import {
+  accountErrors,
+  ACCOUNT_ENTITY_TAG,
+  type Account,
+  type AccountBalance,
+  type AccountBalancesResult,
+  type AccountType,
+  type CreateAccount,
+  type UpdateAccount,
 } from '../../models/account.js';
 import { notFound } from '../../models/error.js';
 import { Locale } from '../../models/locale.js';
@@ -34,7 +35,6 @@ import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 
-/** Repo-touching precondition: true when no account already holds this name. */
 const assertNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
   !(await deps.accounts.findByName(name));
 
@@ -43,11 +43,6 @@ export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Acco
   return R.pipe(all, R.filter(filterByType(type)), R.map(withTypeLabel(locale)));
 };
 
-/** A functional-core flow (docs/functional-core-imperative-shell.md): decides and returns the
- *  write as data (`persist`) instead of performing it; the imperative shell adapts and applies
- *  the batch and returns `response`. A new account has no `version` to decide — that's the
- *  shell's own structural constant (`INITIAL_VERSION`) — so the model built here, and the
- *  response, are both the plain wire-shaped `Account`. */
 export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
   safeTry(async function* () {
     yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected(Remedy.enum.create_credit_card));
@@ -58,9 +53,6 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     return ok({ persist, response: account });
   });
 
-/** Balances are derived: initialBalance + income − expenses + transfers in − transfers out.
- *  Valuation against the base currency (ADR-026) correlates the `accounts` and `currency_rates`
- *  aggregates here, in the controller, never via a repo join (ADR-028). */
 export const getAccountBalances = (
   deps: Deps,
   filter?: { account?: string; type?: AccountType; projectedAsOf?: string },
@@ -112,36 +104,32 @@ export const deleteAccount = (deps: Deps, name: string): ResultAsync<FlowOutcome
     return ok({ persist, response: { deleted: true } });
   });
 
+const guardRenameAvailable = (deps: Deps, account: Account, newName?: string): ResultAsync<void, AppError> =>
+  safeTry(async function* () {
+    if (isRename(account.name, newName)) {
+      yield* guard(await assertNameAvailable(deps, newName), accountErrors.duplicateName(newName));
+    }
+    return ok(undefined);
+  });
+
+const guardPinnedFieldChange = (deps: Deps, accountId: string, input: UpdateAccount): ResultAsync<void, AppError> =>
+  safeTry(async function* () {
+    if (changesPinnedField(input)) {
+      yield* guardPinnedFields(await deps.accounts.countReferences(accountId), input);
+    }
+    return ok(undefined);
+  });
+
 export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, input.name);
     yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected(Remedy.enum.update_credit_card));
     yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected(Remedy.enum.create_credit_card));
-
-    if (input.newName && input.newName.toLowerCase() !== account.name.toLowerCase()) {
-      yield* guard(await assertNameAvailable(deps, input.newName), accountErrors.duplicateName(input.newName));
-    }
-
-    if (R.isDefined(input.type) || R.isDefined(input.currency)) {
-      const refs = await deps.accounts.countReferences(account.id);
-      if (R.isDefined(input.type)) {
-        yield* guard(hasNoTransactions(refs), accountErrors.typeImmutable(refs.transactions));
-      }
-      if (R.isDefined(input.currency)) {
-        yield* guard(hasNoTransactions(refs), accountErrors.currencyImmutableTransactions(refs.transactions));
-        yield* guard(hasNoRecurring(refs), accountErrors.currencyImmutableRecurring);
-        yield* guard(hasNoCards(refs), accountErrors.currencyImmutableCards);
-      }
-    }
+    yield* guardRenameAvailable(deps, account, input.newName);
+    yield* guardPinnedFieldChange(deps, account.id, input);
 
     const raw = yield* okOr(await deps.accounts.findRawById(account.id), notFound('account', account.id, []));
-    const entity: AccountEntity = {
-      ...raw,
-      name: input.newName ?? raw.name,
-      initialBalance: input.initialBalance ?? raw.initialBalance,
-      type: input.type ?? raw.type,
-      currency: input.currency ?? raw.currency,
-    };
+    const entity = mergeAccountPatch(raw, input);
 
     const locale = await deps.locale();
     const persist = R.isDeepEqual(entity, raw)

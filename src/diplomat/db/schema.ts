@@ -13,7 +13,7 @@ import {
 import { sql } from 'drizzle-orm';
 import { GrantChannel, GrantStatus, type SignInDuration } from '../../models/auth/grant.js';
 import { UserRole } from '../../models/auth/owner.js';
-import { type Scope } from '../../models/auth/scope.js';
+import type { Scope } from '../../models/auth/scope.js';
 import { DEFAULT_SIGN_IN_CAP, SignInCap } from '../../models/auth/users.js';
 import { AccessTokenKind, type TokenAccess } from '../../models/auth/token.js';
 import { BudgetPeriod } from '../../models/budget.js';

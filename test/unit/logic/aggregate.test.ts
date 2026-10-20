@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { shapeAggregateResult } from '../../../src/logic/aggregate.js';
-import type { DecimalsFor } from '../../../src/models/money.js';
-import { AggregateGroupBy, AggregateSort } from '../../../src/models/aggregate.js';
+import { shapeAggregateResult, wantsDisplayConversion } from '../../../src/logic/aggregate.js';
+import { CurrencyCode, type DecimalsFor } from '../../../src/models/money.js';
+import { AggregateGroupBy, AggregateMetric, AggregateSort } from '../../../src/models/aggregate.js';
 import type { AggregateDbRow } from '../../../src/wire/db/aggregate.js';
 
 // Fiat-shaped 2 decimals for every currency, matching existing behavior before ADR-026 — the
@@ -193,4 +193,23 @@ describe('shapeAggregateResult', () => {
     expect(out[0]!.total).toBe(0.12345679); // rounded to 8 decimals, not flattened to 0.12
     expect(out[0]!.rows[0]!.value).toBe(0.12345679);
   });
+});
+
+describe('wantsDisplayConversion', () => {
+  it('converts only a sum with a display currency', () => {
+    expect(wantsDisplayConversion({ metric: AggregateMetric.enum.sum, displayCurrency: CurrencyCode.enum.USD })).toBe(
+      true,
+    );
+  });
+
+  it('a sum without a display currency stays as is', () => {
+    expect(wantsDisplayConversion({ metric: AggregateMetric.enum.sum })).toBe(false);
+  });
+
+  it.each([AggregateMetric.enum.count, AggregateMetric.enum.avg])(
+    '%s is never converted — it is not a cross-currency amount',
+    (metric) => {
+      expect(wantsDisplayConversion({ metric, displayCurrency: CurrencyCode.enum.USD })).toBe(false);
+    },
+  );
 });

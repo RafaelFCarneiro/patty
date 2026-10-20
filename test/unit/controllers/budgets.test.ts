@@ -14,8 +14,7 @@ import {
   type BudgetView,
   type BudgetViewInput,
 } from '../../../src/models/budget.js';
-import type { Category, SubCategory } from '../../../src/models/category.js';
-import { CategoryKind } from '../../../src/models/category.js';
+import { type Category, type SubCategory, CategoryKind } from '../../../src/models/category.js';
 import type { CurrencyRateEntity } from '../../../src/models/currencyRate.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode, type Currency } from '../../../src/models/money.js';

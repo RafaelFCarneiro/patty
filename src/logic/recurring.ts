@@ -1,7 +1,19 @@
 import { purry } from 'remeda';
+import { pickClassification } from './classify.js';
 import { localizeRecurringPeriod } from './localize.js';
+import { normalizeMerchant } from './merchant.js';
+import { resolveCurrency } from './money.js';
 import type { Locale } from '../models/locale.js';
-import type { RecurringPeriod, RecurringRuleView } from '../models/recurring.js';
+import type { MerchantMatch } from '../models/transaction.js';
+import {
+  type CreateRecurring,
+  type RecurringPeriod,
+  type RecurringRule,
+  type RecurringRuleView,
+  type RuleFacts,
+  MAX_RECURRING_OCCURRENCES_PER_RUN,
+  type DueSchedule,
+} from '../models/recurring.js';
 
 const _withPeriodLabel = (rule: RecurringRuleView, locale: Locale): RecurringRuleView => ({
   ...rule,
@@ -13,8 +25,6 @@ export function withPeriodLabel(locale: Locale): (rule: RecurringRuleView) => Re
 export function withPeriodLabel(...args: readonly unknown[]) {
   return purry(_withPeriodLabel, args);
 }
-
-/** Pure date math on YYYY-MM-DD strings — no Date timezone traps for month/year. */
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
@@ -36,18 +46,8 @@ export const nextDue = (current: string, period: RecurringPeriod): string => {
   return `${y + 1}-${pad(m)}-${pad(clampDay(d, m, y + 1))}`;
 };
 
-/** Stable idempotency key so re-applying a due rule never duplicates. */
 export const recurringIdempotencyKey = (ruleId: string, due: string): string => `rec-${ruleId}-${due}`;
 
-/** Bounds `applyDueRecurring`'s per-rule materialization loop to prevent runaway on ancient rules. */
-export const MAX_RECURRING_OCCURRENCES_PER_RUN = 36;
-
-export type DueSchedule = {
-  dates: readonly string[];
-  next: string;
-};
-
-/** Occurrences owed through `through`, capped at `max`; `next` is the first date still owed. */
 export const dueSchedule = (
   start: string,
   through: string,
@@ -58,3 +58,24 @@ export const dueSchedule = (
     taken.length < max && due <= through ? advance(nextDue(due, period), [...taken, due]) : { dates: taken, next: due };
   return advance(start, []);
 };
+
+export const ruleMerchantKey = (
+  input: Pick<CreateRecurring, 'description' | 'merchant'>,
+  candidates: readonly MerchantMatch[],
+): string | undefined => {
+  if (input.merchant) return normalizeMerchant(input.merchant) || undefined;
+  return pickClassification(candidates).merchantKey ?? (normalizeMerchant(input.description) || undefined);
+};
+
+export const newRule = (facts: RuleFacts): RecurringRule => ({
+  id: facts.id,
+  description: facts.input.description,
+  amount: facts.input.amount,
+  type: facts.input.type,
+  period: facts.input.period,
+  nextDue: facts.input.startDate,
+  currency: resolveCurrency(facts.account, facts.input),
+  accountId: facts.account?.id,
+  categoryId: facts.category?.id,
+  merchantKey: ruleMerchantKey(facts.input, facts.candidates),
+});

@@ -39,6 +39,9 @@ export default tseslint.config(
           ignoreRestSiblings: true,
         },
       ],
+      // A type is imported as a type, and one module is imported once — `import { a, type B } from 'm'`.
+      '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports', fixStyle: 'inline-type-imports' }],
+      'no-duplicate-imports': 'error',
       // Declarative over imperative (docs/code-quality.md, remeda table): the `xs.filter(...)[0]`
       // smell — taking the first match by index instead of R.find / R.firstBy.
       'no-restricted-syntax': [
@@ -125,7 +128,7 @@ export default tseslint.config(
   },
   {
     // Function shape (docs/code-quality.md § Function shape): enforced per layer as each is brought under the limits.
-    files: ['src/diplomat/http/**/*.ts', 'src/diplomat/mcp/**/*.ts'],
+    files: ['src/diplomat/http/**/*.ts', 'src/diplomat/mcp/**/*.ts', 'src/controllers/**/*.ts', 'src/logic/**/*.ts'],
     rules: {
       'max-lines-per-function': ['error', { max: 40, skipBlankLines: true, skipComments: true }],
       complexity: ['error', 10],
