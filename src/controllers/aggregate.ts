@@ -39,12 +39,6 @@ const convertBlockTotals = async (
   return { displayCurrency, ...converted };
 };
 
-/** Converting to `displayCurrency` correlates two aggregates (this read's own per-currency block
- *  totals × `currency_rates`), so it is orchestrated here rather than inside a repo — the
- *  transactions repo returns its own aggregate unchanged, `currencyRatesRepo` returns rates, and
- *  the pure `logic/currencyRate.ts#consolidateInCurrency` correlates them. Omitting
- *  `displayCurrency` (or requesting count/avg, see `wantsDisplayConversion`) keeps the response
- *  byte-identical to before this option existed. */
 export const aggregateSpending = (
   deps: Deps,
   input: ResolvedAggregateSpending,

@@ -4,7 +4,7 @@ import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { LabelMap } from './locale.js';
-import { MovementType } from './transaction.js';
+import { MovementType, type MerchantMatch } from './transaction.js';
 
 export const RecurringPeriod = z.enum(['weekly', 'monthly', 'yearly']);
 export type RecurringPeriod = z.infer<typeof RecurringPeriod>;
@@ -66,3 +66,11 @@ export const CreateRecurringSchema = z.object({
     ),
 });
 export type CreateRecurring = z.infer<typeof CreateRecurringSchema>;
+
+export type RuleFacts = {
+  id: string;
+  input: CreateRecurring;
+  account: { id: string; currency: CurrencyCode } | null;
+  category: { id: string } | null;
+  candidates: readonly MerchantMatch[];
+};

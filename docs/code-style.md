@@ -216,6 +216,8 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 
 ## models/ — zod single source of truth
 
+- **Every type and constant lives in `models/`** — plan/facts shapes (`NewTransactionFacts`, `BillPaymentPlan`), `Extract`ed unions, sentinels (`INVALID_REDEEM`), key prefixes. `controllers/` and `logic/` hold functions only; a type a function needs is imported, never declared beside it.
+
 - Types are ALWAYS `z.infer<typeof Schema>` — never hand-written interfaces for domain data.
 - **Naming: the zod value gets the `Schema` suffix; the inferred type gets the bare name.**
   `export const AccountSchema = z.object({...})` + `export type Account = z.infer<typeof AccountSchema>`.

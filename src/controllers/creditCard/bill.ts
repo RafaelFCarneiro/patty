@@ -6,7 +6,6 @@ import {
   billEntityFrom,
   computeBillTotal,
   planBillPayment,
-  type BillPaymentPlan,
   toBillView,
   withStatusLabel,
 } from '../../logic/bill.js';
@@ -19,6 +18,7 @@ import {
   BILL_ENTITY_TAG,
   BillStatus,
   type Bill,
+  type BillPaymentPlan,
   type BillQuery,
   type BillView,
   type PayBill,
@@ -66,8 +66,6 @@ const buildPaidBillWrite = (
   };
 };
 
-/** Who pays the bill: the account named in the request, else the card's default; it must be a
- *  non-credit account in the card's currency. */
 const resolvePayer = (deps: Deps, card: CreditCard, accountRef: string | undefined): ResultAsync<Account, AppError> =>
   safeTry(async function* () {
     const payer = accountRef
@@ -81,15 +79,14 @@ const resolvePayer = (deps: Deps, card: CreditCard, accountRef: string | undefin
     return ok(payer);
   });
 
-/** A bill with nothing to pay is marked paid with no transfer. */
 const settleWithoutTransfer = (rawBill: RawBill): FlowOutcome<Bill> => {
   const { persistable, response } = buildPaidBillWrite(rawBill);
   return { persist: [persistable], response };
 };
 
-/** Transfer must be inserted before the bill update that points paymentTransactionId at its id. */
 const settleWithTransfer = (rawBill: RawBill, plan: BillPaymentPlan): FlowOutcome<Bill> => {
   const { persistable: billUpdate, response } = buildPaidBillWrite(rawBill, plan.transferEntity.id);
+  // The transfer is inserted before the bill update that points paymentTransactionId at it.
   const transfer = persistence.insert({
     entity: TRANSACTION_ENTITY_TAG,
     model: plan.transferEntity,
@@ -127,7 +124,6 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
     return ok(settleWithTransfer(rawBill, plan));
   });
 
-// paymentTransactionId: null, not undefined — undefined would leave the column unchanged.
 const buildClosedBillWrite = (rawBill: RawBill): { persistable: Persistable; response: Bill } => ({
   persistable: persistence.update({
     entity: BILL_ENTITY_TAG,

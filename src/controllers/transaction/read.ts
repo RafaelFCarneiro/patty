@@ -14,15 +14,11 @@ import {
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCategoryRef, resolveSubCategoryRef } from '../resolve.js';
 
-/** Resolves an optional name to an id; absent stays absent. */
 const optionalId = <T extends { id: string }>(
   name: string | undefined,
   resolve: (name: string) => ResultAsync<T, AppError>,
 ): ResultAsync<string | null, AppError> => (name ? resolve(name).map((entity) => entity.id) : okAsync(null));
 
-/** The only pieces of search_transactions' filter shape that need a repo lookup or a decode —
- *  everything else the repo needs is already on `input`. Shaping this into the flat SQL-filter
- *  object is diplomat/db's job (`toSearchFilters`), not the controller's. */
 const resolveSearchRefs = (deps: Deps, input: SearchTransactions): ResultAsync<ResolvedSearchRefs, AppError> =>
   safeTry(async function* () {
     const accountId = yield* optionalId(input.account, (name) => resolveAccountRef(deps, name));
@@ -40,8 +36,6 @@ export const searchTransactions = (
     yield* guard(assertExclusivePeriodOrRange(input), transactionErrors.exclusivePeriodRange);
     const refs = yield* resolveSearchRefs(deps, input);
 
-    // count is independent of locale/page — run all three concurrently rather than paying its
-    // latency after the other two resolve.
     const [locale, page, total] = await Promise.all([
       deps.locale(),
       deps.transactions.search(input, refs),

@@ -1,6 +1,3 @@
-// Account aggregate: owns the account-movement entry points. Validates (category/sub-category
-// exclusivity, non-credit account), then hands the write off as a `Persistable` — the core never
-// depends on this module (the reverse is fine and expected).
 
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
@@ -20,7 +17,6 @@ import {
   defaultStatementLines,
   mergePatch,
   planNewTransaction,
-  type NewTransactionPlan,
 } from '../../logic/transaction.js';
 import {
   accountErrors,
@@ -36,6 +32,7 @@ import {
   TRANSACTION_ENTITY_TAG,
   transactionErrors,
   MovementType,
+  type NewTransactionPlan,
   type ClassifiedUpsertResult,
   type DeleteTransactionResult,
   type TransactionSource,
@@ -53,20 +50,12 @@ import {
 import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
-/**
- * Repo-touching precondition: true when every leg the transaction has resolves to one of *this*
- * aggregate's own account types — a positive scope test (`isAccountOwnedType`), not the negation
- * of the credit-card aggregate's test. The account domain doesn't ask "does the credit-card
- * aggregate own this instead"; it asks "is every leg mine", vacuously true for an unattached movement.
- */
 const assertAccountOwnedLegs = (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
 ): ResultAsync<boolean, AppError> =>
   resolveLegAccounts(deps, tx).map((legs) => legs.every((account) => isAccountOwnedType(account.type)));
 
-/** The account a movement is funded from, or null for an unattached movement. A credit account is the
- *  card flow's to post to, never this one's. */
 const resolveFundingAccount = (deps: Deps, ref: string | undefined): ResultAsync<Account | null, AppError> =>
   safeTry(async function* () {
     if (!R.isNonNullish(ref)) return ok(null);
@@ -105,10 +94,6 @@ const planAccountMovement = (
     );
   });
 
-/** Shared by addAccountExpense/addAccountIncome — everything but the fixed movement type. Returns
- *  the write as data: the shell applies the insert and reports back whether it actually landed
- *  (vs. an idempotent duplicate replay), which is what `created` reflects here — never faked by
- *  the domain. */
 const addAccountMovement = (
   deps: Deps,
   input: AddAccountMovement,
@@ -150,15 +135,12 @@ export const addAccountIncome = (
 ): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> =>
   addAccountMovement(deps, input, MovementType.enum.income, source);
 
-// Single-source: every item belongs to the ONE account named in `input.account` (or unattached).
 export const importAccountStatement = async (
   deps: Deps,
   input: ImportAccountStatement,
   source: TransactionSource,
 ): Promise<StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult>> => {
   const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
-  // Cached once for the whole batch — every line's own flow reads locale/currencies, and refetching
-  // per line would mean N identical currency-list queries for an N-line import.
   const localePromise = deps.locale();
   const currenciesPromise = deps.currencies.list();
   const cachedDeps: Deps = {
@@ -175,16 +157,6 @@ export const importAccountStatement = async (
   return { lines, flowFor };
 };
 
-/**
- * Update an account transaction: asserts every leg the target has is one of this aggregate's own
- * account types (`assertAccountOwnedLegs`) — a transaction with a leg outside that scope is
- * rejected with a redirect to the card-transaction update — then enforces transfer mutability, and
- * merges the result onto `existing` to build the full desired end-state entity the shell applies
- * as a version-guarded update. Merchant learning (a correction strengthens the merchant→category
- * association) is composed into the SAME `persist` batch via `withMerchantLearning` — not a side
- * effect performed from `response` — so it commits only when the update does, and never fires on
- * a version-conflict attempt that gets rolled back and retried.
- */
 export const updateAccountTransaction = (
   deps: Deps,
   input: UpdateAccountTransaction,
@@ -215,11 +187,6 @@ export const updateAccountTransaction = (
     return ok({ persist, response });
   });
 
-/**
- * Delete an account transaction: same ownership guard as updateAccountTransaction, then a dry-run
- * preview (no writes at all — an empty `persist` batch) or a version-guarded remove the shell
- * applies.
- */
 export const deleteAccountTransaction = (
   deps: Deps,
   input: { id: string; confirm: boolean },

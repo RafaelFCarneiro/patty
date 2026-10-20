@@ -11,6 +11,8 @@ import {
   STATEMENT_RAW_INPUT_DESCRIPTION,
   TransactionStatus,
   UpdateTransactionSchema,
+  type TransactionEntity,
+  type TransactionSource,
 } from './transaction.js';
 import {
   validationWithRemedy,
@@ -257,3 +259,15 @@ export const accountErrors = {
     issues: ['transfer transactions cannot have a category or sub-category'],
   } satisfies AccountError,
 };
+
+export type TransferFacts = {
+  id: string;
+  today: string;
+  input: CreateTransfer;
+  from: Pick<Account, 'id' | 'name' | 'currency'>;
+  to: Pick<Account, 'id' | 'name'>;
+  source: TransactionSource;
+  decimals: number;
+};
+
+export type TransferPlan = { entity: TransactionEntity; idempotencyKey: string };

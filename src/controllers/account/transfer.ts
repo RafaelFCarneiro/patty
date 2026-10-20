@@ -1,8 +1,3 @@
-// Account aggregate (ADR-016 step 4): owns the transfer entry point — the two-leg pairing between
-// two of its own accounts. Validates (non-credit legs, currency match, distinct accounts), then
-// delegates row persistence to the transaction core — the core never depends on this module (the
-// reverse is fine and expected). Moved here from controllers/transfers.ts, which predates the
-// account/credit-card aggregate split but already had the target shape (ADR-016 §Context).
 
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../../common/errors.js';
@@ -28,12 +23,6 @@ const validateTransferAccounts = (from: Account, to: Account) =>
     return ok(undefined);
   });
 
-/**
- * A transfer is a Transaction {type: 'transfer'} with FROM and TO account edges (ADR-002).
- * Never classified, never in spending summaries; debits FROM and credits TO balances. Returns the
- * insert as data (ADR-021) — the shell applies it and reports whether it actually landed, which is
- * what `created` reflects.
- */
 export const createTransfer = (
   deps: Deps,
   input: CreateTransfer,
@@ -57,8 +46,6 @@ export const createTransfer = (
 
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity, idempotencyKey })];
-    // Transfers are never classified — explicit `undefined` (purry needs the arity to match
-    // `buildUpsertResult`'s 2-arg curry: `classification`, `locale`).
     const response = buildUpsertResult(undefined, locale);
     return ok({ persist, response });
   });

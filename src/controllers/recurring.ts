@@ -28,8 +28,6 @@ export const listRecurring = async (deps: Deps): Promise<RecurringRuleView[]> =>
   return rules.map(withPeriodLabel(locale));
 };
 
-/** No read-back needed — the response is built from the same model plus the already-resolved
- *  account/category names (rule 6). */
 export const createRecurring = (
   deps: Deps,
   input: CreateRecurring,
@@ -37,7 +35,6 @@ export const createRecurring = (
   safeTry(async function* () {
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
-    // An explicit `merchant` names itself; only otherwise do learned candidates matter.
     const candidates = input.merchant ? [] : await deps.merchants.matchCandidates(normalizeMerchant(input.description));
     const rule = newRule({ id: deps.newId(), input, account, category, candidates });
 
@@ -60,8 +57,6 @@ type RulePlan = {
   advance: Persistable;
 };
 
-/** `rule.merchantKey`'s `merchants` row was already emitted when the rule was created (`withMerchant`
- *  in `createRecurring`), so occurrences just reference it — no merchant `Persistable` needed here. */
 const buildOccurrenceEntity = (
   deps: Deps,
   rule: RecurringRuleEntity,
@@ -80,9 +75,6 @@ const buildOccurrenceEntity = (
   refs: { accountId: rule.accountId, categoryId: rule.categoryId, merchantKey: rule.merchantKey },
 });
 
-/** `advance`'s model carries the rule's full desired end-state, not just `nextDue`, so the shell's
- *  generic versioned update can apply it (rule 3/4). Always advances, even when no new occurrence
- *  gets inserted (an idempotent replay). */
 const planRule = (deps: Deps, rule: RecurringRuleEntity, through: string, today: string): RulePlan => {
   const { dates, next } = dueSchedule(rule.nextDue, through, rule.period);
   const occurrences: RulePlan['occurrences'] = dates.map((date) => ({
@@ -98,16 +90,6 @@ const planRule = (deps: Deps, rule: RecurringRuleEntity, through: string, today:
   return { occurrences, advance };
 };
 
-/**
- * Materialize every rule due on/before `through` (default: today). Past/present occurrences land
- * effective; future ones land pending — via defaultStatusFor. Passing a future `through` pre-creates
- * upcoming salary/rent/subscriptions as pending, feeding projections without any extra monthly
- * effort. Idempotent: safe to re-run.
- *
- * Every due rule's occurrences and `advance` apply as one atomic batch: a conflict retries the
- * whole run, which is safe because `recurringIdempotencyKey`'s `rec-<ruleId>-<date>` keys make
- * re-materialization a no-op — already-created occurrences don't duplicate.
- */
 export const applyDueRecurring = (
   deps: Deps,
   options?: { through?: string },

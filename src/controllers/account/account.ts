@@ -34,7 +34,6 @@ import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 
-/** Repo-touching precondition: true when no account already holds this name. */
 const assertNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
   !(await deps.accounts.findByName(name));
 
@@ -43,11 +42,6 @@ export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Acco
   return R.pipe(all, R.filter(filterByType(type)), R.map(withTypeLabel(locale)));
 };
 
-/** A functional-core flow (docs/functional-core-imperative-shell.md): decides and returns the
- *  write as data (`persist`) instead of performing it; the imperative shell adapts and applies
- *  the batch and returns `response`. A new account has no `version` to decide — that's the
- *  shell's own structural constant (`INITIAL_VERSION`) — so the model built here, and the
- *  response, are both the plain wire-shaped `Account`. */
 export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
   safeTry(async function* () {
     yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected(Remedy.enum.create_credit_card));
@@ -58,9 +52,6 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     return ok({ persist, response: account });
   });
 
-/** Balances are derived: initialBalance + income − expenses + transfers in − transfers out.
- *  Valuation against the base currency (ADR-026) correlates the `accounts` and `currency_rates`
- *  aggregates here, in the controller, never via a repo join (ADR-028). */
 export const getAccountBalances = (
   deps: Deps,
   filter?: { account?: string; type?: AccountType; projectedAsOf?: string },
@@ -112,13 +103,11 @@ export const deleteAccount = (deps: Deps, name: string): ResultAsync<FlowOutcome
     return ok({ persist, response: { deleted: true } });
   });
 
-/** A rename to a name another account holds is refused; a case-only change is not a rename. */
 const guardRenameAvailable = async (deps: Deps, account: Account, newName?: string): Promise<Result<void, AppError>> =>
   isRename(account.name, newName)
     ? guard(await assertNameAvailable(deps, newName), accountErrors.duplicateName(newName))
     : ok(undefined);
 
-/** Reads the account's references only when the update touches a field they pin. */
 const guardPinnedFieldChange = async (
   deps: Deps,
   accountId: string,

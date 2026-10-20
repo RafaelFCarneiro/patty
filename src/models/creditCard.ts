@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BillQuerySchema } from './bill.js';
+import { BillQuerySchema, type BillPeriod, type RawBill } from './bill.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
@@ -8,6 +8,7 @@ import {
   STATEMENT_ITEMS_DESCRIPTION,
   STATEMENT_RAW_INPUT_DESCRIPTION,
   UpdateTransactionSchema,
+  type NewTransactionPlan,
 } from './transaction.js';
 import {
   validationWithRemedy,
@@ -199,4 +200,10 @@ export const cardErrors = {
     code: 'validation',
     issues: ["cannot change a credit card's currency; it is fixed at creation"],
   } satisfies CardError,
+};
+
+export type CardPurchasePlan = NewTransactionPlan & {
+  billPeriod: BillPeriod;
+  existingBill: RawBill | null;
+  cardId: string;
 };

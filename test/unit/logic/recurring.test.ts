@@ -4,7 +4,7 @@ import { Locale } from '../../../src/models/locale.js';
 import { RecurringPeriod, type RecurringRuleView } from '../../../src/models/recurring.js';
 import { MovementType } from '../../../src/models/transaction.js';
 import { normalizeMerchant } from '../../../src/logic/merchant.js';
-import type { MerchantMatch } from '../../../src/logic/classify.js';
+import type { MerchantMatch } from '../../../src/models/transaction.js';
 import {
   dueSchedule,
   MAX_RECURRING_OCCURRENCES_PER_RUN,

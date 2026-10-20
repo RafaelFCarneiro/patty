@@ -455,3 +455,45 @@ export const transactionErrors = {
   // the operation named by the remedy; nothing here re-routes on their behalf).
   wrongOperation: (remedy: Remedy): TransactionError => validationWithRemedy(WRONG_OPERATION_MESSAGE, remedy),
 };
+
+export type MerchantMatch = {
+  merchantKey: string;
+  categoryId: string;
+  categoryName: string;
+  weight: number;
+  origin: typeof ClassificationMethod.enum.rule | typeof ClassificationMethod.enum.history;
+};
+
+export type PatchFields = Pick<UpdateTransaction, 'description' | 'amount' | 'type' | 'date' | 'note'>;
+
+export type PatchOverrides = {
+  account?: { id: string; currency: CurrencyCode } | null;
+  billId?: string;
+};
+
+export type NewTransactionInput = Pick<
+  CreateTransaction,
+  'description' | 'amount' | 'date' | 'status' | 'note' | 'rawInput' | 'discriminator'
+>;
+
+export type NewTransactionFunding = {
+  refs: Pick<TransactionEntity['refs'], 'accountId' | 'cardId'>;
+  sourceId?: string;
+  billPeriodKey?: string;
+};
+
+export type NewTransactionFacts = {
+  id: string;
+  today: IsoDate;
+  input: NewTransactionInput;
+  type: MovementType;
+  source: TransactionSource;
+  currency: CurrencyCode;
+  decimals: number;
+  funding: NewTransactionFunding;
+  categorySelection: CategorySelection | null;
+  candidates: readonly MerchantMatch[];
+  keepsUnmatchedMerchant: boolean;
+};
+
+export type NewTransactionPlan = { entity: TransactionEntity; classification: ClassifyOutcome; idempotencyKey: string };

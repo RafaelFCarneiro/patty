@@ -21,7 +21,6 @@ const uncategorizedLabels: Record<Locale, string> = {
 
 const UNKNOWN_KEY = 'unknown';
 
-// Exported: also the "no merchant_key" fallback for merchant_concentration (logic/correlations.ts).
 export const unknownLabels: Record<Locale, string> = {
   en: 'Unknown',
   pt: 'Desconhecido',
@@ -78,8 +77,6 @@ export const shapeAggregateResult = (
     R.sortBy((b) => b.currency),
   );
 
-/** Only a `sum` block total is a money quantity worth converting and cross-summing: `count` is a
- *  transaction count and `avg` a sum of per-group averages, neither a coherent cross-currency amount. */
 export const wantsDisplayConversion = <I extends { metric: AggregateMetric; displayCurrency?: CurrencyCode }>(
   input: I,
 ): input is I & { displayCurrency: CurrencyCode } =>

@@ -3,7 +3,6 @@ import type { DateRange, NullableDateRange, Period, PeriodInput } from '../model
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
-/** Month period → half-open ISO date range [from, to). */
 export const periodRange = ({ month, year }: Period): DateRange => {
   const from = `${year}-${pad(month)}-01`;
   const to = month === 12 ? `${year + 1}-01-01` : `${year}-${pad(month + 1)}-01`;
@@ -20,8 +19,6 @@ export const assertHasPeriodOrRange = (input: PeriodInput): boolean => hasPeriod
 
 export const assertExclusivePeriodOrRange = (input: PeriodInput): boolean => !(hasPeriod(input) && hasDateRange(input));
 
-/** `[from, to)` for the `baselineMonths` immediately preceding `period`, chaining directly into
- *  `periodRange(period).from` with no gap or overlap. Month-index arithmetic avoids `Date`/timezone. */
 export const baselineRange = (period: Period, baselineMonths: number): DateRange => {
   const { from: to } = periodRange(period);
   const monthIndex = period.year * 12 + (period.month - 1) - baselineMonths;
@@ -30,14 +27,12 @@ export const baselineRange = (period: Period, baselineMonths: number): DateRange
   return { from: `${year}-${pad(month)}-01`, to };
 };
 
-// UTC-based like `logic/recurring.ts`'s `nextDue` — no timezone traps.
 export const daysBetween = (a: string, b: string): number => {
   const [ay, am, ad] = a.split('-').map(Number) as [number, number, number];
   const [by, bm, bd] = b.split('-').map(Number) as [number, number, number];
   return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
 };
 
-// Month-index arithmetic mirroring `baselineRange`, anchored at "today" instead of a reference period.
 export const lookbackFrom = (today: string, lookbackMonths: number): string => {
   const [year, month] = today.split('-').map(Number) as [number, number];
   const monthIndex = year * 12 + (month - 1) - lookbackMonths;
@@ -46,8 +41,6 @@ export const lookbackFrom = (today: string, lookbackMonths: number): string => {
   return `${fromYear}-${pad(fromMonth)}-01`;
 };
 
-/** The month/year period's `[from, to)`, or open bounds when none was given (unlike `resolveDateRange`,
- *  an explicit `from`/`to` on the input is not consulted). */
 export const periodBounds = (input: PeriodInput): NullableDateRange =>
   hasPeriod(input) ? periodRange({ month: input.month!, year: input.year! }) : { from: null, to: null };
 

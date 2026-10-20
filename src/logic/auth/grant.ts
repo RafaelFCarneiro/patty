@@ -4,6 +4,7 @@ import {
   DEFAULT_SIGN_IN_DURATION,
   GrantChannel,
   GrantStatus,
+  INVALID_REDEEM,
   MAX_SIGN_IN_DURATION_MS,
   RedeemKind,
   RedeemPlanKind,
@@ -12,6 +13,8 @@ import {
   type ClientGrantEntity,
   type GrantChoice,
   type GrantRequest,
+  type MintableGrant,
+  type RedeemPlan,
   type RedeemResult,
   type StartGrantInput,
 } from '../../models/auth/grant.js';
@@ -28,33 +31,25 @@ import { type InstanceSettingsEntity, type SignInCap } from '../../models/auth/u
 import { formatSetupCode, normalizeSetupCode } from './owner.js';
 import { millis, toIso } from './time.js';
 
-/** What a person typed vs. what was shown: a user code is normalized exactly like a setup code. */
 export const normalizeUserCode = normalizeSetupCode;
-/** `ABCDEFGH` → `ABCD-EFGH`. */
 export const formatUserCode = formatSetupCode;
 
-/** Absolute from approval, never from use, and never past the 30-day maximum. */
 export const signInExpiry = (approvedAt: string, duration: SignInDuration): string =>
   toIso(millis(approvedAt) + Math.min(SIGN_IN_DURATION_MS[duration], MAX_SIGN_IN_DURATION_MS));
 
-/** `session` lives in the stdio process's memory only; every other duration is saved to the keychain. */
 export const persistsToKeychain = (duration: SignInDuration): boolean => duration !== SignInDuration.enum.session;
 
-/** The longest sign-in this instance allows: the admin's setting (30 days until they change it). */
 export const signInCapOf = (settings: InstanceSettingsEntity): SignInCap => settings.maxSignInDuration;
 
 export const withinCap = (duration: SignInDuration, cap: SignInCap): boolean =>
   SIGN_IN_DURATION_MS[duration] <= SIGN_IN_DURATION_MS[cap];
 
-/** A duration above the cap becomes the cap. Applied when a sign-in is approved; a granted one keeps its expiry. */
 export const clampToCap = (duration: SignInDuration, cap: SignInCap): SignInDuration =>
   withinCap(duration, cap) ? duration : cap;
 
-/** Whether this grant's asker may be handed a sign-in of this duration. */
 export const durationAllowedFor = (channel: GrantChannel, duration: SignInDuration): boolean =>
   channel === GrantChannel.enum.stdio || duration !== SignInDuration.enum.session;
 
-/** The durations the consent page offers this asker: what its channel may have, up to the instance cap. */
 export const offeredDurations = (channel: GrantChannel, cap: SignInCap): SignInDuration[] =>
   R.filter(SignInDuration.options, (duration) => durationAllowedFor(channel, duration) && withinCap(duration, cap));
 
@@ -82,7 +77,6 @@ export const newGrant = (
 
 const isGrantExpired = (grant: ClientGrantEntity, now: Date): boolean => now.getTime() >= millis(grant.expiresAt);
 
-/** A request still waiting for a person: pending and inside its window. */
 export const isAnswerable = (grant: ClientGrantEntity | null, now: Date): grant is ClientGrantEntity =>
   grant !== null && grant.status === GrantStatus.enum.pending && !isGrantExpired(grant, now);
 
@@ -124,9 +118,6 @@ export const expiredGrant = (grant: ClientGrantEntity): ClientGrantEntity => ({
   status: GrantStatus.enum.expired,
 });
 
-/** What the consent form pre-selects: the asker's hint, else this user's last choice for this client, else the
- *  defaults (read-only, 24 hours), all within the instance cap. A hint of `session` is dropped for a grant that may not
- *  have one. */
 export const consentChoice = (
   grant: ClientGrantEntity,
   last: Pick<ClientGrantEntity, 'scopes' | 'duration'> | null,
@@ -150,21 +141,6 @@ export const consentChoice = (
   };
 };
 
-/** What redeeming a device code means for this grant right now. `settle` is the expired row to write back, when
- *  the window has just run out on a grant that was still open. */
-export type RedeemPlan =
-  | { kind: typeof RedeemPlanKind.enum.invalid }
-  | { kind: typeof RedeemPlanKind.enum.pending }
-  | { kind: typeof RedeemPlanKind.enum.denied }
-  | { kind: typeof RedeemPlanKind.enum.expired; settle: ClientGrantEntity | null }
-  | {
-      kind: typeof RedeemPlanKind.enum.mint;
-      grant: ClientGrantEntity & { userId: string; scopes: Scope[]; duration: SignInDuration; approvedAt: string };
-    };
-
-const INVALID_REDEEM: RedeemPlan = { kind: RedeemPlanKind.enum.invalid };
-
-/** The grants that can never mint (spent, refused, out of time), or null while one still might. */
 const closedPlan = (grant: ClientGrantEntity, now: Date): RedeemPlan | null => {
   if (grant.status === GrantStatus.enum.redeemed) return INVALID_REDEEM;
   if (grant.status === GrantStatus.enum.denied) return { kind: RedeemPlanKind.enum.denied };
@@ -172,7 +148,6 @@ const closedPlan = (grant: ClientGrantEntity, now: Date): RedeemPlan | null => {
   return isGrantExpired(grant, now) ? { kind: RedeemPlanKind.enum.expired, settle: expiredGrant(grant) } : null;
 };
 
-/** A live grant waits for approval, or — once approved with every field the sign-in needs — mints. */
 const openPlan = (grant: ClientGrantEntity): RedeemPlan => {
   if (grant.status === GrantStatus.enum.pending) return { kind: RedeemPlanKind.enum.pending };
   const { userId, scopes, duration, approvedAt } = grant;
@@ -181,13 +156,9 @@ const openPlan = (grant: ClientGrantEntity): RedeemPlan => {
     : INVALID_REDEEM;
 };
 
-/** An approved grant carrying everything a sign-in is minted from. */
-export type MintableGrant = Extract<RedeemPlan, { kind: typeof RedeemPlanKind.enum.mint }>['grant'];
-
 export const redeemPlan = (grant: ClientGrantEntity | null, now: Date): RedeemPlan =>
   grant === null ? INVALID_REDEEM : (closedPlan(grant, now) ?? openPlan(grant));
 
-/** The answer to a redemption that minted: the one-time plaintext token and who it signs in as. */
 export const signedIn = (
   token: string,
   entity: Pick<AccessTokenEntity, 'id' | 'scopes'> & { expiresAt: string },
@@ -203,7 +174,6 @@ export const signedIn = (
   expiresAt: entity.expiresAt,
 });
 
-/** The sign-in token a redeemed grant becomes. Its expiry is the approval time plus the chosen duration. */
 export const newStdioSignIn = (
   fields: {
     id: string;
@@ -228,18 +198,12 @@ export const newStdioSignIn = (
   revokedAt: null,
 });
 
-/** What the consent form remembers a redeemed grant under: one slot per user, profile and client. */
 const consentMemoryKey = (grant: ClientGrantEntity): string =>
   JSON.stringify([grant.userId, grant.profile, grant.clientName]);
 
 const newestApproval = (grants: readonly ClientGrantEntity[]): ClientGrantEntity | undefined =>
   R.firstBy(grants, [(grant) => grant.approvedAt ?? '', 'desc'], [(grant) => grant.id, 'desc']);
 
-/**
- * The redeemed grants that no longer matter: every one except the newest approval per user, profile and client — that
- * one is the consent form's "last choice" (`lastRedeemed` picks it by the same rule). Pending and approved grants are
- * not candidates at all; the caller only ever offers redeemed ones.
- */
 export const supersededGrants = (redeemed: readonly ClientGrantEntity[]): ClientGrantEntity[] =>
   R.pipe(
     redeemed,
@@ -252,6 +216,5 @@ export const supersededGrants = (redeemed: readonly ClientGrantEntity[]): Client
     }),
   );
 
-/** The label of the "this session only" duration for the client that is asking: "This Claude Desktop session only". */
 export const sessionOnlyLabel = (clientName: string): string =>
   clientName === UNKNOWN_CLIENT_NAME ? SESSION_ONLY_LABEL.unnamed : SESSION_ONLY_LABEL.named(clientName);
