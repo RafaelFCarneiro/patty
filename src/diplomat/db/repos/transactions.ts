@@ -23,7 +23,7 @@ import {
 import { GROUP_BY_MAP, METRIC_MAP } from '../queries/aggregateWhitelist.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../queries/filters.js';
-import { ownedBy } from '../queries/scope.js';
+import { ownedBy, type RepoScope } from '../queries/scope.js';
 import { transactions } from '../schema.js';
 import { fullTxSelect } from '../queries/transactionSelect.js';
 import { txPredicates } from '../queries/txPredicates.js';
@@ -118,56 +118,66 @@ export type TransactionsRepo = {
   ) => Promise<CategoryWindowedSpend[]>;
 };
 
-export const transactionsRepo = (db: Db, userId: string): TransactionsRepo => ({
-  getById: (id) => fetchTx(db, userId, id),
+const findAllCorrelatedToCard = async (
+  { db, userId }: RepoScope,
+  cardId: string,
+  accountId: string,
+): ReturnType<TransactionsRepo['findAllCorrelatedToCard']> => {
+  const rows = await db.all<Record<string, unknown>>(fullTxSelect(userId, correlatedToCard(cardId, accountId, 't')));
+  return rows.map(transactionAdapters.dbToModel);
+};
 
-  findAllCorrelatedToCard: async (cardId, accountId) => {
-    const rows = await db.all<Record<string, unknown>>(fullTxSelect(userId, correlatedToCard(cardId, accountId, 't')));
-    return rows.map(transactionAdapters.dbToModel);
-  },
+// search/count's status/type filters (buildSearchWhere) stay a plain equality against whatever
+// value the caller passed — no fixed policy predicate here to extract onto txPredicates.
+const search = async (
+  { db, userId }: RepoScope,
+  input: SearchTransactions,
+  refs: ResolvedSearchRefs,
+): ReturnType<TransactionsRepo['search']> => {
+  const filters = toSearchFilters(input, refs);
+  const conditions = buildSearchWhere(filters, userId);
+  if (filters.cursorKey) conditions.push(keysetPredicate(filters.sort, filters.dir, filters.cursorKey));
 
-  // search/count's status/type filters (buildSearchWhere) stay a plain equality against whatever
-  // value the caller passed — no fixed policy predicate here to extract onto txPredicates.
-  search: async (input, refs) => {
-    const filters = toSearchFilters(input, refs);
-    const conditions = buildSearchWhere(filters, userId);
-    if (filters.cursorKey) conditions.push(keysetPredicate(filters.sort, filters.dir, filters.cursorKey));
-
-    const where = sql.join(conditions, sql` AND `);
-    const rows = await db.all<Record<string, unknown>>(sql`
+  const where = sql.join(conditions, sql` AND `);
+  const rows = await db.all<Record<string, unknown>>(sql`
       ${fullTxSelect(userId, where)}
       ORDER BY ${orderByClause(filters.sort, filters.dir)}
       LIMIT ${filters.limit + 1}
     `);
 
-    const hasMore = rows.length > filters.limit;
-    return { items: rows.slice(0, filters.limit).map(transactionAdapters.dbToModel), hasMore };
-  },
+  const hasMore = rows.length > filters.limit;
+  return { items: rows.slice(0, filters.limit).map(transactionAdapters.dbToModel), hasMore };
+};
 
-  count: async (input, refs) => {
-    const filters = toSearchFilters(input, refs);
-    const where = sql.join(buildSearchWhere(filters, userId), sql` AND `);
-    // COUNT(*) always returns exactly one row (even for zero matches) — an absent row would be a
-    // genuine driver-level anomaly, not an expected case, so this is allowed to throw on it.
-    const [row] = await db.all<Record<string, unknown>>(
-      sql`SELECT COUNT(*) AS count FROM transactions t WHERE ${where}`,
-    );
-    return SearchCountRowSchema.parse(row).count;
-  },
+const count = async (
+  { db, userId }: RepoScope,
+  input: SearchTransactions,
+  refs: ResolvedSearchRefs,
+): ReturnType<TransactionsRepo['count']> => {
+  const filters = toSearchFilters(input, refs);
+  const where = sql.join(buildSearchWhere(filters, userId), sql` AND `);
+  // COUNT(*) always returns exactly one row (even for zero matches) — an absent row would be a
+  // genuine driver-level anomaly, not an expected case, so this is allowed to throw on it.
+  const [row] = await db.all<Record<string, unknown>>(sql`SELECT COUNT(*) AS count FROM transactions t WHERE ${where}`);
+  return SearchCountRowSchema.parse(row).count;
+};
 
-  aggregate: async (filters) => {
-    const g = GROUP_BY_MAP[filters.groupBy];
-    const metric = METRIC_MAP[filters.metric];
+const aggregate = async (
+  { db, userId }: RepoScope,
+  filters: AggregateFilters,
+): ReturnType<TransactionsRepo['aggregate']> => {
+  const g = GROUP_BY_MAP[filters.groupBy];
+  const metric = METRIC_MAP[filters.metric];
 
-    const conditions = buildCommonWhere(filters, userId);
-    conditions.push(txPredicates.effective());
-    conditions.push(txPredicates.nonTransfer());
+  const conditions = buildCommonWhere(filters, userId);
+  conditions.push(txPredicates.effective());
+  conditions.push(txPredicates.nonTransfer());
 
-    const where = sql.join(conditions, sql` AND `);
+  const where = sql.join(conditions, sql` AND `);
 
-    const labelNames = g.labelNames ? sql`, ${g.labelNames} AS label_names` : sql`, NULL AS label_names`;
+  const labelNames = g.labelNames ? sql`, ${g.labelNames} AS label_names` : sql`, NULL AS label_names`;
 
-    const rows = await db.all<Record<string, unknown>>(sql`
+  const rows = await db.all<Record<string, unknown>>(sql`
       SELECT ${g.expr} AS key, ${g.label} AS label${labelNames},
              t.currency, ${metric} AS value, COUNT(*) AS count
       FROM transactions t
@@ -176,11 +186,15 @@ export const transactionsRepo = (db: Db, userId: string): TransactionsRepo => ({
       GROUP BY t.currency, key
     `);
 
-    return rows.map((r) => AggregateDbRowSchema.parse(r));
-  },
+  return rows.map((r) => AggregateDbRowSchema.parse(r));
+};
 
-  summaryRows: async (from, to) => {
-    const rows = await db.all<Record<string, unknown>>(sql`
+const summaryRows = async (
+  { db, userId }: RepoScope,
+  from: string,
+  to: string,
+): ReturnType<TransactionsRepo['summaryRows']> => {
+  const rows = await db.all<Record<string, unknown>>(sql`
       SELECT t.currency, t.type, c.name AS category, c.names AS category_names,
              SUM(t.amount) AS total, COUNT(*) AS count
       FROM transactions t
@@ -191,16 +205,20 @@ export const transactionsRepo = (db: Db, userId: string): TransactionsRepo => ({
         AND ${txPredicates.effective()}
       GROUP BY t.currency, t.type, c.id
     `);
-    return rows.map((r) => SummaryRowSchema.parse(r));
-  },
+  return rows.map((r) => SummaryRowSchema.parse(r));
+};
 
-  pendingBalanceParts: async (accountId, asOf) => {
-    const [row] = await db.all<{
-      income: number;
-      expenses: number;
-      transfers_out: number;
-      transfers_in: number;
-    }>(sql`
+const pendingBalanceParts = async (
+  { db, userId }: RepoScope,
+  accountId: string,
+  asOf: string,
+): ReturnType<TransactionsRepo['pendingBalanceParts']> => {
+  const [row] = await db.all<{
+    income: number;
+    expenses: number;
+    transfers_out: number;
+    transfers_in: number;
+  }>(sql`
       SELECT
         COALESCE(SUM(CASE WHEN t.type = ${TransactionType.enum.income}   THEN t.amount ELSE 0 END), 0) AS income,
         COALESCE(SUM(CASE WHEN t.type = ${TransactionType.enum.expense}  THEN t.amount ELSE 0 END), 0) AS expenses,
@@ -219,18 +237,22 @@ export const transactionsRepo = (db: Db, userId: string): TransactionsRepo => ({
         AND ${txPredicates.pending()}
         AND t.date <= ${asOf}
     `);
-    return {
-      income: row?.income ?? 0,
-      expenses: row?.expenses ?? 0,
-      transfersIn: row?.transfers_in ?? 0,
-      transfersOut: row?.transfers_out ?? 0,
-    };
-  },
+  return {
+    income: row?.income ?? 0,
+    expenses: row?.expenses ?? 0,
+    transfersIn: row?.transfers_in ?? 0,
+    transfersOut: row?.transfers_out ?? 0,
+  };
+};
 
-  // Excludes uncategorized spend — it can never match a budget target, and keeps `category_id`
-  // non-nullable on `CategorySpend`.
-  spendByCategory: async (from, to) => {
-    const rows = await db.all<Record<string, unknown>>(sql`
+// Excludes uncategorized spend — it can never match a budget target, and keeps `category_id`
+// non-nullable on `CategorySpend`.
+const spendByCategory = async (
+  { db, userId }: RepoScope,
+  from: string,
+  to: string,
+): ReturnType<TransactionsRepo['spendByCategory']> => {
+  const rows = await db.all<Record<string, unknown>>(sql`
       SELECT t.currency, t.category_id, t.subcategory_id,
              COALESCE(SUM(CASE WHEN ${txPredicates.effective()} THEN t.amount END), 0) AS effective,
              COALESCE(SUM(CASE WHEN ${txPredicates.pending()} THEN t.amount END), 0) AS pending
@@ -242,12 +264,17 @@ export const transactionsRepo = (db: Db, userId: string): TransactionsRepo => ({
         AND t.category_id IS NOT NULL
       GROUP BY t.currency, t.category_id, t.subcategory_id
     `);
-    return rows.map((r) => CategorySpendRowSchema.parse(r));
-  },
+  return rows.map((r) => CategorySpendRowSchema.parse(r));
+};
 
-  // Excludes uncategorized spend, same rationale as spendByCategory.
-  spendByCategoryWindowed: async (baselineFrom, currentFrom, currentTo) => {
-    const rows = await db.all<Record<string, unknown>>(sql`
+// Excludes uncategorized spend, same rationale as spendByCategory.
+const spendByCategoryWindowed = async (
+  { db, userId }: RepoScope,
+  baselineFrom: string,
+  currentFrom: string,
+  currentTo: string,
+): ReturnType<TransactionsRepo['spendByCategoryWindowed']> => {
+  const rows = await db.all<Record<string, unknown>>(sql`
       SELECT t.currency, t.category_id, t.subcategory_id,
              SUM(CASE WHEN t.date >= ${currentFrom} THEN t.amount ELSE 0 END) AS current,
              SUM(CASE WHEN t.date < ${currentFrom} THEN t.amount ELSE 0 END) AS baseline_total
@@ -259,9 +286,24 @@ export const transactionsRepo = (db: Db, userId: string): TransactionsRepo => ({
         AND t.category_id IS NOT NULL
       GROUP BY t.currency, t.category_id, t.subcategory_id
     `);
-    return rows.map((r) => CategoryWindowedSpendRowSchema.parse(r));
-  },
-});
+  return rows.map((r) => CategoryWindowedSpendRowSchema.parse(r));
+};
+
+export const transactionsRepo = (db: Db, userId: string): TransactionsRepo => {
+  const scope: RepoScope = { db, userId };
+  return {
+    getById: (id) => fetchTx(db, userId, id),
+    findAllCorrelatedToCard: (cardId, accountId) => findAllCorrelatedToCard(scope, cardId, accountId),
+    search: (input, refs) => search(scope, input, refs),
+    count: (input, refs) => count(scope, input, refs),
+    aggregate: (filters) => aggregate(scope, filters),
+    summaryRows: (from, to) => summaryRows(scope, from, to),
+    pendingBalanceParts: (accountId, asOf) => pendingBalanceParts(scope, accountId, asOf),
+    spendByCategory: (from, to) => spendByCategory(scope, from, to),
+    spendByCategoryWindowed: (baselineFrom, currentFrom, currentTo) =>
+      spendByCategoryWindowed(scope, baselineFrom, currentFrom, currentTo),
+  };
+};
 
 /** The entity's post-write projection (`ReadBack`): the actually-persisted, display-joined view
  *  (account/category names), decoded — what an idempotency-aware flow's `response` reflects

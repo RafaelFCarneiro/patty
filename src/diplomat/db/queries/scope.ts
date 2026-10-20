@@ -1,5 +1,8 @@
 import { and, eq, isNull, or, type SQL, sql } from 'drizzle-orm';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import type { Db } from '../driver.js';
+
+export type RepoScope = { db: Db; userId: string };
 
 /**
  * Where a query says whose rows. `ownedBy`: the user's own. `visibleTo`: own plus the shared defaults (user_id NULL),

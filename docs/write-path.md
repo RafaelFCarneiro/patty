@@ -174,7 +174,9 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   exactly one table** (the proxy is not the rule — a single-table applier could still smuggle in a decision or a
   read). All registered appliers satisfy it.
 - **`versionedTableApplier(table, { readBack? })`** (`diplomat/db/effects.ts`) builds a complete `EntityApplier`
-  from a drizzle table for any `id`+`version` table — `accountApplier` is `versionedTableApplier(accounts)`;
+  from a drizzle table for any `id`+`version` table (one `TableContext` — table, key column, owner scope, `readBack` —
+  built once, and four named operations over it: `insertRow`, `updateRow`, `deleteRow`, `checkRow`; `insertRow` is
+  `assertKeyMatchesTable`, `rowToInsert`, `conflictTarget` and `persistedIdAfter`) — `accountApplier` is `versionedTableApplier(accounts)`;
   `transactionApplier` adds a `readBack`. It writes the next version computed in application code (never a
   SQL-side `version + 1`) guarded by `WHERE id = ? AND version = ?`. Dedup is by convention: the applier uses the
   table's fixed `idempotencyKey` column when it exists (only `transactions` today): the key is merged onto the row,

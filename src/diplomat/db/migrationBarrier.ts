@@ -1,4 +1,4 @@
-import type { Client } from '@libsql/client';
+import type { Client, Transaction } from '@libsql/client';
 import type { SqlReader } from './tenancyIntegrity.js';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { assertBusyTimeout, type Db } from './driver.js';
@@ -9,6 +9,33 @@ import { isSqliteBusy } from './sqliteErrors.js';
 export const MIGRATIONS_TABLE = '__drizzle_migrations';
 
 type MigrationRow = { created_at: number | string | null };
+
+type Migration = ReturnType<typeof readMigrationFiles>[number];
+
+const lastApplied = async (barrier: Transaction): Promise<MigrationRow | undefined> => {
+  const [last] = (await barrier.execute(`SELECT created_at FROM ${MIGRATIONS_TABLE} ORDER BY created_at DESC LIMIT 1`))
+    .rows as unknown as MigrationRow[];
+  return last;
+};
+
+const applyMigration = async (barrier: Transaction, migration: Migration): Promise<void> => {
+  for (const statement of migration.sql) await barrier.execute(statement);
+  await barrier.execute({
+    sql: `INSERT INTO ${MIGRATIONS_TABLE} ("hash", "created_at") VALUES (?, ?)`,
+    args: [migration.hash, migration.folderMillis],
+  });
+};
+
+const applyPending = async (
+  barrier: Transaction,
+  migrations: readonly Migration[],
+  last: MigrationRow | undefined,
+): Promise<void> => {
+  for (const migration of migrations) {
+    const isPending = last === undefined || Number(last.created_at) < migration.folderMillis;
+    if (isPending) await applyMigration(barrier, migration);
+  }
+};
 
 /** `verify` runs inside the same transaction, before the commit: if it throws, the whole upgrade rolls back. */
 /**
@@ -48,20 +75,9 @@ export const applyPendingMigrationsHolding = async (
   await client.execute('PRAGMA foreign_keys=off');
   const barrier = await openWriteBarrier(client);
   try {
-    const [last] = (
-      await barrier.execute(`SELECT created_at FROM ${MIGRATIONS_TABLE} ORDER BY created_at DESC LIMIT 1`)
-    ).rows as unknown as MigrationRow[];
+    const last = await lastApplied(barrier);
     await whileHeld();
-
-    for (const migration of migrations) {
-      const isPending = last === undefined || Number(last.created_at) < migration.folderMillis;
-      if (!isPending) continue;
-      for (const statement of migration.sql) await barrier.execute(statement);
-      await barrier.execute({
-        sql: `INSERT INTO ${MIGRATIONS_TABLE} ("hash", "created_at") VALUES (?, ?)`,
-        args: [migration.hash, migration.folderMillis],
-      });
-    }
+    await applyPending(barrier, migrations, last);
     await verify(barrier);
     await barrier.commit();
   } catch (cause) {

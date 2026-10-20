@@ -55,7 +55,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `diplomat/*` | `controllers/`, `adapters/`, `models/`, wire schemas, runtime clients |
 | `diplomat/http`, `composition/http.ts` → `@rfc0/effect-runner`, `models/tenancy.ts` | **Type-only**: `ChangeBus<ChangeEvent>['subscribe']` (`ChangeEvent` = `{ userId, entities }`) for the SSE route's parameter; the bus is the package's `createChangeBus<ChangeEvent>`, built in the composition root (`composition/runtime.ts`) and passed in, never constructed inside `diplomat/*`. |
 | `diplomat/http`, `diplomat/mcp` → `controllers/deps.ts` (`Tenancy`, `Scoped`, `scopedFor`) | The factories that turn the request's `Principal` into that user's `Deps`/`RunEffects` (ADR-033 §5). HTTP asks per request through `ScopeOf` (`openapi.ts`'s `mountRoutes` binds it to `req.principal`); MCP through `McpContext.as(extra)` (the scope guard puts the gate's principal on `extra`). Both throw without a principal — fail closed. Neither edge ever holds an unscoped repo or runner. |
-| `diplomat/db/repos/*`, `diplomat/db/queries/*` | Every repo is built for one user — `xRepo(db, userId)` — and every query on an owned table filters `user_id = :me` (`queries/scope.ts`: `ownedBy`/`visibleTo`); no method gained a `userId` parameter. |
+| `diplomat/db/repos/*`, `diplomat/db/queries/*` | Every repo is built for one user — `xRepo(db, userId)` — and every query on an owned table filters `user_id = :me` (`queries/scope.ts`: `ownedBy`/`visibleTo`); no method gained a `userId` parameter. The factory only binds a `RepoScope` (`{ db, userId }`, `queries/scope.ts`): each query is a named module-level function over it, so the tenancy filter reads in the query itself. |
 | `diplomat/db` | Same base `diplomat/*` rule, **plus** `@rfc0/effect-runner` — it is the SQLite adapter implementing the port the package's engine defines (`versionedTableApplier` builds an `EntityApplier`, including its read-only `check`; `driver.ts`'s `createTransactionRunner` implements `TransactionRunner`; `sqliteErrors.ts`'s `isSqliteBusy` implements `IsTransientContention`). Imports the package, never the reverse. |
 | `diplomat/auth/credentials.ts` | `controllers/deps.ts` (type-only: the `AuthSecrets` shape it implements), `models/auth/token.ts` (`TOKEN_PREFIX`), `@node-rs/argon2`, `node:crypto` — the real hashing/randomness behind the injected `AuthSecrets`. Loaded lazily (`composition/auth.ts`) so a run with auth disabled never loads the native argon2 module. |
 | `diplomat/auth/signInStore.ts` | `controllers/deps.ts` (type-only: the `SignInStore` port it implements), `models/auth/signIn.ts` (`KEYCHAIN_SERVICE`), `@napi-rs/keyring` (loaded lazily, like `diplomat/db/driver.ts` loads it for the database key), wrapped exactly once (`useEntry`): `load` answers `ResultAsync<string | null, KeychainFailure>` (`models/auth/signIn.ts`) — an unreadable keychain is an error, not "nothing saved" — while `save` answers whether it kept the secret and `clear` never fails. The only place a saved stdio sign-in touches the OS keychain. |
@@ -289,7 +289,7 @@ checks that no owned row has a null or unknown `user_id` (`diplomat/db/tenancyIn
 migration back and the process refuses to start. A guard statement aborts the migration if foreign-key enforcement is on
 (dropping `transactions` would otherwise cascade away `transaction_tags`).
 
-Repos live in `src/diplomat/db/repos/`; each accepts a `Db` (`LibSQLDatabase<typeof schema>`) injected from `composition/boot.ts`. Drizzle query builder is used for simple CRUD; `db.all(sql\`...\`)` for joins and FTS5 searches. All queries parameterized — never string-interpolate user input.
+Repos live in `src/diplomat/db/repos/`; each accepts a `Db` (`LibSQLDatabase<typeof schema>`) injected from `composition/boot.ts`. Drizzle query builder is used for simple CRUD; `db.all(sql\`...\`)` for joins and FTS5 searches. All queries parameterized — never string-interpolate user input. A repo factory (`xRepo(db, userId)`) only binds: it builds one `RepoScope` and each method delegates to a named query function over it (`search(scope, input, refs)`), never a query body inside the returned object. The table appliers follow the same shape — `versionedTableApplier`/`ownedTableApplier` build one `TableContext` and assemble four named operations over it (`insertRow`, `updateRow`, `deleteRow`, `checkRow`; `diplomat/db/effects.ts`).
 
 Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/seed/` (ADR-008). Seed-only types (`DefaultCategoryId`, `MerchantRule`) live there too — the domain never imports seed.
 
@@ -657,9 +657,10 @@ modules mirroring `controllers/`, and registered generically. **The convention:*
 route is a `const` in the domain module matching its controller, added to that module's exported list; the aggregators
 (`server.ts`, `routes.ts`) and the registrar never change. Definitions are declarative metadata plus a handler that
 only adapts args → model, builds the flow, runs it through the scoped runner and maps the result (~10 lines); longer
-is orchestration that belongs in a controller. `diplomat/http/**`, `diplomat/mcp/**`, `controllers/**` and `logic/**` are held to the
+is orchestration that belongs in a controller. All of `src/**` is held to the
 Function-shape limits (`eslint.config.js`: 40 lines, complexity 10, depth 3, 15 statements per function); a controller
-reads gather → decide → persist, the decide step being a pure `logic/` plan function (`docs/code-quality.md` § Function shape).
+reads gather → decide → persist, the decide step being a pure `logic/` plan function, and in the shell a factory only
+binds (below, and `docs/code-quality.md` § Function shape).
 
 **MCP — `diplomat/mcp`.** `definition.ts` defines `ToolDefinition` (`{ name: ToolName, config: { title, description,
 inputSchema, annotations }, handle(args, scoped, ctx) }`), `ResourceDefinition` and `PromptDefinition`, plus the

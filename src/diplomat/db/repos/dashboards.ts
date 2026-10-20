@@ -14,7 +14,7 @@ import type { Db } from '../driver.js';
 import { dashboards } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';
 import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
-import { ownedWhere, visibleRows, visibleWhere } from '../queries/scope.js';
+import { ownedWhere, visibleRows, visibleWhere, type RepoScope } from '../queries/scope.js';
 
 /** Just enough to build a `Persistable` — presence + `id` + `version`, never the (potentially
  *  ~500KB) `html`. */
@@ -88,60 +88,67 @@ const resolveHtml = (row: ResolvableRow): Promise<string> => {
   return Promise.resolve(row.html);
 };
 
+const visibleByName = async ({ db, userId }: RepoScope, name: string) => {
+  const [row] = await db
+    .select()
+    .from(dashboards)
+    .where(visibleWhere(dashboards.userId, userId, eq(dashboards.name, name)))
+    .orderBy(sql`${dashboards.userId} IS NULL`)
+    .limit(1);
+  return row;
+};
+
+const get = async (scope: RepoScope, name: string): ReturnType<DashboardsRepo['get']> => {
+  const row = await visibleByName(scope, name);
+  return row ? dashboardAdapters.dbToModel(row, await resolveHtml(row)) : null;
+};
+
+const findRefByName = async ({ db, userId }: RepoScope, name: string): ReturnType<DashboardsRepo['findRefByName']> => {
+  const [row] = await db
+    .select({ id: dashboards.id, version: dashboards.version })
+    .from(dashboards)
+    .where(ownedWhere(dashboards.userId, userId, eq(dashboards.name, name)))
+    .limit(1);
+  return row ?? null;
+};
+
+const isDefault = async ({ db }: RepoScope, name: string): ReturnType<DashboardsRepo['isDefault']> => {
+  const [row] = await db
+    .select({ id: dashboards.id })
+    .from(dashboards)
+    .where(and(isNull(dashboards.userId), eq(dashboards.name, name)))
+    .limit(1);
+  return row !== undefined;
+};
+
+const findByName = async (scope: RepoScope, name: string): ReturnType<DashboardsRepo['findByName']> => {
+  const row = await visibleByName(scope, name);
+  return row ? dashboardAdapters.dbToEntity(row, await resolveHtml(row), row.userId === null) : null;
+};
+
+const list = async ({ db, userId }: RepoScope): ReturnType<DashboardsRepo['list']> => {
+  const own = db.select({ name: dashboards.name }).from(dashboards).where(ownedWhere(dashboards.userId, userId));
+  const rows = await db
+    .select({ name: dashboards.name, updatedAt: dashboards.updatedAt, source: dashboards.source })
+    .from(dashboards)
+    .where(
+      and(
+        visibleRows(dashboards.userId, userId),
+        sql`(${dashboards.userId} IS NOT NULL OR ${dashboards.name} NOT IN (${own}))`,
+      ),
+    )
+    .orderBy(dashboards.name);
+  return rows.map(dashboardAdapters.dbToListItem);
+};
+
 export const dashboardsRepo = (db: Db, userId: string): DashboardsRepo => {
-  const visibleByName = async (name: string) => {
-    const [row] = await db
-      .select()
-      .from(dashboards)
-      .where(visibleWhere(dashboards.userId, userId, eq(dashboards.name, name)))
-      .orderBy(sql`${dashboards.userId} IS NULL`)
-      .limit(1);
-    return row;
-  };
-
+  const scope: RepoScope = { db, userId };
   return {
-    get: async (name) => {
-      const row = await visibleByName(name);
-      return row ? dashboardAdapters.dbToModel(row, await resolveHtml(row)) : null;
-    },
-
-    findRefByName: async (name) => {
-      const [row] = await db
-        .select({ id: dashboards.id, version: dashboards.version })
-        .from(dashboards)
-        .where(ownedWhere(dashboards.userId, userId, eq(dashboards.name, name)))
-        .limit(1);
-      return row ?? null;
-    },
-
-    isDefault: async (name) => {
-      const [row] = await db
-        .select({ id: dashboards.id })
-        .from(dashboards)
-        .where(and(isNull(dashboards.userId), eq(dashboards.name, name)))
-        .limit(1);
-      return row !== undefined;
-    },
-
-    findByName: async (name) => {
-      const row = await visibleByName(name);
-      return row ? dashboardAdapters.dbToEntity(row, await resolveHtml(row), row.userId === null) : null;
-    },
-
-    list: async () => {
-      const own = db.select({ name: dashboards.name }).from(dashboards).where(ownedWhere(dashboards.userId, userId));
-      const rows = await db
-        .select({ name: dashboards.name, updatedAt: dashboards.updatedAt, source: dashboards.source })
-        .from(dashboards)
-        .where(
-          and(
-            visibleRows(dashboards.userId, userId),
-            sql`(${dashboards.userId} IS NOT NULL OR ${dashboards.name} NOT IN (${own}))`,
-          ),
-        )
-        .orderBy(dashboards.name);
-      return rows.map(dashboardAdapters.dbToListItem);
-    },
+    get: (name) => get(scope, name),
+    findRefByName: (name) => findRefByName(scope, name),
+    isDefault: (name) => isDefault(scope, name),
+    findByName: (name) => findByName(scope, name),
+    list: () => list(scope),
   };
 };
 

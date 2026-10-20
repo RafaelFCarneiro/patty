@@ -85,47 +85,33 @@ export type RuntimeOptions = {
   clock?: () => Date;
 };
 
-export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOptions = {}): Runtime => {
-  const onChangeError = options.onChangeError ?? reportChangeError;
-  const localeResolver = createLocaleResolver(config.FINTRACK_LOCALE);
-  const changeBus = createChangeBus<ChangeEvent>({ onError: onChangeError });
-  const engineContext = createEngineContext(db, onChangeError);
-  const health = healthRepo(db);
+const reposFor = (db: Db, userId: string) => ({
+  accounts: accountsRepo(db, userId),
+  bills: billsRepo(db, userId),
+  budgets: budgetsRepo(db, userId),
+  categories: categoriesRepo(db, userId),
+  subCategories: subCategoriesRepo(db, userId),
+  correlations: correlationsRepo(db, userId),
+  creditCards: creditCardsRepo(db, userId),
+  dashboards: dashboardsRepo(db, userId),
+  merchants: merchantsRepo(db, userId),
+  recurring: recurringRepo(db, userId),
+  tags: tagsRepo(db, userId),
+  transactions: transactionsRepo(db, userId),
+});
 
-  const depsFor: Tenancy['depsFor'] = ({ userId }) => {
-    const settings = settingsRepo(db, userId);
-    return {
-      accounts: accountsRepo(db, userId),
-      bills: billsRepo(db, userId),
-      budgets: budgetsRepo(db, userId),
-      categories: categoriesRepo(db, userId),
-      subCategories: subCategoriesRepo(db, userId),
-      correlations: correlationsRepo(db, userId),
-      creditCards: creditCardsRepo(db, userId),
-      currencies: currenciesRepo(db),
-      currencyRates: currencyRatesRepo(db),
-      dashboards: dashboardsRepo(db, userId),
-      health,
-      merchants: merchantsRepo(db, userId),
-      recurring: recurringRepo(db, userId),
-      settings,
-      tags: tagsRepo(db, userId),
-      transactions: transactionsRepo(db, userId),
-      clock: options.clock ?? (() => new Date()),
-      newId: () => randomUUID(),
-      locale: () => localeResolver.locale(userId, settings),
-      rateStaleness: { fiatHours: config.FIAT_RATE_STALE_HOURS, cryptoHours: config.CRYPTO_RATE_STALE_HOURS },
-    };
-  };
+const publishOn =
+  (changeBus: ChangeBus<ChangeEvent>) =>
+  (userId: string | null) =>
+  (entities: readonly string[]): void =>
+    changeBus.publish({ userId, entities });
 
-  const publishFor =
-    (userId: string | null) =>
-    (entities: readonly string[]): void =>
-      changeBus.publish({ userId, entities });
-
+const runnersOn = (
+  engineContext: ReturnType<typeof createEngineContext>,
+  changeBus: ChangeBus<ChangeEvent>,
+): Pick<Runtime, 'runEffectsFor' | 'runEffectsSequenceFor' | 'authRunEffects'> => {
+  const publishFor = publishOn(changeBus);
   return {
-    publicDeps: { health },
-    depsFor,
     runEffectsFor: ({ userId }) => {
       const registry = applierRegistryFor(userId);
       return (flow) => runEffects(engineContext, registry, flow, publishFor(userId));
@@ -134,8 +120,36 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
       const registry = applierRegistryFor(userId);
       return (items, flowFor) => runEffectsSequence(engineContext, registry, items, flowFor, publishFor(userId));
     },
-    resetLocaleFor: ({ userId }) => localeResolver.resetLocale(userId),
     authRunEffects: (flow) => runEffects(engineContext, AUTH_APPLIERS, flow, publishFor(null)),
+  };
+};
+
+export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOptions = {}): Runtime => {
+  const onChangeError = options.onChangeError ?? reportChangeError;
+  const localeResolver = createLocaleResolver(config.FINTRACK_LOCALE);
+  const changeBus = createChangeBus<ChangeEvent>({ onError: onChangeError });
+  const health = healthRepo(db);
+
+  const depsFor: Tenancy['depsFor'] = ({ userId }) => {
+    const settings = settingsRepo(db, userId);
+    return {
+      ...reposFor(db, userId),
+      currencies: currenciesRepo(db),
+      currencyRates: currencyRatesRepo(db),
+      health,
+      settings,
+      clock: options.clock ?? (() => new Date()),
+      newId: () => randomUUID(),
+      locale: () => localeResolver.locale(userId, settings),
+      rateStaleness: { fiatHours: config.FIAT_RATE_STALE_HOURS, cryptoHours: config.CRYPTO_RATE_STALE_HOURS },
+    };
+  };
+
+  return {
+    publicDeps: { health },
+    depsFor,
+    ...runnersOn(createEngineContext(db, onChangeError), changeBus),
+    resetLocaleFor: ({ userId }) => localeResolver.resetLocale(userId),
     changeBus,
   };
 };
