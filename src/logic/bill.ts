@@ -5,7 +5,15 @@ import * as R from 'remeda';
 import { localizeBillStatus } from './localize.js';
 import { BillStatus, type Bill, type BillEntity, type RawBill } from '../models/bill.js';
 import type { Locale } from '../models/locale.js';
-import { TransactionType, type TransactionView } from '../models/transaction.js';
+import type { CurrencyCode } from '../models/money.js';
+import {
+  ClassificationMethod,
+  TransactionType,
+  type TransactionEntity,
+  type TransactionSource,
+  type TransactionView,
+} from '../models/transaction.js';
+import { defaultStatusFor } from './transaction.js';
 
 const _withStatusLabel = (bill: Bill, locale: Locale): Bill => ({
   ...bill,
@@ -48,6 +56,9 @@ export const toBillView = (bill: RawBill): Bill => R.omit(bill, ['creditCardId',
 export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string };
 
 const pad = (n: number): string => String(n).padStart(2, '0');
+
+/** Identity of a bill cycle inside an idempotency key — the one place its `month-year` form is built. */
+export const billPeriodKey = (period: Pick<BillPeriod, 'month' | 'year'>): string => `${period.month}-${period.year}`;
 
 const nextMonth = (month: number, year: number): { month: number; year: number } =>
   month === 12 ? { month: 1, year: year + 1 } : { month: month + 1, year };
@@ -105,3 +116,44 @@ export const resolveBillPeriod = (
   R.isNonNullish(billMonth) && R.isNonNullish(billYear)
     ? billPeriodForCycle(billMonth, billYear, closingDay, dueDay)
     : billPeriodFor(date, closingDay, dueDay);
+
+// ─── Bill payment ────────────────────────────────────────────────────────────
+
+const BILL_PAYMENT_KEY_PREFIX = 'billpay-';
+
+/** One payment transfer per bill: re-paying the same bill derives the same key. */
+export const billPaymentKey = (billId: string): string => `${BILL_PAYMENT_KEY_PREFIX}${billId}`;
+
+export const billPaymentDescription = (cardName: string, month: number, year: number): string =>
+  `Bill payment: ${cardName} ${pad(month)}/${year}`;
+
+export type BillPaymentFacts = {
+  /** The id the payment transfer is minted with — the bill update points `paymentTransactionId` at it. */
+  id: string;
+  card: { name: string; currency: CurrencyCode; accountId: string };
+  payer: { id: string };
+  bill: Pick<RawBill, 'id' | 'month' | 'year'>;
+  total: number;
+  date: string;
+  today: string;
+  source: TransactionSource;
+};
+
+export type BillPaymentPlan = { transferEntity: TransactionEntity; idempotencyKey: string };
+
+/** The transfer that settles a bill: payer account → the card's internal account, linked to the bill. */
+export const planBillPayment = (facts: BillPaymentFacts): BillPaymentPlan => ({
+  transferEntity: {
+    id: facts.id,
+    description: billPaymentDescription(facts.card.name, facts.bill.month, facts.bill.year),
+    amount: facts.total,
+    type: TransactionType.enum.transfer,
+    status: defaultStatusFor(facts.date, facts.today),
+    date: facts.date,
+    currency: facts.card.currency,
+    source: facts.source,
+    classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+    refs: { accountId: facts.payer.id, toAccountId: facts.card.accountId, billId: facts.bill.id },
+  },
+  idempotencyKey: billPaymentKey(facts.bill.id),
+});

@@ -15,7 +15,11 @@ import {
   billPeriodFor,
   billPeriodForCycle,
   computeBillTotal,
+  billPaymentDescription,
+  billPaymentKey,
+  billPeriodKey,
   isBillPaid,
+  planBillPayment,
   resolveBillPeriod,
   withBillId,
   withStatusLabel,
@@ -216,5 +220,59 @@ describe('withBillId', () => {
     const original = tx('income', 50);
     const updated = withBillId(original, 'bill-9');
     expect(updated).toMatchObject({ ...original, billId: 'bill-9' });
+  });
+});
+
+describe('billPeriodKey', () => {
+  it('is the month-year identity of the cycle, unpadded', () => {
+    expect(billPeriodKey({ month: 3, year: 2026 })).toBe('3-2026');
+    expect(billPeriodKey(billPeriodForCycle(12, 2026, 10, 20))).toBe('12-2026');
+  });
+});
+
+describe('bill payment', () => {
+  it('keys the payment by its bill, so re-paying the same bill derives the same key', () => {
+    expect(billPaymentKey('bill-1')).toBe('billpay-bill-1');
+  });
+
+  it('describes the payment with the card and a zero-padded MM/YYYY', () => {
+    expect(billPaymentDescription('Nubank', 3, 2026)).toBe('Bill payment: Nubank 03/2026');
+    expect(billPaymentDescription('Nubank', 11, 2026)).toBe('Bill payment: Nubank 11/2026');
+  });
+
+  const facts = (overrides: Partial<Parameters<typeof planBillPayment>[0]> = {}) => ({
+    id: 'tx-pay',
+    card: { name: 'Nubank', currency: CurrencyCode.enum.BRL, accountId: 'liab-1' },
+    payer: { id: 'acc-1' },
+    bill: { id: 'bill-1', month: 3, year: 2026 },
+    total: 250.5,
+    date: '2026-04-05',
+    today: '2026-04-05',
+    source: TransactionSource.enum.mcp,
+    ...overrides,
+  });
+
+  it('plans a transfer from the payer to the card account, linked to the bill, never classified', () => {
+    const { transferEntity, idempotencyKey } = planBillPayment(facts());
+    expect(transferEntity).toEqual({
+      id: 'tx-pay',
+      description: 'Bill payment: Nubank 03/2026',
+      amount: 250.5,
+      type: TransactionType.enum.transfer,
+      status: TransactionStatus.enum.effective,
+      date: '2026-04-05',
+      currency: CurrencyCode.enum.BRL,
+      source: TransactionSource.enum.mcp,
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+      refs: { accountId: 'acc-1', toAccountId: 'liab-1', billId: 'bill-1' },
+    });
+    expect(idempotencyKey).toBe('billpay-bill-1');
+  });
+
+  it('a payment dated before today is effective; the plan takes its currency from the card', () => {
+    const plan = planBillPayment(
+      facts({ date: '2026-04-01', card: { name: 'Visa', currency: CurrencyCode.enum.USD, accountId: 'liab-2' } }),
+    );
+    expect(plan.transferEntity).toMatchObject({ status: 'effective', currency: 'USD', date: '2026-04-01' });
   });
 });

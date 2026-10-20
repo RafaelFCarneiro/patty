@@ -1,17 +1,14 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
-import { pickClassification } from '../logic/classify.js';
 import { normalizeMerchant, withMerchant } from '../logic/merchant.js';
 import * as persistence from '../logic/persistence.js';
-import { dueSchedule, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js';
+import { dueSchedule, newRule, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js';
 import { toIsoDate } from '../logic/period.js';
-import { resolveCurrency } from '../logic/money.js';
 import { defaultStatusFor, viewFromOutcome } from '../logic/transaction.js';
 import {
   RECURRING_ENTITY_TAG,
   type CreateRecurring,
-  type RecurringRule,
   type RecurringRuleEntity,
   type RecurringRuleView,
 } from '../models/recurring.js';
@@ -40,27 +37,9 @@ export const createRecurring = (
   safeTry(async function* () {
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
-    // Explicit `merchant` is stored as-is (the user's own naming, no lookup). Otherwise mirror
-    // `planAccountMovement`'s precedence — an already-learned `merchant_category` key wins over a
-    // fresh normalize, so the rule matches the identity a transaction would.
-    const normalizedDescription = normalizeMerchant(input.description);
-    const merchantKey = input.merchant
-      ? normalizeMerchant(input.merchant) || undefined
-      : (pickClassification(await deps.merchants.matchCandidates(normalizedDescription)).merchantKey ??
-        (normalizedDescription || undefined));
-
-    const rule: RecurringRule = {
-      id: deps.newId(),
-      description: input.description,
-      amount: input.amount,
-      type: input.type,
-      period: input.period,
-      nextDue: input.startDate,
-      currency: resolveCurrency(account, input),
-      accountId: account?.id,
-      categoryId: category?.id,
-      merchantKey,
-    };
+    // An explicit `merchant` names itself; only otherwise do learned candidates matter.
+    const candidates = input.merchant ? [] : await deps.merchants.matchCandidates(normalizeMerchant(input.description));
+    const rule = newRule({ id: deps.newId(), input, account, category, candidates });
 
     const persist = withMerchant([persistence.insert({ entity: RECURRING_ENTITY_TAG, model: rule })], rule.merchantKey);
     const response: RecurringRuleView = {

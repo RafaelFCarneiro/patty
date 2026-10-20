@@ -74,7 +74,7 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   that call's promise onto the batch's `cachedDeps` the same way it already does for `deps.locale()`, so an
   N-line import performs one currency-list read, not N, while each line still independently resolves its own
   real account/card and currency (no batch-level account/decimals pre-resolution the way it used to). `recurringIdempotencyKey` (`rec-<ruleId>-<date>`, `controllers/recurring.ts`) and the
-  bill-payment transfer's `billpay-<billId>` (`controllers/creditCard/bill.ts`) are unrelated, hand-built keys
+  bill-payment transfer's `billpay-<billId>` (`logic/bill.ts`'s `billPaymentKey`, planned by `planBillPayment`) are unrelated, hand-built keys
   for internally-generated writes that never go through `CreateTransactionSchema` — outside this derivation.
   **One-time key-format discontinuity**: a statement re-imported after this landed won't dedup against
   pre-existing readable-format keys (possible duplicates of previously-imported rows) — accepted at personal
@@ -336,7 +336,7 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   `amount`/`date`/`status` overrides on top of it read as the diff they are.
 - **Recurring** (Feature Design 017 adds the merchant). `createRecurring` resolves `merchantKey`: an explicit
   `merchant` (normalized, stored as-is — no candidate lookup, since the user is naming it directly); otherwise it
-  mirrors `planAccountMovement`'s own precedence — `deps.merchants.matchCandidates(normalizedDescription)` +
+  mirrors a transaction plan's precedence (`logic/recurring.ts`'s `ruleMerchantKey`) — `deps.merchants.matchCandidates(normalizedDescription)` +
   `pickClassification` first, reusing an already-learned `merchant_category` key so the rule reinforces the same
   merchant identity a matching transaction would, falling back to the normalized `description` (empty-string
   guarded) only when nothing matches. Either way the key is emitted via `withMerchant` — a `MERCHANT_ENTITY_TAG`
@@ -363,6 +363,15 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   independently — no pre-plan step, and the batch-level `CurrencyCode.enum.USD` fallback (and the known gap it
   had: an unattached statement's per-item currency override wasn't consulted for it) is gone along with it. An
   unattached statement's per-item `currency` now correctly drives that line's own decimals rounding.
-- **Merchant key is always stored, matched or not** (`planAccountMovement`): when classification found no
+- **Merchant key is always stored, matched or not** (`logic/transaction.ts`'s `planNewTransaction`, `keepsUnmatchedMerchant: true` — `planAccountMovement` passes it): when classification found no
   merchant, it falls back to `normalizeMerchant(description)` (empty-string guarded) so a later category
-  correction (`resolveMerchantCorrection`) has a merchant to attach to. `add_card_purchase` still lacks this
+  correction (`resolveMerchantCorrection`) has a merchant to attach to. `add_card_purchase` still lacks this fallback (`planCardPurchase` passes `keepsUnmatchedMerchant: false`).
+- **Plan functions — the decide step** (function-shape series). The flows that build a transaction share their
+  decision in `logic/`, so a controller only gathers and persists: `logic/transaction.ts`'s `planNewTransaction`
+  (`addAccountExpense`/`addAccountIncome` via `planAccountMovement`, `addCardPurchase` via `planCardPurchase`: status
+  by date, classification, entity, idempotency key) and `mergePatch` (`updateAccountTransaction`/
+  `updateCardTransaction`: the patch laid over `existing`, with the account or bill the aggregate decided on);
+  `logic/account.ts`'s `planTransfer` (`createTransfer`) and `mergeAccountPatch`/`guardPinnedFields`
+  (`updateAccount`); `logic/bill.ts`'s `planBillPayment` (`payBill`: the transfer entity and its `billpay-` key).
+  Persist order is the controllers' and is unchanged: `payBill` is `[transfer insert, bill update]`, a card add leads
+  with its bill, and merchant learning rides the same batch via `withMerchantLearning`.

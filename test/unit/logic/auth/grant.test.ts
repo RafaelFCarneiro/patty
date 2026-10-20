@@ -17,6 +17,7 @@ import {
   redeemPlan,
   redeemedGrant,
   sessionOnlyLabel,
+  signedIn,
   signInCapOf,
   signInExpiry,
   supersededGrants,
@@ -32,6 +33,7 @@ import {
   SignInDuration,
   type ClientGrantEntity,
 } from '../../../../src/models/auth/grant.js';
+import type { Principal } from '../../../../src/models/auth/principal.js';
 import { UNKNOWN_CLIENT_NAME } from '../../../../src/models/auth/signIn.js';
 import { AccessTokenKind, TOKEN_NAME_MAX_LENGTH } from '../../../../src/models/auth/token.js';
 import { DEFAULT_SIGN_IN_CAP, SignInCap } from '../../../../src/models/auth/users.js';
@@ -444,5 +446,28 @@ describe('the instance cap on sign-in durations', () => {
   it('does not move an expiry already granted: the cap only acts when a sign-in is approved', () => {
     const approvedAt = NOW.toISOString();
     expect(signInExpiry(approvedAt, '30d')).toBe(new Date(NOW.getTime() + 30 * 24 * HOUR_MS).toISOString());
+  });
+});
+
+describe('signedIn — the answer to a redemption that minted', () => {
+  const principal: Principal = { userId: 'u1', role: 'member', scopes: ['fintrack:read'], via: 'stdio' };
+
+  it("carries the one-time token, the new sign-in's id, scopes and expiry, and who it acts as", () => {
+    expect(
+      signedIn(
+        'ftk_secret',
+        { id: 't1', scopes: ['fintrack:read'], expiresAt: '2026-10-12T12:01:00.000Z' },
+        principal,
+        SignInDuration.enum['24h'],
+      ),
+    ).toEqual({
+      kind: 'signed_in',
+      token: 'ftk_secret',
+      tokenId: 't1',
+      scopes: ['fintrack:read'],
+      principal,
+      duration: '24h',
+      expiresAt: '2026-10-12T12:01:00.000Z',
+    });
   });
 });

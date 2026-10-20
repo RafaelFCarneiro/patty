@@ -274,9 +274,9 @@ reach for `import()` to "organize" code or defer work that isn't actually option
 
 ## Function shape
 
-Small functions with one level of branching read at a glance. The limits below are the targets the
-function-shape series enforces per layer, one PR at a time (the switch-size rule is already a lint error
-repo-wide; the rest are enforced as each layer is brought under them — `diplomat/http` and `diplomat/mcp` so far):
+Small functions with one level of branching read at a glance. The limits below are enforced by lint
+(`eslint.config.js`) on `diplomat/http`, `diplomat/mcp`, `controllers/` and `logic/` (the switch-size rule is a
+lint error repo-wide):
 
 | Limit | Value |
 |---|---|
@@ -315,16 +315,27 @@ A controller is three steps, each one a named call: **gather** (reads, I/O throu
 lines; the rules live in the decide step, where they are unit-tested without mocks.
 
 ```ts
-// ✅ DO
-export const payBill = (deps: Deps, input: PayBillInput) =>
+// ✅ DO — the update's decision is one pure call; the controller reads, calls it, persists
+export const updateCardTransaction = (deps: Deps, input: UpdateCardTransaction) =>
   safeTry(async function* () {
-    const facts = yield* gatherPayBillFacts(deps, input)   // gather
-    const plan = yield* planBillPayment(facts)             // decide (pure, logic/)
-    return ok(toOutcome(plan))                             // persist: plan → { persist, response }
+    const { existing, cardId } = yield* loadOwnCardTransaction(deps, input.id)            // gather
+    yield* guardCardPatch(input)
+    const { reassignedBillId } = yield* resolveBillReassignment(deps, cardId, existing, input)
+    const { categorySelection } = yield* decideTransactionUpdate(deps, input, existing)
+    const entity = mergePatch(existing, input, categorySelection, { billId: reassignedBillId }) // decide (pure, logic/)
+    return ok(toOutcome(entity))                                                          // persist: { persist, response }
   })
 
-// ❌ DON'T — reads, rules and write-building interleaved in one body
+// ❌ DON'T — reads, rules and write-building interleaved in one body: every `input.x ?? existing.x`,
+// the note rule, the user-correction classification and the category/sub-category pick re-written inline
+// in each aggregate's update, past the statement and complexity limits
 ```
+
+Extract by meaning, not by count. A decision that is a function of already-read values (`mergePatch`,
+`planNewTransaction`, `planBillPayment`) moves to `logic/` and gets unit tests; a read stays in the controller or a
+named gather helper beside it (`resolveSearchRefs`). Nothing in `logic/` gains I/O or a `deps` parameter. A helper
+with eight positional parameters or a `doStep1`/`doStep2` chain is worse than the function it replaced — pass one
+facts object and name the concept it computes.
 
 ### One named definition per tool / route
 
@@ -344,8 +355,9 @@ export const accountTools = [createAccountTool, listAccountsTool]
 export const registerAccountTools = (server) => { server.tool('create_account', …, async (args) => { /* 60 lines */ }) /* … */ }
 ```
 
-The `diplomat/http` and `diplomat/mcp` folders are held to the four limits above by lint; a handler that outgrows them is
-orchestration that belongs in a controller (or a shared, named step), not a reason to disable the rule.
+The `diplomat/http`, `diplomat/mcp`, `controllers/` and `logic/` folders are held to the four limits above by lint; a handler
+that outgrows them is orchestration that belongs in a controller (or a shared, named step), and a controller that outgrows
+them is missing a `logic/` plan function or a named gather helper — not a reason to disable the rule.
 
 ## Fail loudly at boundaries, trust internally
 

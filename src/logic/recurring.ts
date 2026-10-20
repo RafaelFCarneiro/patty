@@ -1,7 +1,11 @@
 import { purry } from 'remeda';
+import { pickClassification, type MerchantMatch } from './classify.js';
 import { localizeRecurringPeriod } from './localize.js';
+import { normalizeMerchant } from './merchant.js';
+import { resolveCurrency } from './money.js';
 import type { Locale } from '../models/locale.js';
-import type { RecurringPeriod, RecurringRuleView } from '../models/recurring.js';
+import type { CurrencyCode } from '../models/money.js';
+import type { CreateRecurring, RecurringPeriod, RecurringRule, RecurringRuleView } from '../models/recurring.js';
 
 const _withPeriodLabel = (rule: RecurringRuleView, locale: Locale): RecurringRuleView => ({
   ...rule,
@@ -58,3 +62,38 @@ export const dueSchedule = (
     taken.length < max && due <= through ? advance(nextDue(due, period), [...taken, due]) : { dates: taken, next: due };
   return advance(start, []);
 };
+
+/** Explicit `merchant` is stored as-is (the user's own naming, no lookup). Otherwise mirror a
+ *  transaction's precedence — an already-learned `merchant_category` key wins over a fresh
+ *  normalize, so the rule matches the identity a transaction would. */
+export const ruleMerchantKey = (
+  input: Pick<CreateRecurring, 'description' | 'merchant'>,
+  candidates: readonly MerchantMatch[],
+): string | undefined => {
+  if (input.merchant) return normalizeMerchant(input.merchant) || undefined;
+  return pickClassification(candidates).merchantKey ?? (normalizeMerchant(input.description) || undefined);
+};
+
+export type RuleFacts = {
+  /** Minted by the controller (`deps.newId()`) — logic never draws ids. */
+  id: string;
+  input: CreateRecurring;
+  account: { id: string; currency: CurrencyCode } | null;
+  category: { id: string } | null;
+  /** Merchant candidates for the description; empty when the input names its merchant. */
+  candidates: readonly MerchantMatch[];
+};
+
+/** Decides a new recurring rule from the values its controller gathered. */
+export const newRule = (facts: RuleFacts): RecurringRule => ({
+  id: facts.id,
+  description: facts.input.description,
+  amount: facts.input.amount,
+  type: facts.input.type,
+  period: facts.input.period,
+  nextDue: facts.input.startDate,
+  currency: resolveCurrency(facts.account, facts.input),
+  accountId: facts.account?.id,
+  categoryId: facts.category?.id,
+  merchantKey: ruleMerchantKey(facts.input, facts.candidates),
+});

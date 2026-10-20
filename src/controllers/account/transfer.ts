@@ -7,20 +7,14 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../../common/errors.js';
 import { guard } from '../../common/result.js';
-import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
+import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType, planTransfer } from '../../logic/account.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
-import { buildUpsertResult, defaultStatusFor, deriveIdempotencyKey } from '../../logic/transaction.js';
+import { buildUpsertResult } from '../../logic/transaction.js';
 import { accountErrors } from '../../models/account.js';
 import type { Account, CreateTransfer } from '../../models/account.js';
 import type { FlowOutcome } from '@rfc0/effect-runner';
-import {
-  ClassificationMethod,
-  TRANSACTION_ENTITY_TAG,
-  TransactionType,
-  type TransactionEntity,
-  type UpsertTransactionResult,
-} from '../../models/transaction.js';
+import { TRANSACTION_ENTITY_TAG, type UpsertTransactionResult } from '../../models/transaction.js';
 import type { TransactionSource } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveDecimals } from '../resolve.js';
@@ -51,38 +45,15 @@ export const createTransfer = (
 
     yield* validateTransferAccounts(from, to);
 
-    const today = toIsoDate(deps.clock());
-    const date = input.date ?? today;
-    const entity: TransactionEntity = {
+    const { entity, idempotencyKey } = planTransfer({
       id: deps.newId(),
-      description: input.description ?? `Transferência: ${from.name} → ${to.name}`,
-      amount: input.amount,
-      type: TransactionType.enum.transfer,
-      status: input.status ?? defaultStatusFor(date, today),
-      date,
-      currency: from.currency,
+      today: toIsoDate(deps.clock()),
+      input,
+      from,
+      to,
       source,
-      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-      refs: { accountId: from.id, toAccountId: to.id },
-    };
-
-    const decimals = await resolveDecimals(deps, entity.currency);
-    const idempotencyKey = deriveIdempotencyKey(
-      {
-        fundingSourceId: from.id,
-        counterpartyId: to.id,
-        type: entity.type,
-        currency: entity.currency,
-        date: entity.date,
-        // input.description, not entity.description — the latter falls back to a display-name-
-        // based placeholder, which would change (and so silently miss a real duplicate) if either
-        // account was renamed between calls.
-        description: input.description ?? '',
-        amount: entity.amount,
-      },
-      decimals,
-      input.discriminator,
-    );
+      decimals: await resolveDecimals(deps, from.currency),
+    });
 
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity, idempotencyKey })];

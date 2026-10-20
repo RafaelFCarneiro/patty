@@ -113,32 +113,19 @@ const budgetFit: AnalysisHandler = (deps, input, locale, decimalsFor) =>
       decimalsFor,
     );
     const unbudgeted = shapeUnbudgetedSpend(shiftRows, budgeted, input.baselineMonths, locale, decimalsFor);
-    if (!input.displayCurrency) {
-      return ok({
-        analysis: FindCorrelationsAnalysis.enum.budget_fit,
-        month: period.month,
-        year: period.year,
-        budgeted,
-        unbudgeted,
-      });
-    }
-    // A fresh committed-spend read (get_budget_status's own measure), not windowedSpend above
-    // (current-vs-baseline only) — so the two surfaces' converted totals agree.
-    const committedSpend = await deps.transactions.spendByCategory(currentFrom, currentTo);
-    const converted = await convertedTotal(
-      deps,
-      budgetedCommittedByCurrency(budgets, committedSpend),
-      input.displayCurrency,
-      decimalsFor,
-    );
-    return ok({
+    const result = {
       analysis: FindCorrelationsAnalysis.enum.budget_fit,
       month: period.month,
       year: period.year,
       budgeted,
       unbudgeted,
-      converted,
-    });
+    };
+    if (!input.displayCurrency) return ok(result);
+    // A fresh committed-spend read (get_budget_status's own measure), not windowedSpend above
+    // (current-vs-baseline only) — so the two surfaces' converted totals agree.
+    const committedSpend = await deps.transactions.spendByCategory(currentFrom, currentTo);
+    const committed = budgetedCommittedByCurrency(budgets, committedSpend);
+    return ok({ ...result, converted: await convertedTotal(deps, committed, input.displayCurrency, decimalsFor) });
   });
 
 const merchantConcentration: AnalysisHandler = (deps, input, locale, decimalsFor) =>

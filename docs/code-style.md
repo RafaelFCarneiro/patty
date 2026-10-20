@@ -160,6 +160,31 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   writes, not all I/O. Only the write call moves from `await deps.<x>.create(...)` to
   `persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: account })`.
 
+### Controller shape — gather, decide, persist
+
+A controller reads in three named steps: **gather** (resolve refs, repo reads through `deps`), **decide** (one
+pure `logic/` call from the gathered values to an entity, guards and data), **persist** (build `{ persist, response }`).
+Rules belong in the decide step, where they are unit-tested without mocks; the function-shape lint limits
+(`docs/code-quality.md` § Function shape) hold the controller to it.
+
+```ts
+// ✅ DO — gather in the controller, the decision is a pure plan call, then persist
+const categorySelection = yield* resolveCategorySelection(deps, input, type)       // gather
+const plan = planNewTransaction({                                                    // decide (logic/transaction.ts)
+  id: deps.newId(), today: toIsoDate(deps.clock()), input, type, source, currency,
+  decimals: await resolveDecimals(deps, currency),
+  funding: { refs: { accountId: account?.id }, sourceId: account?.id },
+  categorySelection, candidates: await matchCandidatesFor(deps, input.description, categorySelection),
+  keepsUnmatchedMerchant: true,
+})
+const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: plan.entity, idempotencyKey: plan.idempotencyKey })]
+
+// ❌ DON'T — status default, classification, entity literal and key derivation written inline in the controller
+const status = input.status ?? defaultStatusFor(date, today)
+const classification = categorySelection ? userClassification(...) : pickClassification(await deps.merchants.matchCandidates(...))
+const entity: TransactionEntity = { id: deps.newId(), /* … 15 fields … */ }
+```
+
 ## logic/ — pure and declarative
 
 - No I/O, no `Date.now()`/`new Date()` (clock comes from deps), no imports from `controllers/` or `diplomat/`.

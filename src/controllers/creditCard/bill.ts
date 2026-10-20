@@ -2,11 +2,18 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
-import { billEntityFrom, computeBillTotal, toBillView, withStatusLabel } from '../../logic/bill.js';
+import {
+  billEntityFrom,
+  computeBillTotal,
+  planBillPayment,
+  type BillPaymentPlan,
+  toBillView,
+  withStatusLabel,
+} from '../../logic/bill.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
-import { addLocalizedLabels, defaultStatusFor } from '../../logic/transaction.js';
-import { accountErrors } from '../../models/account.js';
+import { addLocalizedLabels } from '../../logic/transaction.js';
+import { accountErrors, type Account } from '../../models/account.js';
 import {
   billErrors,
   BILL_ENTITY_TAG,
@@ -17,14 +24,12 @@ import {
   type PayBill,
   type RawBill,
 } from '../../models/bill.js';
+import type { CreditCard } from '../../models/creditCard.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import {
-  ClassificationMethod,
   TRANSACTION_ENTITY_TAG,
   type RawTransactionView,
-  type TransactionEntity,
   type TransactionSource as TransactionSourceType,
-  TransactionType,
 } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCardRef } from '../resolve.js';
@@ -61,69 +66,65 @@ const buildPaidBillWrite = (
   };
 };
 
+/** Who pays the bill: the account named in the request, else the card's default; it must be a
+ *  non-credit account in the card's currency. */
+const resolvePayer = (deps: Deps, card: CreditCard, accountRef: string | undefined): ResultAsync<Account, AppError> =>
+  safeTry(async function* () {
+    const payer = accountRef
+      ? yield* resolveAccountRef(deps, accountRef)
+      : yield* okOr(
+          card.paymentAccountId ? await deps.accounts.findById(card.paymentAccountId) : null,
+          billErrors.noPayingAccount,
+        );
+    yield* guard(assertNonCreditType(payer.type), accountErrors.creditPaymentRejected);
+    yield* guard(assertCurrencyMatch(payer, card), accountErrors.currencyMismatch(card.currency, payer.currency));
+    return ok(payer);
+  });
+
+/** A bill with nothing to pay is marked paid with no transfer. */
+const settleWithoutTransfer = (rawBill: RawBill): FlowOutcome<Bill> => {
+  const { persistable, response } = buildPaidBillWrite(rawBill);
+  return { persist: [persistable], response };
+};
+
+/** Transfer must be inserted before the bill update that points paymentTransactionId at its id. */
+const settleWithTransfer = (rawBill: RawBill, plan: BillPaymentPlan): FlowOutcome<Bill> => {
+  const { persistable: billUpdate, response } = buildPaidBillWrite(rawBill, plan.transferEntity.id);
+  const transfer = persistence.insert({
+    entity: TRANSACTION_ENTITY_TAG,
+    model: plan.transferEntity,
+    idempotencyKey: plan.idempotencyKey,
+  });
+  return { persist: [transfer, billUpdate], response };
+};
+
 export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcome<Bill>, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card);
-    const existing = yield* okOr(
-      await deps.bills.get(card.id, input.month, input.year),
-      billErrors.notFound(card.name, input.month, input.year),
-    );
-
-    if (existing.bill.status === BillStatus.enum.paid) {
-      return ok({ persist: [], response: existing.bill });
-    }
+    const notFound = billErrors.notFound(card.name, input.month, input.year);
+    const existing = yield* okOr(await deps.bills.get(card.id, input.month, input.year), notFound);
+    if (existing.bill.status === BillStatus.enum.paid) return ok({ persist: [], response: existing.bill });
 
     const today = toIsoDate(deps.clock());
     const date = input.paymentDate ?? today;
     yield* guard(date <= today, billErrors.futurePaymentDate(date));
 
     const total = computeBillTotal(existing.transactions);
-    const rawBill = yield* okOr(
-      await deps.bills.findById(existing.bill.id),
-      billErrors.notFound(card.name, input.month, input.year),
-    );
+    const rawBill = yield* okOr(await deps.bills.findById(existing.bill.id), notFound);
+    if (total <= 0) return ok(settleWithoutTransfer(rawBill));
 
-    if (total <= 0) {
-      const { persistable, response } = buildPaidBillWrite(rawBill);
-      return ok({ persist: [persistable], response });
-    }
-
-    // Resolve the paying account: explicit > card default > error
-    const payer = input.account
-      ? yield* resolveAccountRef(deps, input.account)
-      : yield* okOr(
-          card.paymentAccountId ? await deps.accounts.findById(card.paymentAccountId) : null,
-          billErrors.noPayingAccount,
-        );
-
-    yield* guard(assertNonCreditType(payer.type), accountErrors.creditPaymentRejected);
-    yield* guard(assertCurrencyMatch(payer, card), accountErrors.currencyMismatch(card.currency, payer.currency));
-
-    const txId = deps.newId();
-    const transferEntity: TransactionEntity = {
-      id: txId,
-      description: `Bill payment: ${card.name} ${String(input.month).padStart(2, '0')}/${input.year}`,
-      amount: total,
-      type: TransactionType.enum.transfer,
-      status: defaultStatusFor(date, today),
+    const payer = yield* resolvePayer(deps, card, input.account);
+    const plan = planBillPayment({
+      id: deps.newId(),
+      card,
+      payer,
+      bill: rawBill,
+      total,
       date,
-      currency: card.currency,
+      today,
       source: input.source,
-      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-      refs: { accountId: payer.id, toAccountId: card.accountId, billId: rawBill.id },
-    };
-
-    // Transfer must be inserted before the bill update that points paymentTransactionId at its id.
-    const { persistable: billUpdate, response } = buildPaidBillWrite(rawBill, txId);
-    const persist: Persistable[] = [
-      persistence.insert({
-        entity: TRANSACTION_ENTITY_TAG,
-        model: transferEntity,
-        idempotencyKey: `billpay-${rawBill.id}`,
-      }),
-      billUpdate,
-    ];
-    return ok({ persist, response });
+    });
+    return ok(settleWithTransfer(rawBill, plan));
   });
 
 // paymentTransactionId: null, not undefined — undefined would leave the column unchanged.

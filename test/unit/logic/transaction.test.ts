@@ -24,12 +24,16 @@ import {
   hasSubCategory,
   isCategoryKindAllowed,
   isTransfer,
+  mergePatch,
   needsReview,
   nextCursorAfter,
+  planNewTransaction,
   resolveCursorKey,
   resolveEffectiveType,
   summarizeBulkItems,
 } from '../../../src/logic/transaction.js';
+import { normalizeMerchant } from '../../../src/logic/merchant.js';
+import type { MerchantMatch } from '../../../src/logic/classify.js';
 
 describe('deriveIdempotencyKey', () => {
   const identity = (overrides: Partial<Parameters<typeof deriveIdempotencyKey>[0]> = {}) => ({
@@ -637,5 +641,204 @@ describe('nextCursorAfter', () => {
     const cursor = nextCursorAfter(row, amount, desc);
     const result = resolveCursorKey({ cursor, sort: amount, dir: desc });
     expect(result._unsafeUnwrap()).toEqual({ value: 42.5, id: 'tx-9' });
+  });
+});
+
+describe('mergePatch — the patch laid over an existing transaction', () => {
+  const existing: RawTransactionView = {
+    ...baseTx,
+    accountId: 'acc-1',
+    toAccountId: 'acc-2',
+    cardId: 'card-1',
+    billId: 'bill-1',
+    categoryId: 'cat-food',
+    subCategoryId: 'sub-coffee',
+    merchant: 'uber',
+    rawInput: 'raw',
+    note: 'old note',
+    classification: { method: ClassificationMethod.enum.history, confidence: 0.8 },
+  };
+  const selection = { categoryId: 'cat-transport', categoryName: 'Transport' };
+
+  it('is the existing transaction when nothing is patched', () => {
+    expect(mergePatch(existing, {}, null)).toEqual(entityFromExisting(existing));
+  });
+
+  it('takes each provided field over the existing one and keeps the rest', () => {
+    const merged = mergePatch(
+      existing,
+      { description: 'New', amount: 7, type: TransactionType.enum.income, date: '2026-02-02' },
+      null,
+    );
+    expect(merged).toMatchObject({ description: 'New', amount: 7, type: 'income', date: '2026-02-02' });
+    expect(merged).toMatchObject({ status: existing.status, source: existing.source, rawInput: 'raw' });
+    expect(merged.refs.merchantKey).toBe('uber');
+  });
+
+  it('clears the note on an empty string, keeps it when omitted, sets it when given', () => {
+    expect(mergePatch(existing, { note: '' }, null).note).toBeUndefined();
+    expect(mergePatch(existing, {}, null).note).toBe('old note');
+    expect(mergePatch(existing, { note: 'fresh' }, null).note).toBe('fresh');
+  });
+
+  it('treats a category selection as a user correction at full confidence', () => {
+    const merged = mergePatch(existing, {}, selection);
+    expect(merged.classification).toEqual({ method: ClassificationMethod.enum.user, confidence: 1 });
+    expect(merged.refs.categoryId).toBe('cat-transport');
+  });
+
+  it('a plain category selection clears the stale sub-category; a sub-category selection sets it', () => {
+    expect(mergePatch(existing, {}, selection).refs.subCategoryId).toBeUndefined();
+    expect(mergePatch(existing, {}, { ...selection, subCategoryId: 'sub-taxi' }).refs.subCategoryId).toBe('sub-taxi');
+  });
+
+  it('keeps the classification and category when there is no selection', () => {
+    const merged = mergePatch(existing, {}, null);
+    expect(merged.classification).toEqual(existing.classification);
+    expect(merged.refs).toMatchObject({ categoryId: 'cat-food', subCategoryId: 'sub-coffee' });
+  });
+
+  it('an account override moves the account and adopts its currency; a null account changes neither', () => {
+    const moved = mergePatch(existing, {}, null, { account: { id: 'acc-9', currency: CurrencyCode.enum.USD } });
+    expect(moved.refs.accountId).toBe('acc-9');
+    expect(moved.currency).toBe('USD');
+    const kept = mergePatch(existing, {}, null, { account: null });
+    expect(kept.refs.accountId).toBe('acc-1');
+    expect(kept.currency).toBe('BRL');
+  });
+
+  it('a bill override reassigns the bill; without one the card transaction keeps its bill', () => {
+    expect(mergePatch(existing, {}, null, { billId: 'bill-2' }).refs.billId).toBe('bill-2');
+    expect(mergePatch(existing, {}, null, {}).refs.billId).toBe('bill-1');
+  });
+});
+
+describe('planNewTransaction — decides a new transaction from gathered values', () => {
+  const match: MerchantMatch = {
+    merchantKey: 'uber',
+    categoryId: 'cat-transport',
+    categoryName: 'Transport',
+    weight: 3,
+    origin: ClassificationMethod.enum.rule,
+  };
+  const facts = (overrides: Partial<Parameters<typeof planNewTransaction>[0]> = {}) => ({
+    id: 'tx-new',
+    today: '2026-06-10',
+    input: { description: 'Uber Trip 99', amount: 32.5 },
+    type: TransactionType.enum.expense,
+    source: TransactionSource.enum.mcp,
+    currency: CurrencyCode.enum.BRL,
+    decimals: 2,
+    funding: { refs: { accountId: 'acc-1' }, sourceId: 'acc-1' },
+    categorySelection: null,
+    candidates: [],
+    keepsUnmatchedMerchant: true,
+    ...overrides,
+  });
+
+  it("classifies by the user's category selection, which wins over merchant history", () => {
+    const { entity, classification } = planNewTransaction(
+      facts({
+        categorySelection: { categoryId: 'cat-food', categoryName: 'Food', subCategoryId: 'sub-1' },
+        candidates: [match],
+      }),
+    );
+    expect(classification).toMatchObject({
+      method: ClassificationMethod.enum.user,
+      confidence: 1,
+      categoryId: 'cat-food',
+    });
+    expect(entity.refs).toMatchObject({
+      categoryId: 'cat-food',
+      subCategoryId: 'sub-1',
+      merchantKey: normalizeMerchant('Uber Trip 99'),
+    });
+  });
+
+  it('classifies by the best merchant candidate and reuses its learned merchant key', () => {
+    const { entity, classification } = planNewTransaction(facts({ candidates: [match] }));
+    expect(classification).toMatchObject({ method: ClassificationMethod.enum.rule, categoryId: 'cat-transport' });
+    expect(entity.refs).toMatchObject({ categoryId: 'cat-transport', merchantKey: 'uber' });
+  });
+
+  it('an unmatched transaction falls back to its normalized description only when asked to', () => {
+    expect(planNewTransaction(facts()).entity.refs.merchantKey).toBe(normalizeMerchant('Uber Trip 99'));
+    expect(planNewTransaction(facts({ keepsUnmatchedMerchant: false })).entity.refs.merchantKey).toBeUndefined();
+  });
+
+  it('never stores an empty normalized description as the merchant key', () => {
+    const entity = planNewTransaction(facts({ input: { description: '***', amount: 1 } })).entity;
+    expect(entity.refs.merchantKey).toBeUndefined();
+  });
+
+  it('defaults the date to today and the status by date: future pending, past or today effective', () => {
+    expect(planNewTransaction(facts()).entity).toMatchObject({ date: '2026-06-10', status: 'effective' });
+    expect(
+      planNewTransaction(facts({ input: { description: 'x', amount: 1, date: '2026-07-01' } })).entity.status,
+    ).toBe('pending');
+    expect(
+      planNewTransaction(facts({ input: { description: 'x', amount: 1, date: '2026-05-01' } })).entity.status,
+    ).toBe('effective');
+  });
+
+  it('an explicit status wins over the date default', () => {
+    const input = { description: 'x', amount: 1, date: '2026-07-01', status: TransactionStatus.enum.effective };
+    expect(planNewTransaction(facts({ input })).entity.status).toBe('effective');
+  });
+
+  it("carries the funding refs, id, source, currency and the caller's raw input and note", () => {
+    const input = { description: 'x', amount: 1, rawInput: 'raw', note: 'memo' };
+    const { entity } = planNewTransaction(
+      facts({ input, funding: { refs: { accountId: 'liab-1', cardId: 'card-1' } } }),
+    );
+    expect(entity).toMatchObject({ id: 'tx-new', source: 'mcp', currency: 'BRL', rawInput: 'raw', note: 'memo' });
+    expect(entity.refs).toMatchObject({ accountId: 'liab-1', cardId: 'card-1' });
+  });
+
+  it('derives the account key from the funding account and the card key from the card and its bill cycle', () => {
+    const date = '2026-06-10';
+    const identity = {
+      type: TransactionType.enum.expense,
+      currency: CurrencyCode.enum.BRL,
+      date,
+      description: 'Uber Trip 99',
+      amount: 32.5,
+    };
+    expect(planNewTransaction(facts()).idempotencyKey).toBe(
+      deriveIdempotencyKey({ fundingSourceId: 'acc-1', ...identity }, 2),
+    );
+    const card = planNewTransaction(
+      facts({
+        funding: { refs: { accountId: 'liab-1', cardId: 'card-1' }, sourceId: 'card-1', billPeriodKey: '6-2026' },
+      }),
+    );
+    expect(card.idempotencyKey).toBe(
+      deriveIdempotencyKey({ fundingSourceId: 'card-1', billPeriodKey: '6-2026', ...identity }, 2),
+    );
+  });
+
+  it('the same purchase on another bill cycle derives another key; the liability account does not enter it', () => {
+    const funding = (billPeriodKey: string, accountId: string) => ({
+      refs: { accountId, cardId: 'card-1' },
+      sourceId: 'card-1',
+      billPeriodKey,
+    });
+    const june = planNewTransaction(facts({ funding: funding('6-2026', 'liab-1') })).idempotencyKey;
+    expect(planNewTransaction(facts({ funding: funding('7-2026', 'liab-1') })).idempotencyKey).not.toBe(june);
+    expect(planNewTransaction(facts({ funding: funding('6-2026', 'liab-2') })).idempotencyKey).toBe(june);
+  });
+
+  it('the discriminator separates otherwise identical transactions; decimals round the amount in the key', () => {
+    const plain = planNewTransaction(facts()).idempotencyKey;
+    const withDiscriminator = planNewTransaction(
+      facts({ input: { description: 'Uber Trip 99', amount: 32.5, discriminator: 'second' } }),
+    );
+    expect(withDiscriminator.idempotencyKey).not.toBe(plain);
+    const fine = (decimals: number) =>
+      planNewTransaction(facts({ input: { description: 'Uber Trip 99', amount: 32.504 }, decimals })).idempotencyKey;
+    expect(fine(2)).toBe(
+      planNewTransaction(facts({ input: { description: 'Uber Trip 99', amount: 32.5 } })).idempotencyKey,
+    );
+    expect(fine(6)).not.toBe(fine(2));
   });
 });

@@ -7,14 +7,8 @@ import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertNonCreditType, guardTransferMutability, isAccountOwnedType } from '../../logic/account.js';
-import { pickClassification, userClassification } from '../../logic/classify.js';
 import { resolveCurrency } from '../../logic/money.js';
-import {
-  normalizeMerchant,
-  resolveMerchantCorrection,
-  withMerchant,
-  withMerchantLearning,
-} from '../../logic/merchant.js';
+import { resolveMerchantCorrection, withMerchant, withMerchantLearning } from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { overlayResolvedTags } from '../../logic/tag.js';
@@ -24,11 +18,13 @@ import {
   buildTransactionView,
   buildUpsertResult,
   defaultStatementLines,
-  defaultStatusFor,
-  deriveIdempotencyKey,
+  mergePatch,
+  planNewTransaction,
+  type NewTransactionPlan,
 } from '../../logic/transaction.js';
 import {
   accountErrors,
+  type Account,
   type AddAccountMovement,
   type ImportAccountStatement,
   type ImportAccountStatementItem,
@@ -36,21 +32,24 @@ import {
 } from '../../models/account.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
 import {
-  ClassificationMethod,
   DELETE_TRANSACTION_CONFIRM_HINT,
   TRANSACTION_ENTITY_TAG,
   transactionErrors,
   MovementType,
   type ClassifiedUpsertResult,
-  type ClassifyOutcome,
   type DeleteTransactionResult,
-  type TransactionEntity,
   type TransactionSource,
   type TransactionView,
 } from '../../models/transaction.js';
 import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
-import { resolveAccountRef, resolveDecimals, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
+import {
+  matchCandidatesFor,
+  resolveAccountRef,
+  resolveDecimals,
+  resolveLegAccounts,
+  resolveTagLinks,
+} from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
@@ -66,68 +65,44 @@ const assertAccountOwnedLegs = (
 ): ResultAsync<boolean, AppError> =>
   resolveLegAccounts(deps, tx).map((legs) => legs.every((account) => isAccountOwnedType(account.type)));
 
-type MovementPlan = { entity: TransactionEntity; classification: ClassifyOutcome; idempotencyKey: string };
+/** The account a movement is funded from, or null for an unattached movement. A credit account is the
+ *  card flow's to post to, never this one's. */
+const resolveFundingAccount = (deps: Deps, ref: string | undefined): ResultAsync<Account | null, AppError> =>
+  safeTry(async function* () {
+    if (!R.isNonNullish(ref)) return ok(null);
+    const account = yield* resolveAccountRef(deps, ref);
+    yield* guard(assertNonCreditType(account.type), accountErrors.creditPostRejected);
+    return ok(account);
+  });
 
 const planAccountMovement = (
   deps: Deps,
   input: AddAccountMovement,
   type: MovementType,
   source: TransactionSource,
-): ResultAsync<MovementPlan, AppError> =>
+): ResultAsync<NewTransactionPlan, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory);
 
-    const account = R.isNonNullish(input.account) ? yield* resolveAccountRef(deps, input.account) : null;
-    if (account) {
-      yield* guard(assertNonCreditType(account.type), accountErrors.creditPostRejected);
-    }
-
-    const today = toIsoDate(deps.clock());
-    const date = input.date ?? today;
-    const status = input.status ?? defaultStatusFor(date, today);
+    const account = yield* resolveFundingAccount(deps, input.account);
     const currency = resolveCurrency(account, input);
-
     const categorySelection = yield* resolveCategorySelection(deps, input, type);
-    const normalizedMerchant = normalizeMerchant(input.description);
-    const classification: ClassifyOutcome = categorySelection
-      ? userClassification({ id: categorySelection.categoryId, name: categorySelection.categoryName })
-      : pickClassification(await deps.merchants.matchCandidates(normalizedMerchant));
-    const subCategoryId = categorySelection?.subCategoryId;
-    // A match reuses the (possibly partial) key merchant_category already learned under — reusing
-    // it keeps future corrections reinforcing that same generalized key. Unmatched still needs a
-    // key stored on the row, or a later correction has nothing to attach to (it can only ever
-    // strengthen a merchant this transaction is already linked to) — falls back to the full
-    // normalized description, empty-string guarded since that can't back a merchants FK row.
-    const merchantKey = classification.merchantKey ?? (normalizedMerchant || undefined);
 
-    const entity: TransactionEntity = {
-      id: deps.newId(),
-      description: input.description,
-      amount: input.amount,
-      type,
-      status,
-      date,
-      currency,
-      source,
-      classification,
-      rawInput: input.rawInput,
-      note: input.note,
-      refs: {
-        accountId: account?.id,
-        categoryId: classification.categoryId,
-        subCategoryId,
-        merchantKey,
-      },
-    };
-
-    const decimals = await resolveDecimals(deps, currency);
-    const idempotencyKey = deriveIdempotencyKey(
-      { fundingSourceId: account?.id, type, currency, date, description: input.description, amount: input.amount },
-      decimals,
-      input.discriminator,
+    return ok(
+      planNewTransaction({
+        id: deps.newId(),
+        today: toIsoDate(deps.clock()),
+        input,
+        type,
+        source,
+        currency,
+        decimals: await resolveDecimals(deps, currency),
+        funding: { refs: { accountId: account?.id }, sourceId: account?.id },
+        categorySelection,
+        candidates: await matchCandidatesFor(deps, input.description, categorySelection),
+        keepsUnmatchedMerchant: true,
+      }),
     );
-
-    return ok({ entity, classification, idempotencyKey });
   });
 
 /** Shared by addAccountExpense/addAccountIncome — everything but the fixed movement type. Returns
@@ -220,38 +195,11 @@ export const updateAccountTransaction = (
     yield* guard(isAccountOwned, transactionErrors.wrongOperation(Remedy.enum.update_card_transaction));
     yield* guardTransferMutability(existing, input);
 
-    const { account, effectiveType, categorySelection } = yield* decideTransactionUpdate(deps, input, existing);
-    const categoryId = categorySelection?.categoryId ?? existing.categoryId;
-    const subCategoryId = categorySelection ? categorySelection.subCategoryId : existing.subCategoryId;
-    const isUserCorrection = !!categorySelection;
-
-    const entity: TransactionEntity = {
-      id: existing.id,
-      description: input.description ?? existing.description,
-      amount: input.amount ?? existing.amount,
-      type: effectiveType ?? existing.type,
-      status: existing.status,
-      date: input.date ?? existing.date,
-      currency: account?.currency ?? existing.currency,
-      source: existing.source,
-      classification: isUserCorrection
-        ? { method: ClassificationMethod.enum.user, confidence: 1 }
-        : existing.classification,
-      rawInput: existing.rawInput,
-      note: input.note !== undefined ? (input.note === '' ? undefined : input.note) : existing.note,
-      refs: {
-        accountId: account?.id ?? existing.accountId,
-        toAccountId: existing.toAccountId,
-        cardId: existing.cardId,
-        billId: existing.billId,
-        categoryId,
-        subCategoryId,
-        merchantKey: existing.merchant,
-      },
-    };
+    const { account, categorySelection } = yield* decideTransactionUpdate(deps, input, existing);
+    const entity = mergePatch(existing, input, categorySelection, { account });
 
     const locale = await deps.locale();
-    const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
+    const merchantCorrection = resolveMerchantCorrection(existing, entity.refs.categoryId);
     const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
     const persist: Persistable[] = [
       ...withMerchantLearning(

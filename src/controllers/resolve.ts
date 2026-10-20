@@ -3,6 +3,8 @@ import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { okOr } from '../common/result.js';
 import { buildSynonyms, resolveAndSort } from '../logic/category.js';
+import type { MerchantMatch } from '../logic/classify.js';
+import { normalizeMerchant } from '../logic/merchant.js';
 import { decimalsLookup } from '../logic/money.js';
 import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js';
 import { resolveTagIds, resolveTagNames, tagSetPersistable } from '../logic/tag.js';
@@ -12,7 +14,7 @@ import type { CreditCard } from '../models/creditCard.js';
 import { ambiguous, notFound } from '../models/error.js';
 import type { CurrencyCode } from '../models/money.js';
 import type { Persistable } from '@rfc0/effect-runner';
-import type { TransactionView } from '../models/transaction.js';
+import type { CategorySelection, TransactionView } from '../models/transaction.js';
 import type { Deps } from './deps.js';
 
 /** Resolution → Result with the right structured error for the entity kind. */
@@ -53,6 +55,15 @@ export const resolveCardRef = (deps: Deps, name: string): ResultAsync<CreditCard
  *  `CurrencyCode` is a validated enum member, always present in the list. */
 export const resolveDecimals = async (deps: Deps, currency: CurrencyCode): Promise<number> =>
   decimalsLookup(await deps.currencies.list())(currency);
+
+/** Merchant→category candidates for classifying a new transaction. An explicit category selection
+ *  wins over merchant history, so nothing is read when one was named. */
+export const matchCandidatesFor = async (
+  deps: Deps,
+  description: string,
+  categorySelection: CategorySelection | null,
+): Promise<MerchantMatch[]> =>
+  categorySelection ? [] : deps.merchants.matchCandidates(normalizeMerchant(description));
 
 /**
  * Resolves the account(s) referenced by a transaction's leg(s) (`accountId`/`toAccountId`) —

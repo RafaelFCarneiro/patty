@@ -46,6 +46,11 @@ export const lookbackFrom = (today: string, lookbackMonths: number): string => {
   return `${fromYear}-${pad(fromMonth)}-01`;
 };
 
+/** The month/year period's `[from, to)`, or open bounds when none was given (unlike `resolveDateRange`,
+ *  an explicit `from`/`to` on the input is not consulted). */
+export const periodBounds = (input: PeriodInput): NullableDateRange =>
+  hasPeriod(input) ? periodRange({ month: input.month!, year: input.year! }) : { from: null, to: null };
+
 export const resolveDateRange = (input: PeriodInput): NullableDateRange => {
   const range = hasPeriod(input) ? periodRange({ month: input.month!, year: input.year! }) : null;
   return {

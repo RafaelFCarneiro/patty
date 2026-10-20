@@ -1,7 +1,13 @@
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
 import { roundMoney, roundToDecimals } from './money.js';
-import { AggregateGroupBy, AggregateSort, type AggregateRow, type CurrencyBlock } from '../models/aggregate.js';
+import {
+  AggregateGroupBy,
+  AggregateMetric,
+  AggregateSort,
+  type AggregateRow,
+  type CurrencyBlock,
+} from '../models/aggregate.js';
 import type { CurrencyCode, DecimalsFor } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { AggregateDbRow } from '../wire/db/aggregate.js';
@@ -71,3 +77,10 @@ export const shapeAggregateResult = (
     }),
     R.sortBy((b) => b.currency),
   );
+
+/** Only a `sum` block total is a money quantity worth converting and cross-summing: `count` is a
+ *  transaction count and `avg` a sum of per-group averages, neither a coherent cross-currency amount. */
+export const wantsDisplayConversion = <I extends { metric: AggregateMetric; displayCurrency?: CurrencyCode }>(
+  input: I,
+): input is I & { displayCurrency: CurrencyCode } =>
+  R.isNonNullish(input.displayCurrency) && input.metric === AggregateMetric.enum.sum;

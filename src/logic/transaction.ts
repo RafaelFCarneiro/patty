@@ -6,9 +6,11 @@ import { roundToDecimals } from './money.js';
 import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDirection } from '../models/page.js';
 import type {
   CategoryFields,
+  CategorySelection,
   Classification,
   ClassifiedUpsertResult,
   ClassifyOutcome,
+  CreateTransaction,
   DefaultedStatementLine,
   IdempotencyIdentity,
   UpsertTransactionResult,
@@ -22,7 +24,9 @@ import type {
 import type { RawTransactionView } from '../models/transaction.js';
 import type { PersistOutcome } from '@rfc0/effect-runner';
 import { outcomeFor } from './persistence.js';
+import type { CurrencyCode } from '../models/money.js';
 import {
+  ClassificationMethod,
   transactionErrors,
   TRANSACTION_ENTITY_TAG,
   TransactionCursorSchema,
@@ -30,11 +34,13 @@ import {
   TransactionStatus,
   TransactionType,
   type MovementType,
+  type TransactionSource,
 } from '../models/transaction.js';
 import { CategoryKind } from '../models/category.js';
 import { err, ok, type Result } from 'neverthrow';
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
+import { pickClassification, userClassification, type MerchantMatch } from './classify.js';
 import { localizeTransactionStatus, localizeTransactionType } from './localize.js';
 import { normalizeMerchant } from './merchant.js';
 
@@ -159,6 +165,155 @@ export const entityFromExisting = (existing: RawTransactionView): TransactionEnt
     merchantKey: existing.merchant,
   },
 });
+
+// ─── Patch merge ─────────────────────────────────────────────────────────────
+
+type PatchFields = Pick<UpdateTransaction, 'description' | 'amount' | 'type' | 'date' | 'note'>;
+
+/** What each aggregate decides on its own when merging a patch: the account (and so the currency)
+ *  an account update may move the transaction to, the bill a card update may reassign it to. */
+export type PatchOverrides = {
+  account?: { id: string; currency: CurrencyCode } | null;
+  billId?: string;
+};
+
+/** An empty `note` clears it; an omitted one leaves it. */
+const patchedNote = (note: string | undefined, existing: string | undefined): string | undefined =>
+  note === undefined ? existing : note || undefined;
+
+/** A category selection is a user correction: it reclassifies at full confidence. */
+const patchedClassification = (existing: RawTransactionView, selection: CategorySelection | null): Classification =>
+  selection ? { method: ClassificationMethod.enum.user, confidence: 1 } : existing.classification;
+
+/** A selection replaces the sub-category along with the category, so a plain category clears a stale sub-category. */
+const patchedCategoryRefs = (
+  existing: RawTransactionView,
+  selection: CategorySelection | null,
+): Pick<TransactionEntity['refs'], 'categoryId' | 'subCategoryId'> =>
+  selection
+    ? { categoryId: selection.categoryId, subCategoryId: selection.subCategoryId }
+    : { categoryId: existing.categoryId, subCategoryId: existing.subCategoryId };
+
+/** The funding a patch may move: the account (and so currency) and the bill. */
+const patchedFunding = (
+  existing: RawTransactionView,
+  overrides: PatchOverrides,
+): Pick<TransactionEntity['refs'], 'accountId' | 'billId'> & { currency: CurrencyCode } => ({
+  currency: overrides.account?.currency ?? existing.currency,
+  accountId: overrides.account?.id ?? existing.accountId,
+  billId: overrides.billId ?? existing.billId,
+});
+
+/** The full desired end-state of an updated transaction: `existing` with every provided patch field
+ *  laid over it. */
+export const mergePatch = (
+  existing: RawTransactionView,
+  input: PatchFields,
+  categorySelection: CategorySelection | null,
+  overrides: PatchOverrides = {},
+): TransactionEntity => {
+  const base = entityFromExisting(existing);
+  const { currency, ...fundingRefs } = patchedFunding(existing, overrides);
+  return {
+    ...base,
+    description: input.description ?? existing.description,
+    amount: input.amount ?? existing.amount,
+    type: input.type ?? existing.type,
+    date: input.date ?? existing.date,
+    currency,
+    classification: patchedClassification(existing, categorySelection),
+    note: patchedNote(input.note, existing.note),
+    refs: { ...base.refs, ...fundingRefs, ...patchedCategoryRefs(existing, categorySelection) },
+  };
+};
+
+// ─── New transaction plan ────────────────────────────────────────────────────
+
+type NewTransactionInput = Pick<
+  CreateTransaction,
+  'description' | 'amount' | 'date' | 'status' | 'note' | 'rawInput' | 'discriminator'
+>;
+
+/** What funds a new transaction: the refs it is stored under, plus the identity its idempotency key hashes. */
+export type NewTransactionFunding = {
+  refs: Pick<TransactionEntity['refs'], 'accountId' | 'cardId'>;
+  /** The account or card id the key is scoped to; unset for an unattached movement. */
+  sourceId?: string;
+  billPeriodKey?: string;
+};
+
+export type NewTransactionFacts = {
+  /** Minted by the controller (`deps.newId()`) — logic never draws ids. */
+  id: string;
+  today: IsoDate;
+  input: NewTransactionInput;
+  type: MovementType;
+  source: TransactionSource;
+  currency: CurrencyCode;
+  /** The currency's own decimals, for rounding the amount inside the idempotency key. */
+  decimals: number;
+  funding: NewTransactionFunding;
+  categorySelection: CategorySelection | null;
+  candidates: readonly MerchantMatch[];
+  /** Whether an unmatched transaction stores its normalized description as the merchant key. */
+  keepsUnmatchedMerchant: boolean;
+};
+
+export type NewTransactionPlan = { entity: TransactionEntity; classification: ClassifyOutcome; idempotencyKey: string };
+
+const classifyNew = (selection: CategorySelection | null, candidates: readonly MerchantMatch[]): ClassifyOutcome =>
+  selection
+    ? userClassification({ id: selection.categoryId, name: selection.categoryName })
+    : pickClassification(candidates);
+
+/** A match reuses the (possibly partial) key merchant_category already learned under — reusing it
+ *  keeps future corrections reinforcing that same generalized key. An unmatched transaction that
+ *  `keepsUnmatchedMerchant` still needs a key stored on the row, or a later correction has nothing
+ *  to attach to (it can only strengthen a merchant the transaction is already linked to) — it falls
+ *  back to the full normalized description, empty-string guarded since that can't back a merchants FK row. */
+const merchantKeyFor = (classification: ClassifyOutcome, description: string, keepsUnmatched: boolean) =>
+  classification.merchantKey ?? (keepsUnmatched ? normalizeMerchant(description) || undefined : undefined);
+
+/** Decides a new transaction from the values its controller gathered: entity, classification and
+ *  idempotency key. The status defaults by date; an explicit category beats merchant history. */
+export const planNewTransaction = (facts: NewTransactionFacts): NewTransactionPlan => {
+  const { input, type, currency, funding } = facts;
+  const date = input.date ?? facts.today;
+  const classification = classifyNew(facts.categorySelection, facts.candidates);
+  const entity: TransactionEntity = {
+    id: facts.id,
+    description: input.description,
+    amount: input.amount,
+    type,
+    status: input.status ?? defaultStatusFor(date, facts.today),
+    date,
+    currency,
+    source: facts.source,
+    classification,
+    rawInput: input.rawInput,
+    note: input.note,
+    refs: {
+      ...funding.refs,
+      categoryId: classification.categoryId,
+      subCategoryId: facts.categorySelection?.subCategoryId,
+      merchantKey: merchantKeyFor(classification, input.description, facts.keepsUnmatchedMerchant),
+    },
+  };
+  const idempotencyKey = deriveIdempotencyKey(
+    {
+      fundingSourceId: funding.sourceId,
+      billPeriodKey: funding.billPeriodKey,
+      type,
+      currency,
+      date,
+      description: input.description,
+      amount: input.amount,
+    },
+    facts.decimals,
+    input.discriminator,
+  );
+  return { entity, classification, idempotencyKey };
+};
 
 // ─── Bulk ─────────────────────────────────────────────────────────────────────
 

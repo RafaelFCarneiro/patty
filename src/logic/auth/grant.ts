@@ -5,17 +5,25 @@ import {
   GrantChannel,
   GrantStatus,
   MAX_SIGN_IN_DURATION_MS,
+  RedeemKind,
   RedeemPlanKind,
   SIGN_IN_DURATION_MS,
   SignInDuration,
   type ClientGrantEntity,
   type GrantChoice,
   type GrantRequest,
+  type RedeemResult,
   type StartGrantInput,
 } from '../../models/auth/grant.js';
+import type { Principal } from '../../models/auth/principal.js';
 import { Scope, WRITE_SCOPE } from '../../models/auth/scope.js';
 import { SESSION_ONLY_LABEL, UNKNOWN_CLIENT_NAME } from '../../models/auth/signIn.js';
-import { AccessTokenKind, TOKEN_NAME_MAX_LENGTH, TokenAccess } from '../../models/auth/token.js';
+import {
+  AccessTokenKind,
+  TOKEN_NAME_MAX_LENGTH,
+  TokenAccess,
+  type AccessTokenEntity,
+} from '../../models/auth/token.js';
 import { type InstanceSettingsEntity, type SignInCap } from '../../models/auth/users.js';
 import { formatSetupCode, normalizeSetupCode } from './owner.js';
 import { millis, toIso } from './time.js';
@@ -154,17 +162,46 @@ export type RedeemPlan =
       grant: ClientGrantEntity & { userId: string; scopes: Scope[]; duration: SignInDuration; approvedAt: string };
     };
 
-export const redeemPlan = (grant: ClientGrantEntity | null, now: Date): RedeemPlan => {
-  if (grant === null || grant.status === GrantStatus.enum.redeemed) return { kind: RedeemPlanKind.enum.invalid };
+const INVALID_REDEEM: RedeemPlan = { kind: RedeemPlanKind.enum.invalid };
+
+/** The grants that can never mint (spent, refused, out of time), or null while one still might. */
+const closedPlan = (grant: ClientGrantEntity, now: Date): RedeemPlan | null => {
+  if (grant.status === GrantStatus.enum.redeemed) return INVALID_REDEEM;
   if (grant.status === GrantStatus.enum.denied) return { kind: RedeemPlanKind.enum.denied };
   if (grant.status === GrantStatus.enum.expired) return { kind: RedeemPlanKind.enum.expired, settle: null };
-  if (isGrantExpired(grant, now)) return { kind: RedeemPlanKind.enum.expired, settle: expiredGrant(grant) };
+  return isGrantExpired(grant, now) ? { kind: RedeemPlanKind.enum.expired, settle: expiredGrant(grant) } : null;
+};
+
+/** A live grant waits for approval, or — once approved with every field the sign-in needs — mints. */
+const openPlan = (grant: ClientGrantEntity): RedeemPlan => {
   if (grant.status === GrantStatus.enum.pending) return { kind: RedeemPlanKind.enum.pending };
   const { userId, scopes, duration, approvedAt } = grant;
   return userId !== null && scopes !== null && duration !== null && approvedAt !== null
     ? { kind: RedeemPlanKind.enum.mint, grant: { ...grant, userId, scopes, duration, approvedAt } }
-    : { kind: RedeemPlanKind.enum.invalid };
+    : INVALID_REDEEM;
 };
+
+/** An approved grant carrying everything a sign-in is minted from. */
+export type MintableGrant = Extract<RedeemPlan, { kind: typeof RedeemPlanKind.enum.mint }>['grant'];
+
+export const redeemPlan = (grant: ClientGrantEntity | null, now: Date): RedeemPlan =>
+  grant === null ? INVALID_REDEEM : (closedPlan(grant, now) ?? openPlan(grant));
+
+/** The answer to a redemption that minted: the one-time plaintext token and who it signs in as. */
+export const signedIn = (
+  token: string,
+  entity: Pick<AccessTokenEntity, 'id' | 'scopes'> & { expiresAt: string },
+  principal: Principal,
+  duration: SignInDuration,
+): RedeemResult => ({
+  kind: RedeemKind.enum.signed_in,
+  token,
+  tokenId: entity.id,
+  scopes: entity.scopes,
+  principal,
+  duration,
+  expiresAt: entity.expiresAt,
+});
 
 /** The sign-in token a redeemed grant becomes. Its expiry is the approval time plus the chosen duration. */
 export const newStdioSignIn = (
@@ -172,7 +209,7 @@ export const newStdioSignIn = (
     id: string;
     tokenHash: string;
     prefix: string;
-    grant: Extract<RedeemPlan, { kind: typeof RedeemPlanKind.enum.mint }>['grant'];
+    grant: MintableGrant;
   },
   now: Date,
 ) => ({

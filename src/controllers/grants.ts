@@ -12,12 +12,14 @@ import {
   formatUserCode,
   grantRequestOf,
   isAnswerable,
+  type MintableGrant,
   newGrant,
   newStdioSignIn,
   normalizeUserCode,
   offeredDurations,
   redeemPlan,
   redeemedGrant,
+  signedIn,
   signInCapOf,
   supersededGrants,
 } from '../logic/auth/grant.js';
@@ -169,6 +171,52 @@ export const denyGrant = (
  * race and retries — finds a spent grant. The plaintext token is in the response and nowhere else; only its hash
  * and display prefix are stored.
  */
+/** A redemption that changes nothing: the grant is unknown, still waiting, or refused. */
+const unchanged = (kind: Exclude<RedeemKind, typeof RedeemKind.enum.signed_in>): FlowOutcome<RedeemResult> => ({
+  persist: [],
+  response: plainResult(kind),
+});
+
+/** An approved grant past its window is settled once (terminal), then answered as expired. */
+const settledExpiry = (settle: ClientGrantEntity | null): FlowOutcome<RedeemResult> => ({
+  persist: settle ? [persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: settle })] : [],
+  response: plainResult(RedeemKind.enum.expired),
+});
+
+/** Mints the one stdio sign-in an approved grant is worth, spending the grant in the same batch. */
+const mintSignIn = async (deps: AuthDeps, approved: MintableGrant, now: Date): Promise<FlowOutcome<RedeemResult>> => {
+  // The approver may have lost their login since: a sign-in is only ever minted for a user who can log in.
+  const user = await deps.users.findById(approved.userId);
+  if (!isActiveUser(user)) return unchanged(RedeemKind.enum.invalid);
+
+  const token = deps.secrets.randomAccessToken();
+  // The cap in force now bounds the sign-in too: one approved before it fell is still minted within it.
+  const settings = await deps.instanceSettings.get();
+  const grant = { ...approved, duration: clampToCap(approved.duration, signInCapOf(settings)) };
+  const entity = newStdioSignIn(
+    { id: deps.newId(), tokenHash: deps.secrets.hashSecret(token), prefix: tokenDisplayPrefix(token), grant },
+    now,
+  );
+  // Minting changes the approver's credential set, so their row is written: a racing disable or reset conflicts,
+  // in either order, and its retry refuses this redemption or revokes the new sign-in.
+  const persist: Persistable[] = [
+    persistence.update({ entity: USER_ENTITY_TAG, model: withCredentialsChanged(user, now) }),
+    settingsCheck(settings),
+    persistence.insert({ entity: ACCESS_TOKEN_ENTITY_TAG, model: entity }),
+    persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: redeemedGrant(approved) }),
+  ];
+  return {
+    persist,
+    response: signedIn(token, entity, tokenPrincipal(entity, user, PrincipalVia.enum.stdio), grant.duration),
+  };
+};
+
+/**
+ * The asking process trades its device code for the sign-in (ADR-034 §3.5). Single-use: an approved grant mints one
+ * token and becomes `redeemed` in the same write, so a second redeem — or a concurrent one that loses the version
+ * race and retries — finds a spent grant. The plaintext token is in the response and nowhere else; only its hash
+ * and display prefix are stored.
+ */
 export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<FlowOutcome<RedeemResult>, AppError> =>
   safeTry(async function* () {
     const now = deps.clock();
@@ -178,51 +226,11 @@ export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<Flo
       case RedeemPlanKind.enum.invalid:
       case RedeemPlanKind.enum.pending:
       case RedeemPlanKind.enum.denied:
-        return ok({ persist: [], response: plainResult(plan.kind) });
+        return ok(unchanged(plan.kind));
       case RedeemPlanKind.enum.expired:
-        return ok({
-          persist: plan.settle ? [persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: plan.settle })] : [],
-          response: plainResult(plan.kind),
-        });
-      case RedeemPlanKind.enum.mint: {
-        // The approver may have lost their login since: a sign-in is only ever minted for a user who can log in.
-        const user = await deps.users.findById(plan.grant.userId);
-        if (!isActiveUser(user)) return ok({ persist: [], response: plainResult(RedeemKind.enum.invalid) });
-
-        const token = deps.secrets.randomAccessToken();
-        // The cap in force now bounds the sign-in too: one approved before it fell is still minted within it.
-        const settings = await deps.instanceSettings.get();
-        const grant = { ...plan.grant, duration: clampToCap(plan.grant.duration, signInCapOf(settings)) };
-        const entity = newStdioSignIn(
-          {
-            id: deps.newId(),
-            tokenHash: deps.secrets.hashSecret(token),
-            prefix: tokenDisplayPrefix(token),
-            grant,
-          },
-          now,
-        );
-        // Minting changes the approver's credential set, so their row is written: a racing disable or reset conflicts,
-        // in either order, and its retry refuses this redemption or revokes the new sign-in.
-        const persist: Persistable[] = [
-          persistence.update({ entity: USER_ENTITY_TAG, model: withCredentialsChanged(user, now) }),
-          settingsCheck(settings),
-          persistence.insert({ entity: ACCESS_TOKEN_ENTITY_TAG, model: entity }),
-          persistence.update({ entity: CLIENT_GRANT_ENTITY_TAG, model: redeemedGrant(plan.grant) }),
-        ];
-        return ok({
-          persist,
-          response: {
-            kind: RedeemKind.enum.signed_in,
-            token,
-            tokenId: entity.id,
-            scopes: entity.scopes,
-            principal: tokenPrincipal(entity, user, PrincipalVia.enum.stdio),
-            duration: grant.duration,
-            expiresAt: entity.expiresAt,
-          },
-        });
-      }
+        return ok(settledExpiry(plan.settle));
+      case RedeemPlanKind.enum.mint:
+        return ok(await mintSignIn(deps, plan.grant, now));
       default: {
         const _exhaustive: never = plan;
         throw new Error(`unmapped redeem plan: ${JSON.stringify(_exhaustive)}`);

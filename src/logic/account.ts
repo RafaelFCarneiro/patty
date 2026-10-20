@@ -1,12 +1,25 @@
 import { err, ok, type Result } from 'neverthrow';
+import * as R from 'remeda';
 import { purry } from 'remeda';
 import { localizeAccountType } from './localize.js';
 import { accountErrors, AccountType } from '../models/account.js';
-import type { Account, AccountError, AccountReferences } from '../models/account.js';
+import type {
+  Account,
+  AccountEntity,
+  AccountError,
+  AccountReferences,
+  CreateTransfer,
+  UpdateAccount,
+} from '../models/account.js';
 import type { Locale } from '../models/locale.js';
-import { TransactionType } from '../models/transaction.js';
-import type { TransactionView, UpdateTransaction } from '../models/transaction.js';
-import { isTransfer } from './transaction.js';
+import { ClassificationMethod, TransactionType } from '../models/transaction.js';
+import type {
+  TransactionEntity,
+  TransactionSource,
+  TransactionView,
+  UpdateTransaction,
+} from '../models/transaction.js';
+import { defaultStatusFor, deriveIdempotencyKey, isTransfer } from './transaction.js';
 
 export const filterByType =
   (type?: AccountType) =>
@@ -27,6 +40,41 @@ export const hasNoRecurring = (refs: AccountReferences): boolean => refs.recurri
 export const hasNoCards = (refs: AccountReferences): boolean => refs.cards === 0;
 export const isUnreferenced = (refs: AccountReferences): boolean =>
   hasNoTransactions(refs) && hasNoRecurring(refs) && hasNoCards(refs);
+
+/** Case-insensitive, so a case-only change ("itau" → "Itau") is not a rename — gates the
+ *  name-availability guard, which would otherwise collide with the account's own current name. */
+export const isRename = (currentName: string, newName?: string): newName is string =>
+  newName !== undefined && newName.toLowerCase() !== currentName.toLowerCase();
+
+/** True when an update touches a field the account's history pins (its type or currency). */
+export const changesPinnedField = (input: Pick<UpdateAccount, 'type' | 'currency'>): boolean =>
+  R.isDefined(input.type) || R.isDefined(input.currency);
+
+/** Refuses changing the type or currency once the account has activity: the first violated rule wins. */
+export const guardPinnedFields = (
+  refs: AccountReferences,
+  input: Pick<UpdateAccount, 'type' | 'currency'>,
+): Result<void, AccountError> => {
+  const isChangingType = R.isDefined(input.type);
+  const isChangingCurrency = R.isDefined(input.currency);
+  const violations: ReadonlyArray<readonly [boolean, AccountError]> = [
+    [isChangingType && !hasNoTransactions(refs), accountErrors.typeImmutable(refs.transactions)],
+    [isChangingCurrency && !hasNoTransactions(refs), accountErrors.currencyImmutableTransactions(refs.transactions)],
+    [isChangingCurrency && !hasNoRecurring(refs), accountErrors.currencyImmutableRecurring],
+    [isChangingCurrency && !hasNoCards(refs), accountErrors.currencyImmutableCards],
+  ];
+  const violated = R.find(violations, ([isViolated]) => isViolated);
+  return violated ? err(violated[1]) : ok(undefined);
+};
+
+/** The account with every provided patch field laid over it. */
+export const mergeAccountPatch = (raw: AccountEntity, input: UpdateAccount): AccountEntity => ({
+  ...raw,
+  name: input.newName ?? raw.name,
+  initialBalance: input.initialBalance ?? raw.initialBalance,
+  type: input.type ?? raw.type,
+  currency: input.currency ?? raw.currency,
+});
 
 export const areDifferentAccounts = (a: Pick<Account, 'id'>, b: Pick<Account, 'id'>): boolean => a.id !== b.id;
 
@@ -84,3 +132,55 @@ export function withTypeLabel(locale: Locale): <T extends Account>(account: T) =
 export function withTypeLabel(...args: readonly unknown[]) {
   return purry(_withTypeLabel, args);
 }
+
+// ─── Transfer plan ───────────────────────────────────────────────────────────
+
+export type TransferFacts = {
+  /** Minted by the controller (`deps.newId()`) — logic never draws ids. */
+  id: string;
+  today: string;
+  input: CreateTransfer;
+  from: Pick<Account, 'id' | 'name' | 'currency'>;
+  to: Pick<Account, 'id' | 'name'>;
+  source: TransactionSource;
+  /** The currency's own decimals, for rounding the amount inside the idempotency key. */
+  decimals: number;
+};
+
+export type TransferPlan = { entity: TransactionEntity; idempotencyKey: string };
+
+/** Decides a transfer from the values its controller gathered. Never classified, so no category or
+ *  merchant: a transfer debits FROM and credits TO and stays out of spending summaries (ADR-002). */
+export const planTransfer = (facts: TransferFacts): TransferPlan => {
+  const { input, from, to } = facts;
+  const date = input.date ?? facts.today;
+  const entity: TransactionEntity = {
+    id: facts.id,
+    description: input.description ?? `Transferência: ${from.name} → ${to.name}`,
+    amount: input.amount,
+    type: TransactionType.enum.transfer,
+    status: input.status ?? defaultStatusFor(date, facts.today),
+    date,
+    currency: from.currency,
+    source: facts.source,
+    classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+    refs: { accountId: from.id, toAccountId: to.id },
+  };
+  const idempotencyKey = deriveIdempotencyKey(
+    {
+      fundingSourceId: from.id,
+      counterpartyId: to.id,
+      type: entity.type,
+      currency: entity.currency,
+      date,
+      // input.description, not entity.description — the latter falls back to a display-name-
+      // based placeholder, which would change (and so silently miss a real duplicate) if either
+      // account was renamed between calls.
+      description: input.description ?? '',
+      amount: entity.amount,
+    },
+    facts.decimals,
+    input.discriminator,
+  );
+  return { entity, idempotencyKey };
+};

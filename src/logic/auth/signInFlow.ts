@@ -323,16 +323,17 @@ const adopted = (signedIn: SignedIn, ephemeral: boolean, then: Continuation, con
     : step(next, CLOSE_PAGE);
 };
 
+/** A minted sign-in is kept: "this session only" never reaches the keychain. */
+const keepSignIn = (state: SignInState, signedIn: SignedIn, then: Continuation, config: SignInConfig): SignInStep =>
+  persistsToKeychain(signedIn.duration)
+    ? ask(state, { kind: E.save_credential, signedIn, then })
+    : adopted(signedIn, true, then, config);
+
 const onRedeemed = (state: SignInState, observation: Observed<typeof O.redeemed>, config: SignInConfig) => {
   const { result, then } = observation;
   switch (result.kind) {
-    case RedeemKind.enum.signed_in: {
-      const signedIn: SignedIn = R.omit(result, ['kind']);
-      // "This session only" never reaches the keychain.
-      return persistsToKeychain(signedIn.duration)
-        ? ask(state, { kind: E.save_credential, signedIn, then })
-        : adopted(signedIn, true, then, config);
-    }
+    case RedeemKind.enum.signed_in:
+      return keepSignIn(state, R.omit(result, ['kind']), then, config);
     case REDEEM_ERROR_KIND:
       return config.channel === CHANNEL.cli
         ? ended(S.failed, failedWith(result.error))
