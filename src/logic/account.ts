@@ -1,6 +1,5 @@
 import { err, ok, type Result } from 'neverthrow';
 import * as R from 'remeda';
-import { purry } from 'remeda';
 import { localizeAccountType } from './localize.js';
 import { accountErrors, AccountType } from '../models/account.js';
 import type {
@@ -130,7 +129,7 @@ const _withTypeLabel = <T extends Account>(account: T, locale: Locale): T => ({
 export function withTypeLabel<T extends Account>(account: T, locale: Locale): T;
 export function withTypeLabel(locale: Locale): <T extends Account>(account: T) => T;
 export function withTypeLabel(...args: readonly unknown[]) {
-  return purry(_withTypeLabel, args);
+  return R.purry(_withTypeLabel, args);
 }
 
 // ─── Transfer plan ───────────────────────────────────────────────────────────

@@ -101,8 +101,8 @@ const settleWithTransfer = (rawBill: RawBill, plan: BillPaymentPlan): FlowOutcom
 export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcome<Bill>, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card);
-    const notFound = billErrors.notFound(card.name, input.month, input.year);
-    const existing = yield* okOr(await deps.bills.get(card.id, input.month, input.year), notFound);
+    const billNotFound = billErrors.notFound(card.name, input.month, input.year);
+    const existing = yield* okOr(await deps.bills.get(card.id, input.month, input.year), billNotFound);
     if (existing.bill.status === BillStatus.enum.paid) return ok({ persist: [], response: existing.bill });
 
     const today = toIsoDate(deps.clock());
@@ -110,7 +110,7 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
     yield* guard(date <= today, billErrors.futurePaymentDate(date));
 
     const total = computeBillTotal(existing.transactions);
-    const rawBill = yield* okOr(await deps.bills.findById(existing.bill.id), notFound);
+    const rawBill = yield* okOr(await deps.bills.findById(existing.bill.id), billNotFound);
     if (total <= 0) return ok(settleWithoutTransfer(rawBill));
 
     const payer = yield* resolvePayer(deps, card, input.account);

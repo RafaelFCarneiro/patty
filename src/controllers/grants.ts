@@ -165,12 +165,6 @@ export const denyGrant = (
     });
   });
 
-/**
- * The asking process trades its device code for the sign-in (ADR-034 §3.5). Single-use: an approved grant mints one
- * token and becomes `redeemed` in the same write, so a second redeem — or a concurrent one that loses the version
- * race and retries — finds a spent grant. The plaintext token is in the response and nowhere else; only its hash
- * and display prefix are stored.
- */
 /** A redemption that changes nothing: the grant is unknown, still waiting, or refused. */
 const unchanged = (kind: Exclude<RedeemKind, typeof RedeemKind.enum.signed_in>): FlowOutcome<RedeemResult> => ({
   persist: [],
