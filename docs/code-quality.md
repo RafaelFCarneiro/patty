@@ -380,7 +380,7 @@ const applierFor = (table, owner, { readBack }) => {
   return { insert: insertRow(ctx), update: updateRow(ctx), delete: deleteRow(ctx), check: checkRow(ctx) }
 }
 
-// ❌ DON'T — every query body inside the object the factory returns (122 lines, one literal)
+// ❌ DON'T — every query body inside the object the factory returns
 export const transactionsRepo = (db: Db, userId: string): TransactionsRepo => ({
   search: async (input, refs) => { /* 20 lines */ },
   aggregate: async (filters) => { /* 25 lines */ },

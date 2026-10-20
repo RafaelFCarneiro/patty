@@ -25,11 +25,9 @@ import {
 
 export const optional = <T>(value: T | null | undefined): T | undefined => value ?? undefined;
 
-/** The tag names of a `json_group_array` column; anything in it that is not a string is dropped. */
 export const parseTags = (json: string | null): string[] =>
   (json ? (JSON.parse(json) as unknown[]) : []).filter((tag): tag is string => typeof tag === 'string');
 
-/** The localized names of a category or sub-category (`{"pt":"…","es":"…"}`), `null` when the row has none. */
 export const parseNames = (json: string | null): LocalizedNames =>
   json !== null ? LocalizedNamesSchema.parse(JSON.parse(json)) : null;
 
