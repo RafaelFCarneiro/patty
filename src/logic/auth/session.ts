@@ -1,4 +1,4 @@
-import { type UserEntity } from '../../models/auth/owner.js';
+import type { UserEntity } from '../../models/auth/owner.js';
 import { PrincipalVia, type Principal } from '../../models/auth/principal.js';
 import { ALL_SCOPES } from '../../models/auth/scope.js';
 import {

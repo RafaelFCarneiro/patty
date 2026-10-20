@@ -6,7 +6,7 @@ import {
   ownerClaimPlan,
   resetPassword,
 } from '../../../controllers/auth.js';
-import { type PasswordReset } from '../../../models/auth/password.js';
+import type { PasswordReset } from '../../../models/auth/password.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import {
   AUTH_POSITIONALS,

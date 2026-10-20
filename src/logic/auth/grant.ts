@@ -27,7 +27,7 @@ import {
   TokenAccess,
   type AccessTokenEntity,
 } from '../../models/auth/token.js';
-import { type InstanceSettingsEntity, type SignInCap } from '../../models/auth/users.js';
+import type { InstanceSettingsEntity, SignInCap } from '../../models/auth/users.js';
 import { formatSetupCode, normalizeSetupCode } from './owner.js';
 import { millis, toIso } from './time.js';
 

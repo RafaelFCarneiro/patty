@@ -14,7 +14,7 @@ import {
 import { consolidateInCurrency } from '../logic/currencyRate.js';
 import { decimalsLookup } from '../logic/money.js';
 import { baselineRange, hasPeriod, lookbackFrom, periodRange, toIsoDate } from '../logic/period.js';
-import { type ConvertedTotal, type CurrencyAmount } from '../models/currencyRate.js';
+import type { ConvertedTotal, CurrencyAmount } from '../models/currencyRate.js';
 import {
   findCorrelationsErrors,
   FindCorrelationsAnalysis,

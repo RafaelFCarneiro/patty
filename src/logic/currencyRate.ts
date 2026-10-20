@@ -1,6 +1,6 @@
 import type { Result } from 'neverthrow';
 import * as R from 'remeda';
-import { type CurrencyCode } from '../models/money.js';
+import type { CurrencyCode } from '../models/money.js';
 import {
   ExclusionReason,
   type ConvertedValue,

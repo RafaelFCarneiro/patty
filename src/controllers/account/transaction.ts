@@ -25,7 +25,7 @@ import {
   type ImportAccountStatementItem,
   type UpdateAccountTransaction,
 } from '../../models/account.js';
-import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
+import type { FlowOutcome, Persistable, PersistOutcome } from '@rfc0/effect-runner';
 import {
   DELETE_TRANSACTION_CONFIRM_HINT,
   TRANSACTION_ENTITY_TAG,

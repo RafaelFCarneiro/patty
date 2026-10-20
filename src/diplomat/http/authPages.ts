@@ -1,6 +1,6 @@
 import { TERMINAL_SETUP_HINT } from '../../models/auth/message.js';
 import { PASSWORD_MIN_LENGTH } from '../../models/auth/password.js';
-import { type TokenAccess } from '../../models/auth/token.js';
+import type { TokenAccess } from '../../models/auth/token.js';
 import { LOGIN_PATH, SETUP_PATH, UI_APP_CSS_PATH } from './authPaths.js';
 import { readCached, UI_ROOT } from './uiFiles.js';
 

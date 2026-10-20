@@ -14,7 +14,7 @@ import {
   type ApplyDueResult,
   type RulePlan,
 } from '../models/recurring.js';
-import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
+import type { FlowOutcome, Persistable, PersistOutcome } from '@rfc0/effect-runner';
 import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,

@@ -1,4 +1,4 @@
-import { type UserEntity } from '../../models/auth/owner.js';
+import type { UserEntity } from '../../models/auth/owner.js';
 import { isActiveUser } from './owner.js';
 
 export const withPasswordHash = (user: UserEntity, passwordHash: string): UserEntity => ({ ...user, passwordHash });

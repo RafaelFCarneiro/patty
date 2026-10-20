@@ -1,7 +1,7 @@
 import { purry } from 'remeda';
 import { localizeCategoryKind } from './localize.js';
 import { fold } from './resolve.js';
-import { type Category, type CategoryReferences, type HasKind } from '../models/category.js';
+import type { Category, CategoryReferences, HasKind } from '../models/category.js';
 import type { Locale } from '../models/locale.js';
 
 const _withKindLabel = <T extends HasKind>(item: T, locale: Locale): T => ({

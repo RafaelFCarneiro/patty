@@ -24,7 +24,7 @@ import { loggedIn, withCredentialsChanged } from '../logic/auth/users.js';
 import * as persistence from '../logic/persistence.js';
 import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
 import { authErrors } from '../models/auth/errors.js';
-import { type AuthMode } from '../models/auth/mode.js';
+import type { AuthMode } from '../models/auth/mode.js';
 import {
   type ClaimedOwner,
   type ClaimedUserEntity,
@@ -35,15 +35,15 @@ import {
   SETUP_CODE_TTL_MS,
   type UserEntity,
 } from '../models/auth/owner.js';
-import {
-  type ClaimOwnerInput,
-  type ClaimOwnerLocallyInput,
-  type LoginInput,
-  type PasswordReset,
-  type ResetPasswordInput,
+import type {
+  ClaimOwnerInput,
+  ClaimOwnerLocallyInput,
+  LoginInput,
+  PasswordReset,
+  ResetPasswordInput,
 } from '../models/auth/password.js';
-import { type Principal } from '../models/auth/principal.js';
-import { type StartedSession } from '../models/auth/session.js';
+import type { Principal } from '../models/auth/principal.js';
+import type { StartedSession } from '../models/auth/session.js';
 import type { AuthDeps } from './deps.js';
 
 export const startSession = (deps: AuthDeps, userId: string, now: Date) => {

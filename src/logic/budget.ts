@@ -1,23 +1,23 @@
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
 import { CategoryKind } from '../models/category.js';
-import {
-  type Budget,
-  type BudgetMeasure,
-  type BudgetStatusEntry,
-  type BudgetStatusGroup,
-  type BudgetStatusLine,
-  type BudgetTarget,
-  type BudgetTargetRow,
-  type BudgetView,
-  type BudgetViewInput,
-  type BudgetTargetFields,
-  type SpendCategoryKey,
+import type {
+  Budget,
+  BudgetMeasure,
+  BudgetStatusEntry,
+  BudgetStatusGroup,
+  BudgetStatusLine,
+  BudgetTarget,
+  BudgetTargetRow,
+  BudgetView,
+  BudgetViewInput,
+  BudgetTargetFields,
+  SpendCategoryKey,
 } from '../models/budget.js';
 import type { CurrencyCode } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { CategorySpend } from '../models/transaction.js';
-import { type CurrencyAmount } from '../models/currencyRate.js';
+import type { CurrencyAmount } from '../models/currencyRate.js';
 
 export const hasCategory = (input: BudgetTargetFields): input is BudgetTargetFields & { category: string } =>
   input.category !== undefined;

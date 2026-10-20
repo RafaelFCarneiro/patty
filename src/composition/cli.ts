@@ -5,7 +5,7 @@ import { version } from '../common/buildVersion.js';
 import { loadConfig } from '../config.js';
 import { clientConfigs } from '../diplomat/clientConfig/clients.js';
 import { runCli } from '../diplomat/cli/commands.js';
-import { type CliIo, type Shell } from '../diplomat/cli/io.js';
+import type { CliIo, Shell } from '../diplomat/cli/io.js';
 import * as tty from '../diplomat/cli/terminal.js';
 import { bootstrap } from '../diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase, type Db } from '../diplomat/db/driver.js';

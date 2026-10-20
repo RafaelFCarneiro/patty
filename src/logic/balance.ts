@@ -1,4 +1,4 @@
-import { type BalanceParts, type PendingParts } from '../models/account.js';
+import type { BalanceParts, PendingParts } from '../models/account.js';
 
 export const computeBalance = (p: BalanceParts): number =>
   p.initialBalance + p.income - p.expenses + p.transfersIn - p.transfersOut;

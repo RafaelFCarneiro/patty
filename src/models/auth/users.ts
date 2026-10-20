@@ -2,11 +2,11 @@ import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import { Id } from '../id.js';
 import { LoginDuration, type ClientGrantEntity } from './grant.js';
-import { type UserRole, type UserEntity } from './owner.js';
+import type { UserRole, UserEntity } from './owner.js';
 import type { Principal } from './principal.js';
 import { HOUR_MS } from './time.js';
-import { type SessionEntity } from './session.js';
-import { type AccessTokenEntity } from './token.js';
+import type { SessionEntity } from './session.js';
+import type { AccessTokenEntity } from './token.js';
 
 /** How long an invite link stays usable. After that an admin issues a new one. */
 export const INVITE_TTL_HOURS = 72;

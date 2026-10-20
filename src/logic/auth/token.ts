@@ -1,4 +1,4 @@
-import { type UserEntity } from '../../models/auth/owner.js';
+import type { UserEntity } from '../../models/auth/owner.js';
 import { PrincipalVia, type Principal } from '../../models/auth/principal.js';
 import { SESSION_TOUCH_INTERVAL_MS } from '../../models/auth/session.js';
 import { DAY_MS } from '../../models/auth/time.js';

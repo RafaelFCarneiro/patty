@@ -47,7 +47,7 @@ import {
   type StartedGrant,
   USER_CODE_ATTEMPTS,
 } from '../models/auth/grant.js';
-import { type InstanceSettingsEntity } from '../models/auth/users.js';
+import type { InstanceSettingsEntity } from '../models/auth/users.js';
 import { type Principal, PrincipalVia } from '../models/auth/principal.js';
 import { TOKEN_ACCESS_SCOPES } from '../models/auth/token.js';
 import { conflict } from '../models/error.js';

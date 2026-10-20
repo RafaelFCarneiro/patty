@@ -1,5 +1,5 @@
 import * as R from 'remeda';
-import { type Named, type Resolution } from '../models/resolution.js';
+import type { Named, Resolution } from '../models/resolution.js';
 
 export const fold = (s: string): string =>
   s
