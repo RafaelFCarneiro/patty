@@ -26,13 +26,16 @@ import {
   type SignInObservation,
   type SignInState,
   type SignInStep,
+  type Observed,
+  CLOSE_PAGE,
+  type ObservationHandlers,
+  type ObservationHandler,
 } from '../../models/auth/signInFlow.js';
 import { TokenAccess } from '../../models/auth/token.js';
 import { persistsToKeychain } from './grant.js';
 import { connectUrl } from './origin.js';
 import { hasScope } from './scope.js';
 import { isTokenShaped } from './token.js';
-import { Observed, CLOSE_PAGE, ObservationHandlers, ObservationHandler } from '../../models/auth/signInFlow.js';
 
 const S = SignInStateKind.enum;
 const O = ObservationKind.enum;

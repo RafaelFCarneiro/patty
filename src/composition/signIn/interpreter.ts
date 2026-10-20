@@ -12,8 +12,15 @@ import type {
   SignInStore,
 } from '../../controllers/deps.js';
 import { redeemGrant, startGrant } from '../../controllers/grants.js';
-import { CheckKind, EffectKind, ObservationKind, REDEEM_ERROR_KIND } from '../../models/auth/signInFlow.js';
-import type { CheckResult, SignInEffect, SignInObservation } from '../../models/auth/signInFlow.js';
+import {
+  CheckKind,
+  EffectKind,
+  ObservationKind,
+  REDEEM_ERROR_KIND,
+  type CheckResult,
+  type SignInEffect,
+  type SignInObservation,
+} from '../../models/auth/signInFlow.js';
 import { nextStep } from '../../logic/auth/signInFlow.js';
 import { PrincipalVia } from '../../models/auth/principal.js';
 

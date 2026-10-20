@@ -17,13 +17,13 @@ import {
   type CreditCard,
   type CreditCardEntity,
   type UpdateCreditCard,
+  type DeleteCreditCardResult,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import { TRANSACTION_ENTITY_TAG } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCardRef } from '../resolve.js';
-import { DeleteCreditCardResult } from '../../models/creditCard.js';
 
 export const listCreditCards = (deps: Deps): Promise<CreditCard[]> => deps.creditCards.list();
 

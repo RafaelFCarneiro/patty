@@ -7,18 +7,18 @@ import { type UserEntity, UserRole } from '../../models/auth/owner.js';
 import { PrincipalVia } from '../../models/auth/principal.js';
 import {
   ActorKind,
-  AdminChange,
+  type AdminChange,
   INVITE_TTL_MS,
   type Actor,
   type InviteEntity,
   UserStatus,
   type UserSummary,
+  CHANGE_BLOCKS_SELF,
 } from '../../models/auth/users.js';
 import { hasCredentials, isActiveUser, formatSetupCode, normalizeSetupCode } from './owner.js';
 import { millis, toIso } from './time.js';
 import * as persistence from '../persistence.js';
 import type { Persistable } from '@rfc0/effect-runner';
-import { CHANGE_BLOCKS_SELF } from '../../models/auth/users.js';
 
 export const normalizeInviteCode = normalizeSetupCode;
 export const formatInviteCode = formatSetupCode;

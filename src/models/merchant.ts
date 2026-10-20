@@ -41,6 +41,7 @@ export type MerchantSummary = {
   categoryName: string | null;
 };
 
-export const NOISE_PREFIXES = /^(pag\*?|pix\s+(enviado|recebido)?|compra\s+(no\s+)?(debito|credito)\s*|dbt\s+|crd\s+|tef\s+)/i;
+export const NOISE_PREFIXES =
+  /^(pag\*?|pix\s+(enviado|recebido)?|compra\s+(no\s+)?(debito|credito)\s*|dbt\s+|crd\s+|tef\s+)/i;
 
 export const MERCHANT_LEARNING_WEIGHT_DELTA = 1;

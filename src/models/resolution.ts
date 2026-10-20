@@ -1,4 +1,3 @@
-
 export type Named = { id: string; name: string };
 
 export type Resolution<T extends Named> =

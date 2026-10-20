@@ -39,6 +39,9 @@ export default tseslint.config(
           ignoreRestSiblings: true,
         },
       ],
+      // A type is imported as a type, and one module is imported once — `import { a, type B } from 'm'`.
+      '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports', fixStyle: 'inline-type-imports' }],
+      'no-duplicate-imports': 'error',
       // Declarative over imperative (docs/code-quality.md, remeda table): the `xs.filter(...)[0]`
       // smell — taking the first match by index instead of R.find / R.firstBy.
       'no-restricted-syntax': [

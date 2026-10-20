@@ -852,6 +852,27 @@ describe('a revocation cannot miss a credential issued while it was reading', ()
     expect((await run(() => enableUser(deps, admin, bobId))).isOk()).toBe(true);
     expect((await claim(ctx, code)).statusCode).toBe(403);
   });
+
+  it('g. redeeming a sign-in stamps credentials_changed_at and bumps the approver row version', async () => {
+    const { ctx, ana, deps, run, anaSession } = await world();
+    const started = await startedGrant(deps, run);
+    (await run(() => approveGrant(deps, anaSession, approvalFor(started.userCode))))._unsafeUnwrap();
+    const stamp = async () =>
+      (
+        await ctx.db.all<{ at: string | null; version: number }>(
+          sql`SELECT credentials_changed_at AS at, version FROM users WHERE id = ${ana.userId}`,
+        )
+      )[0];
+    const approved = await stamp();
+
+    expect((await run(() => redeemGrant(deps, started.deviceCode)))._unsafeUnwrap()).toMatchObject({
+      kind: 'signed_in',
+    });
+
+    const redeemed = await stamp();
+    expect(redeemed?.version).toBe((approved?.version ?? 0) + 1);
+    expect(Date.parse(redeemed?.at ?? '')).toBeGreaterThanOrEqual(Date.parse(approved?.at ?? ''));
+  });
 });
 
 describe('a password reset ends every way in, approved sign-in requests included', () => {

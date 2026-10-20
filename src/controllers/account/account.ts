@@ -1,4 +1,4 @@
-import { ok, safeTry, type Result, type ResultAsync } from 'neverthrow';
+import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
@@ -18,14 +18,15 @@ import { resolveBaseCurrency } from '../../logic/locale.js';
 import { decimalsLookup } from '../../logic/money.js';
 import * as persistence from '../../logic/persistence.js';
 import { resolveByName } from '../../logic/resolve.js';
-import { accountErrors, ACCOUNT_ENTITY_TAG } from '../../models/account.js';
-import type {
-  Account,
-  AccountBalance,
-  AccountBalancesResult,
-  AccountType,
-  CreateAccount,
-  UpdateAccount,
+import {
+  accountErrors,
+  ACCOUNT_ENTITY_TAG,
+  type Account,
+  type AccountBalance,
+  type AccountBalancesResult,
+  type AccountType,
+  type CreateAccount,
+  type UpdateAccount,
 } from '../../models/account.js';
 import { notFound } from '../../models/error.js';
 import { Locale } from '../../models/locale.js';
@@ -103,25 +104,29 @@ export const deleteAccount = (deps: Deps, name: string): ResultAsync<FlowOutcome
     return ok({ persist, response: { deleted: true } });
   });
 
-const guardRenameAvailable = async (deps: Deps, account: Account, newName?: string): Promise<Result<void, AppError>> =>
-  isRename(account.name, newName)
-    ? guard(await assertNameAvailable(deps, newName), accountErrors.duplicateName(newName))
-    : ok(undefined);
+const guardRenameAvailable = (deps: Deps, account: Account, newName?: string): ResultAsync<void, AppError> =>
+  safeTry(async function* () {
+    if (isRename(account.name, newName)) {
+      yield* guard(await assertNameAvailable(deps, newName), accountErrors.duplicateName(newName));
+    }
+    return ok(undefined);
+  });
 
-const guardPinnedFieldChange = async (
-  deps: Deps,
-  accountId: string,
-  input: UpdateAccount,
-): Promise<Result<void, AppError>> =>
-  changesPinnedField(input) ? guardPinnedFields(await deps.accounts.countReferences(accountId), input) : ok(undefined);
+const guardPinnedFieldChange = (deps: Deps, accountId: string, input: UpdateAccount): ResultAsync<void, AppError> =>
+  safeTry(async function* () {
+    if (changesPinnedField(input)) {
+      yield* guardPinnedFields(await deps.accounts.countReferences(accountId), input);
+    }
+    return ok(undefined);
+  });
 
 export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, input.name);
     yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected(Remedy.enum.update_credit_card));
     yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected(Remedy.enum.create_credit_card));
-    yield* await guardRenameAvailable(deps, account, input.newName);
-    yield* await guardPinnedFieldChange(deps, account.id, input);
+    yield* guardRenameAvailable(deps, account, input.newName);
+    yield* guardPinnedFieldChange(deps, account.id, input);
 
     const raw = yield* okOr(await deps.accounts.findRawById(account.id), notFound('account', account.id, []));
     const entity = mergeAccountPatch(raw, input);

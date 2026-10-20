@@ -5,8 +5,15 @@ import { normalizeMerchant } from './merchant.js';
 import { resolveCurrency } from './money.js';
 import type { Locale } from '../models/locale.js';
 import type { MerchantMatch } from '../models/transaction.js';
-import type { CreateRecurring, RecurringPeriod, RecurringRule, RecurringRuleView, RuleFacts } from '../models/recurring.js';
-import { MAX_RECURRING_OCCURRENCES_PER_RUN, DueSchedule } from '../models/recurring.js';
+import {
+  type CreateRecurring,
+  type RecurringPeriod,
+  type RecurringRule,
+  type RecurringRuleView,
+  type RuleFacts,
+  MAX_RECURRING_OCCURRENCES_PER_RUN,
+  type DueSchedule,
+} from '../models/recurring.js';
 
 const _withPeriodLabel = (rule: RecurringRuleView, locale: Locale): RecurringRuleView => ({
   ...rule,

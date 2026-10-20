@@ -4,32 +4,27 @@ import { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
 import { roundToDecimals } from './money.js';
 import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDirection } from '../models/page.js';
-import type {
-  CategoryFields,
-  CategorySelection,
-  Classification,
-  ClassifiedUpsertResult,
-  ClassifyOutcome,
-  DefaultedStatementLine,
-  IdempotencyIdentity,
-  MerchantMatch,
-  NewTransactionFacts,
-  NewTransactionPlan,
-  PatchFields,
-  PatchOverrides,
-  UpsertTransactionResult,
-  SearchTransactions,
-  StatementLine,
-  TransactionEntity,
-  TransactionError,
-  TransactionView,
-  UpdateTransaction,
-} from '../models/transaction.js';
-import type { RawTransactionView } from '../models/transaction.js';
-import type { PersistOutcome } from '@rfc0/effect-runner';
-import { outcomeFor } from './persistence.js';
-import type { CurrencyCode } from '../models/money.js';
 import {
+  type CategoryFields,
+  type CategorySelection,
+  type Classification,
+  type ClassifiedUpsertResult,
+  type ClassifyOutcome,
+  type DefaultedStatementLine,
+  type IdempotencyIdentity,
+  type MerchantMatch,
+  type NewTransactionFacts,
+  type NewTransactionPlan,
+  type PatchFields,
+  type PatchOverrides,
+  type UpsertTransactionResult,
+  type SearchTransactions,
+  type StatementLine,
+  type TransactionEntity,
+  type TransactionError,
+  type TransactionView,
+  type UpdateTransaction,
+  type RawTransactionView,
   ClassificationMethod,
   transactionErrors,
   TRANSACTION_ENTITY_TAG,
@@ -38,7 +33,12 @@ import {
   TransactionStatus,
   TransactionType,
   type MovementType,
+  LOW_CONFIDENCE_THRESHOLD,
+  type BulkItemResult,
 } from '../models/transaction.js';
+import type { PersistOutcome } from '@rfc0/effect-runner';
+import { outcomeFor } from './persistence.js';
+import type { CurrencyCode } from '../models/money.js';
 import { CategoryKind } from '../models/category.js';
 import { err, ok, type Result } from 'neverthrow';
 import * as R from 'remeda';
@@ -46,7 +46,6 @@ import { localizeCategoryName } from './category.js';
 import { pickClassification, userClassification } from './classify.js';
 import { localizeTransactionStatus, localizeTransactionType } from './localize.js';
 import { normalizeMerchant } from './merchant.js';
-import { LOW_CONFIDENCE_THRESHOLD, BulkItemResult } from '../models/transaction.js';
 
 export const defaultStatusFor = (date: IsoDate, today: IsoDate): TransactionStatus =>
   date > today ? TransactionStatus.enum.pending : TransactionStatus.enum.effective;
@@ -254,7 +253,7 @@ export const defaultStatementLines = <Line extends StatementLine>(
 ): DefaultedStatementLine<Line>[] => lines.map((line) => ({ ...line, date: line.date ?? today, rawInput }));
 
 export const needsReview = (c: Classification): boolean =>
-  c.method === 'none' || c.confidence < LOW_CONFIDENCE_THRESHOLD;
+  c.method === ClassificationMethod.enum.none || c.confidence < LOW_CONFIDENCE_THRESHOLD;
 
 export const toBulkItemResult = <E>(
   result: Result<ClassifiedUpsertResult, E>,

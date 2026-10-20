@@ -13,11 +13,7 @@ import {
 import { millis } from './time.js';
 
 export const normalizeSetupCode = (raw: string): string =>
-  raw
-    .replace(NON_ALPHANUMERIC, '')
-    .toUpperCase()
-    .replace(/O/g, '0')
-    .replace(/[IL]/g, '1');
+  raw.replace(NON_ALPHANUMERIC, '').toUpperCase().replace(/O/g, '0').replace(/[IL]/g, '1');
 
 export const formatSetupCode = (raw: string): string =>
   (raw.match(new RegExp(`.{1,${SETUP_CODE_GROUP_SIZE}}`, 'g')) ?? []).join(SETUP_CODE_GROUP_SEPARATOR);

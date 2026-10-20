@@ -9,7 +9,7 @@ import {
   type Credential,
 } from '../../models/auth/bearer.js';
 import { type ChallengeableError } from '../../models/auth/errors.js';
-import { ALL_SCOPES, Scope } from '../../models/auth/scope.js';
+import { ALL_SCOPES, type Scope } from '../../models/auth/scope.js';
 import { isTokenShaped } from './token.js';
 
 export const credentialOf = (authorization: string | undefined): Credential => {

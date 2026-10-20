@@ -29,7 +29,7 @@ import type { SessionsRepo } from '../diplomat/db/repos/sessions.js';
 import type { SetupCodesRepo } from '../diplomat/db/repos/setupCodes.js';
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
 import type { UsersRepo } from '../diplomat/db/repos/users.js';
-import { StalenessThresholds } from '../models/currencyRate.js';
+import { type StalenessThresholds } from '../models/currencyRate.js';
 
 export type Deps = {
   accounts: AccountsRepo;

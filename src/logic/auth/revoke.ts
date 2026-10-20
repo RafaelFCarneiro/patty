@@ -4,10 +4,9 @@ import * as persistence from '../persistence.js';
 import { ACCESS_TOKEN_ENTITY_TAG, CLIENT_GRANT_ENTITY_TAG, SESSION_ENTITY_TAG } from '../../models/auth/entity.js';
 import { GrantStatus } from '../../models/auth/grant.js';
 import type { SessionEntity } from '../../models/auth/session.js';
-import type { RevokedCredentials } from '../../models/auth/users.js';
+import { type RevokedCredentials, type HeldCredentials } from '../../models/auth/users.js';
 import { expiredGrant } from './grant.js';
 import { isLiveToken, revokedToken } from './token.js';
-import { HeldCredentials } from '../../models/auth/users.js';
 
 export const removeSession = (session: SessionEntity): Persistable =>
   persistence.remove({ entity: SESSION_ENTITY_TAG, id: session.id, version: session.version });

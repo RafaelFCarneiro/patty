@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import type { Period } from '../../models/date.js';
-import { PeriodSchema } from '../../models/date.js';
+import { type Period, PeriodSchema } from '../../models/date.js';
 import type { Scoped } from '../../controllers/deps.js';
 import { ImportStatementSource, PromptName } from '../../models/prompts.js';
 import { definePrompt, type PromptDefinition } from './definition.js';

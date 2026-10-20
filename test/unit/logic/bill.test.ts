@@ -8,8 +8,8 @@ import {
   TransactionStatus,
   TransactionType,
   TransactionViewSchema,
+  type TransactionView,
 } from '../../../src/models/transaction.js';
-import type { TransactionView } from '../../../src/models/transaction.js';
 import {
   assertBillPeriodPaired,
   billPeriodFor,

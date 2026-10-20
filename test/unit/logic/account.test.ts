@@ -17,10 +17,15 @@ import {
   planTransfer,
   withTypeLabel,
 } from '../../../src/logic/account.js';
-import { accountErrors, type AccountEntity, type AccountReferences } from '../../../src/models/account.js';
+import {
+  accountErrors,
+  type AccountEntity,
+  type AccountReferences,
+  AccountType,
+  type Account,
+} from '../../../src/models/account.js';
 import { TransactionSource } from '../../../src/models/transaction.js';
 import { deriveIdempotencyKey } from '../../../src/logic/transaction.js';
-import { AccountType, type Account } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { Locale } from '../../../src/models/locale.js';
 

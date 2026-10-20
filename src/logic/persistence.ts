@@ -7,7 +7,7 @@ import {
   type Persistable,
   type PersistOutcome,
 } from '@rfc0/effect-runner';
-import { EntityDbAdapter } from '../models/persistence.js';
+import { type EntityDbAdapter } from '../models/persistence.js';
 
 export const insert = <Tag extends string, Model>(fields: {
   entity: Tag;

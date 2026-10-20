@@ -1,4 +1,3 @@
-
 import { purry } from 'remeda';
 import * as R from 'remeda';
 import { localizeBillStatus } from './localize.js';
@@ -13,11 +12,7 @@ import {
   type RawBill,
 } from '../models/bill.js';
 import type { Locale } from '../models/locale.js';
-import {
-  ClassificationMethod,
-  TransactionType,
-  type TransactionView,
-} from '../models/transaction.js';
+import { TransactionType, UNCLASSIFIED, type TransactionView } from '../models/transaction.js';
 import { defaultStatusFor } from './transaction.js';
 
 const _withStatusLabel = (bill: Bill, locale: Locale): Bill => ({
@@ -112,7 +107,7 @@ export const planBillPayment = (facts: BillPaymentFacts): BillPaymentPlan => ({
     date: facts.date,
     currency: facts.card.currency,
     source: facts.source,
-    classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+    classification: UNCLASSIFIED,
     refs: { accountId: facts.payer.id, toAccountId: facts.card.accountId, billId: facts.bill.id },
   },
   idempotencyKey: billPaymentKey(facts.bill.id),

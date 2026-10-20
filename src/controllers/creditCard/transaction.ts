@@ -1,4 +1,3 @@
-
 import { ok, safeTry, type Result, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
@@ -33,6 +32,7 @@ import {
   type ImportCardStatement,
   type ImportCardStatementItem,
   type UpdateCardTransaction,
+  type BillReassignment,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
@@ -57,7 +57,6 @@ import {
 } from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
-import { BillReassignment } from '../../models/creditCard.js';
 
 const assertCreditAccountLeg = (
   deps: Deps,

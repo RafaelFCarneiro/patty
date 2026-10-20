@@ -5,8 +5,12 @@ import { shapeAggregateResult, wantsDisplayConversion } from '../logic/aggregate
 import { consolidateInCurrency } from '../logic/currencyRate.js';
 import { decimalsLookup } from '../logic/money.js';
 import { assertHasPeriodOrRange, resolveDateRange } from '../logic/period.js';
-import { aggregateErrors, type CurrencyBlock, type ResolvedAggregateSpending } from '../models/aggregate.js';
-import type { AggregateResult } from '../models/aggregate.js';
+import {
+  aggregateErrors,
+  type CurrencyBlock,
+  type ResolvedAggregateSpending,
+  type AggregateResult,
+} from '../models/aggregate.js';
 import type { CurrencyCode, DecimalsFor } from '../models/money.js';
 import type { Deps } from './deps.js';
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js';

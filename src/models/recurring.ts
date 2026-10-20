@@ -2,11 +2,9 @@ import { z } from 'zod';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
-import { withPersistenceMeta } from '@rfc0/effect-runner';
+import { withPersistenceMeta, type Persistable } from '@rfc0/effect-runner';
 import type { LabelMap } from './locale.js';
-import { MovementType, type MerchantMatch } from './transaction.js';
-import { type TransactionView } from './transaction.js';
-import type { Persistable } from '@rfc0/effect-runner';
+import { MovementType, type MerchantMatch, type TransactionView } from './transaction.js';
 
 export const RecurringPeriod = z.enum(['weekly', 'monthly', 'yearly']);
 export type RecurringPeriod = z.infer<typeof RecurringPeriod>;

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { BillQuerySchema, type BillPeriod, type RawBill } from './bill.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
-import { withPersistenceMeta } from '@rfc0/effect-runner';
+import { withPersistenceMeta, type Persistable } from '@rfc0/effect-runner';
 import {
   CreateTransactionSchema,
   STATEMENT_ITEMS_DESCRIPTION,
@@ -18,7 +18,6 @@ import {
   type ValidationError,
 } from './error.js';
 import { Remedy } from './remedy.js';
-import type { Persistable } from '@rfc0/effect-runner';
 
 // `.describe()` is domain information — it states what each field is and represents.
 // Defaults split by intent: integrity defaults (a value that must exist for the entity to be

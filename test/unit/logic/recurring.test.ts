@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { Locale } from '../../../src/models/locale.js';
-import { RecurringPeriod, type RecurringRuleView } from '../../../src/models/recurring.js';
-import { MovementType } from '../../../src/models/transaction.js';
+import {
+  RecurringPeriod,
+  type RecurringRuleView,
+  MAX_RECURRING_OCCURRENCES_PER_RUN,
+} from '../../../src/models/recurring.js';
+import { MovementType, type MerchantMatch } from '../../../src/models/transaction.js';
 import { normalizeMerchant } from '../../../src/logic/merchant.js';
-import type { MerchantMatch } from '../../../src/models/transaction.js';
 import {
   dueSchedule,
   newRule,
@@ -13,7 +16,6 @@ import {
   ruleMerchantKey,
   withPeriodLabel,
 } from '../../../src/logic/recurring.js';
-import { MAX_RECURRING_OCCURRENCES_PER_RUN } from '../../../src/models/recurring.js';
 
 describe('nextDue', () => {
   it('advances monthly, clamping short months', () => {

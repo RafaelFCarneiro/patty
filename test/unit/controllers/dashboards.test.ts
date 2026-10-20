@@ -7,9 +7,14 @@ import {
   saveDashboard,
 } from '../../../src/controllers/dashboards.js';
 import type { Deps } from '../../../src/controllers/deps.js';
-import { DASHBOARD_ENTITY_TAG, DashboardSource } from '../../../src/models/dashboard.js';
+import {
+  DASHBOARD_ENTITY_TAG,
+  DashboardSource,
+  type Dashboard,
+  type DashboardEntity,
+  type DashboardListItem,
+} from '../../../src/models/dashboard.js';
 import { SHARED_DEFAULT_READ_ONLY_MESSAGE } from '../../../src/models/tenancy.js';
-import type { Dashboard, DashboardEntity, DashboardListItem } from '../../../src/models/dashboard.js';
 import { PersistOp } from '@rfc0/effect-runner';
 
 const FIXED_CLOCK = new Date('2026-07-02T12:00:00.000Z');

@@ -1,9 +1,13 @@
 import { formatAppError, type AppError } from '../common/errors.js';
-import { CURRENCY_RATE_ENTITY_TAG, CurrencyRateEntitySchema, type CurrencyRateEntity } from '../models/currencyRate.js';
+import {
+  CURRENCY_RATE_ENTITY_TAG,
+  CurrencyRateEntitySchema,
+  type CurrencyRateEntity,
+  type CurrencyRateBulkItem,
+} from '../models/currencyRate.js';
 import * as persistence from '../logic/persistence.js';
 import { BulkSetExchangeRatesOut, type BulkExchangeRateItemOut } from '../wire/out/currencyRates.js';
 import type { CurrencyRateRow } from '../wire/db/currencyRates.js';
-import { CurrencyRateBulkItem } from '../models/currencyRate.js';
 
 export const dbToEntity = (row: CurrencyRateRow): CurrencyRateEntity =>
   CurrencyRateEntitySchema.parse({

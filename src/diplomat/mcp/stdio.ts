@@ -2,8 +2,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { SignInInterpreter, Tenancy } from '../../controllers/deps.js';
 import { AuthMode } from '../../models/auth/mode.js';
-import { ownerGate } from './gate.js';
-import type { PrincipalGate } from './gate.js';
+import { ownerGate, type PrincipalGate } from './gate.js';
 import { buildMcpServer } from './server.js';
 import { createStdioSession, type StdioSession } from './stdioSession.js';
 

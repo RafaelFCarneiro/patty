@@ -1,25 +1,27 @@
 import { err, ok, type Result } from 'neverthrow';
 import * as R from 'remeda';
 import { localizeAccountType } from './localize.js';
-import { accountErrors, AccountType } from '../models/account.js';
-import type {
-  Account,
-  AccountEntity,
-  AccountError,
-  AccountReferences,
-  TransferFacts,
-  TransferPlan,
-  UpdateAccount,
+import {
+  accountErrors,
+  AccountType,
+  type Account,
+  type AccountEntity,
+  type AccountError,
+  type AccountReferences,
+  type TransferFacts,
+  type TransferPlan,
+  type UpdateAccount,
+  ACCOUNT_OWNED_TYPES,
 } from '../models/account.js';
 import type { Locale } from '../models/locale.js';
-import { ClassificationMethod, TransactionType } from '../models/transaction.js';
-import type {
-  TransactionEntity,
-  TransactionView,
-  UpdateTransaction,
+import {
+  UNCLASSIFIED,
+  TransactionType,
+  type TransactionEntity,
+  type TransactionView,
+  type UpdateTransaction,
 } from '../models/transaction.js';
 import { defaultStatusFor, deriveIdempotencyKey, isTransfer } from './transaction.js';
-import { ACCOUNT_OWNED_TYPES } from '../models/account.js';
 
 export const filterByType =
   (type?: AccountType) =>
@@ -108,7 +110,7 @@ export const planTransfer = (facts: TransferFacts): TransferPlan => {
     date,
     currency: from.currency,
     source: facts.source,
-    classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+    classification: UNCLASSIFIED,
     refs: { accountId: from.id, toAccountId: to.id },
   };
   const idempotencyKey = deriveIdempotencyKey(

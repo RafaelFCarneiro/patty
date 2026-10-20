@@ -1,4 +1,3 @@
-
 import { ok, okAsync, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
@@ -16,11 +15,22 @@ import {
   isTransfer,
   resolveEffectiveType,
 } from '../../logic/transaction.js';
-import { TRANSACTION_ENTITY_TAG, TransactionStatus, transactionErrors, type CategoryFields, type CategorySelection, type ConfirmTransaction, type MovementType, type TransactionEntity, type TransactionView } from '../../models/transaction.js';
+import {
+  TRANSACTION_ENTITY_TAG,
+  TransactionStatus,
+  transactionErrors,
+  type CategoryFields,
+  type CategorySelection,
+  type ConfirmTransaction,
+  type MovementType,
+  type TransactionEntity,
+  type TransactionView,
+  type UpdateTransactionPatch,
+  type TransactionUpdateDecision,
+} from '../../models/transaction.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCategoryRef, resolveSubCategoryRef } from '../resolve.js';
-import { UpdateTransactionPatch, TransactionUpdateDecision } from '../../models/transaction.js';
 
 const resolveCategory = (
   deps: Deps,

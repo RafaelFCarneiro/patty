@@ -10,8 +10,9 @@ import {
   TransactionStatus,
   TransactionType,
   TransactionViewSchema,
+  type RawTransactionView,
+  type MerchantMatch,
 } from '../../../src/models/transaction.js';
-import type { RawTransactionView } from '../../../src/models/transaction.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
@@ -33,7 +34,6 @@ import {
   summarizeBulkItems,
 } from '../../../src/logic/transaction.js';
 import { normalizeMerchant } from '../../../src/logic/merchant.js';
-import type { MerchantMatch } from '../../../src/models/transaction.js';
 
 describe('deriveIdempotencyKey', () => {
   const identity = (overrides: Partial<Parameters<typeof deriveIdempotencyKey>[0]> = {}) => ({

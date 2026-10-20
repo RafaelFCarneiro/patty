@@ -8,10 +8,10 @@ import {
   type CurrencyRateEntity,
   type CurrencyRateView,
   type SetExchangeRateInput,
+  type RateFields,
 } from '../models/currencyRate.js';
 import type { FlowOutcome } from '@rfc0/effect-runner';
 import type { Deps } from './deps.js';
-import { RateFields } from '../models/currencyRate.js';
 
 const toView = (fields: RateFields): CurrencyRateView => fields;
 

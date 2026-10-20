@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { z } from 'zod';
+import { type z } from 'zod';
 import { claimOwner, login, logout, ownerNeedsSetup, startsAtSetup } from '../../../controllers/auth.js';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { authErrors } from '../../../models/auth/errors.js';

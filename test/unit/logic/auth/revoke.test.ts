@@ -1,11 +1,14 @@
 import { PersistOp, type Persistable } from '@rfc0/effect-runner';
 import { describe, expect, it } from 'vitest';
 import { endedCredentials, endingCredentials, removeSession } from '../../../../src/logic/auth/revoke.js';
-import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG } from '../../../../src/models/auth/entity.js';
+import {
+  ACCESS_TOKEN_ENTITY_TAG,
+  SESSION_ENTITY_TAG,
+  CLIENT_GRANT_ENTITY_TAG,
+} from '../../../../src/models/auth/entity.js';
 import type { SessionEntity } from '../../../../src/models/auth/session.js';
 import { type AccessTokenEntity, AccessTokenKind } from '../../../../src/models/auth/token.js';
 import { GrantStatus, type ClientGrantEntity } from '../../../../src/models/auth/grant.js';
-import { CLIENT_GRANT_ENTITY_TAG } from '../../../../src/models/auth/entity.js';
 
 const NOW = new Date('2026-10-14T12:00:00.000Z');
 const LATER = '2026-10-20T00:00:00.000Z';

@@ -14,8 +14,8 @@ import { ambiguous, notFound } from '../models/error.js';
 import type { CurrencyCode } from '../models/money.js';
 import type { CategorySelection, MerchantMatch, TransactionView } from '../models/transaction.js';
 import type { Deps } from './deps.js';
-import { Named, Resolution } from '../models/resolution.js';
-import { TagLinksResolution } from '../models/tag.js';
+import { type Named, type Resolution } from '../models/resolution.js';
+import { type TagLinksResolution } from '../models/tag.js';
 
 export const resolutionToResult = <T extends Named>(
   res: Resolution<T>,

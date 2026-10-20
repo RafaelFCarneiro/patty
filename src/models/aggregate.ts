@@ -4,7 +4,7 @@ import { PeriodSchema, RangeFrom, RangeTo } from './date.js';
 import type { ValidationError } from './error.js';
 import { CurrencyCode } from './money.js';
 import { MovementType } from './transaction.js';
-import { Locale } from './locale.js';
+import { type Locale } from './locale.js';
 
 export const AggregateGroupBy = z.enum(['category', 'account', 'tag', 'month', 'merchant']);
 export type AggregateGroupBy = z.infer<typeof AggregateGroupBy>;

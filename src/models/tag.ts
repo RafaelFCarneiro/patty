@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
-import { withPersistenceMeta } from '@rfc0/effect-runner';
+import { withPersistenceMeta, type Persistable } from '@rfc0/effect-runner';
 import type { DuplicateName } from './error.js';
-import type { Persistable } from '@rfc0/effect-runner';
 
 export const TagSchema = z.object({
   id: Id.describe('Unique tag identifier'),

@@ -3,7 +3,14 @@ import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { authErrors } from '../../models/auth/errors.js';
 import { type UserEntity, UserRole } from '../../models/auth/owner.js';
-import { AdminChange, type InviteEntity } from '../../models/auth/users.js';
+import {
+  AdminChange,
+  type InviteEntity,
+  type UserPlan,
+  type HeldCredentials,
+  type UserPlanFacts,
+  NO_REVOCATIONS,
+} from '../../models/auth/users.js';
 import { hasCredentials, isNeverClaimed } from './owner.js';
 import { endedCredentials } from './revoke.js';
 import {
@@ -15,7 +22,6 @@ import {
   withCredentialsChanged,
   withRole,
 } from './users.js';
-import { UserPlan, HeldCredentials, UserPlanFacts, NO_REVOCATIONS } from '../../models/auth/users.js';
 
 const unchanged = (target: UserEntity): UserPlan => ({
   userWrites: [],

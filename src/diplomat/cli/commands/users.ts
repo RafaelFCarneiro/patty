@@ -1,11 +1,19 @@
 import type { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 import { formatAppError, type AppError } from '../../../common/errors.js';
-import { disableUser, enableUser, inviteUser, listUsers, reissueInvite, resolveUserId, setRole } from '../../../controllers/users.js';
+import {
+  disableUser,
+  enableUser,
+  inviteUser,
+  listUsers,
+  reissueInvite,
+  resolveUserId,
+  setRole,
+} from '../../../controllers/users.js';
 import { inviteLink } from '../../../logic/auth/users.js';
 import { UserRole } from '../../../models/auth/owner.js';
 import { UsernameSchema } from '../../../models/auth/password.js';
-import { ActorKind, type Actor, type IssuedInvite } from '../../../models/auth/users.js';
+import { ActorKind, type Actor, type IssuedInvite, type UserChange } from '../../../models/auth/users.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import {
   InviteOptionsSchema,
@@ -26,7 +34,6 @@ import {
   type Shell,
 } from '../io.js';
 import { CLI_MESSAGES } from '../messages.js';
-import { UserChange } from '../../../models/auth/users.js';
 
 export const USERS_HELP = `
 Usage: ${NPX_COMMAND} users <command>

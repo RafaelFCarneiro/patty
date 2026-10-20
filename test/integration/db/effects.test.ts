@@ -11,14 +11,13 @@ import * as accountAdapters from '../../../src/adapters/accounts.js';
 import * as billAdapters from '../../../src/adapters/bills.js';
 import * as creditCardAdapters from '../../../src/adapters/creditCards.js';
 import * as transactionAdapters from '../../../src/adapters/transactions.js';
-import { payBill } from '../../../src/controllers/creditCard/bill.js';
+import { payBill, revertBillPayment } from '../../../src/controllers/creditCard/bill.js';
 import { deleteCreditCard } from '../../../src/controllers/creditCard/creditCard.js';
 import { renameDashboard, saveDashboard } from '../../../src/controllers/dashboards.js';
 import { setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
-import type { Db } from '../../../src/diplomat/db/driver.js';
-import { createTransactionRunner, openDatabase } from '../../../src/diplomat/db/driver.js';
+import { type Db, createTransactionRunner, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountApplier, accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from '../../../src/diplomat/db/repos/bills.js';
 import { categoryApplier } from '../../../src/diplomat/db/repos/categories.js';
@@ -1750,6 +1749,30 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     expect(second._unsafeUnwrap().paymentTransactionId).toBe(first._unsafeUnwrap().paymentTransactionId);
 
     expect(await countPaymentTransfers()).toBe(1);
+  });
+
+  it('reverting a payment NULLs bills.payment_transaction_id on the row, not only in the response', async () => {
+    const { deps, cardName } = await seedCardWithOpenBill();
+    const context = { runner, isTransientContention, conflictError };
+    const billRow = async () =>
+      (
+        await db.all<{ status: string; paymentTransactionId: string | null }>(
+          sql`SELECT status, payment_transaction_id AS paymentTransactionId FROM bills`,
+        )
+      )[0];
+
+    await runEffects(context, fullRegistry, payBillFlow(deps, cardName));
+    expect((await billRow())?.paymentTransactionId).not.toBeNull();
+
+    const reverted = await runEffects(context, fullRegistry, () =>
+      revertBillPayment(deps, { card: cardName, month: 6, year: 2026 })
+        .map(billAdapters.outcomeToDb)
+        .map(transactionAdapters.outcomeToDb),
+    );
+
+    expect(reverted.isOk()).toBe(true);
+    expect(await billRow()).toEqual({ status: BillStatus.enum.closed, paymentTransactionId: null });
+    expect(await countPaymentTransfers()).toBe(0);
   });
 
   it('a concurrent bill mutation conflicts, rolls back the whole batch, and a retry lands cleanly', async () => {

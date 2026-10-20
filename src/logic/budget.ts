@@ -1,22 +1,23 @@
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
 import { CategoryKind } from '../models/category.js';
-import type {
-  Budget,
-  BudgetMeasure,
-  BudgetStatusEntry,
-  BudgetStatusGroup,
-  BudgetStatusLine,
-  BudgetTarget,
-  BudgetTargetRow,
-  BudgetView,
-  BudgetViewInput,
+import {
+  type Budget,
+  type BudgetMeasure,
+  type BudgetStatusEntry,
+  type BudgetStatusGroup,
+  type BudgetStatusLine,
+  type BudgetTarget,
+  type BudgetTargetRow,
+  type BudgetView,
+  type BudgetViewInput,
+  type BudgetTargetFields,
+  type SpendCategoryKey,
 } from '../models/budget.js';
 import type { CurrencyCode } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { CategorySpend } from '../models/transaction.js';
-import { CurrencyAmount } from '../models/currencyRate.js';
-import { BudgetTargetFields, SpendCategoryKey } from '../models/budget.js';
+import { type CurrencyAmount } from '../models/currencyRate.js';
 
 export const hasCategory = (input: BudgetTargetFields): input is BudgetTargetFields & { category: string } =>
   input.category !== undefined;
@@ -79,10 +80,7 @@ const sumMatchedSpend = (
   row: BudgetViewInput,
 ): { effective: number; pending: number } => {
   const isSubCategory = isSubCategoryRow(row);
-  const matched = R.filter(
-    spend,
-    (s) => s.currency === row.currency && matchesTarget(s, isSubCategory, row.targetId),
-  );
+  const matched = R.filter(spend, (s) => s.currency === row.currency && matchesTarget(s, isSubCategory, row.targetId));
   return { effective: R.sumBy(matched, (s) => s.effective), pending: R.sumBy(matched, (s) => s.pending) };
 };
 

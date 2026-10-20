@@ -1,9 +1,13 @@
-
-import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG, type MerchantCategoryEdge } from '../models/merchant.js';
+import {
+  MERCHANT_CATEGORY_ENTITY_TAG,
+  MERCHANT_ENTITY_TAG,
+  type MerchantCategoryEdge,
+  NOISE_PREFIXES,
+  MERCHANT_LEARNING_WEIGHT_DELTA,
+} from '../models/merchant.js';
 import type { Persistable } from '@rfc0/effect-runner';
 import { ClassificationMethod } from '../models/transaction.js';
 import { insert } from './persistence.js';
-import { NOISE_PREFIXES, MERCHANT_LEARNING_WEIGHT_DELTA } from '../models/merchant.js';
 
 export const normalizeMerchant = (description: string): string =>
   description

@@ -4,22 +4,24 @@ import {
   type RawTransactionView,
   type Transaction,
   type TransactionEntity,
+  type ClassifiedUpsertResult,
+  type ConfirmTransaction,
+  type DeleteTransactionResult,
+  type SearchTransactions,
+  type BulkItemResult,
+  type BulkResult,
 } from '../models/transaction.js';
 import { LocalizedNamesSchema } from '../models/category.js';
-import type {
-  ClassifiedUpsertResult,
-  ConfirmTransaction,
-  DeleteTransactionResult,
-  SearchTransactions,
-} from '../models/transaction.js';
-import type { AppError } from '../common/errors.js';
+import { type AppError, formatAppError } from '../common/errors.js';
 import * as persistence from '../logic/persistence.js';
 import { TransactionRowSchema, type TransactionDbProps, type TransactionDbRefs } from '../wire/db/transactions.js';
 import type * as wireIn from '../wire/in/transactions.js';
-import type { BulkItemOut } from '../wire/out/transactions.js';
-import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js';
-import { formatAppError } from '../common/errors.js';
-import { BulkItemResult, BulkResult } from '../models/transaction.js';
+import {
+  type BulkItemOut,
+  BulkResultOut,
+  CreateTransactionOut,
+  DeleteTransactionOut,
+} from '../wire/out/transactions.js';
 
 /** db→model: decode a flat SQL row (from a full transaction SELECT) into a RawTransactionView. */
 export const dbToModel = (record: Record<string, unknown>): RawTransactionView => {

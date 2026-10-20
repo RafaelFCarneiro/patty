@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { shapeAggregateResult, wantsDisplayConversion } from '../../../src/logic/aggregate.js';
-import type { DecimalsFor } from '../../../src/models/money.js';
+import { CurrencyCode, type DecimalsFor } from '../../../src/models/money.js';
 import { AggregateGroupBy, AggregateMetric, AggregateSort } from '../../../src/models/aggregate.js';
 import type { AggregateDbRow } from '../../../src/wire/db/aggregate.js';
 
@@ -197,7 +197,9 @@ describe('shapeAggregateResult', () => {
 
 describe('wantsDisplayConversion', () => {
   it('converts only a sum with a display currency', () => {
-    expect(wantsDisplayConversion({ metric: AggregateMetric.enum.sum, displayCurrency: 'USD' })).toBe(true);
+    expect(wantsDisplayConversion({ metric: AggregateMetric.enum.sum, displayCurrency: CurrencyCode.enum.USD })).toBe(
+      true,
+    );
   });
 
   it('a sum without a display currency stays as is', () => {
@@ -207,7 +209,7 @@ describe('wantsDisplayConversion', () => {
   it.each([AggregateMetric.enum.count, AggregateMetric.enum.avg])(
     '%s is never converted — it is not a cross-currency amount',
     (metric) => {
-      expect(wantsDisplayConversion({ metric, displayCurrency: 'USD' })).toBe(false);
+      expect(wantsDisplayConversion({ metric, displayCurrency: CurrencyCode.enum.USD })).toBe(false);
     },
   );
 });

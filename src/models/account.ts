@@ -89,7 +89,9 @@ export type AccountBalance = z.infer<typeof AccountBalanceSchema>;
 export const ConsolidatedNetWorthSchema = z.object({
   baseCurrency: CurrencyCode.describe('The base currency all included balances are summed in'),
   total: z.number().describe('Sum of every included balance converted value'),
-  excluded: z.array(Id).describe('Account ids left out of total because no exchange rate is on file for their currency'),
+  excluded: z
+    .array(Id)
+    .describe('Account ids left out of total because no exchange rate is on file for their currency'),
 });
 export type ConsolidatedNetWorth = z.infer<typeof ConsolidatedNetWorthSchema>;
 

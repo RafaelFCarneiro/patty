@@ -3,8 +3,13 @@ import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { summarizeBulkItems, toBulkItemResult } from '../../logic/transaction.js';
 import type { FlowOutcome } from '@rfc0/effect-runner';
-import type { ClassifiedUpsertResult, DefaultedStatementLine, StatementLine } from '../../models/transaction.js';
-import { BulkItemResult, BulkResult } from '../../models/transaction.js';
+import {
+  type ClassifiedUpsertResult,
+  type DefaultedStatementLine,
+  type StatementLine,
+  type BulkItemResult,
+  type BulkResult,
+} from '../../models/transaction.js';
 
 type Flow<T> = () => ResultAsync<FlowOutcome<T>, AppError>;
 

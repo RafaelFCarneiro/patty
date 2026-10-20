@@ -2,7 +2,7 @@ import {
   MCP_TOOLS_CALL_METHOD,
   READ_METHODS,
   READ_SCOPE,
-  Scope,
+  type Scope,
   WRITE_SCOPE,
   type JsonRpcMessage,
 } from '../../models/auth/scope.js';

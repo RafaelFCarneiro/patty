@@ -46,12 +46,13 @@ import {
   type SetSignInCapInput,
   type SignInCap,
   type UserSummary,
+  type UserPlan,
+  type UserChange,
+  type Admitted,
+  NO_REVOCATIONS,
 } from '../models/auth/users.js';
 import { startSession } from './auth.js';
 import type { AuthDeps } from './deps.js';
-import { UserPlan, UserChange, Admitted } from '../models/auth/users.js';
-import { NO_REVOCATIONS } from '../models/auth/users.js';
-
 
 const updateUser = (user: UserEntity): Persistable => persistence.update({ entity: USER_ENTITY_TAG, model: user });
 

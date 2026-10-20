@@ -1,4 +1,3 @@
-
 import { accountTypeLabels, type AccountType } from '../models/account.js';
 import { billStatusLabels, type BillStatus } from '../models/bill.js';
 import { categoryKindLabels, type CategoryKind } from '../models/category.js';

@@ -1,6 +1,13 @@
 import { Script as VmScript } from 'node:vm';
 import * as R from 'remeda';
-import { HTML_DOCUMENT_ROOT_PATTERN, SKIPPED_SCRIPT_TYPES, SCRIPT_TAG_PATTERN, ATTRIBUTE_PATTERN, ScriptTag, EXTERNAL_SCRIPT_ISSUE } from '../models/dashboard.js';
+import {
+  HTML_DOCUMENT_ROOT_PATTERN,
+  SKIPPED_SCRIPT_TYPES,
+  SCRIPT_TAG_PATTERN,
+  ATTRIBUTE_PATTERN,
+  type ScriptTag,
+  EXTERNAL_SCRIPT_ISSUE,
+} from '../models/dashboard.js';
 
 export const findHtmlValidationIssues = (html: string): string[] => [
   ...(isNonEmptyContent(html) ? [] : ['content must not be empty']),

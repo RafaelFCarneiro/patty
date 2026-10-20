@@ -1,10 +1,24 @@
 import type { Result } from 'neverthrow';
 import * as R from 'remeda';
-import { CurrencyCode } from '../models/money.js';
-import { ExclusionReason } from '../models/currencyRate.js';
-import type { ConvertedValue, CurrencyRate, CurrencyRateView, SetExchangeRateInput } from '../models/currencyRate.js';
+import { type CurrencyCode } from '../models/money.js';
+import {
+  ExclusionReason,
+  type ConvertedValue,
+  type CurrencyRate,
+  type CurrencyRateView,
+  type SetExchangeRateInput,
+  type CurrencyRateBulkItem,
+  CRYPTO_CURRENCIES,
+  type StalenessThresholds,
+  MS_PER_HOUR,
+  type ConversionResult,
+  type ConvertOptions,
+  type ValuableBalance,
+  type ConsolidatedNetWorth,
+  type CurrencyAmount,
+  type ConsolidatedInCurrency,
+} from '../models/currencyRate.js';
 import { roundToDecimals } from './money.js';
-import { CurrencyRateBulkItem, CRYPTO_CURRENCIES, StalenessThresholds, MS_PER_HOUR, ConversionResult, ConvertOptions, ValuableBalance, ConsolidatedNetWorth, CurrencyAmount, ConsolidatedInCurrency } from '../models/currencyRate.js';
 
 export const toBulkItem = <E>(
   input: SetExchangeRateInput,
@@ -84,7 +98,10 @@ const consolidate = <K>(
   const [included, excluded] = R.partition(contributions, (c) => c.converted !== undefined);
   const oldest = R.firstBy(included, (c) => new Date(c.converted!.asOf).getTime());
   return {
-    total: roundToDecimals(R.sumBy(included, (c) => c.converted!.value), decimals),
+    total: roundToDecimals(
+      R.sumBy(included, (c) => c.converted!.value),
+      decimals,
+    ),
     stale: included.some((c) => c.converted!.stale),
     asOf: oldest?.converted!.asOf ?? null,
     excludedKeys: excluded.map((c) => c.key),

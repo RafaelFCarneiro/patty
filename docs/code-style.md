@@ -9,7 +9,7 @@ come from real refactors; generating in the "don't" style means the code will be
 - `const` + expressions over `let` + mutation. Arrow functions. No classes anywhere in the domain
   (the only acceptable class usage is library-provided, e.g. the MCP SDK server).
 - Prefer small named functions over inline complexity; extract when a function does two things.
-- Comments explain *why* (invariants, trade-offs), never *what* the code already says.
+- Comments explain *why* (invariants, trade-offs), never *what* the code already says. A rule the code cannot show (a guarantee a port makes, a race a write closes, a column a revert must clear) is pinned by a test with a descriptive name, not only by a comment — a comment can rot, a failing test cannot.
 
 ## Controllers — safeTry composition (Railway-Oriented)
 
@@ -216,7 +216,7 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 
 ## models/ — zod single source of truth
 
-- **Every type and constant lives in `models/`** — plan/facts shapes (`NewTransactionFacts`, `BillPaymentPlan`), `Extract`ed unions, sentinels (`INVALID_REDEEM`), key prefixes. `controllers/` and `logic/` hold functions only; a type a function needs is imported, never declared beside it. The exceptions are shapes that cannot live there: ports that name `diplomat/` types or the composed `AppError` (`controllers/deps.ts`, `StatementImportPlan`) and function-valued dispatch tables.
+- **Every type and constant lives in `models/`** — plan/facts shapes (`NewTransactionFacts`, `BillPaymentPlan`), `Extract`ed unions, sentinels (`INVALID_REDEEM`), key prefixes. `controllers/` and `logic/` hold functions only; a type a function needs is imported, never declared beside it. Plan/facts types are hand-written TypeScript — they are not domain data, so not zod; domain data stays `z.infer`. The exceptions are shapes that cannot live there: ports that name `diplomat/` types or the composed `AppError` (`controllers/deps.ts`, `StatementImportPlan`) and function-valued dispatch tables.
 
 - Types are ALWAYS `z.infer<typeof Schema>` — never hand-written interfaces for domain data.
 - **Naming: the zod value gets the `Schema` suffix; the inferred type gets the bare name.**

@@ -2,7 +2,7 @@ import * as R from 'remeda';
 import { Locale } from '../models/locale.js';
 import type { StatusOut } from '../wire/out/status.js';
 import type { Deps } from './deps.js';
-import { DatabaseState, Health } from '../models/database.js';
+import { type DatabaseState, type Health } from '../models/database.js';
 
 const databaseState = async (deps: Pick<Deps, 'health'>): Promise<DatabaseState> =>
   (await deps.health.reachable()) ? 'ok' : 'error';

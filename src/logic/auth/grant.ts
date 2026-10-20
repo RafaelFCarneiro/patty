@@ -19,7 +19,7 @@ import {
   type StartGrantInput,
 } from '../../models/auth/grant.js';
 import type { Principal } from '../../models/auth/principal.js';
-import { Scope, WRITE_SCOPE } from '../../models/auth/scope.js';
+import { type Scope, WRITE_SCOPE } from '../../models/auth/scope.js';
 import { SESSION_ONLY_LABEL, UNKNOWN_CLIENT_NAME } from '../../models/auth/signIn.js';
 import {
   AccessTokenKind,

@@ -1,12 +1,10 @@
 import { z } from 'zod';
-import { LocalizedNamesSchema } from './category.js';
+import { LocalizedNamesSchema, type CategoryKind } from './category.js';
 import { IsoDate, PeriodSchema, RangeFrom, RangeTo } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
-import { cursorSchema, PageRequestSchema, SortDirection } from './page.js';
+import { cursorSchema, PageRequestSchema, SortDirection, type CursorKey } from './page.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
-import type { CursorKey } from './page.js';
-import type { CategoryKind } from './category.js';
 import { validationWithRemedy, type ValidationError } from './error.js';
 import { Remedy } from './remedy.js';
 import type { LabelMap } from './locale.js';
@@ -43,6 +41,8 @@ export const ClassificationSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 export type Classification = z.infer<typeof ClassificationSchema>;
+
+export const UNCLASSIFIED: Classification = { method: ClassificationMethod.enum.none, confidence: 0 };
 
 export const TransactionSource = z.enum(['mcp', 'rest', 'import']);
 export type TransactionSource = z.infer<typeof TransactionSource>;
