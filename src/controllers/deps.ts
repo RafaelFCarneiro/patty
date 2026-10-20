@@ -1,6 +1,5 @@
 import type { Result, ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
-import type { StalenessThresholds } from '../logic/currencyRate.js';
 import type { FlowOutcome } from '@rfc0/effect-runner';
 import type { Principal } from '../models/auth/principal.js';
 import type { Presentation, SignInConfig, SignInObservation, SignInState } from '../models/auth/signInFlow.js';
@@ -30,8 +29,8 @@ import type { SessionsRepo } from '../diplomat/db/repos/sessions.js';
 import type { SetupCodesRepo } from '../diplomat/db/repos/setupCodes.js';
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
 import type { UsersRepo } from '../diplomat/db/repos/users.js';
+import { StalenessThresholds } from '../models/currencyRate.js';
 
-/** Side-effect dependencies, injected so controllers stay testable. One user's: every repo is already bound to them. */
 export type Deps = {
   accounts: AccountsRepo;
   bills: BillsRepo;
@@ -55,82 +54,47 @@ export type Deps = {
   rateStaleness: StalenessThresholds;
 };
 
-/** Secrets and randomness, injected so `logic/` and controllers stay deterministic and testable. The
- *  real implementations (argon2id, CSPRNG, sha256) live in `diplomat/auth/credentials.ts`. */
 export type AuthSecrets = {
   hashPassword: (password: string) => Promise<string>;
-  /** Constant-time; resolves `false` (never throws) for a mismatch or an unreadable hash. */
   verifyPassword: (hash: string, password: string) => Promise<boolean>;
-  /** A fresh opaque session token (256 random bits, base64url). */
   randomToken: () => string;
-  /** A fresh personal access token: `ftk_` + 256 random bits (base64url). Shown once, never stored. */
   randomAccessToken: () => string;
-  /** The raw characters of a fresh setup code, before display grouping. */
   randomSetupCode: () => string;
-  /** The raw characters of a fresh sign-in user code (8 symbols), before display grouping. */
   randomUserCode: () => string;
-  /** The raw characters of a fresh invite code (100 bits), before display grouping. */
   randomInviteCode: () => string;
-  /** A fresh device code (256 random bits, base64url) — held by the asking process, stored only as a hash. */
   randomDeviceCode: () => string;
-  /** sha256 of a secret — what is stored instead of the session token or setup code. */
   hashSecret: (secret: string) => string;
-  /** A real hash nobody holds the password for — verified against when the user does not exist, so an
-   *  unknown username takes as long as a wrong password (ADR-033 §2). */
   dummyPasswordHash: string;
 };
 
-/** Where a saved stdio sign-in lives between runs — the OS keychain in production (ADR-034 §2). Keychain trouble
- *  A refused write is reported by returning `false`, after which the sign-in lasts only as long as the process; an
- *  unreadable store is a `KeychainFailure` from `load`, which each caller decides how to treat (the stdio
- *  session carries on without a saved sign-in, `logout` refuses to claim a sign-out it could not check). */
 export type SignInStore = {
-  /** `null` = nothing saved; an error when the keychain cannot be read at all (as opposed to holding nothing). */
   load: () => ResultAsync<string | null, KeychainFailure>;
   save: (token: string) => Promise<boolean>;
   clear: () => Promise<void>;
 };
 
-/** Where the consent page is served while a sign-in waits: a temporary server this process started on its own. */
 export type SignInServer = { origin: string; close: () => Promise<void> };
 
-/** What writing a client's configuration has to tell the person — never printed by the adapter itself. */
 export type ClientSetupReport = {
-  /** Printed first, on stderr: something was off in the file and has been replaced. */
   warnings: readonly string[];
-  /** Printed after, on stdout, in order: what was written and what to do next. */
   lines: readonly string[];
 };
 
-/** One MCP client whose configuration file `setup` knows how to write. */
 export type ClientConfig = {
   label: string;
-  /** Writes the entry that runs FinTrack as `profile` for this client (or, for one that cannot be written, describes
-   *  how to), and reports — or says why a configuration file could not be read or written. */
   run: (profile: string) => Result<ClientSetupReport, ClientConfigFailure>;
 };
 
-/** The clients `setup` can configure — the config files of Claude Code, Claude Desktop, VS Code…, behind one lookup. */
 export type ClientConfigs = {
-  /** The client named `tool` (trimmed, case-insensitive), or `undefined` for a name nothing answers to. */
   find: (tool: string) => ClientConfig | undefined;
 };
 
-/** What the edge supplies each time it feeds the sign-in protocol: where facts for the person go, and how to wait. */
 export type SignInHooks = {
   present: (presentation: Presentation) => void;
-  /** Resolves after `ms`, or sooner if the edge has reason to look again; an edge that paces itself returns now. */
   wait: (ms: number) => Promise<void>;
-  /** The state after each step, so an edge that loses the drive to a throw still knows how far it got. */
   progress: (state: SignInState) => void;
 };
 
-/**
- * The imperative shell's capability to run the sign-in protocol (`logic/auth/signInFlow.ts` decides, this executes).
- * `drive` feeds one observation and runs the effects it leads to — each answer fed straight back — until nothing is
- * left to do, then returns the state. Not a controller (it executes effects, which controllers never do), and built at
- * the composition root (`src/composition/signIn/interpreter.ts`) like `RunEffects`, so no edge imports another.
- */
 export type SignInInterpreter = {
   drive: (
     state: SignInState,
@@ -138,12 +102,9 @@ export type SignInInterpreter = {
     config: SignInConfig,
     hooks: SignInHooks,
   ) => Promise<SignInState>;
-  /** Close the temporary page, if one is open. Idempotent; for an edge that ends without the protocol finishing. */
   release: () => Promise<void>;
 };
 
-/** Identity dependencies (ADR-033): kept apart from `Deps` because auth is infrastructure the domain
- *  controllers never see — only `controllers/auth.ts` and the HTTP edge's auth hook use these. */
 export type AuthDeps = {
   users: UsersRepo;
   sessions: SessionsRepo;
@@ -157,30 +118,13 @@ export type AuthDeps = {
   secrets: AuthSecrets;
 };
 
-/**
- * The imperative shell's capability to run a functional-core flow (docs/functional-core-imperative-shell.md):
- * invoke `flow`, execute the effects it returns, and yield the response. Not a field on `Deps` —
- * `Deps` is handed to controllers, and this is shell-only (only diplomat handlers call it), so a
- * controller can never reach for it and apply its own writes. The concrete implementation
- * (`runEffects`, bound to a `Db`) lives in `diplomat/db`; this is just the shape
- * `diplomat/mcp`/`diplomat/http` depend on.
- */
 export type RunEffects = <T>(flow: () => ResultAsync<FlowOutcome<T>, AppError>) => ResultAsync<T, AppError>;
 
-/**
- * The imperative shell's capability to run a **sequence** of independent per-item flows: each
- * item's flow runs and applies in its own transaction, in commit order, so item *i+1*'s flow sees
- * item *i*'s committed writes; one item's failure is recorded and the sequence continues (partial
- * success). Shell-only, like `RunEffects` — never a field a controller can reach for. The concrete
- * implementation (`runEffectsSequence`, bound to a `Db`) lives in `diplomat/db`; this is just the
- * shape `diplomat/mcp`/`diplomat/http` depend on.
- */
 export type RunEffectsSequence = <I, T>(
   items: readonly I[],
   flowFor: (item: I) => () => ResultAsync<FlowOutcome<T>, AppError>,
 ) => Promise<Result<T, AppError>[]>;
 
-/** What one request needs to act as one user, built per request; nothing about the user is stored between requests. */
 export type Scoped = {
   deps: Deps;
   runEffects: RunEffects;
@@ -188,7 +132,6 @@ export type Scoped = {
   resetLocale: () => void;
 };
 
-/** Turns the authenticated principal into that user's scoped dependencies (built in composition/runtime.ts). */
 export type Tenancy = {
   depsFor: (principal: Principal) => Deps;
   runEffectsFor: (principal: Principal) => RunEffects;

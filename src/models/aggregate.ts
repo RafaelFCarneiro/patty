@@ -4,6 +4,7 @@ import { PeriodSchema, RangeFrom, RangeTo } from './date.js';
 import type { ValidationError } from './error.js';
 import { CurrencyCode } from './money.js';
 import { MovementType } from './transaction.js';
+import { Locale } from './locale.js';
 
 export const AggregateGroupBy = z.enum(['category', 'account', 'tag', 'month', 'merchant']);
 export type AggregateGroupBy = z.infer<typeof AggregateGroupBy>;
@@ -75,4 +76,20 @@ export const aggregateErrors = {
     code: 'validation',
     issues: ['provide month+year or at least one of from/to'],
   } satisfies AggregateError,
+};
+
+export const UNCATEGORIZED_KEY = 'uncategorized';
+
+export const uncategorizedLabels: Record<Locale, string> = {
+  en: 'Uncategorized',
+  pt: 'Sem categoria',
+  es: 'Sin categoría',
+};
+
+export const UNKNOWN_KEY = 'unknown';
+
+export const unknownLabels: Record<Locale, string> = {
+  en: 'Unknown',
+  pt: 'Desconhecido',
+  es: 'Desconocido',
 };

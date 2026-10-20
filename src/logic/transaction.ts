@@ -46,6 +46,7 @@ import { localizeCategoryName } from './category.js';
 import { pickClassification, userClassification } from './classify.js';
 import { localizeTransactionStatus, localizeTransactionType } from './localize.js';
 import { normalizeMerchant } from './merchant.js';
+import { LOW_CONFIDENCE_THRESHOLD, BulkItemResult } from '../models/transaction.js';
 
 export const defaultStatusFor = (date: IsoDate, today: IsoDate): TransactionStatus =>
   date > today ? TransactionStatus.enum.pending : TransactionStatus.enum.effective;
@@ -252,15 +253,8 @@ export const defaultStatementLines = <Line extends StatementLine>(
   rawInput: string | undefined,
 ): DefaultedStatementLine<Line>[] => lines.map((line) => ({ ...line, date: line.date ?? today, rawInput }));
 
-export const LOW_CONFIDENCE_THRESHOLD = 0.6;
-
 export const needsReview = (c: Classification): boolean =>
   c.method === 'none' || c.confidence < LOW_CONFIDENCE_THRESHOLD;
-
-export type BulkItemResult<E = unknown> =
-  | { status: 'created' | 'needs_review'; transaction: TransactionView; classification: ClassifyOutcome }
-  | { status: 'duplicate'; transaction: TransactionView }
-  | { status: 'error'; description: string; error: E };
 
 export const toBulkItemResult = <E>(
   result: Result<ClassifiedUpsertResult, E>,
@@ -277,11 +271,6 @@ export const toBulkItemResult = <E>(
           },
     (error) => ({ status: 'error', description, error }),
   );
-
-export type BulkResult<E = unknown> = {
-  summary: { created: number; needsReview: number; duplicates: number; errors: number };
-  items: BulkItemResult<E>[];
-};
 
 export const summarizeBulkItems = (
   items: BulkItemResult<unknown>[],

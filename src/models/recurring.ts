@@ -5,6 +5,8 @@ import { CurrencyCode, Money } from './money.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { LabelMap } from './locale.js';
 import { MovementType, type MerchantMatch } from './transaction.js';
+import { type TransactionView } from './transaction.js';
+import type { Persistable } from '@rfc0/effect-runner';
 
 export const RecurringPeriod = z.enum(['weekly', 'monthly', 'yearly']);
 export type RecurringPeriod = z.infer<typeof RecurringPeriod>;
@@ -73,4 +75,21 @@ export type RuleFacts = {
   account: { id: string; currency: CurrencyCode } | null;
   category: { id: string } | null;
   candidates: readonly MerchantMatch[];
+};
+
+export type ApplyDueResult = {
+  applied: Array<{ rule: string; date: string; transaction: TransactionView }>;
+  count: number;
+};
+
+export type RulePlan = {
+  occurrences: Array<{ rule: string; date: string; persistable: Persistable }>;
+  advance: Persistable;
+};
+
+export const MAX_RECURRING_OCCURRENCES_PER_RUN = 36;
+
+export type DueSchedule = {
+  dates: readonly string[];
+  next: string;
 };

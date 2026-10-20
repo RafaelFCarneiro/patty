@@ -32,14 +32,13 @@ import { persistsToKeychain } from './grant.js';
 import { connectUrl } from './origin.js';
 import { hasScope } from './scope.js';
 import { isTokenShaped } from './token.js';
+import { Observed, CLOSE_PAGE, ObservationHandlers, ObservationHandler } from '../../models/auth/signInFlow.js';
 
 const S = SignInStateKind.enum;
 const O = ObservationKind.enum;
 const E = EffectKind.enum;
 const P = PresentationKind.enum;
 const CHANNEL = GrantChannel.enum;
-
-type Observed<K extends ObservationKind> = Extract<SignInObservation, { kind: K }>;
 
 export const pendingOf = (state: SignInState): PendingSignIn | null => {
   switch (state.kind) {
@@ -63,8 +62,6 @@ const withoutHeld = (state: SignInState): SignInState => {
   const pending = pendingOf(state);
   return pending === null ? IDLE : { kind: S.pending, pending };
 };
-
-const CLOSE_PAGE: SignInEffect = { kind: E.close_page };
 const present = (presentation: Presentation): SignInEffect => ({ kind: E.present, presentation });
 const step = (state: SignInState, ...effects: SignInEffect[]): SignInStep => ({ state, effects });
 const tell = (state: SignInState, presentation: Presentation): SignInStep => step(state, present(presentation));
@@ -368,12 +365,6 @@ const onClosed = (state: SignInState): SignInStep => {
   }
   return step(base, CLOSE_PAGE);
 };
-
-type ObservationHandlers = {
-  [K in ObservationKind]: (state: SignInState, observation: Observed<K>, config: SignInConfig) => SignInStep;
-};
-
-type ObservationHandler = (state: SignInState, observation: SignInObservation, config: SignInConfig) => SignInStep;
 
 const OBSERVATION_HANDLERS = {
   [O.requested]: (state, _observation, config) => onRequested(state, config),

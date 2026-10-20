@@ -125,7 +125,7 @@ const LOW_CONFIDENCE_THRESHOLD = 0.6
 if (c.confidence < 0.6)
 ```
 
-Thresholds, limits, and domain constants belong in `models/` or `logic/` with a name that
+Thresholds, limits, and domain constants belong in `models/` with a name that
 encodes intent.
 
 ## Declarative over imperative

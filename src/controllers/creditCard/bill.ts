@@ -13,26 +13,13 @@ import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { addLocalizedLabels } from '../../logic/transaction.js';
 import { accountErrors, type Account } from '../../models/account.js';
-import {
-  billErrors,
-  BILL_ENTITY_TAG,
-  BillStatus,
-  type Bill,
-  type BillPaymentPlan,
-  type BillQuery,
-  type BillView,
-  type PayBill,
-  type RawBill,
-} from '../../models/bill.js';
+import { billErrors, BILL_ENTITY_TAG, BillStatus, type Bill, type BillPaymentPlan, type BillQuery, type BillView, type RawBill } from '../../models/bill.js';
 import type { CreditCard } from '../../models/creditCard.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
-import {
-  TRANSACTION_ENTITY_TAG,
-  type RawTransactionView,
-  type TransactionSource as TransactionSourceType,
-} from '../../models/transaction.js';
+import { TRANSACTION_ENTITY_TAG, type RawTransactionView } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCardRef } from '../resolve.js';
+import { PayBillInput } from '../../models/bill.js';
 
 export const getBill = (deps: Deps, input: BillQuery): ResultAsync<BillView, AppError> =>
   safeTry(async function* () {
@@ -49,8 +36,6 @@ export const getBill = (deps: Deps, input: BillQuery): ResultAsync<BillView, App
       total: computeBillTotal(bill.transactions),
     });
   });
-
-export type PayBillInput = PayBill & { source: TransactionSourceType };
 
 const buildPaidBillWrite = (
   rawBill: RawBill,

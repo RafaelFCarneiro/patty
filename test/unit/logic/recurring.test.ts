@@ -7,13 +7,13 @@ import { normalizeMerchant } from '../../../src/logic/merchant.js';
 import type { MerchantMatch } from '../../../src/models/transaction.js';
 import {
   dueSchedule,
-  MAX_RECURRING_OCCURRENCES_PER_RUN,
   newRule,
   nextDue,
   recurringIdempotencyKey,
   ruleMerchantKey,
   withPeriodLabel,
 } from '../../../src/logic/recurring.js';
+import { MAX_RECURRING_OCCURRENCES_PER_RUN } from '../../../src/models/recurring.js';
 
 describe('nextDue', () => {
   it('advances monthly, clamping short months', () => {

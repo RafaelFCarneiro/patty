@@ -5,6 +5,10 @@ import { LoginDuration } from './grant.js';
 import { UserRole } from './owner.js';
 import type { Principal } from './principal.js';
 import { HOUR_MS } from './time.js';
+import { type UserEntity } from './owner.js';
+import { type SessionEntity } from './session.js';
+import { type AccessTokenEntity } from './token.js';
+import { type ClientGrantEntity } from './grant.js';
 
 /** How long an invite link stays usable. After that an admin issues a new one. */
 export const INVITE_TTL_HOURS = 72;
@@ -96,3 +100,45 @@ export type SetSignInCapInput = { maxSignInDuration: SignInCap };
 
 /** Whose credentials an action ended, for the report to the admin. */
 export type RevokedCredentials = { sessionsEnded: number; tokensRevoked: number };
+
+export type UserChange = { user: UserSummary; revoked: RevokedCredentials };
+
+export type Admitted = {
+  actingUserId: string | null;
+  acting: UserEntity | null;
+  session: SessionEntity | null;
+};
+
+export type HeldCredentials = {
+  sessions: readonly SessionEntity[];
+  tokens: readonly AccessTokenEntity[];
+  approvedGrants: readonly ClientGrantEntity[];
+};
+
+export const CHANGE_BLOCKS_SELF: Readonly<Record<AdminChange, boolean>> = {
+  [AdminChange.enum.disable]: true,
+  [AdminChange.enum.demote]: true,
+  [AdminChange.enum.reissue]: false,
+};
+
+export type UserPlan = {
+  userWrites: UserEntity[];
+  checks: UserEntity[];
+  sessions: SessionEntity[];
+  tokens: AccessTokenEntity[];
+  expiredGrants: ClientGrantEntity[];
+  removedInvites: InviteEntity[];
+  newInvites: Omit<InviteEntity, 'version'>[];
+  after: UserEntity;
+  revoked: RevokedCredentials;
+};
+
+export type UserPlanFacts = {
+  actingUserId: string | null;
+  acting: UserEntity | null;
+  target: UserEntity;
+  users: readonly UserEntity[];
+  now: Date;
+};
+
+export const NO_REVOCATIONS: RevokedCredentials = { sessionsEnded: 0, tokensRevoked: 0 };

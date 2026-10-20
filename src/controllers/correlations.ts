@@ -11,7 +11,7 @@ import {
   shapeSpendingShifts,
   shapeUnbudgetedSpend,
 } from '../logic/correlations.js';
-import { consolidateInCurrency, type CurrencyAmount } from '../logic/currencyRate.js';
+import { consolidateInCurrency } from '../logic/currencyRate.js';
 import { decimalsLookup } from '../logic/money.js';
 import { baselineRange, hasPeriod, lookbackFrom, periodRange, toIsoDate } from '../logic/period.js';
 import type { ConvertedTotal } from '../models/currencyRate.js';
@@ -26,6 +26,7 @@ import type { Locale } from '../models/locale.js';
 import type { CurrencyCode, DecimalsFor } from '../models/money.js';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef } from './resolve.js';
+import { CurrencyAmount } from '../models/currencyRate.js';
 
 const resolvePeriod = (input: ResolvedFindCorrelations): Period => ({ month: input.month!, year: input.year! });
 

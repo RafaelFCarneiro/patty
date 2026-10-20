@@ -57,6 +57,7 @@ import {
 } from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
+import { BillReassignment } from '../../models/creditCard.js';
 
 const assertCreditAccountLeg = (
   deps: Deps,
@@ -200,8 +201,6 @@ export const importCardStatement = async (
     addCardPurchase(cachedDeps, { ...line, card: input.card }, source);
   return { lines, flowFor };
 };
-
-type BillReassignment = { reassignedBillId: string | undefined; billPersistables: Persistable[] };
 
 const resolveBillReassignment = (
   deps: Deps,

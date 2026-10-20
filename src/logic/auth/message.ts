@@ -16,14 +16,8 @@ export const setupBanner = (fields: { code: string; setupUrl: string; expiresAt:
     '',
   ].join('\n');
 
-/**
- * The text of the tool/resource/prompt error a signed-out stdio session answers with. The link carries the user
- * code only; nothing here — and nothing a caller can pass in — is a secret.
- */
 export const notSignedInMessage = (fields: {
-  /** The origin serving `/ui/connect`, or `null` when no HTTP server is involved (`FINTRACK_HTTP=false`). */
   origin: string | null;
-  /** The code as displayed (`ABCD-EFGH`). */
   userCode: string | null;
   ownerUnclaimed: boolean;
 }): string => {

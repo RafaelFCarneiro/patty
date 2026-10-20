@@ -497,3 +497,23 @@ export type NewTransactionFacts = {
 };
 
 export type NewTransactionPlan = { entity: TransactionEntity; classification: ClassifyOutcome; idempotencyKey: string };
+
+export type UpdateTransactionPatch = UpdateTransaction & { account?: string };
+
+export type TransactionUpdateDecision = {
+  account: { id: string; currency: CurrencyCode } | null;
+  effectiveType: MovementType | undefined;
+  categorySelection: CategorySelection | null;
+};
+
+export const LOW_CONFIDENCE_THRESHOLD = 0.6;
+
+export type BulkItemResult<E = unknown> =
+  | { status: 'created' | 'needs_review'; transaction: TransactionView; classification: ClassifyOutcome }
+  | { status: 'duplicate'; transaction: TransactionView }
+  | { status: 'error'; description: string; error: E };
+
+export type BulkResult<E = unknown> = {
+  summary: { created: number; needsReview: number; duplicates: number; errors: number };
+  items: BulkItemResult<E>[];
+};

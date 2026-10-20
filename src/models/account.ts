@@ -271,3 +271,20 @@ export type TransferFacts = {
 };
 
 export type TransferPlan = { entity: TransactionEntity; idempotencyKey: string };
+
+export const ACCOUNT_OWNED_TYPES: ReadonlySet<AccountType> = new Set([
+  AccountType.enum.checking,
+  AccountType.enum.savings,
+  AccountType.enum.wallet,
+  AccountType.enum.investment,
+]);
+
+export type BalanceParts = {
+  initialBalance: number;
+  income: number;
+  expenses: number;
+  transfersIn: number;
+  transfersOut: number;
+};
+
+export type PendingParts = Omit<BalanceParts, 'initialBalance'>;

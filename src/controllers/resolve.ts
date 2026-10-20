@@ -5,16 +5,17 @@ import { okOr } from '../common/result.js';
 import { buildSynonyms, resolveAndSort } from '../logic/category.js';
 import { normalizeMerchant } from '../logic/merchant.js';
 import { decimalsLookup } from '../logic/money.js';
-import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js';
+import { resolveByName, resolveByNames } from '../logic/resolve.js';
 import { resolveTagIds, resolveTagNames, tagSetPersistable } from '../logic/tag.js';
 import type { Account } from '../models/account.js';
 import type { Category, SubCategory } from '../models/category.js';
 import type { CreditCard } from '../models/creditCard.js';
 import { ambiguous, notFound } from '../models/error.js';
 import type { CurrencyCode } from '../models/money.js';
-import type { Persistable } from '@rfc0/effect-runner';
 import type { CategorySelection, MerchantMatch, TransactionView } from '../models/transaction.js';
 import type { Deps } from './deps.js';
+import { Named, Resolution } from '../models/resolution.js';
+import { TagLinksResolution } from '../models/tag.js';
 
 export const resolutionToResult = <T extends Named>(
   res: Resolution<T>,
@@ -75,8 +76,6 @@ export const resolveLegAccounts = (
       ),
     ),
   );
-
-export type TagLinksResolution = { persistable: Persistable; tags: string[] };
 
 export const resolveTagLinks = async (
   deps: Deps,

@@ -11,21 +11,7 @@ import {
 import type { CurrencyCode, DecimalsFor } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { AggregateDbRow } from '../wire/db/aggregate.js';
-
-const UNCATEGORIZED_KEY = 'uncategorized';
-const uncategorizedLabels: Record<Locale, string> = {
-  en: 'Uncategorized',
-  pt: 'Sem categoria',
-  es: 'Sin categoría',
-};
-
-const UNKNOWN_KEY = 'unknown';
-
-export const unknownLabels: Record<Locale, string> = {
-  en: 'Unknown',
-  pt: 'Desconhecido',
-  es: 'Desconocido',
-};
+import { UNCATEGORIZED_KEY, uncategorizedLabels, UNKNOWN_KEY, unknownLabels } from '../models/aggregate.js';
 
 const resolveKey = (row: AggregateDbRow, groupBy: AggregateGroupBy): string => {
   if (R.isNonNullish(row.key)) return row.key;

@@ -36,8 +36,6 @@ import type { BudgetStatusOut } from '../wire/out/budgets.js';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
 
-/** Resolves the budgeted node by name — reuses the same `resolveCategoryRef`/`resolveSubCategoryRef`
- *  transactions resolve through, but always required: budgets have no "leave unset" meaning. */
 const resolveBudgetTarget = (
   deps: Deps,
   input: { category?: string; subCategory?: string },
@@ -58,18 +56,9 @@ const resolveBudgetTarget = (
       hasCategory,
       (i) => resolveCategoryRef(deps, i.category).map((cat) => ({ id: cat.id, category: cat.name, kind: cat.kind })),
     ],
-    // Unreachable once `hasExactlyOneTarget` has guarded the caller — kept so `R.conditional` stays
-    // exhaustive rather than throwing on a missing match.
     () => errAsync<BudgetTarget, AppError>(budgetErrors.targetRequired),
   );
 
-/** `findById` only carries the budgeted node's id (`categoryId`), never its display name —
- *  `updateBudget`'s response still needs one, so this re-derives it the same way `createBudget`'s
- *  in-memory `resolveBudgetTarget` result already has it, without re-resolving by name. A miss
- *  (the id matches neither a category nor a sub-category) can't happen under the FK-enforced
- *  invariant that a stored `categoryId` always references a live node — but the failure is
- *  nameable, so it's mapped to the same `unknown_category` `AppError` every other category lookup
- *  raises, not an unstructured throw. */
 const describeCategoryTarget = (
   deps: Deps,
   categoryId: string,
@@ -130,8 +119,6 @@ export const updateBudget = (deps: Deps, input: UpdateBudget): ResultAsync<FlowO
     return ok({ persist, response: toView(entity, target) });
   });
 
-/** Delete by id is idempotent-by-design — a missing budget returns `{ deleted: false }` rather than
- *  an error, with an empty `persist` batch (no write). Mirrors `deleteTag`/`deleteDashboard`. */
 export const deleteBudget = (deps: Deps, id: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>
   safeTry(async function* () {
     const existing = await deps.budgets.findById(id);
@@ -146,19 +133,11 @@ export const listBudgets = async (deps: Deps): Promise<BudgetView[]> =>
     rowsToViews(rows, locale),
   );
 
-/** No write, so a plain async function rather than `ResultAsync`, mirroring `getSpendingSummary`
- *  (`controllers/summary.ts`). Correlates `budgets`/`transactions`' own reads in `logic/budget.ts`
- *  rather than a repo join. Converting to `displayCurrency` correlates a second aggregate
- *  (`currency_rates`), so it's orchestrated here too — omitting it keeps the response byte-identical
- *  to before this option existed. */
 export const getBudgetStatus = async (
   deps: Deps,
   periodInput: Period,
   displayCurrency?: CurrencyCode,
 ): Promise<BudgetStatusOut> => {
-  // Both diplomat callers pass their whole parsed query/args object as `periodInput`, which also
-  // carries `displayCurrency` when supplied — rebuild `period` from its two declared fields so
-  // that extra field never leaks into the response, mirroring `getSpendingSummary`.
   const period: Period = { month: periodInput.month, year: periodInput.year };
   const { from, to } = periodRange(period);
   const [budgets, spend, locale] = await Promise.all([

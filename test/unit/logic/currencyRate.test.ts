@@ -9,9 +9,9 @@ import {
   isStale,
   toBulkItem,
   valueAccount,
-  type ValuableBalance,
 } from '../../../src/logic/currencyRate.js';
 import { CurrencyCode } from '../../../src/models/money.js';
+import type { ValuableBalance } from '../../../src/models/currencyRate.js';
 import type { CurrencyRate, CurrencyRateView, SetExchangeRateInput } from '../../../src/models/currencyRate.js';
 
 const { BRL, USD, USDC, BTC } = CurrencyCode.enum;

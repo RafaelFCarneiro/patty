@@ -257,3 +257,17 @@ export type Presentation =
 
 /** What one observation does to the state, and what the shell must do about it, in order. */
 export type SignInStep = { state: SignInState; effects: SignInEffect[] };
+
+export type Observed<K extends ObservationKind> = Extract<SignInObservation, { kind: K }>;
+
+export const CLOSE_PAGE: SignInEffect = { kind: E.close_page };
+
+export type ObservationHandlers = {
+  [K in ObservationKind]: (state: SignInState, observation: Observed<K>, config: SignInConfig) => SignInStep;
+};
+
+export type ObservationHandler = (
+  state: SignInState,
+  observation: SignInObservation,
+  config: SignInConfig,
+) => SignInStep;

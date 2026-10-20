@@ -19,6 +19,7 @@ import type {
   UpdateTransaction,
 } from '../models/transaction.js';
 import { defaultStatusFor, deriveIdempotencyKey, isTransfer } from './transaction.js';
+import { ACCOUNT_OWNED_TYPES } from '../models/account.js';
 
 export const filterByType =
   (type?: AccountType) =>
@@ -67,13 +68,6 @@ export const areDifferentAccounts = (a: Pick<Account, 'id'>, b: Pick<Account, 'i
 
 export const assertCurrencyMatch = (a: Pick<Account, 'currency'>, b: Pick<Account, 'currency'>): boolean =>
   a.currency === b.currency;
-
-const ACCOUNT_OWNED_TYPES: ReadonlySet<AccountType> = new Set([
-  AccountType.enum.checking,
-  AccountType.enum.savings,
-  AccountType.enum.wallet,
-  AccountType.enum.investment,
-]);
 
 export const isAccountOwnedType = (type: AccountType): boolean => ACCOUNT_OWNED_TYPES.has(type);
 

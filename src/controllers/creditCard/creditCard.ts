@@ -23,39 +23,21 @@ import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import { TRANSACTION_ENTITY_TAG } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCardRef } from '../resolve.js';
-
-export type DeleteCreditCardResult =
-  | { deleted: true; card: string }
-  | {
-      deleted: false;
-      dryRun: true;
-      wouldDelete: { card: string; account: string; transactions: number; bills: number };
-      hint: string;
-    };
+import { DeleteCreditCardResult } from '../../models/creditCard.js';
 
 export const listCreditCards = (deps: Deps): Promise<CreditCard[]> => deps.creditCards.list();
 
-/** Repo-touching precondition: true when no card already holds this name. */
 const assertCardNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
   !(await deps.creditCards.findByName(name));
 
-/** Repo-touching precondition: true when no account already holds this name. */
 const assertAccountNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
   !(await deps.accounts.findByName(name));
 
-/** A bill with a payment transfer has a circular reference with it (`bills.payment_transaction_id`
- *  → the transfer; the transfer's own `bill_id` → the bill; no `ON DELETE` action on either
- *  column, libsql enforces foreign keys) — so that reference must be cleared before either row can
- *  be deleted. Returns nothing for a bill that never had a transfer. */
 const billClearFor = (bill: RawBill): Persistable[] =>
   bill.paymentTransactionId
     ? [persistence.update({ entity: BILL_ENTITY_TAG, model: { ...billEntityFrom(bill), paymentTransactionId: null } })]
     : [];
 
-/** The bill's own removal — version-guarded. A bill `billClearFor` already emitted an `update` for
- *  is removed at the version the shell will have bumped it to by the time this applies in the same
- *  batch (rule 4: an `update` always becomes `model.version + 1`, deterministically) — not the
- *  version read here, which the update already moved past. */
 const billRemovalFor = (bill: RawBill): Persistable =>
   persistence.remove({
     entity: BILL_ENTITY_TAG,
@@ -63,16 +45,6 @@ const billRemovalFor = (bill: RawBill): Persistable =>
     version: bill.paymentTransactionId ? bill.version + 1 : bill.version,
   });
 
-/**
- * Delete a credit card: the dry-run preview (no writes — an empty `persist` batch) is unchanged.
- * On confirm, the domain reads every bill and transaction correlated to the card
- * (`findAllByCard`/`findAllCorrelatedToCard`) and decides their removal itself, in FK-safe order:
- * every bill's payment-transfer reference cleared first, then every correlated transaction removed
- * (`transaction_tags` cascades via its own `ON DELETE CASCADE`, not a `Persistable`), then every
- * bill, then the card, then its internal liability account. `resolveCardRef`'s `CreditCard`/
- * `resolveAccountRef`'s `Account` carry no `version`; `findRawById` re-reads supply what the
- * `Persistable`s need.
- */
 export const deleteCreditCard = (
   deps: Deps,
   input: { card: string; confirm: boolean },
@@ -128,7 +100,6 @@ const resolvePaymentAccount = (deps: Deps, name: string, cardCurrency: CurrencyC
     return ok(paymentAccount);
   });
 
-/** Name-checked only on a real rename; the internal account's name always tracks the card's. */
 const renameInternalAccount = (
   deps: Deps,
   card: CreditCard,
@@ -152,11 +123,6 @@ const renameInternalAccount = (
     );
   });
 
-/**
- * Create a credit card with its internal liability account (ADR-010/ADR-021): a two-entity
- * insert batch — `[insert internal account, insert creditCard]`, account first since the card
- * row's `accountId` is a NOT NULL FK into it.
- */
 export const createCreditCard = (deps: Deps, input: CreateCreditCard): ResultAsync<FlowOutcome<CreditCard>, AppError> =>
   safeTry(async function* () {
     yield* guard(await assertCardNameAvailable(deps, input.name), cardErrors.duplicateName(input.name));
@@ -197,13 +163,6 @@ export const createCreditCard = (deps: Deps, input: CreateCreditCard): ResultAsy
     return ok({ persist, response: card });
   });
 
-/**
- * Update a credit card (mirrors `updateAccount`, Feature Design 007): a rename cascades to the
- * card's internal account (`isCardRename` above) as a two-entity update batch. `paymentAccount`
- * reuses `createCreditCard`'s exact non-credit/currency guard (the #4 regression this design
- * closes). A `closingDay`/`dueDay` change applies to future bill cycles only — existing `bills`
- * rows keep their own already-computed `closeDate`/`dueDate`.
- */
 export const updateCreditCard = (deps: Deps, input: UpdateCreditCard): ResultAsync<FlowOutcome<CreditCard>, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.name);

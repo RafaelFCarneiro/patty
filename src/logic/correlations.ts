@@ -1,8 +1,6 @@
 import * as R from 'remeda';
-import { unknownLabels } from './aggregate.js';
 import { localizeCategoryName } from './category.js';
 import { isSubCategoryRow, matchesTarget, resolveTargetNames } from './budget.js';
-import type { CurrencyAmount } from './currencyRate.js';
 import { roundMoney, roundToDecimals } from './money.js';
 import { daysBetween } from './period.js';
 import { nextDue } from './recurring.js';
@@ -28,9 +26,10 @@ import type { Locale } from '../models/locale.js';
 import type { CurrencyCode, DecimalsFor } from '../models/money.js';
 import type { CategoryWindowedSpend } from '../models/transaction.js';
 import { RecurringPeriod } from '../models/recurring.js';
+import { unknownLabels } from '../models/aggregate.js';
+import { CurrencyAmount } from '../models/currencyRate.js';
+import { CadenceResult } from '../models/correlations.js';
 
-/** A shift with no measurable baseline (brand-new spend) has no percentage to compare against
- *  `minDeltaPct`, but is always the most notable kind of shift — sorts as maximally significant. */
 const shiftMagnitude = (deltaPct: number | null): number =>
   deltaPct === null ? Number.POSITIVE_INFINITY : Math.abs(deltaPct);
 
@@ -43,8 +42,6 @@ const toSpendingShift = (
   locale: Locale,
   decimalsFor: DecimalsFor,
 ): SpendingShift => {
-  // Decide null/direction/deltaPct off the unrounded baseline — rounding first could turn a real
-  // (if tiny) baseline into a false 0.00, misclassifying it as brand-new.
   const rawBaseline = row.baselineTotal / baselineMonths;
   const deltaPct = rawBaseline === 0 ? null : roundMoney(((row.current - rawBaseline) / rawBaseline) * 100);
   const direction =
@@ -74,9 +71,6 @@ export const shapeSpendingShifts = (
     R.sortBy([(shift) => shiftMagnitude(shift.deltaPct), 'desc']),
   );
 
-/** The reference month's effective, expense-only spend per currency — every row's `current`,
- *  unfiltered by `minDeltaPct` (a display filter must not shrink the total), grouped and summed
- *  by currency. */
 export const currentSpendByCurrency = (rows: readonly SpendingShiftInput[]): CurrencyAmount[] =>
   R.pipe(
     rows,
@@ -153,15 +147,8 @@ export const shapeBudgetFitLines = (
     ),
   );
 
-/** Composite grouping key for a (category, currency) pair — JSON-encoded rather than
- *  template-literal-concatenated, so a category name containing the delimiter can never collide
- *  with a differently-split pair. Shared by `shapeUnbudgetedSpend`'s exclusion set and
- *  `shapeMerchantConcentration`'s grouping. */
 const categoryCurrencyKey = (category: string, currency: CurrencyCode): string => JSON.stringify([category, currency]);
 
-/** Unbudgeted requires `baseline > 0` — an established spend pattern, not just a one-off
- *  current-month blip. `budgeted` lines already resolve a sub-category budget's `category` to its
- *  parent, so this exclusion covers the parent too. */
 export const shapeUnbudgetedSpend = (
   shiftRows: readonly SpendingShiftInput[],
   budgeted: readonly BudgetFitLine[],
@@ -193,16 +180,11 @@ export const shapeUnbudgetedSpend = (
   );
 };
 
-// Share/cumulativeShare are 0-1 fractions — 4 decimals gives ~0.01-percentage-point precision,
-// finer than roundMoney's 2 decimals (built for money amounts, not ratios).
 const roundShare = (value: number): number => Math.round(value * 10000) / 10000;
 
 const resolveMerchantLabel = (merchantKey: string | null, locale: Locale): string =>
   merchantKey ?? unknownLabels[locale];
 
-/** Accumulates `cumulativeShare` over the unrounded shares (rounding only the returned values),
- *  so the running total stays accurate regardless of how many merchants are returned. Expects
- *  `top` already sorted by spend descending. */
 const toMerchantShares = (
   top: readonly MerchantConcentrationInput[],
   categoryTotal: number,
@@ -228,7 +210,6 @@ const toCategoryConcentration = (
   locale: Locale,
   decimalsFor: DecimalsFor,
 ): CategoryConcentration => {
-  // Safe: a group from R.groupBy is never empty — every row shares the same category/currency.
   const { category, categoryNames, currency } = rows[0]!;
   const decimals = decimalsFor(currency);
   const categoryTotal = R.sumBy(rows, (row) => row.spent);
@@ -256,12 +237,6 @@ export const shapeMerchantConcentration = (
     R.sortBy([(entry) => entry.category, 'asc'], [(entry) => entry.currency, 'asc']),
   );
 
-/** The per-currency total spend the concentration is computed over — each category-currency
- *  group's own `categoryTotal` (already rounded to the currency's decimals by
- *  `shapeMerchantConcentration`), summed once per currency across every category. Sums the
- *  *shaped* totals rather than re-deriving from the raw rows: `Money` carries no decimal-precision
- *  constraint, so raw `spent` values can hold more precision than the currency displays, and
- *  summing them directly could drift from the sum of the `categoryTotal` lines actually returned. */
 export const merchantSpendByCurrency = (
   groups: readonly Pick<CategoryConcentration, 'currency' | 'categoryTotal'>[],
 ): CurrencyAmount[] =>
@@ -275,20 +250,11 @@ export const merchantSpendByCurrency = (
     })),
   );
 
-/** Composite grouping key for a (merchant, currency) pair — same JSON-encoding rationale as
- *  `categoryCurrencyKey`. */
 const merchantCurrencyKey = (merchantKey: string, currency: CurrencyCode): string =>
   JSON.stringify([merchantKey, currency]);
 
 const withinTolerance = (value: number, target: number, tolerance: number): boolean =>
   Math.abs(value - target) <= tolerance;
-
-type CadenceResult = {
-  typicalAmount: number;
-  occurrences: number;
-  lastDate: string;
-  suggestedNextDue: string;
-};
 
 export const detectRecurringCadence = (
   series: readonly { date: string; amount: number }[],
@@ -327,7 +293,6 @@ const toRecurringCandidate = (
   const { merchantKey, currency } = rows[0]!;
   const cadence = detectRecurringCadence(rows, minOccurrences, decimalsFor(currency));
   if (!cadence) return null;
-  // A merchant's category is stable in practice — no need for a full mode-count over the series.
   const latest = R.firstBy(rows, [(row) => row.date, 'desc'])!;
   return {
     merchant: merchantKey,

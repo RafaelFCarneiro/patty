@@ -6,12 +6,7 @@ import type { CurrencyCode, DecimalsFor } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { CurrencySummary, SummaryRow } from '../models/summary.js';
 import { TransactionType } from '../models/transaction.js';
-
-const uncategorizedLabels: Record<Locale, string> = {
-  en: 'Uncategorized',
-  pt: 'Sem categoria',
-  es: 'Sin categoría',
-};
+import { uncategorizedLabels } from '../models/aggregate.js';
 
 const sumOf = (rows: readonly SummaryRow[], type: TransactionType, decimals: number): number =>
   roundToDecimals(
@@ -59,7 +54,6 @@ function toCurrencySummary(...args: readonly unknown[]) {
   return purry(_toCurrencySummary, args);
 }
 
-/** Group raw rows per currency — NEVER mix currencies in totals. */
 export const summarize = (rows: readonly SummaryRow[], locale: Locale, decimalsFor: DecimalsFor): CurrencySummary[] =>
   R.pipe(
     rows,

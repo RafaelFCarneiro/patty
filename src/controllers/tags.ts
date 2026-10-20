@@ -19,8 +19,6 @@ export const createTag = (deps: Deps, name: string): ResultAsync<FlowOutcome<Tag
     return ok({ persist, response: tag });
   });
 
-/** Delete by id is idempotent-by-design — a missing tag returns `{ deleted: false }` rather than
- *  an error, with an empty `persist` batch (no write). */
 export const deleteTag = (deps: Deps, id: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>
   safeTry(async function* () {
     const tag = await deps.tags.findById(id);

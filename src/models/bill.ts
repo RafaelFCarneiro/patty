@@ -105,3 +105,5 @@ export type BillPaymentFacts = {
 };
 
 export type BillPaymentPlan = { transferEntity: TransactionEntity; idempotencyKey: string };
+
+export type PayBillInput = PayBill & { source: TransactionSource };

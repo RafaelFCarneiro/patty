@@ -13,15 +13,10 @@ import {
   type RecurringRuleView,
 } from '../models/recurring.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
-import {
-  ClassificationMethod,
-  TRANSACTION_ENTITY_TAG,
-  TransactionSource,
-  type TransactionEntity,
-  type TransactionView,
-} from '../models/transaction.js';
+import { ClassificationMethod, TRANSACTION_ENTITY_TAG, TransactionSource, type TransactionEntity } from '../models/transaction.js';
 import type { Deps } from './deps.js';
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js';
+import { ApplyDueResult, RulePlan } from '../models/recurring.js';
 
 export const listRecurring = async (deps: Deps): Promise<RecurringRuleView[]> => {
   const [locale, rules] = await Promise.all([deps.locale(), deps.recurring.list()]);
@@ -46,16 +41,6 @@ export const createRecurring = (
     };
     return ok({ persist, response });
   });
-
-export type ApplyDueResult = {
-  applied: Array<{ rule: string; date: string; transaction: TransactionView }>;
-  count: number;
-};
-
-type RulePlan = {
-  occurrences: Array<{ rule: string; date: string; persistable: Persistable }>;
-  advance: Persistable;
-};
 
 const buildOccurrenceEntity = (
   deps: Deps,

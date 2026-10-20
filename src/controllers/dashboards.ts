@@ -14,9 +14,6 @@ import { sharedDefaultErrors } from '../models/tenancy.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { Deps } from './deps.js';
 
-/** `save_dashboard` always stores `source: inline`, `path: null` — a custom dashboard can never be file-backed, which
- *  closes the path-traversal surface (only bootstrap's directory scan ever sets `path`). Saving under a default's
- *  name creates the caller's own copy; the default is untouched. */
 export const saveDashboard = (deps: Deps, name: string, html: string): ResultAsync<FlowOutcome<Dashboard>, AppError> =>
   safeTry(async function* () {
     const issues = findHtmlValidationIssues(html);
@@ -48,8 +45,6 @@ export const saveDashboard = (deps: Deps, name: string, html: string): ResultAsy
     return ok({ persist, response: dashboard });
   });
 
-/** Delete by name is idempotent-by-design — a missing dashboard returns `{ deleted: false }` rather
- *  than an error, with an empty `persist` batch (no write). Mirrors `deleteTag`. A shared default is refused. */
 export const deleteDashboard = (deps: Deps, name: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>
   safeTry(async function* () {
     const ref = await deps.dashboards.findRefByName(name);
@@ -62,8 +57,6 @@ export const deleteDashboard = (deps: Deps, name: string): ResultAsync<FlowOutco
     return ok({ persist, response: { deleted: true } });
   });
 
-/** Preserves the entity's `id` across the rename, unlike `saveDashboard` under a new name (which
- *  would mint a fresh `id` for what the caller means as the same dashboard). */
 export const renameDashboard = (
   deps: Deps,
   name: string,
@@ -73,7 +66,6 @@ export const renameDashboard = (
     const entity = yield* okOr(await deps.dashboards.findByName(name), dashboardErrors.notFound(name));
     yield* guard(!entity.shared, sharedDefaultErrors.readOnly);
 
-    // Must precede the guard below — it would otherwise see this row's own name and reject it.
     if (newName === entity.name) {
       return ok({
         persist: [],
@@ -82,7 +74,6 @@ export const renameDashboard = (
     }
     yield* guard(!(await deps.dashboards.findRefByName(newName)), dashboardErrors.duplicateName(newName));
 
-    // A rename is a pure identity change — it never touches content or the source/path discriminator.
     const dashboard: Dashboard = {
       name: newName,
       html: entity.html,

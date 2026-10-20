@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { REDACTED, redactSecretQuery, SECRET_QUERY_PARAMS } from '../../../../src/logic/auth/redact.js';
+import { redactSecretQuery } from '../../../../src/logic/auth/redact.js';
+import { REDACTED, SECRET_QUERY_PARAMS } from '../../../../src/models/auth/redact.js';
 
 describe('redactSecretQuery', () => {
   it('names the invite code parameter as a secret', () => {

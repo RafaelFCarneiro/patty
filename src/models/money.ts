@@ -20,3 +20,7 @@ export const CurrencySchema = z.object({
   decimals: z.number().int().nonnegative().describe('Fractional digits for display/rounding'),
 });
 export type Currency = z.infer<typeof CurrencySchema>;
+
+export const FIAT_DECIMALS = 2;
+
+export type CurrencySource = { currency: CurrencyCode };

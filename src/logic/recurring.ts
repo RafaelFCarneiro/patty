@@ -6,6 +6,7 @@ import { resolveCurrency } from './money.js';
 import type { Locale } from '../models/locale.js';
 import type { MerchantMatch } from '../models/transaction.js';
 import type { CreateRecurring, RecurringPeriod, RecurringRule, RecurringRuleView, RuleFacts } from '../models/recurring.js';
+import { MAX_RECURRING_OCCURRENCES_PER_RUN, DueSchedule } from '../models/recurring.js';
 
 const _withPeriodLabel = (rule: RecurringRuleView, locale: Locale): RecurringRuleView => ({
   ...rule,
@@ -39,13 +40,6 @@ export const nextDue = (current: string, period: RecurringPeriod): string => {
 };
 
 export const recurringIdempotencyKey = (ruleId: string, due: string): string => `rec-${ruleId}-${due}`;
-
-export const MAX_RECURRING_OCCURRENCES_PER_RUN = 36;
-
-export type DueSchedule = {
-  dates: readonly string[];
-  next: string;
-};
 
 export const dueSchedule = (
   start: string,

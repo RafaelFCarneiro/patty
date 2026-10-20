@@ -1,13 +1,5 @@
-import { INVITE_CODE_PARAM } from '../../models/auth/origin.js';
+import { SECRET_QUERY_PARAMS, REDACTED, NAME_VALUE_SEPARATOR } from '../../models/auth/redact.js';
 
-/** Query parameters whose value is a secret a person was handed: an invite code today. */
-export const SECRET_QUERY_PARAMS: readonly string[] = [INVITE_CODE_PARAM];
-
-export const REDACTED = '[Redacted]';
-
-const NAME_VALUE_SEPARATOR = '=';
-
-/** The parameter's name as the server's query parser reads it: percent-decoded (`%63ode` is `code`), any case. */
 const nameOf = (pair: string): string => {
   const raw = pair.split(NAME_VALUE_SEPARATOR)[0] ?? '';
   try {
@@ -23,10 +15,6 @@ const isSecretPair = (pair: string): boolean =>
 const redactedPair = (pair: string): string =>
   `${pair.slice(0, pair.indexOf(NAME_VALUE_SEPARATOR))}${NAME_VALUE_SEPARATOR}${REDACTED}`;
 
-/**
- * A request URL as it may be written to a log: the values of the secret parameters are replaced — matched by their
- * decoded name, since an encoded name reaches the handler as the same parameter — and everything else is kept.
- */
 export const redactSecretQuery = (url: string): string => {
   const queryStart = url.indexOf('?');
   if (queryStart === -1) return url;

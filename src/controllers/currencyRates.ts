@@ -11,13 +11,8 @@ import {
 } from '../models/currencyRate.js';
 import type { FlowOutcome } from '@rfc0/effect-runner';
 import type { Deps } from './deps.js';
+import { RateFields } from '../models/currencyRate.js';
 
-type RateFields = Pick<SetExchangeRateInput, 'from' | 'to' | 'rate' | 'asOf' | 'source'>;
-
-// `fields` is already boundary-decoded (SetExchangeRateSchema at the MCP/REST edge, or
-// dbToEntity at the repo edge) — trust it rather than re-validating already-typed internal data
-// (docs/code-quality.md "Fail loudly at boundaries, trust internally"). RateFields and
-// CurrencyRateView share the same shape, so this is a plain pass-through, not a real adaptation.
 const toView = (fields: RateFields): CurrencyRateView => fields;
 
 const entityToFields = (entity: CurrencyRateEntity): RateFields => ({
@@ -28,10 +23,6 @@ const entityToFields = (entity: CurrencyRateEntity): RateFields => ({
   source: entity.source ?? undefined,
 });
 
-/** Upsert-latest (ADR-026 Phase 2): a rate is addressed by its `(from, to)` pair, never by id — an
- *  existing row for the pair is updated in place; a new pair is inserted. `currencyRateApplier`
- *  (diplomat/db/repos/currencyRates.ts) covers the concurrent-first-write race this pre-check alone
- *  can't (two callers both reading "no row yet" for the same pair). */
 export const setExchangeRate = (
   deps: Deps,
   input: SetExchangeRateInput,

@@ -18,6 +18,7 @@ import {
   type ValidationError,
 } from './error.js';
 import { Remedy } from './remedy.js';
+import type { Persistable } from '@rfc0/effect-runner';
 
 // `.describe()` is domain information — it states what each field is and represents.
 // Defaults split by intent: integrity defaults (a value that must exist for the entity to be
@@ -207,3 +208,14 @@ export type CardPurchasePlan = NewTransactionPlan & {
   existingBill: RawBill | null;
   cardId: string;
 };
+
+export type DeleteCreditCardResult =
+  | { deleted: true; card: string }
+  | {
+      deleted: false;
+      dryRun: true;
+      wouldDelete: { card: string; account: string; transactions: number; bills: number };
+      hint: string;
+    };
+
+export type BillReassignment = { reassignedBillId: string | undefined; billPersistables: Persistable[] };

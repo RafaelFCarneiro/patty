@@ -70,3 +70,16 @@ export const dashboardErrors = {
   invalidHtml: (issues: string[]): DashboardError => validation(issues),
   duplicateName: (name: string): DashboardError => ({ code: 'duplicate_name', entity: 'dashboard', name }),
 };
+
+export const HTML_DOCUMENT_ROOT_PATTERN = /^\s*<!doctype html|<html[\s>]/i;
+
+export const SKIPPED_SCRIPT_TYPES = ['application/json', 'application/ld+json', 'importmap', 'module'];
+
+export const SCRIPT_TAG_PATTERN = /<script((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script>/gi;
+
+export const ATTRIBUTE_PATTERN = /([a-zA-Z][-\w:.]*)\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+
+export type ScriptTag = { attributes: string; body: string };
+
+export const EXTERNAL_SCRIPT_ISSUE =
+  'no external <script src> allowed in a fragment — the shell already loads Chart.js once; fetch data from /api instead';

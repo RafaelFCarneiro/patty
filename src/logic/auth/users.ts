@@ -18,14 +18,11 @@ import { hasCredentials, isActiveUser, formatSetupCode, normalizeSetupCode } fro
 import { millis, toIso } from './time.js';
 import * as persistence from '../persistence.js';
 import type { Persistable } from '@rfc0/effect-runner';
+import { CHANGE_BLOCKS_SELF } from '../../models/auth/users.js';
 
-/** An invite code is typed and printed exactly like a setup code: case, dashes and spaces never matter. */
 export const normalizeInviteCode = normalizeSetupCode;
 export const formatInviteCode = formatSetupCode;
 
-/** The link an admin hands the invited person. The code is in the query string on purpose: the page it opens answers
- *  `Referrer-Policy: strict-origin` (no path or query ever leaves) and the logger redacts the parameter; the same
- *  code may be typed instead. */
 export const inviteLink = (origin: string, code: string): string =>
   `${origin}${INVITE_PATH}?${INVITE_CODE_PARAM}=${encodeURIComponent(code)}`;
 
@@ -36,14 +33,12 @@ export const userStatus = (user: UserEntity): UserStatus =>
       ? UserStatus.enum.active
       : UserStatus.enum.invited;
 
-/** Someone who can log in right now AND administers: the only kind the "always one admin" rule counts. */
 export const isActiveAdmin = (user: UserEntity | null): boolean =>
   isActiveUser(user) && user.role === UserRole.enum.admin;
 
 export const isInviteLive = (invite: InviteEntity, now: Date): boolean =>
   invite.usedAt === null && millis(invite.expiresAt) > now.getTime();
 
-/** An invite that can be claimed right now: it exists, is unused and unexpired. */
 export const isInviteUsable = (invite: InviteEntity | null, now: Date): invite is InviteEntity =>
   invite !== null && isInviteLive(invite, now);
 
@@ -87,7 +82,6 @@ export const spentInvite = (invite: InviteEntity, now: Date): InviteEntity => ({
   usedAt: now.toISOString(),
 });
 
-/** The user's set of ways in changed (one was issued or ended): a revocation that read it earlier now conflicts. */
 export const withCredentialsChanged = (user: UserEntity, now: Date): UserEntity => ({
   ...user,
   credentialsChangedAt: now.toISOString(),
@@ -97,42 +91,25 @@ export const disabledUser = (user: UserEntity, now: Date): UserEntity =>
   withCredentialsChanged({ ...user, disabledAt: now.toISOString() }, now);
 export const enabledUser = (user: UserEntity): UserEntity => ({ ...user, disabledAt: null });
 export const withRole = (user: UserEntity, role: UserRole): UserEntity => ({ ...user, role });
-/** The password is gone: the new invite is the only way back in. */
 export const withoutPassword = (user: UserEntity, now: Date): UserEntity =>
   withCredentialsChanged({ ...user, passwordHash: null }, now);
 
-/** A login starts a session, which is a way in. */
 export const loggedIn = (user: UserEntity, now: Date): UserEntity =>
   withCredentialsChanged({ ...user, lastLoginAt: now.toISOString() }, now);
-/** The invited person chooses their password: the row that exists is updated, never created. */
 export const claimedByInvite = (user: UserEntity, passwordHash: string, now: Date): UserEntity => ({
   ...loggedIn(user, now),
   passwordHash,
 });
 
-/** Who may manage users: an admin signed in through a browser session — or the trusted terminal. */
 export const authorizeActor = (actor: Actor, acting: UserEntity | null): AppError | null => {
   if (actor.kind === ActorKind.enum.terminal) return null;
   if (actor.principal.via !== PrincipalVia.enum.session) return authErrors.sessionRequired;
   return isActiveAdmin(acting) ? null : authErrors.adminRequired;
 };
 
-/** Each admin change says whether the acting admin may do it to themself. */
-const CHANGE_BLOCKS_SELF: Readonly<Record<AdminChange, boolean>> = {
-  [AdminChange.enum.disable]: true,
-  [AdminChange.enum.demote]: true,
-  // A reissued admin keeps the page that shows them their new invite: locking oneself out is recoverable.
-  [AdminChange.enum.reissue]: false,
-};
-
-/** Every active admin other than `target` — who is left to administer, and the rows a decision must check. */
 export const remainingAdmins = (users: readonly UserEntity[], target: UserEntity): UserEntity[] =>
   R.filter(users, (user) => user.id !== target.id && isActiveAdmin(user));
 
-/**
- * The guard tables for taking an admin away: nobody disables or demotes themself, and no action leaves zero active
- * admins. `null` = allowed. `actingUserId` is null for the terminal, which acts as nobody.
- */
 export const guardAdminChange = (
   change: AdminChange,
   fields: { actingUserId: string | null; target: UserEntity; users: readonly UserEntity[] },
@@ -142,6 +119,5 @@ export const guardAdminChange = (
   return reduces && remainingAdmins(fields.users, fields.target).length === 0 ? authErrors.lastAdmin : null;
 };
 
-/** Asserts a user row is still at the version the flow read, without writing it. */
 export const checkUser = (user: UserEntity): Persistable =>
   persistence.check({ entity: USER_ENTITY_TAG, id: user.id, version: user.version });

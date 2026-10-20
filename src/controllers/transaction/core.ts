@@ -1,6 +1,3 @@
-// Transaction core (ADR-016): row integrity and category resolution shared by every aggregate.
-// No bill/card knowledge — must never import logic/bill.js or touch deps.bills.
-// Aggregates (credit-card, account) depend on this module; it never depends on them.
 
 import { ok, okAsync, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
@@ -19,24 +16,12 @@ import {
   isTransfer,
   resolveEffectiveType,
 } from '../../logic/transaction.js';
-import {
-  TRANSACTION_ENTITY_TAG,
-  TransactionStatus,
-  transactionErrors,
-  type CategoryFields,
-  type CategorySelection,
-  type ConfirmTransaction,
-  type MovementType,
-  type TransactionEntity,
-  type TransactionView,
-  type UpdateTransaction,
-} from '../../models/transaction.js';
-import type { CurrencyCode } from '../../models/money.js';
+import { TRANSACTION_ENTITY_TAG, TransactionStatus, transactionErrors, type CategoryFields, type CategorySelection, type ConfirmTransaction, type MovementType, type TransactionEntity, type TransactionView } from '../../models/transaction.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCategoryRef, resolveSubCategoryRef } from '../resolve.js';
+import { UpdateTransactionPatch, TransactionUpdateDecision } from '../../models/transaction.js';
 
-/** Resolves a category by name, guarding kind-compatibility when the movement type is known. */
 const resolveCategory = (
   deps: Deps,
   category: string,
@@ -52,7 +37,6 @@ const resolveCategory = (
     return ok({ categoryId: cat.id, categoryName: cat.name });
   });
 
-/** Resolves a sub-category by name, guarding kind-compatibility when the movement type is known. */
 const resolveSubCategory = (
   deps: Deps,
   subCategory: string,
@@ -68,11 +52,6 @@ const resolveSubCategory = (
     return ok({ categoryId: subCat.parentId, categoryName: subCat.parentName, subCategoryId: subCat.id });
   });
 
-/**
- * Dispatches to subCategory (preferred) or category resolution by whichever the caller provided.
- * Returns null when neither was given — callers decide what "unset" means for them (auto-classify
- * on create, leave the existing category untouched on update).
- */
 export const resolveCategorySelection = (
   deps: Deps,
   input: CategoryFields,
@@ -85,14 +64,6 @@ export const resolveCategorySelection = (
     () => okAsync(null),
   );
 
-/**
- * Flips a `pending` transaction to `effective`, optionally correcting `amount`/`date` in the same
- * call (Design 014 phase B) — a thin core flow rather than a delegation to `updateAccountTransaction`/
- * `updateCardTransaction`, whose guards this module can't reach. Immutability is enforced directly
- * via `isTransfer`: editing amount/date is rejected for a transfer/bill-payment, but a plain
- * status-only confirm of one is still fine. The future-date guard applies regardless of whether an
- * edit was supplied — `date` resolves to the (possibly already future-dated) existing date otherwise.
- */
 export const confirmTransaction = (
   deps: Deps,
   input: ConfirmTransaction,
@@ -124,32 +95,6 @@ export const confirmTransaction = (
     ];
     return ok({ persist, response: buildTransactionView(locale) });
   });
-
-/** Generic patch input: the core's minimal `UpdateTransaction` (ADR-019) plus `account` — the one
- *  context field both aggregates' own FC/IS updates still resolve generically (the account
- *  aggregate's `UpdateAccountTransactionSchema` carries it; the credit-card aggregate's own schema
- *  carries it too, but only so `updateCardTransaction` can reject it with a dedicated error before
- *  ever calling `decideTransactionUpdate` — it always reaches this decision as `undefined` on that
- *  path). Declared locally rather than importing an aggregate's model type, so the core still names
- *  no sibling context's schema. */
-type UpdateTransactionPatch = UpdateTransaction & { account?: string };
-
-/** What every FC/IS update — the account aggregate's `updateAccountTransaction`
- *  (`controllers/account/transaction.ts`) and the credit-card aggregate's `updateCardTransaction`
- *  (`controllers/creditCard/transaction.ts`) — needs decided via injected reads, before either
- *  shapes its own write: the resolved new account (if any), the movement type a category-kind check
- *  should validate against, and the category/sub-category selection (if any field was provided).
- *  Extracted once here so both share the same reads/validation and never re-derive them
- *  differently. `account` is a minimal structural type (id + currency, the only fields either caller
- *  reads off it) rather than the full `Account` — this module must never import `models/account.ts`
- *  (dependency table). The real `Account` that `resolveAccountRef` (`controllers/resolve.ts`)
- *  resolves to structurally satisfies this narrower type, so neither side has to name the other's
- *  model. */
-type TransactionUpdateDecision = {
-  account: { id: string; currency: CurrencyCode } | null;
-  effectiveType: MovementType | undefined;
-  categorySelection: CategorySelection | null;
-};
 
 export const decideTransactionUpdate = (
   deps: Deps,
