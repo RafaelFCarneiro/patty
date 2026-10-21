@@ -26,8 +26,6 @@ export type CreditCardsRepo = {
   list: () => Promise<CreditCard[]>;
   findByName: (name: string) => Promise<CreditCard | null>;
   findById: (id: string) => Promise<CreditCard | null>;
-  /** Version-carrying read — for `deleteCreditCard`, which needs it to build a
-   *  version-guarded `Persistable`. */
   findRawById: (id: string) => Promise<CreditCardEntity | null>;
   countCorrelated: (cardId: string, accountId: string) => Promise<DeleteCardCounts>;
 };
@@ -93,7 +91,4 @@ export const creditCardsRepo = (db: Db, userId: string): CreditCardsRepo => {
   };
 };
 
-/** Deleting a card cascades to its correlated bills/transactions, but that's decided in
- *  `deleteCreditCard` (`controllers/creditCard/creditCard.ts`), which emits their own
- *  `Persistable`s ahead of the card's — this applier just writes the row it's handed. */
 export const creditCardApplier = (userId: string): EntityApplier => ownedTableApplier(creditCards, userId);

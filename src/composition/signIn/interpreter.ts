@@ -24,22 +24,11 @@ import {
 import { nextStep } from '../../logic/auth/signInFlow.js';
 import { PrincipalVia } from '../../models/auth/principal.js';
 
-/**
- * The shell side of the sign-in protocol. `logic/auth/signInFlow.ts` decides; this runs the effects it describes with
- * the existing controllers (through `run`), the keychain (`store`) and — for the page a person approves on — either the
- * origin the process can already name or a temporary server it starts on demand. It executes and reports; it never
- * chooses between outcomes, so there is no sign-in rule in this file to test twice.
- */
 export type SignInInterpreterOptions = {
   deps: AuthDeps;
-  /** Already adapted model→row (`bindAuthRunEffects`). */
   run: RunEffects;
   store: SignInStore;
-  /** The origin of a page this process can honestly name for `/ui/connect` — `PUBLIC_URL`, or the sidecar it bound — or
-   *  `null`. Asked at use, because the sidecar binds after the interpreter exists. */
   origin: () => string | null;
-  /** How to serve `/ui/connect` when `origin()` names nothing: a temporary app of this process, on this database.
-   *  Absent when there is no HTTP at all (`FINTRACK_HTTP=false`). */
   startPage?: (() => Promise<SignInServer>) | undefined;
 };
 
@@ -52,7 +41,6 @@ type Performer<K extends EffectKind> = (
 ) => Promise<SignInObservation | undefined>;
 
 type TemporaryPage = {
-  /** A temporary page, once started, is the page its pending request was announced at, so it is named first. */
   namedOrigin: () => string | null;
   serve: () => Promise<string | null>;
   close: () => Promise<void>;
@@ -78,8 +66,6 @@ const temporaryPage = (options: Pick<SignInInterpreterOptions, 'origin' | 'start
   };
 };
 
-// An unreadable keychain is a `KeychainFailure`: whether it counts as "nothing saved" is the protocol's call
-// (`tolerateUnreadable`); when it does not, the failure is reported back as an observation.
 const loadSavedToken = async (
   store: SignInStore,
   tolerateUnreadable: boolean,
@@ -161,8 +147,6 @@ const performServePage =
     origin: await page.serve(),
   });
 
-// Whatever goes wrong creating the request — an Err or a throw — the page it would have served is closed again:
-// with no pending request there is nothing left to retire it.
 const performStartGrant =
   ({ deps, run, page }: PerformerContext): Performer<typeof E.start_grant> =>
   async (effect) => {
@@ -244,8 +228,6 @@ export const createSignInInterpreter = (options: SignInInterpreterOptions): Sign
   const perform = (effect: SignInEffect, hooks: SignInHooks): Promise<SignInObservation | undefined> =>
     (performers[effect.kind] as Performer<EffectKind>)(effect, hooks);
 
-  // In order, one after the other. A step ends with at most one asking effect and it is the last, so the answer to
-  // hand back is the one the rest of the list ends in, if any.
   const performAll = async (
     effects: readonly SignInEffect[],
     hooks: SignInHooks,

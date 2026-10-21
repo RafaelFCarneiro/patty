@@ -4,10 +4,6 @@ import type { Db } from '../driver.js';
 
 export type RepoScope = { db: Db; userId: string };
 
-/**
- * Where a query says whose rows. `ownedBy`: the user's own. `visibleTo`: own plus the shared defaults (user_id NULL),
- * for reads of categories, merchant edges and dashboards only.
- */
 const column = (alias: string, name: string): SQL => sql.raw(alias ? `${alias}.${name}` : name);
 
 export const ownedBy = (userId: string, alias = ''): SQL => sql`${column(alias, 'user_id')} = ${userId}`;

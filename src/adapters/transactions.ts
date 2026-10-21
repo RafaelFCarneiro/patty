@@ -31,9 +31,7 @@ export const parseTags = (json: string | null): string[] =>
 export const parseNames = (json: string | null): LocalizedNames =>
   json !== null ? LocalizedNamesSchema.parse(JSON.parse(json)) : null;
 
-/** db→model: decode a flat SQL row (from a full transaction SELECT) into a RawTransactionView. */
 export const dbToModel = (record: Record<string, unknown>): RawTransactionView => {
-  // Decode the raw row at the boundary; downstream mapping then trusts the typed shape.
   const row = TransactionRowSchema.parse(record);
 
   return RawTransactionViewSchema.parse({
@@ -71,7 +69,6 @@ export const dbToModel = (record: Record<string, unknown>): RawTransactionView =
   });
 };
 
-/** model→db: flatten a domain Transaction entity into node properties + edge refs. */
 export const modelToDb = (entity: Transaction): { props: TransactionDbProps; refs: TransactionDbRefs } => ({
   props: {
     id: entity.id,
@@ -98,10 +95,6 @@ export const modelToDb = (entity: Transaction): { props: TransactionDbProps; ref
   },
 });
 
-/** The row shape `transactionApplier` (`diplomat/db/repos/transactions.ts`) writes — `modelToDb`'s
- *  flat props/refs merged onto the actual `transactions` table column names (drizzle's
- *  `fromAccountId`/`creditCardId`/`subcategoryId`, not the entity's own `refs.accountId`/`cardId`/
- *  `subCategoryId`), plus `version` (ADR-021). */
 export type TransactionRowEntity = TransactionDbProps & {
   fromAccountId: string | null;
   toAccountId: string | null;
@@ -113,9 +106,6 @@ export type TransactionRowEntity = TransactionDbProps & {
   version: number;
 };
 
-/** entity→row for the versioned unit of work (ADR-021) — the only transaction write path that
- *  needs `version` on the wire-db row. Reuses `modelToDb` for the shared node properties/edge
- *  refs, then renames the refs onto their actual drizzle column names. */
 export const entityToDb = (entity: TransactionEntity & { version: number }): TransactionRowEntity => {
   const { props, refs } = modelToDb(entity);
   return {
@@ -141,9 +131,6 @@ export const confirmWireInToModel = (input: wireIn.ConfirmTransaction): ConfirmT
 
 // ─── model→wire/out ──────────────────────────────────────────────────────────
 
-// `classification` required (narrower than `UpsertTransactionResult`'s general optional field):
-// this adapter is only ever reached from add_account_expense/add_account_income/add_card_purchase,
-// never create_transfer (transfers are never classified — TransferResultOut has no such field).
 export const createResultToWireOut = (result: ClassifiedUpsertResult): CreateTransactionOut =>
   CreateTransactionOut.parse(result);
 

@@ -15,13 +15,9 @@ export type BlockingReferences = { transactions: number; recurring: number; subC
 export type CategoriesRepo = {
   list: (options?: ListCategoriesOptions) => Promise<Category[]>;
   countReferences: (categoryId: string) => Promise<BlockingReferences>;
-  /** Version-carrying read — for `deleteCategory`/`deleteSubCategory`, which need it to
-   *  build a version-guarded `Persistable`. Shared by both, since a sub-category is a row in this
-   *  same table. */
   findRawById: (categoryId: string) => Promise<CategoryVersion | null>;
 };
 
-/** Top-level categories only — sub-categories belong to subCategoriesRepo. */
 const list = async ({ db, userId }: RepoScope, options?: ListCategoriesOptions): ReturnType<CategoriesRepo['list']> => {
   const query = db
     .select()
@@ -79,7 +75,4 @@ export const categoriesRepo = (db: Db, userId: string): CategoriesRepo => {
   };
 };
 
-/** Shared by both a top-level category and a sub-category (same table). Deleting a category also
- *  clears its `merchant_category` learning rows, but that's a schema-declared `ON DELETE CASCADE`
- *  on `merchant_category.category_id` (`schema.ts`), not applier code — this stays plain. */
 export const categoryApplier = (userId: string): EntityApplier => ownedTableApplier(categories, userId);

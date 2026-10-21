@@ -57,8 +57,6 @@ const withPromptIo = async <T>(
   }
 };
 
-/** `EXIT_OK` = the owner holds a login when this returns (claimed now or before); anything else = nothing was
- *  written, and is the exit code to end with. */
 export const ensureOwnerClaimed = (io: CliIo, options: ClaimOptions): Promise<number> =>
   withShell(
     io,
@@ -97,7 +95,6 @@ const resetUserPassword = (io: CliIo, options: ResetOptions): Promise<number> =>
   withShell(
     io,
     async (shell) => {
-      // Resolve the user before asking for anything: a typo'd `--user` should not cost a typed password.
       const target = await findResetTarget(shell.deps, options.user);
       if (target.isErr()) return failed(io, formatAppError(target.error));
 

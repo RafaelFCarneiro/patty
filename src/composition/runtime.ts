@@ -39,16 +39,6 @@ import { TRANSACTION_ENTITY_TAG } from '../models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../models/transactionTag.js';
 import type { ChangeEvent } from '../models/tenancy.js';
 
-/**
- * Composition root for everything a running FinTrack process needs on top of an open database: the repos the
- * controllers read through, the appliers the effect runner writes through, and the change bus. Shared by the server
- * (`main.ts`) and by `fintrack login`, which serves the sign-in page from a temporary server of its own when none is
- * running — one assembly, so the two can never wire a flow differently.
- *
- * Nothing here is bound to a user: `depsFor(principal)` and the other factories build, per request, repos and
- * appliers bound to that principal's user. The only unscoped access is `authRunEffects` (identity flows) and
- * `publicDeps` (the health probe), neither of which touches user-owned tables.
- */
 export type Runtime = Tenancy & {
   publicDeps: Pick<Deps, 'health'>;
   authRunEffects: RunEffects;
@@ -57,12 +47,10 @@ export type Runtime = Tenancy & {
 
 export type RuntimeConfig = Pick<Config, 'FINTRACK_LOCALE' | 'FIAT_RATE_STALE_HOURS' | 'CRYPTO_RATE_STALE_HOURS'>;
 
-// stderr only — stdout carries the MCP protocol on the stdio transport (ADR-007).
 const reportChangeError = (cause: unknown): void => {
   console.error('[fintrack] change notification failed:', cause);
 };
 
-/** Appliers built for one user; shared reference data (exchange rates, merchant dictionary) has no owner. */
 const applierRegistryFor = (userId: string): ApplierRegistry => ({
   [ACCOUNT_ENTITY_TAG]: accountApplier(userId),
   [TRANSACTION_ENTITY_TAG]: transactionApplier(userId),

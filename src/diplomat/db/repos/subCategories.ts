@@ -13,8 +13,6 @@ export type SubCategoriesRepo = {
   countReferences: (subCategoryId: string) => Promise<BlockingReferences>;
 };
 
-// Sub-categories are categories with a non-null parent_id.
-// We join to the parent to get parentName and kind; both must be visible to the user.
 const SUB_SELECT = (userId: string) => sql`
   SELECT sc.id, sc.name, sc.parent_id, p.name AS parent_name, p.kind
   FROM categories sc

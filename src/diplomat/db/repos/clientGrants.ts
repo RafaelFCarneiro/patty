@@ -9,13 +9,9 @@ import { VersionConflict, versionedTableApplier, type EntityApplier } from '../e
 export type ClientGrantsRepo = {
   findByDeviceCodeHash: (deviceCodeHash: string) => Promise<ClientGrantEntity | null>;
   findPendingByUserCode: (userCode: string) => Promise<ClientGrantEntity | null>;
-  /** The newest sign-in this user actually completed for this client on this profile — the consent form's memory. */
   lastRedeemed: (userId: string, profile: string, clientName: string) => Promise<ClientGrantEntity | null>;
-  /** Grants this user approved that no process has redeemed yet — each could still mint a sign-in as them. */
   listApprovedByUser: (userId: string) => Promise<ClientGrantEntity[]>;
-  /** Every redeemed grant — candidates for `supersededGrants`, which decides which still matter. */
   listRedeemed: () => Promise<ClientGrantEntity[]>;
-  /** Grants that ran out their window without being redeemed (`expiresAt` is ISO, so it sorts chronologically). */
   listExpired: (nowIso: string) => Promise<ClientGrantEntity[]>;
 };
 
@@ -93,9 +89,6 @@ export const clientGrantsRepo = (db: Db): ClientGrantsRepo => ({
 
 const versionedClientGrantApplier = versionedTableApplier(clientGrants);
 
-/** `user_code` is unique among PENDING grants: two grants drawing the same free code at once collide on that index,
- *  which `onConflictDoNothing` (scoped to `id`) does not swallow. Rethrown as `VersionConflict`, so the engine rolls
- *  back and re-runs `startGrant`, whose `freshUserCode` then sees the committed row and draws another code. */
 export const clientGrantApplier: EntityApplier = {
   ...versionedClientGrantApplier,
   insert: async (tx, model, idempotencyKey) => {

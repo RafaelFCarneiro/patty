@@ -12,9 +12,7 @@ export type AccountsRepo = {
   list: () => Promise<Account[]>;
   findById: (id: string) => Promise<Account | null>;
   findByName: (name: string) => Promise<Account | null>;
-  /** Version-carrying read — for flows building an `update`/`delete` `Persistable`. */
   findRawById: (id: string) => Promise<AccountEntity | null>;
-  /** Aggregated movement per account: transactions + transfers, both directions. */
   balanceParts: (accountId: string) => Promise<BalancePartsRow>;
   countReferences: (accountId: string) => Promise<AccountReferences>;
 };
@@ -123,10 +121,4 @@ export const accountsRepo = (db: Db, userId: string): AccountsRepo => {
   };
 };
 
-/**
- * The account entity's `EntityApplier` — how `runEffects` applies an account `Persistable`
- * without ever naming "account" itself. `accounts` follows the `id`/`version` convention, so this
- * is just `ownedTableApplier(accounts, userId)` — model→row adaptation already happened upstream,
- * before `runEffects` ever sees the batch, so this applier only ever writes the row it's handed.
- */
 export const accountApplier = (userId: string): EntityApplier => ownedTableApplier(accounts, userId);
