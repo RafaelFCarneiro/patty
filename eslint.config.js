@@ -1,3 +1,4 @@
+import checkFile from 'eslint-plugin-check-file';
 import tseslint from 'typescript-eslint';
 
 /** Shared by every `no-restricted-syntax` block below (a later block replaces, not merges, the earlier one). */
@@ -15,7 +16,7 @@ const SWITCH_TOO_LARGE = {
  */
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'coverage/**', 'drizzle/**', 'scripts/**', '**/*.config.ts', '**/*.config.js'],
+    ignores: ['dist/**', 'coverage/**', 'drizzle/**', '**/*.config.ts', '**/*.config.js'],
   },
   {
     files: ['src/**/*.ts', 'test/**/*.ts'],
@@ -148,6 +149,20 @@ export default tseslint.config(
           ignoreRegExpLiterals: true,
         },
       ],
+    },
+  },
+  {
+    files: ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.mjs'],
+    plugins: { 'check-file': checkFile },
+    rules: {
+      // File and folder names are kebab-case (docs/code-quality.md § Naming clarity). `ignoreMiddleExtensions`
+      // lets `foo-bar.test.ts` through; the stem is what is checked.
+      'check-file/filename-naming-convention': [
+        'error',
+        { '{src,test,scripts}/**/*.{ts,mjs}': 'KEBAB_CASE' },
+        { ignoreMiddleExtensions: true },
+      ],
+      'check-file/folder-naming-convention': ['error', { '{src,test,scripts}/**/': 'KEBAB_CASE' }],
     },
   },
 );
