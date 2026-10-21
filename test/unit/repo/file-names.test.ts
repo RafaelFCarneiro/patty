@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = join(import.meta.dirname, '..', '..', '..');
@@ -16,7 +16,7 @@ const pathsUnder = (dir: string): readonly string[] =>
   });
 
 const isKebabCase = (path: string): boolean =>
-  path.split('/').every((name) => EXCEPTIONS.has(name) || KEBAB_CASE_NAME.test(name));
+  path.split(sep).every((name) => EXCEPTIONS.has(name) || KEBAB_CASE_NAME.test(name));
 
 describe('file and folder names', () => {
   it('are kebab-case', () => {
