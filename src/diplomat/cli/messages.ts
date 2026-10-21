@@ -51,7 +51,7 @@ export const CLI_MESSAGES = {
   snapshotExported: (path: string, counts: ExportedRowCounts) =>
     [
       `Database snapshot written to ${path} (mode ${fileMode()}, encrypted under the same key, never overwritten).`,
-      `Rows: ${Object.entries(counts)
+      `Rows (whole database, every user): ${Object.entries(counts)
         .map(([table, rows]) => `${table} ${rows}`)
         .join(', ')}`,
       `Compare these after the move: ${MOVE_GUIDE}.`,

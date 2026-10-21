@@ -567,7 +567,7 @@ cannot read your OS keychain, so the key goes to a file it mounts as a secret. T
      <http://127.0.0.1:51737/ui/login> with the same username and password.
    - **You never claimed it:** `docker compose logs fintrack` shows the setup code; claim it at `/ui/setup`
      ([The setup code](#the-setup-code)).
-7. **Verify.** The dashboard shows your accounts and transactions, and the counts match what `db export` printed.
+7. **Verify.** The dashboard shows your accounts and transactions. `db export`'s counts are for the whole database (every user, credit accounts included), while the dashboard is scoped to the signed-in user and its accounts page leaves credit accounts out. With one user and no credit accounts they match exactly; otherwise expect the dashboard to show the same or fewer.
 8. **Reconnect the MCP clients to the container.** Create a personal access token at `/ui/access/tokens` and use the HTTP
    config from [`mcp-clients.md`](mcp-clients.md#docker-container-http-on-12700151737). The old stdio config still points at
    the npm database, which is no longer the one in use.
