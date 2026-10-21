@@ -174,7 +174,7 @@ or stale data.
    fetches `/api/summary`, `/api/aggregate`, `/api/accounts/balances`, `/api/recurring`, `/api/transactions` on
    load, renders per-currency blocks with loading/empty/error states, and leaves installment projections as a
    labeled placeholder (no endpoint yet). See `docs/architecture.md` § Dashboards / `/ui` surface; regression
-   guard at `test/integration/http/dashboardTemplate.test.ts`.
+   guard at `test/integration/http/dashboard-template.test.ts`.
 6. [x] Author the **UI-building skill**: fetch-only guardrails, OpenAPI-contract usage, allowed CDN libs,
    theming/accessibility, the real-time rule. Shipped: `skills/dashboard-building/SKILL.md` (docs-only,
    distributed via `package.json`'s `files` array) — see `docs/architecture.md` § Dashboards / `/ui` surface

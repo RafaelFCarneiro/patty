@@ -489,7 +489,7 @@ Without a session, in `required` mode, exactly these answer:
 Everything else — `/api/status`, the rest of `/api`, `/mcp`, `/ui`, `/ui/events`, the other UI assets, and any path
 that doesn't exist — is `401` JSON with a [`WWW-Authenticate` challenge](#challenges) (`/api`, `/mcp`, anything outside
 `/ui`) or a redirect (`/ui`: to `/ui/setup` while the owner is unclaimed, otherwise to `/ui/login`). The list lives in one constant
-(`PUBLIC_ROUTES`, `src/diplomat/http/authPaths.ts`), and a test enumerates every route Fastify registers to prove
+(`PUBLIC_ROUTES`, `src/diplomat/http/auth-paths.ts`), and a test enumerates every route Fastify registers to prove
 nothing else is reachable.
 
 ## CSRF

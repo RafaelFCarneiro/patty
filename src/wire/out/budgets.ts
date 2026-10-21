@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { PeriodSchema } from '../../models/date.js';
 import { BudgetStatusGroupSchema } from '../../models/budget.js';
-import { ConvertedTotalSchema } from '../../models/currencyRate.js';
+import { ConvertedTotalSchema } from '../../models/currency-rate.js';
 
 export const BudgetStatusOutSchema = z.object({
   period: PeriodSchema,

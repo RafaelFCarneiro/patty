@@ -14,7 +14,7 @@ import { CurrencyCode } from '../../../../src/models/money.js';
 import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
 import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
 import type { ValidationError } from '../../../../src/models/error.js';
-import { TRANSACTION_TAG_ENTITY_TAG } from '../../../../src/models/transactionTag.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../../../src/models/transaction-tag.js';
 import { Locale } from '../../../../src/models/locale.js';
 import { SEEDED_CURRENCIES } from '../../fixtures/currencies.js';
 

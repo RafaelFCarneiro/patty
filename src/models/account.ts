@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Id } from './id.js';
-import { ConvertedValueSchema } from './currencyRate.js';
+import { ConvertedValueSchema } from './currency-rate.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';

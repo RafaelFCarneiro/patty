@@ -6,7 +6,7 @@ import {
   type EntityApplier,
 } from '../../../../src/diplomat/db/effects.js';
 import { currencyRates, tags, transactions } from '../../../../src/diplomat/db/schema.js';
-import { query, rejecting, txReturning } from './fakeTx.js';
+import { query, rejecting, txReturning } from './fake-tx.js';
 
 const OWNER = 'user-1';
 const row = { id: 'row-1', version: 0 };

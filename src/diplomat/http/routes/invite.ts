@@ -7,12 +7,12 @@ import { AUTH_MESSAGES } from '../../../models/auth/message.js';
 import { DEFAULT_LANDING_PATH, INVITE_CODE_PARAM } from '../../../models/auth/origin.js';
 import { validation } from '../../../models/error.js';
 import { ClaimedCodeEchoSchema, ClaimInviteFormSchema, InviteQuerySchema } from '../../../wire/in/auth.js';
-import { INVITE_PATH, SEE_OTHER } from '../authPaths.js';
+import { INVITE_PATH, SEE_OTHER } from '../auth-paths.js';
 import type { AuthRoutesContext } from '../context.js';
 import { sessionCookie } from '../cookies.js';
-import { addFormParser, FORM_BODY_LIMIT_BYTES, SECRET_URL_HEADERS, page } from '../formPages.js';
-import { createAttemptLimiter, type AttemptLimiter } from '../rateLimiter.js';
-import { renderInvitePage } from '../userPages.js';
+import { addFormParser, FORM_BODY_LIMIT_BYTES, SECRET_URL_HEADERS, page } from '../form-pages.js';
+import { createAttemptLimiter, type AttemptLimiter } from '../rate-limiter.js';
+import { renderInvitePage } from '../user-pages.js';
 
 const INVALID_FORM_STATUS = httpStatus(validation([]));
 

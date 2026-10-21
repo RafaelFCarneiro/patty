@@ -5,13 +5,13 @@ import type { CurrencyCode } from '../../../models/money.js';
 import { BudgetViewRowSchema, type BudgetViewRow } from '../../../wire/db/budgets.js';
 import type { Db } from '../driver.js';
 import { budgets } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqliteErrors.js';
+import { isUniqueConstraintViolation } from '../sqlite-errors.js';
 import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
 import { ownedBy, ownedWhere } from '../queries/scope.js';
 
 // Budgets target either a top-level category or a sub-category — both rows in `categories` — so
 // the display projection always joins the node plus its (possibly absent) parent. Mirrors
-// `subCategoriesRepo`'s `SUB_SELECT` (`diplomat/db/repos/subCategories.ts`): a hand-written raw
+// `subCategoriesRepo`'s `SUB_SELECT` (`diplomat/db/repos/sub-categories.ts`): a hand-written raw
 // join, not the query builder, for the same self-referencing-table reason. `node.names`/
 // `parent.names` travel alongside the raw names so the repo itself never has to decide a locale.
 // `node.id` (== `b.category_id`) travels too as `target_id`, needed to match spend against it in

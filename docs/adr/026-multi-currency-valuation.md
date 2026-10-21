@@ -148,7 +148,7 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
        `amount.toFixed(2)` (`logic/transaction.ts#deriveIdempotencyKey`) — two distinct same-day BTC lines could
        collide on a `...-0.00` key and the second was silently dropped as a duplicate. Fixed by threading the
        importing account/card's own currency decimals (`decimalsLookup`) through `defaultStatementLines` into
-       `deriveIdempotencyKey`, resolved once per import in `controllers/creditCard|account/transaction.ts`, for
+       `deriveIdempotencyKey`, resolved once per import in `controllers/credit-card|account/transaction.ts`, for
        any statement naming an account or card. An unattached statement with per-item currency overrides still
        resolves decimals once for the whole batch (defaults to USD) — tracked separately as
        [#184](https://github.com/RafaelFCarneiro/fintrack/issues/184).

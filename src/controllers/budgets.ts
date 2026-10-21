@@ -13,7 +13,7 @@ import {
   rowsToViews,
   toView,
 } from '../logic/budget.js';
-import { consolidateInCurrency } from '../logic/currencyRate.js';
+import { consolidateInCurrency } from '../logic/currency-rate.js';
 import { decimalsLookup } from '../logic/money.js';
 import { periodRange } from '../logic/period.js';
 import * as persistence from '../logic/persistence.js';

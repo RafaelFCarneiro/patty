@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
-import { version } from '../common/buildVersion.js';
+import { version } from '../common/build-version.js';
 import type { Config } from '../config.js';
 import { boot } from './boot.js';
 import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';

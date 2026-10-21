@@ -79,7 +79,7 @@ export const dashboardApplier: EntityApplier = {
 ```
 
 This is **structurally identical to `tagApplier`** (`tags.name` UNIQUE) and reuses the shared
-`isUniqueConstraintViolation` (`diplomat/db/sqliteErrors.ts`). Net: dashboards leaves the bespoke-third-pattern
+`isUniqueConstraintViolation` (`diplomat/db/sqlite-errors.ts`). Net: dashboards leaves the bespoke-third-pattern
 bucket and joins the tags/bills "versioned entity with a unique secondary key" family. `update`/`delete` are the
 generic `versionedTableApplier` mechanics (keyed on `id`+`version`). The old `isPrimaryKeyConstraintViolation`
 path is deleted (a fresh-uuid `id` never collides; the name collision is now a UNIQUE, not a PK, violation).

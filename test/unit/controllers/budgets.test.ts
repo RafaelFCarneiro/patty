@@ -15,7 +15,7 @@ import {
   type BudgetViewInput,
 } from '../../../src/models/budget.js';
 import { type Category, type SubCategory, CategoryKind } from '../../../src/models/category.js';
-import type { CurrencyRateEntity } from '../../../src/models/currencyRate.js';
+import type { CurrencyRateEntity } from '../../../src/models/currency-rate.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode, type Currency } from '../../../src/models/money.js';
 import { PersistOp } from '@rfc0/effect-runner';

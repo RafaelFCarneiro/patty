@@ -1,6 +1,6 @@
 import { withRemedyHint, type AppError } from '../../common/errors.js';
 import type { Remedy } from '../../models/remedy.js';
-import { ToolName } from './toolName.js';
+import { ToolName } from './tool-name.js';
 
 /** The MCP tool that performs each domain operation a rejected call is told to use instead. */
 const REMEDY_TOOL = {

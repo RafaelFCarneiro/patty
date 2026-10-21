@@ -3,7 +3,7 @@ import * as inviteAdapters from '../../../adapters/invites.js';
 import type { InviteEntity } from '../../../models/auth/users.js';
 import type { Db } from '../driver.js';
 import { invites } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqliteErrors.js';
+import { isUniqueConstraintViolation } from '../sqlite-errors.js';
 import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
 
 export type InvitesRepo = {

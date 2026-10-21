@@ -9,10 +9,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppError } from '../../../src/common/errors.js';
 import * as accountAdapters from '../../../src/adapters/accounts.js';
 import * as billAdapters from '../../../src/adapters/bills.js';
-import * as creditCardAdapters from '../../../src/adapters/creditCards.js';
+import * as creditCardAdapters from '../../../src/adapters/credit-cards.js';
 import * as transactionAdapters from '../../../src/adapters/transactions.js';
-import { payBill, revertBillPayment } from '../../../src/controllers/creditCard/bill.js';
-import { deleteCreditCard } from '../../../src/controllers/creditCard/creditCard.js';
+import { payBill, revertBillPayment } from '../../../src/controllers/credit-card/bill.js';
+import { deleteCreditCard } from '../../../src/controllers/credit-card/credit-card.js';
 import { renameDashboard, saveDashboard } from '../../../src/controllers/dashboards.js';
 import { setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
@@ -21,13 +21,13 @@ import { type Db, createTransactionRunner, openDatabase } from '../../../src/dip
 import { accountApplier, accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from '../../../src/diplomat/db/repos/bills.js';
 import { categoryApplier } from '../../../src/diplomat/db/repos/categories.js';
-import { creditCardApplier, creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
+import { creditCardApplier, creditCardsRepo } from '../../../src/diplomat/db/repos/credit-cards.js';
 import { dashboardApplier, dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { merchantApplier, merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
 import { settingsRepo, userSettingsApplier } from '../../../src/diplomat/db/repos/settings.js';
 import { tagApplier } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
-import { transactionTagApplier } from '../../../src/diplomat/db/repos/transactionTags.js';
+import { transactionTagApplier } from '../../../src/diplomat/db/repos/transaction-tags.js';
 import {
   accounts,
   bills,
@@ -48,7 +48,7 @@ import {
   type ApplierRegistry,
   type EntityApplier,
 } from '../../../src/diplomat/db/effects.js';
-import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
+import { isSqliteBusy } from '../../../src/diplomat/db/sqlite-errors.js';
 import {
   checkVersion,
   MAX_RUN_EFFECTS_ATTEMPTS,
@@ -64,7 +64,7 @@ import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
 import { CATEGORY_ENTITY_TAG, CategoryKind } from '../../../src/models/category.js';
-import { CREDIT_CARD_ENTITY_TAG, type CreditCardEntity } from '../../../src/models/creditCard.js';
+import { CREDIT_CARD_ENTITY_TAG, type CreditCardEntity } from '../../../src/models/credit-card.js';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
 import { conflict, validation } from '../../../src/models/error.js';
 import { Locale, LocaleSource, USER_SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
@@ -79,7 +79,7 @@ import {
   TransactionType,
   type Transaction,
 } from '../../../src/models/transaction.js';
-import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transactionTag.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transaction-tag.js';
 import type { TransactionRowEntity } from '../../../src/adapters/transactions.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 
@@ -1620,7 +1620,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
         });
       }
       // A fresh read on retry finds the winner already there — touches it instead of inserting,
-      // exactly what `resolveBillWrite` (`controllers/creditCard/transaction.ts`) does.
+      // exactly what `resolveBillWrite` (`controllers/credit-card/transaction.ts`) does.
       return okAsync({
         persist: [
           { op: PersistOp.enum.update, entity: BILL_ENTITY_TAG, model: { ...winner, version: 0 } },

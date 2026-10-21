@@ -68,7 +68,7 @@ creates default to `pending`).
 ### Feature B — concrete controller
 
 **Layering constraint that shapes this.** `confirmTransaction` lives in `controllers/transaction/core.ts`, which
-**must not import `controllers/account/*` or `controllers/creditCard/*`** (dependency table — the shared core
+**must not import `controllers/account/*` or `controllers/credit-card/*`** (dependency table — the shared core
 never depends on the aggregates). So confirm **cannot delegate** to `updateAccountTransaction`/
 `updateCardTransaction`, and the aggregate guards (`assertAccountOwnedLegs`, `guardTransferMutability`, the
 bill-payment block) are not reachable from here. "Reuse the update flow passing status" is therefore realized as

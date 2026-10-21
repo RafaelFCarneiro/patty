@@ -1,9 +1,9 @@
 import { runEffects } from '@rfc0/effect-runner';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
 import { AUTH_APPLIERS, bindAuthRunEffects, createAuthDeps } from './auth.js';
-import { version } from '../common/buildVersion.js';
+import { version } from '../common/build-version.js';
 import { loadConfig } from '../config.js';
-import { clientConfigs } from '../diplomat/clientConfig/clients.js';
+import { clientConfigs } from '../diplomat/client-config/clients.js';
 import { runCli } from '../diplomat/cli/commands.js';
 import type { CliIo, Shell } from '../diplomat/cli/io.js';
 import * as tty from '../diplomat/cli/terminal.js';
@@ -12,7 +12,7 @@ import { closeDatabase, openDatabase, type Db } from '../diplomat/db/driver.js';
 import { createEngineContext } from '../diplomat/db/engine.js';
 import type { DatabaseAhead } from '../models/database.js';
 import { AuthMode } from '../models/auth/mode.js';
-import { createSignInFor } from './signIn/wiring.js';
+import { createSignInFor } from './sign-in/wiring.js';
 
 /**
  * Composition root of the command mode (`setup`, `auth …`, `login`, `logout`): the one place that joins the database,

@@ -61,7 +61,7 @@ export type TransactionCursor = z.infer<typeof TransactionCursorSchema>;
 export const NOTE_MAX_LENGTH = 1000;
 
 // Shared statement-import field descriptions (ADR-017 step 2) — both ImportCardStatementItemSchema
-// (models/creditCard.ts) and ImportAccountStatementItemSchema/ImportCardStatementSchema/
+// (models/credit-card.ts) and ImportAccountStatementItemSchema/ImportCardStatementSchema/
 // ImportAccountStatementSchema reuse these verbatim; named once here so the two aggregate schemas
 // never copy-paste the same describe() text (code-quality.md "constants over literals").
 export const STATEMENT_ITEMS_DESCRIPTION = 'Statement lines to import';
@@ -176,7 +176,7 @@ export type CategoryFields = z.infer<typeof CategoryFieldsSchema>;
 
 /** Minimal shared movement vocabulary (ADR-019) — the transaction core's create input. Names no
  *  context field (`account`, `card`, `billMonth`/`billYear`): each aggregate `.extend`s this schema
- *  with its own vocabulary (`models/creditCard.ts`, `models/account.ts`) rather than the core
+ *  with its own vocabulary (`models/credit-card.ts`, `models/account.ts`) rather than the core
  *  carrying the union and aggregates `.omit`-ing what isn't theirs. */
 export const CreateTransactionSchema = z.object({
   description: z.string().min(1).describe('What was paid/received, e.g. "Uber para o aeroporto"'),
@@ -217,7 +217,7 @@ export type DefaultedStatementLine<Line extends StatementLine> = Line & {
 
 /** Shared base for the aggregate-specific update tools (ADR-017), mirroring how
  *  CreateTransactionSchema is the minimal shared base for add_card_purchase/add_account_expense/
- *  add_account_income (ADR-019) — `UpdateCardTransactionSchema` (models/creditCard.ts) and
+ *  add_account_income (ADR-019) — `UpdateCardTransactionSchema` (models/credit-card.ts) and
  *  `UpdateAccountTransactionSchema` (models/account.ts) `.extend` this one with their own context
  *  fields (`billMonth`/`billYear`, `account`), rather than this schema carrying them for the
  *  aggregates to `.omit`. */

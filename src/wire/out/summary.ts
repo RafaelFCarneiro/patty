@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { PeriodSchema } from '../../models/date.js';
-import { ConvertedTotalSchema } from '../../models/currencyRate.js';
+import { ConvertedTotalSchema } from '../../models/currency-rate.js';
 import { CurrencySummarySchema } from '../../models/summary.js';
 
 export const SpendingSummaryOut = z.object({

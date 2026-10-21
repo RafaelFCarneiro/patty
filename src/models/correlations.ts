@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { IsoDate, PeriodSchema } from './date.js';
-import { ConvertedTotalSchema } from './currencyRate.js';
+import { ConvertedTotalSchema } from './currency-rate.js';
 import type { ValidationError } from './error.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';

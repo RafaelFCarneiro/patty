@@ -20,13 +20,13 @@ import {
   ORDER_BY_COLUMN,
   SummaryRowSchema,
 } from '../../../wire/db/transactions.js';
-import { GROUP_BY_MAP, METRIC_MAP } from '../queries/aggregateWhitelist.js';
+import { GROUP_BY_MAP, METRIC_MAP } from '../queries/aggregate-whitelist.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../queries/filters.js';
 import { ownedBy, type RepoScope } from '../queries/scope.js';
 import { transactions } from '../schema.js';
-import { fullTxSelect } from '../queries/transactionSelect.js';
-import { txPredicates } from '../queries/txPredicates.js';
+import { fullTxSelect } from '../queries/transaction-select.js';
+import { txPredicates } from '../queries/tx-predicates.js';
 import { ownedTableApplier, type EntityApplier, type Tx } from '../effects.js';
 
 const SearchCountRowSchema = z.object({ count: z.number().int() });

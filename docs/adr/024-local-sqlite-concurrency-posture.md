@@ -47,7 +47,7 @@ plus one architectural clarification.
 
 3. **Retry `SQLITE_BUSY` in `runEffects`, bounded** — defense-in-depth for contention that outlives the timeout
    (WAL can still raise `SQLITE_BUSY`/`SQLITE_BUSY_SNAPSHOT` under checkpoint starvation). Add `isSqliteBusy`
-   (`diplomat/db/sqliteErrors.ts`, same `.code`/extended-code shape as the existing
+   (`diplomat/db/sqlite-errors.ts`, same `.code`/extended-code shape as the existing
    `isForeignKeyConstraintViolation`/`isUniqueConstraintViolation` checks); `applyBatch` treats it like a
    `VersionConflict` — roll back and re-invoke the flow, bounded by the existing attempt budget — so physical
    contention degrades to a bounded retry and finally the generic `conflict` error, never a 500.
@@ -74,7 +74,7 @@ no safety net for timeout-exceeding contention. WAL is low-cost and the bigger c
 | --- | --- |
 | User-visible BUSY | Eliminated in the common case (timeout waits it out); bounded-retried in the rare case |
 | Reader/writer concurrency | WAL removes the rollback-journal blocking between the sidecar and the writer |
-| Scope | `driver.ts` (two PRAGMAs) + `sqliteErrors.ts`/`effects.ts` (one retryable class) — small |
+| Scope | `driver.ts` (two PRAGMAs) + `sqlite-errors.ts`/`effects.ts` (one retryable class) — small |
 | Local-first | Preserved — still one encrypted file, zero infra (ADR-004) |
 | Cost | WAL sidecar files (`-wal`/`-shm`) to account for in backup; verify WAL + encryption |
 
@@ -107,7 +107,7 @@ Violates the local-first, zero-infra posture (ADR-004/005). Not for this release
 2. [x] `driver.ts`: on `openDatabase`, execute `PRAGMA journal_mode = WAL` and `PRAGMA busy_timeout = 5000`
    (named constants), against the same client, before returning the Drizzle handle. **Verify WAL works with the
    encryption key**; fall back to busy_timeout-only if not, with a note.
-3. [x] `sqliteErrors.ts`: add `isSqliteBusy`. `effects.ts`: `applyBatch` treats `SQLITE_BUSY` as a retryable
+3. [x] `sqlite-errors.ts`: add `isSqliteBusy`. `effects.ts`: `applyBatch` treats `SQLITE_BUSY` as a retryable
    conflict (bounded by the existing attempt budget), same rollback-and-re-invoke path as `VersionConflict`.
 4. [x] Tests: unit — `SQLITE_BUSY` classified as retryable and bounded; integration — a fresh DB reports
    `journal_mode = wal` and a non-zero `busy_timeout`.

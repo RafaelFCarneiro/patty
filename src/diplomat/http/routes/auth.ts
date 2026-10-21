@@ -8,12 +8,12 @@ import { DEFAULT_LANDING_PATH } from '../../../models/auth/origin.js';
 import { validation } from '../../../models/error.js';
 import { LoginFormSchema, NextQuerySchema, SetupFormSchema } from '../../../wire/in/auth.js';
 import { replyError } from '../respond.js';
-import { renderLoginPage, renderSetupPage } from '../authPages.js';
-import { LOGIN_PATH, LOGOUT_PATH, SEE_OTHER, SETUP_PATH } from '../authPaths.js';
+import { renderLoginPage, renderSetupPage } from '../auth-pages.js';
+import { LOGIN_PATH, LOGOUT_PATH, SEE_OTHER, SETUP_PATH } from '../auth-paths.js';
 import type { AuthRoutesContext } from '../context.js';
-import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../formPages.js';
+import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../form-pages.js';
 import { clearedSessionCookie, readCookie, SESSION_COOKIE_NAME, sessionCookie } from '../cookies.js';
-import { createAttemptLimiter } from '../rateLimiter.js';
+import { createAttemptLimiter } from '../rate-limiter.js';
 
 const statusOf = (error: AppError): number => httpStatus(error);
 const RATE_LIMITED_STATUS = statusOf(authErrors.rateLimited);

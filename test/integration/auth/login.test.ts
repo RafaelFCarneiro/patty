@@ -7,12 +7,12 @@ import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { loadConfig } from '../../../src/config.js';
 import { type PromptEnd, type Terminal, promptEnded } from '../../../src/diplomat/cli/terminal.js';
 import { LOGIN_MESSAGES, offerSignIn, runLogin, runLogout } from '../../../src/diplomat/cli/commands/login.js';
-import { keychainFailures, GRANT_POLL_INTERVAL_MS } from '../../../src/models/auth/signIn.js';
+import { keychainFailures, GRANT_POLL_INTERVAL_MS } from '../../../src/models/auth/sign-in.js';
 import { conflict } from '../../../src/models/error.js';
 import { AUTH_MESSAGES } from '../../../src/models/auth/message.js';
 import { NPX_COMMAND } from '../../../src/models/package.js';
-import { createSignInInterpreter } from '../../../src/composition/signIn/interpreter.js';
-import { startSignInServer } from '../../../src/composition/signIn/server.js';
+import { createSignInInterpreter } from '../../../src/composition/sign-in/interpreter.js';
+import { startSignInServer } from '../../../src/composition/sign-in/server.js';
 import type { AppContext } from '../app-builder.js';
 import {
   authDepsOf,

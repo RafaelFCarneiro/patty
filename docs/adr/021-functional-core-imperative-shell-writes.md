@@ -245,7 +245,7 @@ gets its own generic atomicity/conflict/idempotency suite.
      this case) — the whole batch rolls back and the flow re-invokes, re-reading `findByCycle` and emitting a
      version-guarded *touch* of the winner's row instead of a second insert, never a wrong-id no-op. The
      "ensure" decision itself (insert-a-fresh-`open`-bill vs. touch-the-existing-one) moved to the domain as
-     `controllers/creditCard/transaction.ts`'s `resolveBillWrite`, shared by `addCardPurchase` (new cycle) and
+     `controllers/credit-card/transaction.ts`'s `resolveBillWrite`, shared by `addCardPurchase` (new cycle) and
      `updateCardTransaction`'s reassignment branch (target cycle); the transaction row carries `billId` at
      insert/update, so there is no separate attach step and no orphan to self-heal. Guard-what-you-validated:
      every bill whose paid status the flow read is also version-guarded in the same batch — `addCardPurchase`
@@ -313,12 +313,12 @@ gets its own generic atomicity/conflict/idempotency suite.
      `create_tag`/`delete_tag`, `create_category`/`delete_category`/`create_sub_category`/`delete_sub_category`,
      `create_credit_card`/`delete_credit_card` converted end to end (MCP + REST). Three new entities, each owning
      its own tag (`models/tag.ts`'s `TAG_ENTITY_TAG`, `models/category.ts`'s `CATEGORY_ENTITY_TAG`,
-     `models/creditCard.ts`'s `CREDIT_CARD_ENTITY_TAG`). `tagApplier` (`diplomat/db/repos/tags.ts`) mirrors
+     `models/credit-card.ts`'s `CREDIT_CARD_ENTITY_TAG`). `tagApplier` (`diplomat/db/repos/tags.ts`) mirrors
      `billApplier`'s pattern: `tags.name` carries its own `UNIQUE` constraint beyond the `id`-scoped
      `onConflictDoNothing`, so a concurrent same-name create surfaces as a genuine unique-constraint violation,
      recognized and rethrown as `VersionConflict` — the retried flow's own `assertTagNameAvailable` then sees
      the committed row and returns `duplicate_name` instead of a raw 500. The shared cause-chain-walking
-     unique-constraint check moved out of `bills.ts` into `diplomat/db/sqliteErrors.ts`'s
+     unique-constraint check moved out of `bills.ts` into `diplomat/db/sqlite-errors.ts`'s
      `isUniqueConstraintViolation`, used by both appliers now. `deleteTag` stays idempotent-by-design (delete by
      id, no name resolution): a missing id returns `{ deleted: false }` on an empty `persist` batch, unchanged
      pre-ADR-021 behavior — not an error. `categoryApplier` (`diplomat/db/repos/categories.ts`) is shared by a
@@ -338,13 +338,13 @@ gets its own generic atomicity/conflict/idempotency suite.
      now-redundant `categoriesRepo.delete`/`subCategoriesRepo.delete` repo methods dropped their manual
      `merchant_category` cleanup (the cascade handles it) — and, once checked, turned out to have no other
      caller left at all (see the `deps` write-method note below), so they were removed outright rather than kept
-     simplified. `creditCardApplier` (`diplomat/db/repos/creditCards.ts`) is plain
+     simplified. `creditCardApplier` (`diplomat/db/repos/credit-cards.ts`) is plain
      `versionedTableApplier(creditCards)` — a first version of this applier read the card's own `accountId`
      back and cascade-deleted every correlated bill/transaction/tag itself, mirroring the pre-ADR-021
      `deleteCard`'s cascade; caught in review as the repo deciding a business question ("what happens when a
      card is deleted") — the exact ADR-015/018 smell this whole ADR exists to remove, recurring one layer down
      — and fixed before merge. **The cascade decision now lives in the domain.** `deleteCreditCard`
-     (`controllers/creditCard/creditCard.ts`) reads every bill (`billsRepo.findAllByCard`, new) and transaction
+     (`controllers/credit-card/credit-card.ts`) reads every bill (`billsRepo.findAllByCard`, new) and transaction
      (`transactionsRepo.findAllCorrelatedToCard`, new) correlated to the card and emits their own removal as
      explicit `Persistable`s, in FK-safe order. A bill with a payment transfer has a **circular reference** with
      it (`bills.payment_transaction_id` → the transfer; the transfer's own `bill_id` → the bill; no `ON DELETE`
@@ -415,7 +415,7 @@ gets its own generic atomicity/conflict/idempotency suite.
      suites (materialization, `through`, idempotent re-run) passing unchanged through the new shell path.
    - [x] Phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome contract, generalized to
      `runEffectsSequence`'s per-unit `SequenceOutcome` for per-item created/duplicate/needs-review status —
-     ADR-022 step 3): `import_card_statement`/`import_account_statement` (`controllers/creditCard/transaction.ts`/
+     ADR-022 step 3): `import_card_statement`/`import_account_statement` (`controllers/credit-card/transaction.ts`/
      `controllers/account/transaction.ts`) default each line (`controllers/transaction/bulk.ts`'s
      `defaultStatementLines`) and return a `StatementImportPlan` — the defaulted lines plus a `flowFor` binding
      one line to the aggregate's own single-line flow (`addCardPurchase`, `addAccountExpense`/`addAccountIncome`)

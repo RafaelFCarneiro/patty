@@ -20,7 +20,7 @@ import {
 } from '../../models/auth/grant.js';
 import type { Principal } from '../../models/auth/principal.js';
 import { type Scope, WRITE_SCOPE } from '../../models/auth/scope.js';
-import { SESSION_ONLY_LABEL, UNKNOWN_CLIENT_NAME } from '../../models/auth/signIn.js';
+import { SESSION_ONLY_LABEL, UNKNOWN_CLIENT_NAME } from '../../models/auth/sign-in.js';
 import {
   AccessTokenKind,
   TOKEN_NAME_MAX_LENGTH,

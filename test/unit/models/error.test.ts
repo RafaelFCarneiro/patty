@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ambiguous, notFound, validation } from '../../../src/models/error.js';
 import { accountErrors } from '../../../src/models/account.js';
 import { categoryErrors } from '../../../src/models/category.js';
-import { cardErrors } from '../../../src/models/creditCard.js';
+import { cardErrors } from '../../../src/models/credit-card.js';
 import { transactionErrors } from '../../../src/models/transaction.js';
 import { billErrors } from '../../../src/models/bill.js';
 import { tagErrors } from '../../../src/models/tag.js';

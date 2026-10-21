@@ -23,7 +23,7 @@ import {
   toolCall,
   useAuthApp,
 } from './helpers.js';
-import { PUBLIC_ROUTES } from '../../../src/diplomat/http/authPaths.js';
+import { PUBLIC_ROUTES } from '../../../src/diplomat/http/auth-paths.js';
 
 const createApp = useAuthApp();
 

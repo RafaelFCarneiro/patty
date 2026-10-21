@@ -574,7 +574,7 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
   // top-level defaults" case is impossible by construction now (ADR-017 step 2): import_card_statement
   // items structurally have no `account` field (mirroring add_card_purchase's own single-purpose
   // schema) — a statement belongs wholly to the ONE card named at the top level. `.strict()` on
-  // ImportCardStatementItemSchema (models/creditCard.ts) turns an item-level `account` into a
+  // ImportCardStatementItemSchema (models/credit-card.ts) turns an item-level `account` into a
   // schema-validation error the MCP SDK rejects before the tool handler ever runs — a stronger
   // guarantee than the old per-item runtime `validation` error, since the whole call is refused
   // rather than one item coming back with status: 'error'.

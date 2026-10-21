@@ -17,7 +17,7 @@ import type {
 import type { CurrencyCode } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { CategorySpend } from '../models/transaction.js';
-import type { CurrencyAmount } from '../models/currencyRate.js';
+import type { CurrencyAmount } from '../models/currency-rate.js';
 
 export const hasCategory = (input: BudgetTargetFields): input is BudgetTargetFields & { category: string } =>
   input.category !== undefined;

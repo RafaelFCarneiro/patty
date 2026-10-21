@@ -56,7 +56,7 @@ aggregate; the credit-card aggregate never reasons about transfer invariants.**
    - **Implementation detail (each aggregate asks its own question — neither shares or negates the other's
      judgment):** `controllers/resolve.ts`'s `resolveLegAccounts(deps, tx)` is a neutral I/O helper — it resolves
      the accounts referenced by a transaction's leg(s), making no ownership judgment itself. The credit-card
-     aggregate's own `assertCreditAccountLeg` (`controllers/creditCard/transaction.ts`) asks "is a leg `credit`".
+     aggregate's own `assertCreditAccountLeg` (`controllers/credit-card/transaction.ts`) asks "is a leg `credit`".
      The account aggregate's own `assertAccountOwnedLegs` (`controllers/account/transaction.ts`) asks the
      different, positive question "is every leg one of *my* types", tested against `logic/account.ts`'s
      `isAccountOwnedType` — an explicit enumeration of `checking`/`savings`/`wallet`/`investment`, not the

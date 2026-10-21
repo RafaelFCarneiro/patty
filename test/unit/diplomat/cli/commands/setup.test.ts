@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClientConfigs } from '../../../../../src/controllers/deps.js';
 import { EXIT_FAILURE, EXIT_OK } from '../../../../../src/diplomat/cli/io.js';
 import { runSetup as runSetupFor } from '../../../../../src/diplomat/cli/commands/setup.js';
-import { clientConfigs } from '../../../../../src/diplomat/clientConfig/clients.js';
-import { STDIO_ENTRY, VSCODE_ENTRY } from '../../../../../src/diplomat/clientConfig/merge.js';
+import { clientConfigs } from '../../../../../src/diplomat/client-config/clients.js';
+import { STDIO_ENTRY, VSCODE_ENTRY } from '../../../../../src/diplomat/client-config/merge.js';
 
 /** The I/O `setup` prints through, captured. */
 const captureIo = (clients: ClientConfigs) => {
@@ -25,7 +25,7 @@ const runSetup = (tool: string | undefined, profile?: string) => {
 const importSetup = async () => {
   const { runSetup: run, runGuidedSetup: runGuided } =
     await import('../../../../../src/diplomat/cli/commands/setup.js');
-  const { clientConfigs: clients } = await import('../../../../../src/diplomat/clientConfig/clients.js');
+  const { clientConfigs: clients } = await import('../../../../../src/diplomat/client-config/clients.js');
   const { io, out, err } = captureIo(clients);
   return {
     out,

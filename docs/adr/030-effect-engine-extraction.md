@@ -25,7 +25,7 @@ diplomat:
 - **The port** — `EntityApplier` (insert/update/delete over a `Tx`), `ApplierRegistry`, `ReadBack`, and the
   "is this failure retryable?" classification the retry loop depends on. This is the core↔adapter contract.
 - **The SQLite adapter** — `versionedTableApplier` (Drizzle `and`/`eq`, `SQLiteTable`/`AnySQLiteColumn`),
-  `sqliteErrors.ts` (`LibsqlError` code matching), `Tx` derived from the libSQL Drizzle handle (`driver.ts`).
+  `sqlite-errors.ts` (`LibsqlError` code matching), `Tx` derived from the libSQL Drizzle handle (`driver.ts`).
 
 The core reaches into the adapter today via: `import { and, eq } from 'drizzle-orm'`, the sqlite-core column/table
 types, `type Tx = Parameters<Db['transaction']>[0][0]`, and `isSqliteBusy`/`isForeignKeyConstraintViolation`.
@@ -74,7 +74,7 @@ the later lift-out is a move, not a rewrite.
 
 ### The SQLite adapter (`diplomat/db`)
 
-- `versionedTableApplier` (Drizzle `and`/`eq`, `SQLiteTable`), `sqliteErrors.ts` (implements
+- `versionedTableApplier` (Drizzle `and`/`eq`, `SQLiteTable`), `sqlite-errors.ts` (implements
   `isTransientContention` + the unique/FK detection), `driver.ts` (provides `runInTransaction` from the libSQL
   Drizzle handle and the concrete `Tx` type). Implements the port; imports `effects/`, never the reverse.
 

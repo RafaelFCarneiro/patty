@@ -8,16 +8,16 @@ import { AUTH_MESSAGES } from '../../../models/auth/message.js';
 import { CONNECT_CODE_PARAM } from '../../../models/auth/origin.js';
 import { validation } from '../../../models/error.js';
 import { ConnectDecision, ConnectFormSchema, ConnectQuerySchema } from '../../../wire/in/auth.js';
-import { CONNECT_PATH } from '../authPaths.js';
+import { CONNECT_PATH } from '../auth-paths.js';
 import type { AuthRoutesContext } from '../context.js';
-import { renderConnectPage, renderConnectResultPage } from '../connectPages.js';
-import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../formPages.js';
+import { renderConnectPage, renderConnectResultPage } from '../connect-pages.js';
+import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../form-pages.js';
 import {
   createRateLimiter,
   LOGIN_ATTEMPT_WINDOW_MS,
   MAX_CODE_LOOKUP_FAILURES_PER_IP,
   type RateLimiter,
-} from '../rateLimiter.js';
+} from '../rate-limiter.js';
 import { requireSession } from '../session.js';
 
 const OK_STATUS = 200;

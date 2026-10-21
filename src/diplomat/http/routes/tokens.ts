@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
-import { createToken, listTokens, revokeToken } from '../../../controllers/accessTokens.js';
+import { createToken, listTokens, revokeToken } from '../../../controllers/access-tokens.js';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import { UserRole } from '../../../models/auth/owner.js';
@@ -8,12 +8,12 @@ import type { Principal } from '../../../models/auth/principal.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
 import { validation } from '../../../models/error.js';
 import { CreateTokenFormSchema } from '../../../wire/in/auth.js';
-import { SEE_OTHER, TOKEN_REVOKE_PATH, TOKENS_PATH } from '../authPaths.js';
+import { SEE_OTHER, TOKEN_REVOKE_PATH, TOKENS_PATH } from '../auth-paths.js';
 import type { AuthRoutesContext } from '../context.js';
-import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../formPages.js';
-import { createAttemptLimiter } from '../rateLimiter.js';
+import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../form-pages.js';
+import { createAttemptLimiter } from '../rate-limiter.js';
 import { requireSession } from '../session.js';
-import { renderTokenCreatedPage, renderTokensPage } from '../tokenPages.js';
+import { renderTokenCreatedPage, renderTokensPage } from '../token-pages.js';
 
 const INVALID_FORM_STATUS = httpStatus(validation([]));
 // A wrong step-up password is a refused action inside a valid session, not a missing credential.
@@ -84,7 +84,7 @@ const revokePage = (ctx: AuthRoutesContext) => async (req: FastifyRequest, reply
 /**
  * `/ui/access/tokens` (ADR-033 §3): the personal-access-token pages. Browser HTML behind the session cookie and the
  * hook's CSRF check — a bearer token is never accepted on `/ui`, so a token can never mint, widen or revoke
- * another. Thin: parse the form, run the `controllers/accessTokens.ts` flow, render a page. The plaintext token
+ * another. Thin: parse the form, run the `controllers/access-tokens.ts` flow, render a page. The plaintext token
  * is rendered once, by the response to the create POST, and nowhere else.
  */
 export const registerTokenRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {

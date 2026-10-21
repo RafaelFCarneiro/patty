@@ -34,12 +34,12 @@ import {
   USER_ROLE_PATH,
   USERS_CAP_PATH,
   USERS_PATH,
-} from '../authPaths.js';
+} from '../auth-paths.js';
 import type { AuthRoutesContext } from '../context.js';
-import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../formPages.js';
-import { createAttemptLimiter, type AttemptLimiter } from '../rateLimiter.js';
+import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../form-pages.js';
+import { createAttemptLimiter, type AttemptLimiter } from '../rate-limiter.js';
 import { requireAdmin, requireSession } from '../session.js';
-import { renderInvitedPage, renderUsersPage } from '../userPages.js';
+import { renderInvitedPage, renderUsersPage } from '../user-pages.js';
 
 const INVALID_FORM_STATUS = httpStatus(validation([]));
 // A wrong step-up password is a refused action inside a valid session, not a missing credential.

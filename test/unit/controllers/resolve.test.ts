@@ -4,7 +4,7 @@ import type { Deps } from '../../../src/controllers/deps.js';
 import { AccountType, type Account } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp } from '@rfc0/effect-runner';
-import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transactionTag.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transaction-tag.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-1',

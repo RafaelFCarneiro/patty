@@ -9,7 +9,7 @@ import {
   CLIENT_VERSION_MAX_LENGTH,
   UNKNOWN_CLIENT_NAME,
   UNKNOWN_CLIENT_VERSION,
-} from '../../models/auth/signIn.js';
+} from '../../models/auth/sign-in.js';
 import { TOKEN_NAME_MAX_LENGTH, TokenAccess, TokenExpiry } from '../../models/auth/token.js';
 
 // Login accepts whatever was typed (an unknown name must fail like a wrong password, not like bad

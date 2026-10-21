@@ -83,7 +83,7 @@ table can come later if multi-note is ever wanted.
 > `docs/code-style.md`, `docs/code-quality.md`, and conform (diplomatic layering, zod-decode at boundaries,
 > constants over literals, single responsibility). Mirror how `rawInput` is threaded through the transaction
 > stack — `note` follows the exact same path. Skim `src/diplomat/db/schema.ts`,
-> `src/diplomat/db/queries/transactionSelect.ts`, `src/models/transaction.ts`, `src/adapters/transactions.ts`,
+> `src/diplomat/db/queries/transaction-select.ts`, `src/models/transaction.ts`, `src/adapters/transactions.ts`,
 > `src/wire/{in,out,db}/transactions.ts`, `src/controllers/transactions.ts`, `src/diplomat/mcp/server.ts`,
 > `src/diplomat/http/routes.ts`.
 

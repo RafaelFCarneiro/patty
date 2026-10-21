@@ -9,7 +9,7 @@ import {
   type Transaction,
 } from '../../../src/models/transaction.js';
 import { ImportAccountStatementItemSchema } from '../../../src/models/account.js';
-import { ImportCardStatementItemSchema } from '../../../src/models/creditCard.js';
+import { ImportCardStatementItemSchema } from '../../../src/models/credit-card.js';
 import * as wireInTransactions from '../../../src/wire/in/transactions.js';
 import * as transactionAdapters from '../../../src/adapters/transactions.js';
 
@@ -284,7 +284,7 @@ describe('dbToModel', () => {
 // Unlike the retired god CreateTransactionsBulkSchema's per-line BulkTransactionItemSchema (which
 // silently stripped subCategory/tags as unknown keys), the aggregate-specific statement item
 // schemas below are `.strict()` — same rationale as AddCardPurchaseSchema/AddAccountMovementSchema
-// (models/creditCard.ts, models/account.ts): a caller who mistakenly sends a field that doesn't
+// (models/credit-card.ts, models/account.ts): a caller who mistakenly sends a field that doesn't
 // apply to a statement line should get a validation error, not have it silently dropped.
 describe('ImportAccountStatementItemSchema', () => {
   it('rejects subCategory and tags on account statement items', () => {

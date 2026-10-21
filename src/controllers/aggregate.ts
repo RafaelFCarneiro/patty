@@ -2,7 +2,7 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import { guard } from '../common/result.js';
 import { shapeAggregateResult, wantsDisplayConversion } from '../logic/aggregate.js';
-import { consolidateInCurrency } from '../logic/currencyRate.js';
+import { consolidateInCurrency } from '../logic/currency-rate.js';
 import { decimalsLookup } from '../logic/money.js';
 import { assertHasPeriodOrRange, resolveDateRange } from '../logic/period.js';
 import {

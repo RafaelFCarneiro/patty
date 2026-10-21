@@ -3,7 +3,7 @@ import * as tagAdapters from '../../../adapters/tags.js';
 import type { Tag, TagEntity } from '../../../models/tag.js';
 import type { Db } from '../driver.js';
 import { tags } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqliteErrors.js';
+import { isUniqueConstraintViolation } from '../sqlite-errors.js';
 import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
 import { ownedWhere } from '../queries/scope.js';
 

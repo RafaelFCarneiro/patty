@@ -3,7 +3,7 @@ import { findCorrelations } from '../../../src/controllers/correlations.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { CategoryKind, type Category } from '../../../src/models/category.js';
 import { BudgetPeriod } from '../../../src/models/budget.js';
-import type { CurrencyRate } from '../../../src/models/currencyRate.js';
+import type { CurrencyRate } from '../../../src/models/currency-rate.js';
 import { FindCorrelationsAnalysis, type ResolvedFindCorrelations } from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';

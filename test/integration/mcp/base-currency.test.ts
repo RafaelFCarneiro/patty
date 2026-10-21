@@ -4,7 +4,7 @@ import { callTool, makeClient } from './helpers.js';
 type Preferences = { locale?: string; localeSource?: string; baseCurrency?: string };
 
 // This suite shares one MCP server/DB across every integration test file (fileParallelism: false),
-// and settings is a global singleton row — so, unlike emptyDb.test.ts's isolated fresh DB, these
+// and settings is a global singleton row — so, unlike empty-db.test.ts's isolated fresh DB, these
 // tests only assert the explicit round-trip (set -> get reflects it), never the "still unset"
 // default, which would be order-dependent on whatever another file already stored.
 describe('MCP integration > base currency', () => {

@@ -1,5 +1,5 @@
-import { ClientConfigFailureCode, type ClientConfigFailure } from '../../../models/clientConfig.js';
-import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/signIn.js';
+import { ClientConfigFailureCode, type ClientConfigFailure } from '../../../models/client-config.js';
+import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/sign-in.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import { PASSWORD_STDIN_FLAG, SETUP_POSITIONALS, SetupOptionsSchema } from '../../../wire/in/cli.js';
 import { EXIT_FAILURE, EXIT_OK, exitCodeOf, fail, parseFlags, type CliIo } from '../io.js';

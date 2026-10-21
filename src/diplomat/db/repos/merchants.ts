@@ -6,7 +6,7 @@ import { MerchantTopDbRowSchema, type MerchantTopDbRow } from '../../../wire/db/
 import type { Db } from '../driver.js';
 import { merchantCategory, merchants } from '../schema.js';
 import { ownedBy, visibleTo } from '../queries/scope.js';
-import { txPredicates } from '../queries/txPredicates.js';
+import { txPredicates } from '../queries/tx-predicates.js';
 import type { EntityApplier } from '../effects.js';
 
 const MatchRow = z.object({

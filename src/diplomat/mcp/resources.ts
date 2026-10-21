@@ -1,9 +1,9 @@
 import { listAccounts } from '../../controllers/account/account.js';
 import { listCategories } from '../../controllers/categories.js';
 import { listCurrencies } from '../../controllers/currencies.js';
-import { listExchangeRates } from '../../controllers/currencyRates.js';
+import { listExchangeRates } from '../../controllers/currency-rates.js';
 import { topMerchants } from '../../controllers/merchants.js';
-import { listCreditCards } from '../../controllers/creditCard/creditCard.js';
+import { listCreditCards } from '../../controllers/credit-card/credit-card.js';
 import { listTags } from '../../controllers/tags.js';
 import { DEFAULT_TOP_MERCHANTS_LIMIT } from '../../models/merchant.js';
 import type { ResourceDefinition } from './definition.js';

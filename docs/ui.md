@@ -58,7 +58,7 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   Flatpickr are called as shell-provided globals (`ui/dashboards/*.html`'s date inputs call `flatpickr(...)`
   directly) — so the shell's `<head>` is the *only* place external hosts are referenced; a fragment carrying
   its own `<script src>`/`<link>` is rejected by `save_dashboard` (see Management flows below).
-  `test/integration/http/dashboardTemplate.test.ts` pins the allowed host+version list for both the shell and
+  `test/integration/http/dashboard-template.test.ts` pins the allowed host+version list for both the shell and
   every fragment.
 - **`ui/app.css`** — shell/layout styling for the sidebar-nav shell (menu, toolbar chrome, Flatpickr theme
   overrides), reworked from the original per-dashboard `<style>` blocks rather than a verbatim lift of them.
@@ -225,7 +225,7 @@ fragments were first converted to files.
   `Content-Security-Policy` locked down). `ui/shell.html` reserves `<!--fintrack:auth-controls-->`: `registerUiRoutes`
   replaces it with the access-tokens link and the logout form (bottom of the sidebar) when auth is `required` and with nothing otherwise — the
   shell is the same bytes either way except for that one marker. An open `/ui/events` stream re-checks its session
-  every 30 s and closes when the session is gone (logout, expiry, disabled user). **`/ui/access/tokens`** (auth `required` only; `routes/tokens.ts`, templates `ui/tokens.html` / `ui/tokenCreated.html`) lists, creates and revokes personal access tokens — session-only, a bearer token is never accepted on any `/ui` path; the plaintext of a new token appears once, on the response to the create `POST`. See `docs/auth.md`.
+  every 30 s and closes when the session is gone (logout, expiry, disabled user). **`/ui/access/tokens`** (auth `required` only; `routes/tokens.ts`, templates `ui/tokens.html` / `ui/token-created.html`) lists, creates and revokes personal access tokens — session-only, a bearer token is never accepted on any `/ui` path; the plaintext of a new token appears once, on the response to the create `POST`. See `docs/auth.md`.
 - These are browser-facing routes, **not** `RouteDefinition`s, so `/ui*` is deliberately excluded from the
   `/api` OpenAPI document (that document exists to give agents `fetch()` shapes for the JSON API). Dashboard
   *management* (list/get/save/delete/rename) has full REST parity under `/api/dashboards*` and is documented
@@ -278,7 +278,7 @@ the API already provides (`typeLabel`, `categoryName`, `periodLabel`, …); date
 state, so a slow or failing endpoint degrades one card, not the page.
 
 **Every fragment embeds zero financial data or secrets** — the ADR-013 non-negotiable, held equally across all
-ten. `test/integration/http/dashboardTemplate.test.ts` is the regression guard, parameterized over all ten
+ten. `test/integration/http/dashboard-template.test.ts` is the regression guard, parameterized over all ten
 names: each fragment must contain a `fetch()` call, match no inline-data-blob pattern, carry no full document
 root, reference no external host outside the pinned CDN allowlist, fetch only `/api` paths that exist in the
 live OpenAPI document, and — checked independently of that OpenAPI-membership check, so a fetch target that

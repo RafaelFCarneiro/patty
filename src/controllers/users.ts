@@ -7,7 +7,7 @@ import { signInCapOf } from '../logic/auth/grant.js';
 import { hasCredentials } from '../logic/auth/owner.js';
 import { canLogin } from '../logic/auth/password.js';
 import { removeSession } from '../logic/auth/revoke.js';
-import { planDisable, planReissue, planRole } from '../logic/auth/userPlans.js';
+import { planDisable, planReissue, planRole } from '../logic/auth/user-plans.js';
 import {
   authorizeActor,
   claimedByInvite,

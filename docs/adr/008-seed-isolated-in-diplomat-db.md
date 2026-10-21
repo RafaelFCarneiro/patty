@@ -29,7 +29,7 @@ merely discouraged.
 ## Decision
 
 1. **Seed is a persistence-initialization concern and lives under the db diplomat:** `diplomat/db/seed/`
-   (`currencies.ts`, `categories.ts`, `merchantRules.ts`), consumed **only** by `diplomat/db/bootstrap.ts`.
+   (`currencies.ts`, `categories.ts`, `merchant-rules.ts`), consumed **only** by `diplomat/db/bootstrap.ts`.
 2. **The domain never imports seed.** Because `models/`, `logic/`, and `controllers/` do not import `diplomat/`,
    the independence is **structural**, not a convention to remember.
 3. **Seed-only types move into `seed/`.** `DefaultCategoryId` (the canonical seed slugs) and the seed-authoring

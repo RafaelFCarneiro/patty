@@ -1,4 +1,4 @@
-import { ToolName } from '../toolName.js';
+import { ToolName } from '../tool-name.js';
 import { aggregateSpending } from '../../../controllers/aggregate.js';
 import {
   AggregateMetric,
