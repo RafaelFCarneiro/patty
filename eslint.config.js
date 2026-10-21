@@ -1,4 +1,8 @@
+import css from '@eslint/css';
+import js from '@eslint/js';
+import html from '@html-eslint/eslint-plugin';
 import checkFile from 'eslint-plugin-check-file';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 /** Shared by every `no-restricted-syntax` block below (a later block replaces, not merges, the earlier one). */
@@ -13,10 +17,44 @@ const SWITCH_TOO_LARGE = {
  * `docs/code-quality.md` / `docs/code-style.md`. Judgment-based rules that can't be linted
  * reliably (constants-over-literals, when a remeda pipeline beats native map/filter, naming,
  * single-responsibility) stay in the CLAUDE.md "Definition of Done" self-review — not here.
+ * `ui/` (browser shell code) gets each language's recommended rules (js, html, css) and the kebab-case names.
  */
 export default tseslint.config(
   {
     ignores: ['dist/**', 'coverage/**', 'drizzle/**', '**/*.config.ts', '**/*.config.js'],
+  },
+  {
+    files: ['ui/**/*.js'],
+    ...js.configs.recommended,
+    languageOptions: { sourceType: 'script', ecmaVersion: 2022, globals: globals.browser },
+  },
+  {
+    files: ['ui/**/*.html'],
+    plugins: { '@html-eslint': html },
+    language: '@html-eslint/html',
+    rules: {
+      ...html.configs['flat/recommended'].rules,
+      // Purely stylistic: would reformat every page (no mass reformat in a tooling change).
+      '@html-eslint/indent': 'off',
+      '@html-eslint/attrs-newline': 'off',
+      '@html-eslint/element-newline': 'off',
+      '@html-eslint/no-extra-spacing-tags': 'off',
+      '@html-eslint/require-closing-tags': 'off',
+      // `autocapitalize` is deliberate on the credential fields; dropping it would change the pages.
+      '@html-eslint/use-baseline': 'off',
+    },
+  },
+  {
+    files: ['ui/**/*.css'],
+    plugins: { css },
+    language: 'css/css',
+    rules: {
+      ...css.configs.recommended.rules,
+      // The four `!important` flags win specificity fights; removing them could change the layout.
+      'css/no-important': 'off',
+      // @eslint/css 2.0.1's schema for this rule overflows the stack in ESLint 9.39 (even with explicit options).
+      'css/use-baseline': 'off',
+    },
   },
   {
     files: ['src/**/*.ts', 'test/**/*.ts'],
@@ -152,17 +190,17 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.mjs'],
+    files: ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.mjs', 'ui/**/*.{js,html,css}'],
     plugins: { 'check-file': checkFile },
     rules: {
       // File and folder names are kebab-case (docs/code-quality.md § Naming clarity). `ignoreMiddleExtensions`
       // lets `foo-bar.test.ts` through; the stem is what is checked.
       'check-file/filename-naming-convention': [
         'error',
-        { '{src,test,scripts}/**/*.{ts,mjs}': 'KEBAB_CASE' },
+        { '{src,test,scripts}/**/*.{ts,mjs}': 'KEBAB_CASE', 'ui/**/*.{js,html,css}': 'KEBAB_CASE' },
         { ignoreMiddleExtensions: true },
       ],
-      'check-file/folder-naming-convention': ['error', { '{src,test,scripts}/**/': 'KEBAB_CASE' }],
+      'check-file/folder-naming-convention': ['error', { '{src,test,scripts,ui}/**/': 'KEBAB_CASE' }],
     },
   },
 );

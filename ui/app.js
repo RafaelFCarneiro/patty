@@ -35,8 +35,8 @@
       errDiv.appendChild(pre);
       document.body.appendChild(errDiv);
     } else {
-      var pre = errDiv.querySelector('pre');
-      if (pre) pre.textContent += '\n\n' + message;
+      var existingPre = errDiv.querySelector('pre');
+      if (existingPre) existingPre.textContent += '\n\n' + message;
     }
   }
 
@@ -363,7 +363,7 @@
       var payload;
       try {
         payload = JSON.parse(event.data);
-      } catch (err) {
+      } catch {
         return;
       }
       if (typeof window.fintrackOnDataChanged === 'function' && Array.isArray(payload.entities)) {

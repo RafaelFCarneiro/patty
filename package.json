@@ -33,7 +33,7 @@
     "dev": "cross-env PORT=3001 tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "lint": "eslint src test scripts",
+    "lint": "eslint src test scripts ui",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run --config vitest.unit.config.ts",
@@ -50,7 +50,7 @@
     "descriptions": {
       "dev": "Run backend in watch mode (stdio by default; MCP_TRANSPORT=http or FINTRACK_HTTP=true for REST + MCP on :3001)",
       "build": "Compile TypeScript to dist/",
-      "lint": "Lint src/ with ESLint (style/quality smell rules — part of the gate)",
+      "lint": "Lint src/, test/, scripts/ and ui/ with ESLint (style/quality smell rules — part of the gate)",
       "format": "Format the repository with Prettier",
       "format:check": "Check whether files follow Prettier formatting",
       "start": "Run compiled backend",
@@ -79,6 +79,10 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@eslint/css": "^2.0.1",
+    "@eslint/js": "^9.39.5",
+    "@html-eslint/eslint-plugin": "^0.67.0",
+    "@html-eslint/parser": "^0.67.0",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/github": "^12.0.8",
     "@semantic-release/npm": "^13.1.5",
@@ -89,6 +93,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.18.0",
     "eslint-plugin-check-file": "^3.3.2",
+    "globals": "^17.13.0",
     "prettier": "^3.9.4",
     "semantic-release": "^25.0.5",
     "tsx": "^4.19.0",
