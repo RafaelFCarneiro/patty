@@ -117,7 +117,7 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['**/diplomat/mcp/toolName.js'],
+              group: ['**/diplomat/mcp/tool-name.js'],
               message:
                 "ToolName is the MCP edge's vocabulary — a domain error carries a `Remedy`; diplomat/mcp translates it.",
             },

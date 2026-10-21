@@ -6,7 +6,7 @@ import { jsonError } from '../../../../src/diplomat/mcp/respond.js';
 import { toolScopesOf } from '../../../../src/diplomat/mcp/scopes.js';
 import { buildMcpServer } from '../../../../src/diplomat/mcp/server.js';
 import { accountErrors } from '../../../../src/models/account.js';
-import { cardErrors } from '../../../../src/models/creditCard.js';
+import { cardErrors } from '../../../../src/models/credit-card.js';
 import { Remedy } from '../../../../src/models/remedy.js';
 import { transactionErrors } from '../../../../src/models/transaction.js';
 import { notFound } from '../../../../src/models/error.js';

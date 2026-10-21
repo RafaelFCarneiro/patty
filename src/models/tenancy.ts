@@ -1,4 +1,4 @@
-import { CURRENCY_RATE_ENTITY_TAG } from './currencyRate.js';
+import { CURRENCY_RATE_ENTITY_TAG } from './currency-rate.js';
 import { validation, type ValidationError } from './error.js';
 
 /** The one message every attempt to change a shared default answers with. */

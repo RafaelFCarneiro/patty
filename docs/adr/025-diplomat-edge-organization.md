@@ -15,7 +15,7 @@ The two diplomat edges have each grown into a single large file:
 
 Every new tool or route lands in the same file, so the edges grow monotonically and a domain's surface is
 scattered through a 1000-line function. The rest of the codebase is already organized **by domain, mirroring
-`controllers/`** (`controllers/account/*`, `controllers/creditCard/*`, …); the edges are the exception.
+`controllers/`** (`controllers/account/*`, `controllers/credit-card/*`, …); the edges are the exception.
 
 This is not a capability — there is nothing new to *do*. It is a decision about **how the edge layer is
 organized**, and it produces a **convention that constrains all future edge work**. That is an architectural

@@ -6,11 +6,11 @@ import { type CliIo, EXIT_FAILURE, EXIT_OK } from '../../../src/diplomat/cli/io.
 import { CLI_MESSAGES } from '../../../src/diplomat/cli/messages.js';
 import { AUTH_POSITIONALS, SETUP_POSITIONALS } from '../../../src/wire/in/cli.js';
 import { bindAuthRunEffects } from '../../../src/composition/auth.js';
-import { createSignInInterpreter } from '../../../src/composition/signIn/interpreter.js';
+import { createSignInInterpreter } from '../../../src/composition/sign-in/interpreter.js';
 import { PROMPT_MESSAGES } from '../../../src/diplomat/cli/prompt.js';
 import { accessTokens, sessions, users } from '../../../src/diplomat/db/schema.js';
 import { OWNER_USER_ID, UserRole } from '../../../src/models/auth/owner.js';
-import { DEFAULT_PROFILE } from '../../../src/models/auth/signIn.js';
+import { DEFAULT_PROFILE } from '../../../src/models/auth/sign-in.js';
 import type { AppContext } from '../app-builder.js';
 import {
   authDepsOf,

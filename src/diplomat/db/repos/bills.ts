@@ -7,8 +7,8 @@ import type { RawTransactionView } from '../../../models/transaction.js';
 import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { Db } from '../driver.js';
 import { bills } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqliteErrors.js';
-import { fullTxSelect } from '../queries/transactionSelect.js';
+import { isUniqueConstraintViolation } from '../sqlite-errors.js';
+import { fullTxSelect } from '../queries/transaction-select.js';
 import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
 import { ownedBy } from '../queries/scope.js';
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { overlayResolvedTags, resolveTagIds, resolveTagNames, tagSetPersistable } from '../../../src/logic/tag.js';
 import { PersistOp, type PersistOutcome } from '@rfc0/effect-runner';
 import type { Tag } from '../../../src/models/tag.js';
-import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transactionTag.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transaction-tag.js';
 
 const allTags: Tag[] = [
   { id: 'tag-work', name: 'work' },

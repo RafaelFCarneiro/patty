@@ -9,7 +9,7 @@ import { buildMcpServer } from '../../../src/diplomat/mcp/server.js';
 import { toolScopesOf } from '../../../src/diplomat/mcp/scopes.js';
 import { SHARED_DEFAULT_READ_ONLY_MESSAGE } from '../../../src/models/tenancy.js';
 import { buildApp, type AppContext } from '../app-builder.js';
-import { seedProductPath, type Seeded } from './productPath.js';
+import { seedProductPath, type Seeded } from './product-path.js';
 import {
   callRoute,
   callTool,

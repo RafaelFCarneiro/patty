@@ -5,7 +5,7 @@
 follow-on ADR-026 scoped ("an opt-in `displayCurrency`/convert flag can later add a converted grand-total on
 top of budgets' and `find_correlations`' per-currency lines"). Governed by **ADR-028** (the conversion
 correlates two aggregates, so it is controller-orchestrated — no repo joins `currency_rates`). Reuses the
-phase-3 conversion logic (`logic/currencyRate.ts`).
+phase-3 conversion logic (`logic/currency-rate.ts`).
 
 > **Implementation status**: `Not started` · `In progress` · `Done` · `Blocked`. Phased (see Migration plan);
 > one branch per phase.
@@ -48,7 +48,7 @@ response gains a **converted grand total** in that currency, computed read-time 
   (unchanged); `currencyRatesRepo` returns rates. **No repo joins `currency_rates`.**
 - **Controller** orchestrates: fetches the per-currency read + the rates + resolves `displayCurrency` +
   the per-class staleness thresholds (config → controller, never logic), and calls the pure helper.
-- **Logic:** generalize `consolidateNetWorth` (`logic/currencyRate.ts`, today typed to
+- **Logic:** generalize `consolidateNetWorth` (`logic/currency-rate.ts`, today typed to
   `{ id; converted? }` account balances) into a reusable **`consolidateInCurrency(amountsByCurrency, target,
   rates, now, thresholds, targetDecimals)`** that converts a set of per-currency amounts, sums the convertible
   ones, and returns `{ total, stale, asOf, excluded }`. `get_account_balances` keeps its own thin wrapper; the
@@ -73,7 +73,7 @@ response gains a **converted grand total** in that currency, computed read-time 
 ## Migration plan (phased — one branch each, behind the full gate)
 
 1. **Helper + `get_spending_summary`** (`feat/display-currency-summary`, **done**): generalized
-   `consolidateNetWorth` → `consolidateInCurrency` (`logic/currencyRate.ts`, both now share a private `consolidate`
+   `consolidateNetWorth` → `consolidateInCurrency` (`logic/currency-rate.ts`, both now share a private `consolidate`
    core); added `displayCurrency?` to `get_spending_summary` (MCP + `GET /api/summary`); controller-orchestrated
    conversion of the summary's per-currency `expenses` into the top-level `converted` block — the exemplar.
 2. **`get_budget_status`** (`feat/display-currency-budgets`, **done**): `displayCurrency?` on the tool +
@@ -110,7 +110,7 @@ the display currency) — a UI follow-on, not required by the tools.
 
 ## Testing
 
-- **Logic (`test/unit/logic/currencyRate.test.ts`):** `consolidateInCurrency` — mixed fiat+crypto convert and
+- **Logic (`test/unit/logic/currency-rate.test.ts`):** `consolidateInCurrency` — mixed fiat+crypto convert and
   sum to target decimals; a missing pair is excluded (not fabricated) and listed; `stale` true iff any
   contributing rate is stale (per-class boundary); target==source is identity. Reuse/extend the existing
   `consolidateNetWorth` tests.

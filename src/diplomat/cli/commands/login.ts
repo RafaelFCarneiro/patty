@@ -3,7 +3,7 @@ import type { SignInHooks } from '../../../controllers/deps.js';
 import { GrantChannel } from '../../../models/auth/grant.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
 import { AUTH_ENV_VAR } from '../../../models/auth/mode.js';
-import { CLI_CLIENT_NAME, TOKEN_ENV_VAR } from '../../../models/auth/signIn.js';
+import { CLI_CLIENT_NAME, TOKEN_ENV_VAR } from '../../../models/auth/sign-in.js';
 import {
   ObservationKind,
   PresentationKind,
@@ -13,7 +13,7 @@ import {
   type SignInConfig,
   type SignInObservation,
   type SignInState,
-} from '../../../models/auth/signInFlow.js';
+} from '../../../models/auth/sign-in-flow.js';
 import type { TokenAccess } from '../../../models/auth/token.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import {

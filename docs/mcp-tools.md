@@ -414,7 +414,7 @@ No REST mirror yet (MCP-only).
 
 A `CurrencyCode` accepted alongside any `analysis`, adding a top-level `converted` block —
 `{ displayCurrency, total, stale, asOf, excluded }` — a read-time grand total converted against `currency_rates`
-via the same `logic/currencyRate.ts`'s `consolidateInCurrency` `get_spending_summary`/`get_budget_status` use. A
+via the same `logic/currency-rate.ts`'s `consolidateInCurrency` `get_spending_summary`/`get_budget_status` use. A
 currency with no rate to `displayCurrency` is listed in `excluded` (`{ currency, reason: "no_rate" }`) and left
 out of `total`, never fabricated; `stale` is true if any contributing rate is stale (fiat 24h / crypto 1h);
 `asOf` is the oldest contributing rate's timestamp, or `null` when nothing converted. Omitting `displayCurrency`
@@ -440,7 +440,7 @@ Per-currency/per-line results are unaffected either way, in every mode.
 
 Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `balance`, `byCategory` (sorted by total desc). Currencies are never mixed or converted.
 
-**Optional `displayCurrency` (Feature Design 021, ADR-028 controller-orchestrated):** a `CurrencyCode` that adds a top-level `converted` block — `{ displayCurrency, total, stale, asOf, excluded }` — a read-time grand total of `expenses` across every currency's line, converted against `currency_rates` (the same conversion `get_account_balances` uses, generalized by `logic/currencyRate.ts`'s `consolidateInCurrency`). `total` sums every convertible currency's `expenses`; a currency with no rate to `displayCurrency` is listed in `excluded` (`{ currency, reason: "no_rate" }`) and left out of `total`, never fabricated. A currency with zero `expenses` this period (e.g. income-only) is skipped before conversion entirely — it never costs an `excluded` entry for a missing rate, and a stale rate on file for it never flips the total `stale`. `stale` is true if any contributing (non-zero) rate is stale (fiat 24h / crypto 1h); `asOf` is the oldest contributing rate's timestamp (the total is only as fresh as its stalest input), or `null` when nothing converted. Omitting `displayCurrency` leaves the response byte-identical to before this option existed — `currencies[]` is unaffected either way. Invalid `displayCurrency` is rejected at the schema boundary (422 over REST).
+**Optional `displayCurrency` (Feature Design 021, ADR-028 controller-orchestrated):** a `CurrencyCode` that adds a top-level `converted` block — `{ displayCurrency, total, stale, asOf, excluded }` — a read-time grand total of `expenses` across every currency's line, converted against `currency_rates` (the same conversion `get_account_balances` uses, generalized by `logic/currency-rate.ts`'s `consolidateInCurrency`). `total` sums every convertible currency's `expenses`; a currency with no rate to `displayCurrency` is listed in `excluded` (`{ currency, reason: "no_rate" }`) and left out of `total`, never fabricated. A currency with zero `expenses` this period (e.g. income-only) is skipped before conversion entirely — it never costs an `excluded` entry for a missing rate, and a stale rate on file for it never flips the total `stale`. `stale` is true if any contributing (non-zero) rate is stale (fiat 24h / crypto 1h); `asOf` is the oldest contributing rate's timestamp (the total is only as fresh as its stalest input), or `null` when nothing converted. Omitting `displayCurrency` leaves the response byte-identical to before this option existed — `currencies[]` is unaffected either way. Invalid `displayCurrency` is rejected at the schema boundary (422 over REST).
 
 REST mirror: `GET /api/summary?month=6&year=2026&displayCurrency=USD`.
 
@@ -567,7 +567,7 @@ parent category name is still the raw, unlocalized one (tracked in #169).
 **Optional `displayCurrency` (Feature Design 021 phase 2, ADR-028 controller-orchestrated):** a `CurrencyCode`
 that adds a top-level `converted` block — `{ displayCurrency, total, stale, asOf, excluded }` — a read-time
 grand total of **committed** (effective + pending) spend across every budgeted category's currency, converted
-against `currency_rates` via the same `logic/currencyRate.ts`'s `consolidateInCurrency` `get_spending_summary`
+against `currency_rates` via the same `logic/currency-rate.ts`'s `consolidateInCurrency` `get_spending_summary`
 uses. `total` sums each currency's budgeted committed spend once — computed directly from the underlying
 per-currency spend matched by at least one budget, not by summing per-line `committed.amount`, so a spend row
 counted toward both a sub-category budget and its rolled-up parent budget (the envelope behavior) contributes

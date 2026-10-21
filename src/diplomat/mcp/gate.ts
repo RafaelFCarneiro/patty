@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { authErrors } from '../../models/auth/errors.js';
 import { OWNER_PRINCIPAL, type Principal } from '../../models/auth/principal.js';
 import type { AppError } from '../../common/errors.js';
-import { principalOf } from './authInfo.js';
+import { principalOf } from './auth-info.js';
 
 export const GateKind = z.enum(['granted', 'refused', 'not_signed_in']);
 

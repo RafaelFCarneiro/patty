@@ -11,10 +11,10 @@ import {
   shapeSpendingShifts,
   shapeUnbudgetedSpend,
 } from '../logic/correlations.js';
-import { consolidateInCurrency } from '../logic/currencyRate.js';
+import { consolidateInCurrency } from '../logic/currency-rate.js';
 import { decimalsLookup } from '../logic/money.js';
 import { baselineRange, hasPeriod, lookbackFrom, periodRange, toIsoDate } from '../logic/period.js';
-import type { ConvertedTotal, CurrencyAmount } from '../models/currencyRate.js';
+import type { ConvertedTotal, CurrencyAmount } from '../models/currency-rate.js';
 import {
   findCorrelationsErrors,
   FindCorrelationsAnalysis,

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { Scoped } from '../../../../src/controllers/deps.js';
 import { MUTATING, READ_ONLY } from '../../../../src/diplomat/mcp/annotations.js';
-import { authInfoOf } from '../../../../src/diplomat/mcp/authInfo.js';
+import { authInfoOf } from '../../../../src/diplomat/mcp/auth-info.js';
 import type { McpContext } from '../../../../src/diplomat/mcp/context.js';
 import { definePrompt, defineTool } from '../../../../src/diplomat/mcp/definition.js';
 import { ownerGate } from '../../../../src/diplomat/mcp/gate.js';
@@ -14,7 +14,7 @@ import { guardScopes, toolScopesOf } from '../../../../src/diplomat/mcp/scopes.j
 import { toolDefinitions } from '../../../../src/diplomat/mcp/tools/index.js';
 import { OWNER_PRINCIPAL } from '../../../../src/models/auth/principal.js';
 import { PromptName } from '../../../../src/models/prompts.js';
-import { ToolName } from '../../../../src/diplomat/mcp/toolName.js';
+import { ToolName } from '../../../../src/diplomat/mcp/tool-name.js';
 
 const sorted = (names: readonly string[]) => [...names].sort();
 

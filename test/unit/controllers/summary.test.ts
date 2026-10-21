@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getSpendingSummary } from '../../../src/controllers/summary.js';
 import type { Deps } from '../../../src/controllers/deps.js';
-import type { CurrencyRateEntity } from '../../../src/models/currencyRate.js';
+import type { CurrencyRateEntity } from '../../../src/models/currency-rate.js';
 import { CurrencyCode, type Currency } from '../../../src/models/money.js';
 import { Locale } from '../../../src/models/locale.js';
 import type { SummaryRow } from '../../../src/models/summary.js';

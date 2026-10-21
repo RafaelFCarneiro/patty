@@ -4,7 +4,7 @@ import type { SignInInterpreter, Tenancy } from '../../controllers/deps.js';
 import { AuthMode } from '../../models/auth/mode.js';
 import { ownerGate, type PrincipalGate } from './gate.js';
 import { buildMcpServer } from './server.js';
-import { createStdioSession, type StdioSession } from './stdioSession.js';
+import { createStdioSession, type StdioSession } from './stdio-session.js';
 
 /** Who the stdio channel acts as: the owner under an explicit `FINTRACK_AUTH=disabled`, otherwise whoever signs in
  *  (ADR-034) — with the sign-in capability injected, as the CLI's `Shell.signIn` is. */

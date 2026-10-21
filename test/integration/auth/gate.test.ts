@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { PUBLIC_ROUTES } from '../../../src/diplomat/http/authPaths.js';
+import { PUBLIC_ROUTES } from '../../../src/diplomat/http/auth-paths.js';
 import { AuthMode } from '../../../src/models/auth/mode.js';
 import { UserRole } from '../../../src/models/auth/owner.js';
 import { OWNER_PRINCIPAL, PrincipalVia } from '../../../src/models/auth/principal.js';

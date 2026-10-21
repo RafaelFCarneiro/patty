@@ -1,4 +1,4 @@
-import { ToolName } from '../toolName.js';
+import { ToolName } from '../tool-name.js';
 import { z } from 'zod';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../../controllers/recurring.js';
 import { CreateRecurringSchema } from '../../../wire/in/recurring.js';

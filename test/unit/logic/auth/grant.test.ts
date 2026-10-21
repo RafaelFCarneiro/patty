@@ -34,7 +34,7 @@ import {
   type ClientGrantEntity,
 } from '../../../../src/models/auth/grant.js';
 import type { Principal } from '../../../../src/models/auth/principal.js';
-import { UNKNOWN_CLIENT_NAME } from '../../../../src/models/auth/signIn.js';
+import { UNKNOWN_CLIENT_NAME } from '../../../../src/models/auth/sign-in.js';
 import { AccessTokenKind, TOKEN_NAME_MAX_LENGTH } from '../../../../src/models/auth/token.js';
 import { DEFAULT_SIGN_IN_CAP, SignInCap } from '../../../../src/models/auth/users.js';
 

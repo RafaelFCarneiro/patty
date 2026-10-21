@@ -237,7 +237,7 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
   export const CreateTransactionSchema = z.object({ description, amount, type, status, date, ... })
   // no account, no card, no billMonth/billYear — those are a single aggregate's vocabulary
 
-  // models/creditCard.ts — composes UP: adds card-only fields the core never carries
+  // models/credit-card.ts — composes UP: adds card-only fields the core never carries
   export const AddCardPurchaseSchema = CreateTransactionSchema.extend({ card, billMonth, billYear }).strict()
 
   // models/account.ts — composes UP: adds its own field, omits the create-only type discriminator
@@ -245,7 +245,7 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
   ```
 
   Field-tied errors move with their field to the aggregate that owns it (e.g. `billPeriodIncomplete`
-  lives in `creditCard.ts`'s `cardErrors`, not the core's `transactionErrors`, since only a
+  lives in `credit-card.ts`'s `cardErrors`, not the core's `transactionErrors`, since only a
   card-context schema can carry `billMonth`/`billYear` at all). The one carve-out: a read/balance/
   summary concern that's *structurally* defined over a value common to every aggregate (e.g. the
   transfer row kind, `TransactionView`'s discriminator fields) stays on the core even though a
@@ -345,7 +345,7 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 
 ## Naming & misc
 
-- Files: camelCase matching the domain (`creditCards.ts`); tests live under `test/unit/`/`test/integration/`
+- Files: camelCase matching the domain (`credit-cards.ts`); tests live under `test/unit/`/`test/integration/`
   in a mirrored path, not colocated (`test/unit/logic/bill.test.ts`, never `src/logic/bill.test.ts` — see
   `CLAUDE.md`'s Commands section; the vitest config only scans `test/unit/**`/`test/integration/**`, so a
   colocated `src/**/*.test.ts` file silently never runs).

@@ -28,7 +28,7 @@ import type { CurrencyCode, DecimalsFor } from '../models/money.js';
 import type { CategoryWindowedSpend } from '../models/transaction.js';
 import { RecurringPeriod } from '../models/recurring.js';
 import { unknownLabels } from '../models/aggregate.js';
-import type { CurrencyAmount } from '../models/currencyRate.js';
+import type { CurrencyAmount } from '../models/currency-rate.js';
 
 const shiftMagnitude = (deltaPct: number | null): number =>
   deltaPct === null ? Number.POSITIVE_INFINITY : Math.abs(deltaPct);

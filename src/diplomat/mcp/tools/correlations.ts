@@ -1,4 +1,4 @@
-import { ToolName } from '../toolName.js';
+import { ToolName } from '../tool-name.js';
 import { findCorrelations } from '../../../controllers/correlations.js';
 import {
   DEFAULT_BASELINE_MONTHS,

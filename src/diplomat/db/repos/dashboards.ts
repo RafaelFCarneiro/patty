@@ -12,7 +12,7 @@ import {
 } from '../../../models/dashboard.js';
 import type { Db } from '../driver.js';
 import { dashboards } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqliteErrors.js';
+import { isUniqueConstraintViolation } from '../sqlite-errors.js';
 import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
 import { ownedWhere, visibleRows, visibleWhere, type RepoScope } from '../queries/scope.js';
 

@@ -10,12 +10,12 @@ import { normalizeMerchant } from '../../logic/merchant.js';
 import type { Db } from './driver.js';
 import { HTML_FILE_EXTENSION, listDefaultDashboardFiles } from './repos/dashboards.js';
 import { categories, currencies, dashboards, merchantCategory, merchants } from './schema.js';
-import { migrateWithSafetyCopy } from './safetyCopy.js';
-import { assertOwnedRowsHaveKnownUsers } from './tenancyIntegrity.js';
-import { checkDatabaseNotAhead } from './versionGuard.js';
+import { migrateWithSafetyCopy } from './safety-copy.js';
+import { assertOwnedRowsHaveKnownUsers } from './tenancy-integrity.js';
+import { checkDatabaseNotAhead } from './version-guard.js';
 import { CURRENCIES } from './seed/currencies.js';
 import { CATEGORIES } from './seed/categories.js';
-import { DEFAULT_MERCHANT_RULES } from './seed/merchantRules.js';
+import { DEFAULT_MERCHANT_RULES } from './seed/merchant-rules.js';
 
 // Resolve the migrations folder relative to this module (../../../drizzle), so it
 // works under both `tsx src/...` (dev) and `node dist/...` (prod/npx) regardless of cwd.

@@ -1,7 +1,7 @@
 import { getHealth, getStatus } from '../../../controllers/status.js';
 import { HealthOut, StatusOut } from '../../../wire/out/status.js';
 import type { HttpContext } from '../context.js';
-import { HEALTH_PATH } from '../authPaths.js';
+import { HEALTH_PATH } from '../auth-paths.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
 import { READ_SCOPE } from '../../../models/auth/scope.js';
 

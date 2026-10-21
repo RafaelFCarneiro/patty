@@ -7,7 +7,7 @@ export const UserRole = z.enum(['admin', 'member']);
 export type UserRole = z.infer<typeof UserRole>;
 
 /** The owner is inserted by migration on every database (ADR-033 §7) — this id must match the
- *  `INSERT` in `drizzle/0018_auth_identity.sql`; `test/integration/db/ownerMigration.test.ts` pins it. */
+ *  `INSERT` in `drizzle/0018_auth_identity.sql`; `test/integration/db/owner-migration.test.ts` pins it. */
 export const OWNER_USER_ID = 'user-owner';
 
 /** There is at most ONE setup code: issuing replaces it in place (ADR-033 §2), so concurrent starters can

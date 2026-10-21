@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
-import { version } from '../common/buildVersion.js';
+import { version } from '../common/build-version.js';
 import { httpOrigin } from '../common/net.js';
 import type { Config } from '../config.js';
 import { connectStdio, type StdioAuth, type StdioConnection } from '../diplomat/mcp/stdio.js';

@@ -9,7 +9,7 @@
 > when work starts, → `Done` on merge); use `Blocked` with a one-line reason if stuck.
 
 > **Where it lives now:** the `setup` module this design describes is `src/diplomat/cli/commands/setup.ts` (the command) and
-> `src/diplomat/clientConfig/` (the merge helpers and the file writes); the text below keeps the original design's names.
+> `src/diplomat/client-config/` (the merge helpers and the file writes); the text below keeps the original design's names.
 
 ## Context
 

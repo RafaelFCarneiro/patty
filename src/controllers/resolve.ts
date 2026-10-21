@@ -9,7 +9,7 @@ import { resolveByName, resolveByNames } from '../logic/resolve.js';
 import { resolveTagIds, resolveTagNames, tagSetPersistable } from '../logic/tag.js';
 import type { Account } from '../models/account.js';
 import type { Category, SubCategory } from '../models/category.js';
-import type { CreditCard } from '../models/creditCard.js';
+import type { CreditCard } from '../models/credit-card.js';
 import { ambiguous, notFound } from '../models/error.js';
 import type { CurrencyCode } from '../models/money.js';
 import type { CategorySelection, MerchantMatch, TransactionView } from '../models/transaction.js';

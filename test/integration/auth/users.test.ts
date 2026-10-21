@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { bindAuthRunEffects } from '../../../src/composition/auth.js';
-import { createToken } from '../../../src/controllers/accessTokens.js';
+import { createToken } from '../../../src/controllers/access-tokens.js';
 import { resetPassword } from '../../../src/controllers/auth.js';
 import { approveGrant, redeemGrant, startGrant } from '../../../src/controllers/grants.js';
 import { disableUser, enableUser, inviteUser, reissueInvite } from '../../../src/controllers/users.js';
@@ -49,7 +49,7 @@ import {
   userRows,
   USERS_URL,
   countRows,
-} from './userHelpers.js';
+} from './user-helpers.js';
 import type { AppContext } from '../app-builder.js';
 
 const createApp = useAuthApp();

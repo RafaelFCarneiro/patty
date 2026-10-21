@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppError } from '../../common/errors.js';
 import { authenticate } from '../../controllers/auth.js';
-import { authenticateToken } from '../../controllers/accessTokens.js';
+import { authenticateToken } from '../../controllers/access-tokens.js';
 import { authErrors } from '../../models/auth/errors.js';
 import { UserRole } from '../../models/auth/owner.js';
 import { type Principal, PrincipalVia } from '../../models/auth/principal.js';
@@ -22,7 +22,7 @@ export const resolvePrincipal = async (auth: AuthRoutesContext, req: FastifyRequ
 };
 
 /** Whose personal access token is this? `null` for an unknown, revoked or expired one
- *  (`controllers/accessTokens.ts`'s `authenticateToken`; `last_used_at` is touched at most every few minutes). */
+ *  (`controllers/access-tokens.ts`'s `authenticateToken`; `last_used_at` is touched at most every few minutes). */
 export const resolveBearerPrincipal = async (auth: AuthRoutesContext, token: string): Promise<Resolution> => {
   const result = await auth.runEffects(() => authenticateToken(auth.deps, auth.deps.secrets.hashSecret(token)));
   return result.isOk() ? { principal: result.value } : { failure: result.error };

@@ -16,7 +16,7 @@ domain knowledge that belongs to other contexts. Concretely, on `main`:
   bill cycle from a card's `closingDay`/`dueDay`, guards paid-bill immutability, and calls
   `bills.ensureAndAttach` with hand-rolled compensation. That is **credit-card domain policy living in the
   transaction controller.**
-- `src/controllers/creditCards.ts` is **card CRUD only** — it owns none of the card-transaction or
+- `src/controllers/credit-cards.ts` is **card CRUD only** — it owns none of the card-transaction or
   bill policy that logically belongs to it.
 - `src/controllers/transfers.ts` and `src/controllers/bills.ts` reach *down* into `deps.transactions.create(...)`.
 
@@ -32,12 +32,12 @@ work. The concurrency mechanism was treating a symptom of a boundary problem.
 
 Note what is **already correct** and should be preserved:
 
-- The `models/` layer is already split per-entity (`src/models/creditCard.ts`, `src/models/bill.ts`,
+- The `models/` layer is already split per-entity (`src/models/credit-card.ts`, `src/models/bill.ts`,
   `src/models/account.ts`, `src/models/transaction.ts`) with colocated errors (ADR-012). The *visible* entanglement is
   in **controllers/logic and the create/update flows** — but this does not exempt the model (or adapter/wire)
   layers from the boundary: the ownership rule below governs where **new** structures land too. A card- or
   bill-shaped type (e.g. `AddCardPurchase`) belongs to the credit-card context's model namespace
-  (`src/models/creditCard.ts`), never nested under `src/models/transaction.ts`; the same holds for its adapter and wire
+  (`src/models/credit-card.ts`), never nested under `src/models/transaction.ts`; the same holds for its adapter and wire
   schema. (This is not hypothetical — a first cut of the credit-card purchase / bill-policy extraction created
   card model structures under the transaction model and had to be corrected.)
 - `createTransfer` (in `transfers.ts`) already owns account-domain validation (non-credit legs, currency match,
@@ -77,8 +77,8 @@ ESLint import-boundary rule.
 **The boundary is context-wide, not controller-only.** This is a semantic division of the domain into bounded
 contexts (credit-card, account, transaction core), and it runs through **every layer** — `models/`, `logic/`,
 `adapters/`, `wire/*`, `controllers/`, and `diplomat/db` repos alike. A structure that belongs to the
-credit-card context lives in that context's namespace at each layer (`models/creditCard.ts`,
-`adapters/creditCards.ts`, the card wire schemas, `controllers/creditCard/*`); it is never placed under, or
+credit-card context lives in that context's namespace at each layer (`models/credit-card.ts`,
+`adapters/credit-cards.ts`, the card wire schemas, `controllers/credit-card/*`); it is never placed under, or
 nested inside, the transaction core's equivalents merely because a card movement is also a transaction. The
 module map below is illustrated with `controllers/` for brevity, but "aggregate ownership" means ownership of
 the entity's full vertical slice — schema, translation, validation, persistence — not just its controller.
@@ -91,8 +91,8 @@ controllers/
   transaction/        # shared core: integrity + persistence primitives + read side
     core.ts           #   persist / patch / delete row + tags (no bill/card knowledge)
     read.ts           #   search / summary / aggregate / balances
-  creditCard/
-    creditCard.ts     #   card CRUD
+  credit-card/
+    credit-card.ts     #   card CRUD
     creditCardTransaction.ts  #   card purchase (owns bill-period + paid guard + attach)
     bill.ts           #   bill lifecycle (get / pay / revert)
   account/

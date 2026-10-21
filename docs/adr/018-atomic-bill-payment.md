@@ -14,7 +14,7 @@ module owned them — a concurrency mechanism laid over a cross-domain write had
 into the repo. The boundary refactor (ADR-016/017) moved ownership to the right aggregates and, as predicted,
 most surveyed flows collapsed into a single aggregate over one repo transaction. One residue remains.
 
-`payBill` (`controllers/creditCard/bill.ts`) still issues two separate repo writes that are not atomic as a
+`payBill` (`controllers/credit-card/bill.ts`) still issues two separate repo writes that are not atomic as a
 pair:
 
 ```

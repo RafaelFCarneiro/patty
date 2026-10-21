@@ -33,7 +33,7 @@ translation **catalog** (a slug-keyed map in `logic/`) was the wrong tool: it cr
 ## Decision
 
 1. **Seed is isolated under the db diplomat (ADR-008).** Currencies, default categories, and default merchant
-   rules live in `src/diplomat/db/seed/` (`currencies.ts`, `categories.ts`, `merchantRules.ts`), consumed only
+   rules live in `src/diplomat/db/seed/` (`currencies.ts`, `categories.ts`, `merchant-rules.ts`), consumed only
    by `bootstrap.ts`. The domain never imports seed. Seed-only types — `DefaultCategoryId` and the
    `MerchantRule` shape — live in `seed/`, **not** `models/`. `models/Category` keeps a generic `Id`.
 2. **The canonical seed is English** (default locale = `en`). Default category slug IDs are English
@@ -62,7 +62,7 @@ translation **catalog** (a slug-keyed map in `logic/`) was the wrong tool: it cr
    gives pt/es users *zero* hits (`FARMÁCIA`, `IFOOD`, `ALUGUEL` match nothing). The seed is the **union** of a
    language-agnostic brand pack plus `en`/`pt`/`es` keyword packs, all targeting English category slugs and
    loaded for every user (locale drives display, never which rules apply). The `MerchantRule` shape +
-   `DEFAULT_MERCHANT_RULES` live in `diplomat/db/seed/merchantRules.ts`; keys are re-normalized via
+   `DEFAULT_MERCHANT_RULES` live in `diplomat/db/seed/merchant-rules.ts`; keys are re-normalized via
    `logic/merchant.ts#normalizeMerchant` and deduped by `(key, category)` at seed time. Authoring discipline:
    distinctive 4+ char keys; avoid short tokens that embed in unrelated words (`gas` ⊂ `gasolina`, `tax` ⊂
    `taxi`, `bar` ⊂ `embarque`); when a specific key must beat a generic one, add both — the matcher's
@@ -74,7 +74,7 @@ translation **catalog** (a slug-keyed map in `logic/`) was the wrong tool: it cr
 
 - **In:** seed isolation under `diplomat/db/seed/` (ADR-008); English-canonical seed (English slug IDs + English
   canonical `name`); localized names on the category row via a JSON `names` column + `names?.[locale] ?? name`
-  resolution (ADR-009); multilingual additive merchant rules (brand + en/pt/es) in `seed/merchantRules.ts`;
+  resolution (ADR-009); multilingual additive merchant rules (brand + en/pt/es) in `seed/merchant-rules.ts`;
   `settings` table + AI-driven locale (`set_locale` with anti-churn + explicit-override guardrails,
   env-overridable, default en); locale-aware `resolveByName`; `set_locale`/`get_preferences` tools; a manual
   `scripts/reset-local-db.sh` (clean slate — **no** remap migration).
@@ -156,7 +156,7 @@ than the JSON column with no current need; revisit only if cross-locale name sea
    (category catalog). Read-time resolution at the category adapter/controller: `displayName = names?.[locale]
    ?? name`. `list_categories` returns active-locale names; user categories show literal `name`; switching
    locale reflows with no migration.
-4. **Multilingual additive merchant rules (ADR-008).** In `seed/merchantRules.ts`: `MerchantRule` shape +
+4. **Multilingual additive merchant rules (ADR-008).** In `seed/merchant-rules.ts`: `MerchantRule` shape +
    `DEFAULT_MERCHANT_RULES` (brand + `en`/`pt`/`es` sections), targeting `DefaultCategoryId`. `seedMerchantRules`
    normalizes every key via `normalizeMerchant` and dedupes by `(key, category)` before insert; all packs load
    for every user (not locale-gated). Authoring discipline: distinctive 4+ char keys; avoid short tokens that

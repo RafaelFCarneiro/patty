@@ -93,7 +93,7 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   `null` (clear it) — an asymmetry the uniform factory can't express.
 - **Exception — the auth flows (ADR-033) are adapted once at the composition root.** `login`/`claimOwner`/
   `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions`, the CLI's `claimOwnerLocally`/`resetPassword` (`composition/cli.ts` binds its own runner the same way) and the access-token flows (`createToken`/
-  `revokeToken`/`revokeSignInByHash`/`authenticateToken`, `controllers/accessTokens.ts`) and the stdio sign-in flows (`startGrant`/`approveGrant`/`denyGrant`/`redeemGrant`/`pruneExpiredGrants`, `controllers/grants.ts`) and the user-management flows (`inviteUser`/`reissueInvite`/`claimInvite`/`disableUser`/`enableUser`/`setRole`/`setSignInCap`, `controllers/users.ts`, run from the users and invite pages and the `users` command) are run from several shell sites (the auth hook,
+  `revokeToken`/`revokeSignInByHash`/`authenticateToken`, `controllers/access-tokens.ts`) and the stdio sign-in flows (`startGrant`/`approveGrant`/`denyGrant`/`redeemGrant`/`pruneExpiredGrants`, `controllers/grants.ts`) and the user-management flows (`inviteUser`/`reissueInvite`/`claimInvite`/`disableUser`/`enableUser`/`setRole`/`setSignInCap`, `controllers/users.ts`, run from the users and invite pages and the `users` command) are run from several shell sites (the auth hook,
   the sign-in and token routes, startup), none of which is "the" handler, and a single batch can mix three entities
   (`claimOwner`: user + setup code + session; `inviteUser`: user + invite). So `adapters/auth.ts`'s `outcomeToDb` (the seven entities'
   `entityDbAdapter` pairs applied in turn — each rewrites only its own tag) is applied in `composition/auth.ts`'s
@@ -108,7 +108,7 @@ and its failure isolation) is the package's to document — see the pointer abov
 
 - **Composition-root binding** (`composition/runtime.ts`, `test/integration/app-builder.ts`). The `EngineContext` is bound to the
   SQLite adapter and FinTrack's own error: `diplomat/db/driver.ts`'s `createTransactionRunner(db)` is `runner`,
-  `diplomat/db/sqliteErrors.ts`'s `isSqliteBusy` is `isTransientContention` (`SQLITE_BUSY` and
+  `diplomat/db/sqlite-errors.ts`'s `isSqliteBusy` is `isTransientContention` (`SQLITE_BUSY` and
   `SQLITE_BUSY_SNAPSHOT`, matched on the driver error's base `.code`; `busy_timeout` in `driver.ts` absorbs the
   common case, ADR-024), and `() => conflict` (`models/error.ts`) is `conflictError`. `E` is `AppError`.
 - **The `ApplierRegistry`** is assembled once there, one `EntityApplier` per FinTrack entity tag.
@@ -128,7 +128,7 @@ and its failure isolation) is the package's to document — see the pointer abov
 - **`RunEffects` is shell-only, never a field on `Deps`.** `controllers/deps.ts` exports the type, but only the
   `diplomat/mcp`/`diplomat/http` handlers hold an instance — a controller cannot reach it to apply its own
   writes. The handler gets it, with the caller's `Deps`, from `Scoped` (`scopedFor(tenancy, principal)`).
-  `resetLocale` (`diplomat/db/localeCache.ts`, keyed by user) is part of `Scoped` too, used by the one handler that
+  `resetLocale` (`diplomat/db/locale-cache.ts`, keyed by user) is part of `Scoped` too, used by the one handler that
   needs it (`set_locale`), called only after the write commits.
 
 ### Reading without writing — the read-version check
@@ -165,7 +165,7 @@ scope adds is mechanical:
 - reference data with no owner (`merchantApplier`, `currencyRateApplier`) is registered as it is.
 
 The friendly refusals (`"default categories can't be changed"`) are the controllers', before any effect; the appliers are
-the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
+the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
 
 ### Appliers — the mechanical write
 
@@ -186,7 +186,7 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   `version` convention (`merchants`, `merchant_category`, `transaction_tags`) hand-write their `EntityApplier`.
 - **FK violation on a versioned `delete` → `VersionConflict`.** A row acquiring a referrer between the flow's
   read and its apply is the same "world changed" race a stale version reports; `versionedTableApplier` catches
-  `isForeignKeyConstraintViolation` (`diplomat/db/sqliteErrors.ts`) and rethrows `VersionConflict` so the flow
+  `isForeignKeyConstraintViolation` (`diplomat/db/sqlite-errors.ts`) and rethrows `VersionConflict` so the flow
   retries. (Rationale: ADR-021.)
 - **Secondary-`UNIQUE` appliers.** `billApplier` (`diplomat/db/repos/bills.ts`; a bill is created by
   upsert-on-cycle, `UNIQUE(creditCardId, month, year)`), `tagApplier` (`tags.name`), `dashboardApplier`
@@ -206,7 +206,7 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   'history'>`) chosen by `resolveMerchantCorrection`; the applier applies `weight: weightDelta`/`origin` on
   insert and `weight = weight + weightDelta` on conflict, never touching `origin` on the conflict path
   (ADR-023 decision 2).
-- **The `transactionTag` entity** — hand-written `transactionTagApplier` (`diplomat/db/repos/transactionTags.ts`):
+- **The `transactionTag` entity** — hand-written `transactionTagApplier` (`diplomat/db/repos/transaction-tags.ts`):
   no `id`/`version`, a **set-replace** addressed by the flow's own transaction id, zero reads. The core resolves
   names → ids in `logic/tag.ts`'s `resolveTagIds` (matches `input.tags` against `deps.tags.list()`, silently
   dropping misses — leniency by decision, with a test). `controllers/resolve.ts`'s `resolveTagLinks` builds the
@@ -244,7 +244,7 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
   second redeem built from the same stale read cannot commit, and the engine's retry re-reads a spent grant — plus, for an
   approved grant past its window, the `expired` `update` that settles it (terminal, written once); `pruneExpiredGrants` one
   `delete` per unredeemed grant past its window and per redeemed grant superseded by a newer approval for the same user, profile and client (never a live pending/approved one, never the newest redeemed per key); `approveGrant` writes the chosen duration clamped to `settings.max_sign_in_duration`.
-  The user-management flows (`controllers/users.ts`): `inviteUser` emits a user `insert` (no password) and its invite `insert`; `claimInvite` the user `update` (password, first login), the invite `update` (`used_at`) and a session `insert`, in ONE batch — the version guard on the invite makes it single-use; `reissueInvite` emits the previous unclaimed invite's `delete`, the new invite's `insert` (in that order, the partial unique index would otherwise refuse the insert) and, for a claimed user, the `update` clearing the password and `endingCredentials` (a session `delete` and a `revoked_at` `update` per live token, personal access tokens and stdio sign-ins alike); `disableUser` the user's `disabled_at` `update` plus the same `endingCredentials` — every credential ends in the SAME batch that disables, so no instant exists in which the user is disabled but a credential works; `disable`, `reissue` and `resetPassword` also expire the user's approved-but-unredeemed `client_grant`s (`UserPlan.expiredGrants`), so a request approved earlier cannot mint a sign-in after an enable or a re-claim; an unclaimed reissue writes the target row (`credentials_changed_at`, so a racing claim or revocation conflicts); `createToken`, `approveGrant` and `redeemGrant` write the acting/approving user's row the same way, so a disable or reset racing an issuance conflicts and retries — into a refusal, or into a revocation that includes the new credential; `enableUser` only the `disabled_at` `update`. Every one of these also checks the admitted acting admin's row (`Admitted.acting`, or `UserPlan.checks`), `redeemGrant` also checks the instance settings row it read the cap from, so a cap lowered meanwhile conflicts and the retry applies it, and `approveGrant` writes the approving user's row and checks the session it was asked through (`createToken` does too, taking the `Principal` rather than a bare user id; every user-management flow does the same for the admin's session: `admit` re-reads it each attempt and each batch carries its check) (the `Principal` carries `sessionId`; every attempt re-reads that session, so a retry after a password reset that deleted it is refused), so a change to the author of a request that lands between its authorization and its commit conflicts and the retry is refused. **Checks:** an action that takes an active admin away (a disable, a demote, a reissue of a claimed admin) also emits a `check` of every admin it leaves standing (`logic/auth/userPlans.ts`) — the guard read "another admin stands", and checking that admin puts its `version` in the batch, so two such actions racing from the same stale read conflict instead of both committing; the engine re-runs the loser, whose fresh read refuses it. `setSignInCap` emits one version-guarded `instance_settings` `update` after the actor's check; `login`/`claimOwner` also `update` the user's `last_login_at`.
+  The user-management flows (`controllers/users.ts`): `inviteUser` emits a user `insert` (no password) and its invite `insert`; `claimInvite` the user `update` (password, first login), the invite `update` (`used_at`) and a session `insert`, in ONE batch — the version guard on the invite makes it single-use; `reissueInvite` emits the previous unclaimed invite's `delete`, the new invite's `insert` (in that order, the partial unique index would otherwise refuse the insert) and, for a claimed user, the `update` clearing the password and `endingCredentials` (a session `delete` and a `revoked_at` `update` per live token, personal access tokens and stdio sign-ins alike); `disableUser` the user's `disabled_at` `update` plus the same `endingCredentials` — every credential ends in the SAME batch that disables, so no instant exists in which the user is disabled but a credential works; `disable`, `reissue` and `resetPassword` also expire the user's approved-but-unredeemed `client_grant`s (`UserPlan.expiredGrants`), so a request approved earlier cannot mint a sign-in after an enable or a re-claim; an unclaimed reissue writes the target row (`credentials_changed_at`, so a racing claim or revocation conflicts); `createToken`, `approveGrant` and `redeemGrant` write the acting/approving user's row the same way, so a disable or reset racing an issuance conflicts and retries — into a refusal, or into a revocation that includes the new credential; `enableUser` only the `disabled_at` `update`. Every one of these also checks the admitted acting admin's row (`Admitted.acting`, or `UserPlan.checks`), `redeemGrant` also checks the instance settings row it read the cap from, so a cap lowered meanwhile conflicts and the retry applies it, and `approveGrant` writes the approving user's row and checks the session it was asked through (`createToken` does too, taking the `Principal` rather than a bare user id; every user-management flow does the same for the admin's session: `admit` re-reads it each attempt and each batch carries its check) (the `Principal` carries `sessionId`; every attempt re-reads that session, so a retry after a password reset that deleted it is refused), so a change to the author of a request that lands between its authorization and its commit conflicts and the retry is refused. **Checks:** an action that takes an active admin away (a disable, a demote, a reissue of a claimed admin) also emits a `check` of every admin it leaves standing (`logic/auth/user-plans.ts`) — the guard read "another admin stands", and checking that admin puts its `version` in the batch, so two such actions racing from the same stale read conflict instead of both committing; the engine re-runs the loser, whose fresh read refuses it. `setSignInCap` emits one version-guarded `instance_settings` `update` after the actor's check; `login`/`claimOwner` also `update` the user's `last_login_at`.
 
 ### Outcomes and responses
 
@@ -296,24 +296,24 @@ the second line. `test/integration/tenancy/scopedWrites.test.ts` pins it.
 - **Cascades live in the schema or the domain, never the applier.** `merchant_category.category_id` and
   `transaction_tags.transaction_id` are `ON DELETE CASCADE` in the schema (association rows with no independent
   meaning once their owner is gone). The credit-card cascade is a **domain decision**: `deleteCreditCard`
-  (`controllers/creditCard/creditCard.ts`) reads every correlated bill and transaction (`billsRepo.findAllByCard`,
+  (`controllers/credit-card/credit-card.ts`) reads every correlated bill and transaction (`billsRepo.findAllByCard`,
   `transactionsRepo.findAllCorrelatedToCard` — the `correlatedToCard` predicate lives in the transactions repo,
   reused by `creditCardsRepo.countCorrelated`) and emits their `Persistable`s in FK-safe order:
   `[...bill payment-clears, ...transaction removals, ...bill removals, remove creditCard, remove account]`. A bill
   this batch already cleared is removed at `bill.version + 1` (the version the shell will have bumped it to by the
   time that delete applies). `createCreditCard` is the mirror two-entity insert `[account, creditCard]`.
   (History — why the applier no longer cascades: ADR-021 / ADR-023.)
-- **`updateCreditCard`** (`controllers/creditCard/creditCard.ts`, Feature Design 014 phase C, mirrors
+- **`updateCreditCard`** (`controllers/credit-card/credit-card.ts`, Feature Design 014 phase C, mirrors
   `updateAccount`) — a rename (`newName`) is a two-entity `update` batch, `[account, creditCard]` (same order as
   `createCreditCard`'s insert): the card's internal account is re-read via `accountsRepo.findRawById` and re-emitted
   under `Card: {newName}`, alongside the card's own version-guarded update. A non-rename update (`limit`/
   `closingDay`/`dueDay`/`paymentAccount` only) emits just the card update; an update that changes nothing emits an
   empty `persist` (`R.isDeepEqual` against the freshly-read entity, same idiom as `updateAccount`). The
-  account-name-availability guard only runs for a genuine (more-than-case-only) rename — `logic/creditCard.ts`'s
+  account-name-availability guard only runs for a genuine (more-than-case-only) rename — `logic/credit-card.ts`'s
   `isCardRename` type-predicate decides this the same way `updateAccount` already does for the card's own name —
   because a case-only rename's target internal-account name always case-insensitively matches the account's
   *own* current name, and would otherwise self-collide against itself in `findByName`.
-- **`payBill`/`revertBillPayment`** (`controllers/creditCard/bill.ts`) — plain `response` (both mint and read
+- **`payBill`/`revertBillPayment`** (`controllers/credit-card/bill.ts`) — plain `response` (both mint and read
   everything the response needs before building the batch). FK direction reverses the batch order between them:
   `payBill`'s positive-total batch = `[transfer insert, bill update]` (the bill points `payment_transaction_id`
   at the transfer; a non-positive total has no transfer, so the batch is just `[bill update]`);

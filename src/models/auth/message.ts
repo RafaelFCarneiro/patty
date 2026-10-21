@@ -1,5 +1,5 @@
 import { NPX_COMMAND } from '../package.js';
-import { TOKEN_ENV_VAR } from './signIn.js';
+import { TOKEN_ENV_VAR } from './sign-in.js';
 
 /** The terminal route to the same owner claim as `/ui/setup` — shown wherever the setup code is. */
 export const TERMINAL_SETUP_COMMAND = `${NPX_COMMAND} auth setup`;

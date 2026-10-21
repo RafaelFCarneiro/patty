@@ -133,7 +133,7 @@ validation. Deferred; the chosen transaction model makes it additive.
 1. **Account type + schema** (ADR-010): add `credit` to `AccountType`. Add `credit_cards.account_id` (FK →
    `accounts.id`) and `payment_account_id` (FK → `accounts.id`), both nullable at the column level. Generate the
    migration. Existing dev DB is reset via the manual `scripts/reset-local-db.sh` (no production data).
-2. **Card creation** (`controllers/creditCards.ts`): auto-create the internal `credit` account (name e.g.
+2. **Card creation** (`controllers/credit-cards.ts`): auto-create the internal `credit` account (name e.g.
    `Card: <name>`, currency = card currency, initial balance 0), link via `account_id`. Accept optional
    `paymentAccount` (name) → resolve via `resolve.ts`, validate same currency, store as `payment_account_id`.
    In `controllers/accounts.ts`, make `create_account` reject `type: 'credit'` with a `validation` error — a

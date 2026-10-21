@@ -13,7 +13,7 @@ import {
   withTypeLabel,
 } from '../../logic/account.js';
 import { computeBalance, computeProjectedBalance } from '../../logic/balance.js';
-import { consolidateNetWorth, valueAccount } from '../../logic/currencyRate.js';
+import { consolidateNetWorth, valueAccount } from '../../logic/currency-rate.js';
 import { resolveBaseCurrency } from '../../logic/locale.js';
 import { decimalsLookup } from '../../logic/money.js';
 import * as persistence from '../../logic/persistence.js';

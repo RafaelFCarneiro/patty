@@ -22,7 +22,7 @@ CreateTransactionSchema = z.object({ …shared…, account, card, billMonth, bil
 UpdateTransactionSchema = z.object({ …shared…, account, billMonth, billYear })
 
 // aggregates carve it DOWN
-AddCardPurchaseSchema      = CreateTransactionSchema.omit({ account })            // models/creditCard.ts
+AddCardPurchaseSchema      = CreateTransactionSchema.omit({ account })            // models/credit-card.ts
 AddAccountMovementSchema   = CreateTransactionSchema.omit({ card, billMonth, billYear })  // models/account.ts
 UpdateCardTransactionSchema    = UpdateTransactionSchema.strict()
 UpdateAccountTransactionSchema = UpdateTransactionSchema.omit({ billMonth, billYear })
@@ -66,7 +66,7 @@ CreateTransactionSchema = z.object({
 // no account, no card, no billMonth/billYear
 
 // credit-card context ADDS its fields
-AddCardPurchaseSchema     = CreateTransactionSchema.extend({ card, billMonth, billYear })   // models/creditCard.ts
+AddCardPurchaseSchema     = CreateTransactionSchema.extend({ card, billMonth, billYear })   // models/credit-card.ts
 UpdateCardTransactionSchema = UpdateTransactionSchema.extend({ billMonth, billYear })
 
 // account context ADDS its field

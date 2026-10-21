@@ -9,7 +9,7 @@ import { authErrors } from '../../models/auth/errors.js';
 import { READ_SCOPE } from '../../models/auth/scope.js';
 import { rejectWithChallenge } from '../http/bearer.js';
 import '../http/principal.js';
-import { authInfoOf } from './authInfo.js';
+import { authInfoOf } from './auth-info.js';
 import { authInfoGate } from './gate.js';
 import { buildMcpServer } from './server.js';
 import { toolScopesOf } from './scopes.js';

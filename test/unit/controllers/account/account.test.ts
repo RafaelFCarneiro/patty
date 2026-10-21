@@ -9,7 +9,7 @@ import type { Deps } from '../../../../src/controllers/deps.js';
 import { PersistOp } from '@rfc0/effect-runner';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../../src/models/account.js';
 import { Remedy } from '../../../../src/models/remedy.js';
-import type { CurrencyRateEntity } from '../../../../src/models/currencyRate.js';
+import type { CurrencyRateEntity } from '../../../../src/models/currency-rate.js';
 import { CurrencyCode, type Currency } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
 

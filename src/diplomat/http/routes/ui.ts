@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import { SHARED_ENTITY_TAGS, type ChangeEvent } from '../../../models/tenancy.js';
-import { LOGOUT_PATH, TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
+import { LOGOUT_PATH, TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../auth-paths.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import { CACHE_CONTROL_NO_CACHE, replyError } from '../respond.js';
-import { HTML_CONTENT_TYPE, readCached, UI_ROOT } from '../uiFiles.js';
+import { HTML_CONTENT_TYPE, readCached, UI_ROOT } from '../ui-files.js';
 
 const SHELL_PATH = `${UI_ROOT}/shell.html`;
 const APP_CSS_PATH = `${UI_ROOT}/app.css`;

@@ -8,7 +8,7 @@ import { AuthMode } from '../../../models/auth/mode.js';
 import { type CsrfRequest, isUiPath } from '../../../models/auth/origin.js';
 import { OWNER_PRINCIPAL, type Principal } from '../../../models/auth/principal.js';
 import { safeNextPath } from '../../../wire/in/auth.js';
-import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from '../authPaths.js';
+import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from '../auth-paths.js';
 import type { HttpAuth } from '../context.js';
 import { rejectWithChallenge } from '../bearer.js';
 import { replyError as reject } from '../respond.js';

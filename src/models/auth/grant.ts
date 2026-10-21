@@ -3,7 +3,7 @@ import { withPersistenceMeta } from '@rfc0/effect-runner';
 import { Id } from '../id.js';
 import type { Principal } from './principal.js';
 import { Scope } from './scope.js';
-import { CLIENT_NAME_MAX_LENGTH, CLIENT_VERSION_MAX_LENGTH, ProfileSchema } from './signIn.js';
+import { CLIENT_NAME_MAX_LENGTH, CLIENT_VERSION_MAX_LENGTH, ProfileSchema } from './sign-in.js';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from './time.js';
 import { TokenAccess } from './token.js';
 

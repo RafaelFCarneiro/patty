@@ -121,7 +121,7 @@ otherwise. You'll see new releases on the repo's **Releases** page with auto-gen
 `bootstrap()` — and so the server and every command that opens the database — first compares the database's newest applied migration
 (`__drizzle_migrations.created_at`, i.e. the journal entry's `when`) with the newest entry in the migrations journal **this build ships**. If the
 database is ahead, the process exits non-zero with `databaseAheadMessage` (`models/database.ts`) before it takes the safety copy, migrates, seeds or writes anything
-(`diplomat/db/versionGuard.ts`, rule in `logic/migration.ts`).
+(`diplomat/db/version-guard.ts`, rule in `logic/migration.ts`).
 
 It exists because of a field incident: running `auth setup` through an **unpinned** `npx` (no `@latest`) resolved to a **stale global install**. That build did not know `auth setup`, started as a
 server, and failed inside an old seed against the newer schema. No data was harmed, but neither half should be possible: every printed command is now `@latest`-pinned
@@ -138,11 +138,11 @@ Consequences for releases:
 
 ## Dependency upgrades — `drizzle-orm`, `drizzle-kit`, `@libsql/client`
 
-`src/diplomat/db/migrationBarrier.ts` **mirrors drizzle's libSQL migrator** (`drizzle-orm/libsql`'s `migrate()` and
+`src/diplomat/db/migration-barrier.ts` **mirrors drizzle's libSQL migrator** (`drizzle-orm/libsql`'s `migrate()` and
 `@libsql/client`'s `migrate()`/`transaction()` underneath): it applies a pending data-rewriting migration inside one
 write transaction so the pre-migration backup cannot miss a concurrent writer (ADR-033 § 7). Bumping any of those
 three packages therefore **requires the parity tests to pass** — `npx vitest run --config vitest.integration.config.ts
-test/integration/db/ownerMigration.test.ts` — before merging. They migrate the same pre-auth database through this
+test/integration/db/owner-migration.test.ts` — before merging. They migrate the same pre-auth database through this
 runner and through drizzle alone and compare the schema, every `__drizzle_migrations` row, the data, and the app
 connection's `foreign_keys`/`busy_timeout`. A failure means drizzle's behavior changed: update the runner to match
 (or remove it) — never relax the test.

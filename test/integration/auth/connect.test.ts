@@ -8,7 +8,7 @@ import {
 } from '../../../src/models/auth/grant.js';
 import { PrincipalVia } from '../../../src/models/auth/principal.js';
 import { startGrant } from '../../../src/controllers/grants.js';
-import { MAX_CODE_LOOKUP_FAILURES_PER_IP } from '../../../src/diplomat/http/rateLimiter.js';
+import { MAX_CODE_LOOKUP_FAILURES_PER_IP } from '../../../src/diplomat/http/rate-limiter.js';
 import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import {
   answerConnect,

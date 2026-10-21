@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ConvertedTotalSchema } from './currencyRate.js';
+import { ConvertedTotalSchema } from './currency-rate.js';
 import { PeriodSchema, RangeFrom, RangeTo } from './date.js';
 import type { ValidationError } from './error.js';
 import { CurrencyCode } from './money.js';

@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { createClient } from '@libsql/client';
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
 import { EncryptionKey, type Config } from '../../config.js';
-import { KEYCHAIN_SERVICE } from '../../models/auth/signIn.js';
+import { KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
 import * as schema from './schema.js';
 
 export type Db = LibSQLDatabase<typeof schema>;

@@ -52,6 +52,7 @@ const checkTransfer = ...
 - Functions: verb + noun describing what they do (`createTransaction`, `guardCategoryKind`).
 - Booleans: `is*`, `has*`, `can*`, `needs*` (`isUserCorrection`, `needsReview`).
 - Variables: name the domain concept, not the type (`account`, not `accountResult`).
+- Files and folders under `src/`, `test/`, `ui/` and `scripts/` are kebab-case (`credit-card.ts`, `sign-in/`), enforced by `test/unit/repo/file-names.test.ts`.
 
 ### Names carry the context of their module — don't repeat it
 

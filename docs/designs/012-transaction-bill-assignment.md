@@ -159,7 +159,7 @@ return a client-visible error for the same request.
    **`adapters/transactions.ts`:** map `billId: row.bill_id ?? undefined` in `dbToModel`.
 5. **`diplomat/db/repos/bills.ts`:** expose `findById(billId): Promise<Bill | null>` (reuse the existing private
    `fetchBillById`). Remove `findByPaymentTransaction` (dead after step 7).
-   **`diplomat/db/repos/creditCards.ts`:** add `findById(id): Promise<CreditCard | null>` (mirrors
+   **`diplomat/db/repos/credit-cards.ts`:** add `findById(id): Promise<CreditCard | null>` (mirrors
    `findByName`).
 6. **`controllers/transactions.ts`:**
    - `createTransaction`: after `guard(assertExclusiveCategorySubCategory...)`, add

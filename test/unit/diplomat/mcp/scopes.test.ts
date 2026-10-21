@@ -2,14 +2,14 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { Tenancy } from '../../../../src/controllers/deps.js';
-import { authInfoOf, principalOf } from '../../../../src/diplomat/mcp/authInfo.js';
+import { authInfoOf, principalOf } from '../../../../src/diplomat/mcp/auth-info.js';
 import { authInfoGate, GateKind, ownerGate, type PrincipalGate } from '../../../../src/diplomat/mcp/gate.js';
 import { guardScopes, toolScopesOf } from '../../../../src/diplomat/mcp/scopes.js';
 import { buildMcpServer } from '../../../../src/diplomat/mcp/server.js';
 import { UserRole } from '../../../../src/models/auth/owner.js';
 import { OWNER_PRINCIPAL, type Principal, PrincipalVia } from '../../../../src/models/auth/principal.js';
 import { Scope } from '../../../../src/models/auth/scope.js';
-import { ToolName } from '../../../../src/diplomat/mcp/toolName.js';
+import { ToolName } from '../../../../src/diplomat/mcp/tool-name.js';
 
 const READ = Scope.enum['fintrack:read'];
 const WRITE = Scope.enum['fintrack:write'];

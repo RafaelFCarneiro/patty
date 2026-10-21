@@ -3,7 +3,7 @@ import { documentationContext } from '../../../../src/diplomat/http/context.js';
 import { remedyHint, remedyRoute, withRouteHint } from '../../../../src/diplomat/http/remedy.js';
 import { buildRouteDefinitions } from '../../../../src/diplomat/http/routes.js';
 import { accountErrors } from '../../../../src/models/account.js';
-import { cardErrors } from '../../../../src/models/creditCard.js';
+import { cardErrors } from '../../../../src/models/credit-card.js';
 import { notFound } from '../../../../src/models/error.js';
 import { Remedy } from '../../../../src/models/remedy.js';
 import { transactionErrors } from '../../../../src/models/transaction.js';

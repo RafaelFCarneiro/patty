@@ -269,7 +269,7 @@ the data on disk one join away. Named here as the fallback if the hook ever need
    `firstOutcome`/`lastOutcome` with `logic/persistence.ts`'s `outcomeFor(tag, outcomes)`, addressed by tag
    rather than position — a small, mechanical, behavior-preserving refactor (`models/persistable.ts`,
    `diplomat/db/effects.ts`, and the handful of call sites in `logic/transaction.ts` and
-   `controllers/creditCard/transaction.ts`), landed in the same change since step 1 is what needed it and the
+   `controllers/credit-card/transaction.ts`), landed in the same change since step 1 is what needed it and the
    footprint turned out too small to justify a separate PR.
 2. **Tag links to the core (implemented).** `transactionTag` entity + set-replace applier; name resolution and
    leniency into `logic/` against `deps.tags.list()`; `tagNames` off `TransactionEntity`; duplicate-path test

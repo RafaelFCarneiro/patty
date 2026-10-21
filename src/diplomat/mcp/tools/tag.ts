@@ -1,4 +1,4 @@
-import { ToolName } from '../toolName.js';
+import { ToolName } from '../tool-name.js';
 import { z } from 'zod';
 import { createTag, deleteTag, listTags } from '../../../controllers/tags.js';
 import { CreateTagSchema } from '../../../wire/in/tags.js';

@@ -8,7 +8,7 @@ import {
   type ReadBack as EngineReadBack,
 } from '@rfc0/effect-runner';
 import type { Tx } from './driver.js';
-import { isForeignKeyConstraintViolation } from './sqliteErrors.js';
+import { isForeignKeyConstraintViolation } from './sqlite-errors.js';
 
 export { VersionConflict };
 

@@ -35,7 +35,7 @@ beforeAll(async () => {
       // (ADR-013 Decision 7), so it must be explicitly disabled here to avoid an unrelated,
       // unnecessary port bind in the test suite.
       FINTRACK_HTTP: 'false',
-      // Sign-in over stdio is covered by stdioSignIn.test.ts; this file exercises the tool surface itself.
+      // Sign-in over stdio is covered by stdio-sign-in.test.ts; this file exercises the tool surface itself.
       FINTRACK_AUTH: AuthMode.enum.disabled,
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: TEST_KEY,

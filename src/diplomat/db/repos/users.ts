@@ -3,7 +3,7 @@ import * as userAdapters from '../../../adapters/users.js';
 import type { UserEntity } from '../../../models/auth/owner.js';
 import type { Db } from '../driver.js';
 import { users } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqliteErrors.js';
+import { isUniqueConstraintViolation } from '../sqlite-errors.js';
 import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
 
 export type UsersRepo = {

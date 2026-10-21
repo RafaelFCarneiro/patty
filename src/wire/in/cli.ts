@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { LoginDuration } from '../../models/auth/grant.js';
 import { UserRole } from '../../models/auth/owner.js';
 import { UsernameSchema, normalizeUsername } from '../../models/auth/password.js';
-import { DEFAULT_PROFILE, ProfileSchema } from '../../models/auth/signIn.js';
+import { DEFAULT_PROFILE, ProfileSchema } from '../../models/auth/sign-in.js';
 import { TokenAccess } from '../../models/auth/token.js';
 
 /** The CLI's argv grammar: the commands, their subcommands, their flags and how many positionals each takes. */
