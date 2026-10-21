@@ -39,16 +39,6 @@ import { TRANSACTION_ENTITY_TAG } from '../models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../models/transactionTag.js';
 import type { ChangeEvent } from '../models/tenancy.js';
 
-/**
- * Composition root for everything a running FinTrack process needs on top of an open database: the repos the
- * controllers read through, the appliers the effect runner writes through, and the change bus. Shared by the server
- * (`main.ts`) and by `fintrack login`, which serves the sign-in page from a temporary server of its own when none is
- * running — one assembly, so the two can never wire a flow differently.
- *
- * Nothing here is bound to a user: `depsFor(principal)` and the other factories build, per request, repos and
- * appliers bound to that principal's user. The only unscoped access is `authRunEffects` (identity flows) and
- * `publicDeps` (the health probe), neither of which touches user-owned tables.
- */
 export type Runtime = Tenancy & {
   publicDeps: Pick<Deps, 'health'>;
   authRunEffects: RunEffects;
@@ -57,12 +47,10 @@ export type Runtime = Tenancy & {
 
 export type RuntimeConfig = Pick<Config, 'FINTRACK_LOCALE' | 'FIAT_RATE_STALE_HOURS' | 'CRYPTO_RATE_STALE_HOURS'>;
 
-// stderr only — stdout carries the MCP protocol on the stdio transport (ADR-007).
 const reportChangeError = (cause: unknown): void => {
   console.error('[fintrack] change notification failed:', cause);
 };
 
-/** Appliers built for one user; shared reference data (exchange rates, merchant dictionary) has no owner. */
 const applierRegistryFor = (userId: string): ApplierRegistry => ({
   [ACCOUNT_ENTITY_TAG]: accountApplier(userId),
   [TRANSACTION_ENTITY_TAG]: transactionApplier(userId),
@@ -85,47 +73,33 @@ export type RuntimeOptions = {
   clock?: () => Date;
 };
 
-export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOptions = {}): Runtime => {
-  const onChangeError = options.onChangeError ?? reportChangeError;
-  const localeResolver = createLocaleResolver(config.FINTRACK_LOCALE);
-  const changeBus = createChangeBus<ChangeEvent>({ onError: onChangeError });
-  const engineContext = createEngineContext(db, onChangeError);
-  const health = healthRepo(db);
+const reposFor = (db: Db, userId: string) => ({
+  accounts: accountsRepo(db, userId),
+  bills: billsRepo(db, userId),
+  budgets: budgetsRepo(db, userId),
+  categories: categoriesRepo(db, userId),
+  subCategories: subCategoriesRepo(db, userId),
+  correlations: correlationsRepo(db, userId),
+  creditCards: creditCardsRepo(db, userId),
+  dashboards: dashboardsRepo(db, userId),
+  merchants: merchantsRepo(db, userId),
+  recurring: recurringRepo(db, userId),
+  tags: tagsRepo(db, userId),
+  transactions: transactionsRepo(db, userId),
+});
 
-  const depsFor: Tenancy['depsFor'] = ({ userId }) => {
-    const settings = settingsRepo(db, userId);
-    return {
-      accounts: accountsRepo(db, userId),
-      bills: billsRepo(db, userId),
-      budgets: budgetsRepo(db, userId),
-      categories: categoriesRepo(db, userId),
-      subCategories: subCategoriesRepo(db, userId),
-      correlations: correlationsRepo(db, userId),
-      creditCards: creditCardsRepo(db, userId),
-      currencies: currenciesRepo(db),
-      currencyRates: currencyRatesRepo(db),
-      dashboards: dashboardsRepo(db, userId),
-      health,
-      merchants: merchantsRepo(db, userId),
-      recurring: recurringRepo(db, userId),
-      settings,
-      tags: tagsRepo(db, userId),
-      transactions: transactionsRepo(db, userId),
-      clock: options.clock ?? (() => new Date()),
-      newId: () => randomUUID(),
-      locale: () => localeResolver.locale(userId, settings),
-      rateStaleness: { fiatHours: config.FIAT_RATE_STALE_HOURS, cryptoHours: config.CRYPTO_RATE_STALE_HOURS },
-    };
-  };
+const publishOn =
+  (changeBus: ChangeBus<ChangeEvent>) =>
+  (userId: string | null) =>
+  (entities: readonly string[]): void =>
+    changeBus.publish({ userId, entities });
 
-  const publishFor =
-    (userId: string | null) =>
-    (entities: readonly string[]): void =>
-      changeBus.publish({ userId, entities });
-
+const runnersOn = (
+  engineContext: ReturnType<typeof createEngineContext>,
+  changeBus: ChangeBus<ChangeEvent>,
+): Pick<Runtime, 'runEffectsFor' | 'runEffectsSequenceFor' | 'authRunEffects'> => {
+  const publishFor = publishOn(changeBus);
   return {
-    publicDeps: { health },
-    depsFor,
     runEffectsFor: ({ userId }) => {
       const registry = applierRegistryFor(userId);
       return (flow) => runEffects(engineContext, registry, flow, publishFor(userId));
@@ -134,8 +108,36 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
       const registry = applierRegistryFor(userId);
       return (items, flowFor) => runEffectsSequence(engineContext, registry, items, flowFor, publishFor(userId));
     },
-    resetLocaleFor: ({ userId }) => localeResolver.resetLocale(userId),
     authRunEffects: (flow) => runEffects(engineContext, AUTH_APPLIERS, flow, publishFor(null)),
+  };
+};
+
+export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOptions = {}): Runtime => {
+  const onChangeError = options.onChangeError ?? reportChangeError;
+  const localeResolver = createLocaleResolver(config.FINTRACK_LOCALE);
+  const changeBus = createChangeBus<ChangeEvent>({ onError: onChangeError });
+  const health = healthRepo(db);
+
+  const depsFor: Tenancy['depsFor'] = ({ userId }) => {
+    const settings = settingsRepo(db, userId);
+    return {
+      ...reposFor(db, userId),
+      currencies: currenciesRepo(db),
+      currencyRates: currencyRatesRepo(db),
+      health,
+      settings,
+      clock: options.clock ?? (() => new Date()),
+      newId: () => randomUUID(),
+      locale: () => localeResolver.locale(userId, settings),
+      rateStaleness: { fiatHours: config.FIAT_RATE_STALE_HOURS, cryptoHours: config.CRYPTO_RATE_STALE_HOURS },
+    };
+  };
+
+  return {
+    publicDeps: { health },
+    depsFor,
+    ...runnersOn(createEngineContext(db, onChangeError), changeBus),
+    resetLocaleFor: ({ userId }) => localeResolver.resetLocale(userId),
     changeBus,
   };
 };

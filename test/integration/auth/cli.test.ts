@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import { AUTH_HELP, parseClaimArgs, runAuthCommand } from '../../../src/diplomat/cli/commands/auth.js';
 import { type CliIo, EXIT_FAILURE, EXIT_OK } from '../../../src/diplomat/cli/io.js';
@@ -367,5 +367,54 @@ describe('no flow can create a user', () => {
     await harness(ctx, { stdin: NEW_PASSWORD }).run('reset-password', '--password-stdin');
     await harness(ctx, { stdin: NEW_PASSWORD }).run('reset-password', '--user', 'ghost', '--password-stdin');
     expect((await ownerRows(ctx)).map((row) => row.id)).toEqual([OWNER_USER_ID]);
+  });
+});
+
+describe('fintrack auth — the world changing between planning and writing', () => {
+  /** The CLI's shell, with `beforeWrite` running right before the first flow it executes (after the plan was made). */
+  const racing = (ctx: AppContext, input: { stdin: string }, beforeWrite: () => Promise<void>) => {
+    const { io, out, err } = harness(ctx, input);
+    let pending = true;
+    const raced: CliIo = {
+      ...io,
+      openShell: () =>
+        io.openShell().map((shell) => ({
+          ...shell,
+          run: (flow) => {
+            const first = pending;
+            pending = false;
+            return ResultAsync.fromSafePromise(first ? beforeWrite() : Promise.resolve()).andThen(() =>
+              shell.run(flow),
+            );
+          },
+        })),
+    };
+    return { io: raced, out, err };
+  };
+
+  it('setup that lost the claim to another process answers who holds it, and exits 0', async () => {
+    const ctx = await createApp();
+    const { io, out, err } = racing(ctx, { stdin: NEW_PASSWORD }, async () => {
+      await harness(ctx, { stdin: PASSWORD }).run('setup', '--username', USERNAME, '--password-stdin');
+    });
+
+    expect(await runAuthCommand(['setup', '--username', 'mallory', '--password-stdin'], io)).toBe(EXIT_OK);
+
+    expect(out).toEqual([CLI_MESSAGES.alreadyClaimed('rafael')]);
+    expect(err).toEqual([]);
+    expect((await ownerRows(ctx))[0]).toMatchObject({ id: OWNER_USER_ID, username: 'rafael' });
+  });
+
+  it('reset-password whose target lost its login meanwhile reports the failure and exits non-zero', async () => {
+    const ctx = await createApp();
+    await harness(ctx, { stdin: PASSWORD }).run('setup', '--username', USERNAME, '--password-stdin');
+    const { io, out, err } = racing(ctx, { stdin: NEW_PASSWORD }, async () => {
+      await ctx.db.run(sql`UPDATE users SET password_hash = NULL WHERE id = ${OWNER_USER_ID}`);
+    });
+
+    expect(await runAuthCommand(['reset-password', '--password-stdin'], io)).toBe(EXIT_FAILURE);
+
+    expect(err.join('\n')).toContain('owner_unclaimed');
+    expect(out.join('\n')).not.toContain('password was reset');
   });
 });

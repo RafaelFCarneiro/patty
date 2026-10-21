@@ -379,3 +379,50 @@ describe('note zod validation', () => {
     expect(result.success).toBe(true);
   });
 });
+
+describe('optional', () => {
+  it('turns a nullable column into an optional field, keeping every other value, falsy ones included', () => {
+    expect(transactionAdapters.optional(null)).toBeUndefined();
+    expect(transactionAdapters.optional(undefined)).toBeUndefined();
+    expect(transactionAdapters.optional('note')).toBe('note');
+    expect(transactionAdapters.optional('')).toBe('');
+    expect(transactionAdapters.optional(0)).toBe(0);
+  });
+});
+
+describe('parseTags', () => {
+  it('reads the tag names out of the JSON array column', () => {
+    expect(transactionAdapters.parseTags('["food","trip"]')).toEqual(['food', 'trip']);
+  });
+
+  it('is empty for a row with no tags (null) or an empty column', () => {
+    expect(transactionAdapters.parseTags(null)).toEqual([]);
+    expect(transactionAdapters.parseTags('')).toEqual([]);
+    expect(transactionAdapters.parseTags('[]')).toEqual([]);
+  });
+
+  it('drops anything that is not a string (json_group_array yields null for a tag-less LEFT JOIN row)', () => {
+    expect(transactionAdapters.parseTags('[null,"food",3,{"a":1}]')).toEqual(['food']);
+  });
+
+  it('throws on malformed JSON rather than inventing tags', () => {
+    expect(() => transactionAdapters.parseTags('[not json')).toThrow(SyntaxError);
+  });
+});
+
+describe('parseNames', () => {
+  it('reads the localized names of a category', () => {
+    expect(transactionAdapters.parseNames('{"pt":"Comida","es":"Comida"}')).toEqual({ pt: 'Comida', es: 'Comida' });
+  });
+
+  it('is null for a row with no names (a user category, or no category at all)', () => {
+    expect(transactionAdapters.parseNames(null)).toBeNull();
+    expect(transactionAdapters.parseNames('null')).toBeNull();
+  });
+
+  it('throws on malformed JSON, and on names that are not a map of non-empty strings', () => {
+    expect(() => transactionAdapters.parseNames('{oops')).toThrow(SyntaxError);
+    expect(() => transactionAdapters.parseNames('{"pt":""}')).toThrow();
+    expect(() => transactionAdapters.parseNames('["pt"]')).toThrow();
+  });
+});

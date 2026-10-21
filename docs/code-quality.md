@@ -277,8 +277,7 @@ reach for `import()` to "organize" code or defer work that isn't actually option
 ## Function shape
 
 Small functions with one level of branching read at a glance. The limits below are enforced by lint
-(`eslint.config.js`) on `diplomat/http`, `diplomat/mcp`, `controllers/` and `logic/` (the switch-size rule is a
-lint error repo-wide):
+(`eslint.config.js`) on all of `src/**` (the switch-size rule is a lint error repo-wide):
 
 | Limit | Value |
 |---|---|
@@ -357,9 +356,40 @@ export const accountTools = [createAccountTool, listAccountsTool]
 export const registerAccountTools = (server) => { server.tool('create_account', …, async (args) => { /* 60 lines */ }) /* … */ }
 ```
 
-The `diplomat/http`, `diplomat/mcp`, `controllers/` and `logic/` folders are held to the four limits above by lint; a handler
-that outgrows them is orchestration that belongs in a controller (or a shared, named step), and a controller that outgrows
-them is missing a `logic/` plan function or a named gather helper — not a reason to disable the rule.
+All of `src/**` is held to the four limits above by lint; a handler that outgrows them is orchestration that belongs in a
+controller (or a shared, named step), and a controller that outgrows them is missing a `logic/` plan function or a named
+gather helper — not a reason to disable the rule.
+
+### The shell: a factory binds, queries are named functions
+
+A repo factory has one job: bind the scope and hand each method to a named query. The query bodies sit at module level over
+that scope, so the tenancy filter is visible in the query and no object literal grows with the number of methods. An
+applier is built the same way: a small context, built once, and one named function per operation.
+
+```ts
+// ✅ DO — the factory binds; each query is a named function over the scope
+const search = async ({ db, userId }: RepoScope, input: SearchTransactions, refs: ResolvedSearchRefs) => { /* … */ }
+export const transactionsRepo = (db: Db, userId: string): TransactionsRepo => {
+  const scope: RepoScope = { db, userId }
+  return { search: (input, refs) => search(scope, input, refs), count: (input, refs) => count(scope, input, refs) }
+}
+
+// ✅ DO — an applier: a context built once, one named function per operation, the loud invariants named
+const applierFor = (table, owner, { readBack }) => {
+  const ctx = tableContextFor(table, owner, readBack)
+  return { insert: insertRow(ctx), update: updateRow(ctx), delete: deleteRow(ctx), check: checkRow(ctx) }
+}
+
+// ❌ DON'T — every query body inside the object the factory returns
+export const transactionsRepo = (db: Db, userId: string): TransactionsRepo => ({
+  search: async (input, refs) => { /* 20 lines */ },
+  aggregate: async (filters) => { /* 25 lines */ },
+  /* … */
+})
+```
+
+Extract by meaning here too: a branchy `insert` becomes `assertKeyMatchesTable`, `rowToInsert`, `conflictTarget`,
+`persistedIdAfter` — each one a decision a reader can name — rather than a `step1`/`step2` split.
 
 ## Fail loudly at boundaries, trust internally
 

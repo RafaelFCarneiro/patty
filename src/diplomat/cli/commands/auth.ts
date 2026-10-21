@@ -57,8 +57,6 @@ const withPromptIo = async <T>(
   }
 };
 
-/** `EXIT_OK` = the owner holds a login when this returns (claimed now or before); anything else = nothing was
- *  written, and is the exit code to end with. */
 export const ensureOwnerClaimed = (io: CliIo, options: ClaimOptions): Promise<number> =>
   withShell(
     io,
@@ -97,7 +95,6 @@ const resetUserPassword = (io: CliIo, options: ResetOptions): Promise<number> =>
   withShell(
     io,
     async (shell) => {
-      // Resolve the user before asking for anything: a typo'd `--user` should not cost a typed password.
       const target = await findResetTarget(shell.deps, options.user);
       if (target.isErr()) return failed(io, formatAppError(target.error));
 
@@ -123,6 +120,18 @@ const RESET_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, user: { type: 
 export const parseClaimArgs = (args: readonly string[], maxPositionals: number) =>
   parseFlags(args, CLAIM_FLAGS, ClaimOptionsSchema, maxPositionals);
 
+const setupFromArgs = async (args: readonly string[], io: CliIo): Promise<number> => {
+  const parsed = parseClaimArgs(args, AUTH_POSITIONALS);
+  if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
+  return ensureOwnerClaimed(io, parsed.options);
+};
+
+const resetFromArgs = async (args: readonly string[], io: CliIo): Promise<number> => {
+  const parsed = parseFlags(args, RESET_FLAGS, ResetOptionsSchema, AUTH_POSITIONALS);
+  if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
+  return resetUserPassword(io, parsed.options);
+};
+
 export const runAuthCommand = async (args: readonly string[], io: CliIo): Promise<number> => {
   const [name, ...rest] = args;
   if (name === undefined) {
@@ -136,12 +145,5 @@ export const runAuthCommand = async (args: readonly string[], io: CliIo): Promis
     return EXIT_FAILURE;
   }
 
-  if (subcommand.data === AuthSubcommand.enum.setup) {
-    const parsed = parseClaimArgs(rest, AUTH_POSITIONALS);
-    if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
-    return ensureOwnerClaimed(io, parsed.options);
-  }
-  const parsed = parseFlags(rest, RESET_FLAGS, ResetOptionsSchema, AUTH_POSITIONALS);
-  if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
-  return resetUserPassword(io, parsed.options);
+  return subcommand.data === AuthSubcommand.enum.setup ? setupFromArgs(rest, io) : resetFromArgs(rest, io);
 };

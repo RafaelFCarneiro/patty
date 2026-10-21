@@ -11,7 +11,7 @@ import {
   type BulkItemResult,
   type BulkResult,
 } from '../models/transaction.js';
-import { LocalizedNamesSchema } from '../models/category.js';
+import { LocalizedNamesSchema, type LocalizedNames } from '../models/category.js';
 import { type AppError, formatAppError } from '../common/errors.js';
 import * as persistence from '../logic/persistence.js';
 import { TransactionRowSchema, type TransactionDbProps, type TransactionDbRefs } from '../wire/db/transactions.js';
@@ -23,16 +23,16 @@ import {
   DeleteTransactionOut,
 } from '../wire/out/transactions.js';
 
-/** db→model: decode a flat SQL row (from a full transaction SELECT) into a RawTransactionView. */
-export const dbToModel = (record: Record<string, unknown>): RawTransactionView => {
-  // Decode the raw row at the boundary; downstream mapping then trusts the typed shape.
-  const row = TransactionRowSchema.parse(record);
+export const optional = <T>(value: T | null | undefined): T | undefined => value ?? undefined;
 
-  const parsedTags = row.tags ? (JSON.parse(row.tags) as unknown[]) : [];
-  const tags = parsedTags.filter((tag): tag is string => typeof tag === 'string');
-  const categoryNames = row.category_names !== null ? LocalizedNamesSchema.parse(JSON.parse(row.category_names)) : null;
-  const subCategoryNames =
-    row.subcategory_names !== null ? LocalizedNamesSchema.parse(JSON.parse(row.subcategory_names)) : null;
+export const parseTags = (json: string | null): string[] =>
+  (json ? (JSON.parse(json) as unknown[]) : []).filter((tag): tag is string => typeof tag === 'string');
+
+export const parseNames = (json: string | null): LocalizedNames =>
+  json !== null ? LocalizedNamesSchema.parse(JSON.parse(json)) : null;
+
+export const dbToModel = (record: Record<string, unknown>): RawTransactionView => {
+  const row = TransactionRowSchema.parse(record);
 
   return RawTransactionViewSchema.parse({
     id: row.id,
@@ -48,28 +48,27 @@ export const dbToModel = (record: Record<string, unknown>): RawTransactionView =
       method: row.classification_method,
       confidence: row.confidence,
     },
-    rawInput: row.raw_input ?? undefined,
-    note: row.note ?? undefined,
-    accountId: row.from_account_id ?? undefined,
-    accountName: row.from_account_name ?? undefined,
-    toAccountId: row.to_account_id ?? undefined,
-    toAccountName: row.to_account_name ?? undefined,
-    cardId: row.credit_card_id ?? undefined,
-    cardName: row.credit_card_name ?? undefined,
-    billId: row.bill_id ?? undefined,
-    categoryId: row.category_id ?? undefined,
-    categoryName: row.category_name ?? undefined,
-    categoryNames,
-    subCategoryId: row.subcategory_id ?? undefined,
-    subCategoryName: row.subcategory_name ?? undefined,
-    subCategoryNames,
-    merchant: row.merchant_key ?? undefined,
-    tags,
+    rawInput: optional(row.raw_input),
+    note: optional(row.note),
+    accountId: optional(row.from_account_id),
+    accountName: optional(row.from_account_name),
+    toAccountId: optional(row.to_account_id),
+    toAccountName: optional(row.to_account_name),
+    cardId: optional(row.credit_card_id),
+    cardName: optional(row.credit_card_name),
+    billId: optional(row.bill_id),
+    categoryId: optional(row.category_id),
+    categoryName: optional(row.category_name),
+    categoryNames: parseNames(row.category_names),
+    subCategoryId: optional(row.subcategory_id),
+    subCategoryName: optional(row.subcategory_name),
+    subCategoryNames: parseNames(row.subcategory_names),
+    merchant: optional(row.merchant_key),
+    tags: parseTags(row.tags),
     version: row.version,
   });
 };
 
-/** model→db: flatten a domain Transaction entity into node properties + edge refs. */
 export const modelToDb = (entity: Transaction): { props: TransactionDbProps; refs: TransactionDbRefs } => ({
   props: {
     id: entity.id,
@@ -96,10 +95,6 @@ export const modelToDb = (entity: Transaction): { props: TransactionDbProps; ref
   },
 });
 
-/** The row shape `transactionApplier` (`diplomat/db/repos/transactions.ts`) writes — `modelToDb`'s
- *  flat props/refs merged onto the actual `transactions` table column names (drizzle's
- *  `fromAccountId`/`creditCardId`/`subcategoryId`, not the entity's own `refs.accountId`/`cardId`/
- *  `subCategoryId`), plus `version` (ADR-021). */
 export type TransactionRowEntity = TransactionDbProps & {
   fromAccountId: string | null;
   toAccountId: string | null;
@@ -111,9 +106,6 @@ export type TransactionRowEntity = TransactionDbProps & {
   version: number;
 };
 
-/** entity→row for the versioned unit of work (ADR-021) — the only transaction write path that
- *  needs `version` on the wire-db row. Reuses `modelToDb` for the shared node properties/edge
- *  refs, then renames the refs onto their actual drizzle column names. */
 export const entityToDb = (entity: TransactionEntity & { version: number }): TransactionRowEntity => {
   const { props, refs } = modelToDb(entity);
   return {
@@ -139,9 +131,6 @@ export const confirmWireInToModel = (input: wireIn.ConfirmTransaction): ConfirmT
 
 // ─── model→wire/out ──────────────────────────────────────────────────────────
 
-// `classification` required (narrower than `UpsertTransactionResult`'s general optional field):
-// this adapter is only ever reached from add_account_expense/add_account_income/add_card_purchase,
-// never create_transfer (transfers are never classified — TransferResultOut has no such field).
 export const createResultToWireOut = (result: ClassifiedUpsertResult): CreateTransactionOut =>
   CreateTransactionOut.parse(result);
 

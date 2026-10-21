@@ -4,7 +4,7 @@ import type { SubCategory } from '../../../models/category.js';
 import type { BlockingReferences } from './categories.js';
 import type { Db } from '../driver.js';
 import { categories, recurringRules, transactions } from '../schema.js';
-import { ownedWhere, visibleTo, visibleWhere } from '../queries/scope.js';
+import { ownedWhere, visibleTo, visibleWhere, type RepoScope } from '../queries/scope.js';
 
 export type SubCategoriesRepo = {
   list: () => Promise<SubCategory[]>;
@@ -13,8 +13,6 @@ export type SubCategoriesRepo = {
   countReferences: (subCategoryId: string) => Promise<BlockingReferences>;
 };
 
-// Sub-categories are categories with a non-null parent_id.
-// We join to the parent to get parentName and kind; both must be visible to the user.
 const SUB_SELECT = (userId: string) => sql`
   SELECT sc.id, sc.name, sc.parent_id, p.name AS parent_name, p.kind
   FROM categories sc
@@ -24,54 +22,68 @@ const SUB_SELECT = (userId: string) => sql`
     AND ${visibleTo(userId, 'p')}
 `;
 
-export const subCategoriesRepo = (db: Db, userId: string): SubCategoriesRepo => ({
-  list: async () => {
-    const rows = await db.all<Record<string, unknown>>(sql`
+const list = async ({ db, userId }: RepoScope): ReturnType<SubCategoriesRepo['list']> => {
+  const rows = await db.all<Record<string, unknown>>(sql`
       ${SUB_SELECT(userId)}
       ORDER BY p.name, sc.name
     `);
-    return rows.map(categoryAdapters.dbToSubCategory);
-  },
+  return rows.map(categoryAdapters.dbToSubCategory);
+};
 
-  listByParent: async (parentId) => {
-    const rows = await db.all<Record<string, unknown>>(sql`
+const listByParent = async (
+  { db, userId }: RepoScope,
+  parentId: string,
+): ReturnType<SubCategoriesRepo['listByParent']> => {
+  const rows = await db.all<Record<string, unknown>>(sql`
       ${SUB_SELECT(userId)}
       AND sc.parent_id = ${parentId}
       ORDER BY sc.name
     `);
-    return rows.map(categoryAdapters.dbToSubCategory);
-  },
+  return rows.map(categoryAdapters.dbToSubCategory);
+};
 
-  findByName: async (name) => {
-    const rows = await db.all<Record<string, unknown>>(sql`
+const findByName = async ({ db, userId }: RepoScope, name: string): ReturnType<SubCategoriesRepo['findByName']> => {
+  const rows = await db.all<Record<string, unknown>>(sql`
       ${SUB_SELECT(userId)}
       AND sc.name = ${name}
       LIMIT 1
     `);
-    return rows[0] ? categoryAdapters.dbToSubCategory(rows[0]) : null;
-  },
+  return rows[0] ? categoryAdapters.dbToSubCategory(rows[0]) : null;
+};
 
-  countReferences: async (subCategoryId) => {
-    const [byCat] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(transactions)
-      .where(ownedWhere(transactions.userId, userId, eq(transactions.categoryId, subCategoryId)));
-    const [bySub] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(transactions)
-      .where(ownedWhere(transactions.userId, userId, eq(transactions.subcategoryId, subCategoryId)));
-    const [recRow] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(recurringRules)
-      .where(ownedWhere(recurringRules.userId, userId, eq(recurringRules.categoryId, subCategoryId)));
-    const [subRow] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(categories)
-      .where(visibleWhere(categories.userId, userId, eq(categories.parentId, subCategoryId)));
-    return {
-      transactions: (byCat?.count ?? 0) + (bySub?.count ?? 0),
-      recurring: recRow?.count ?? 0,
-      subCategories: subRow?.count ?? 0,
-    };
-  },
-});
+const countReferences = async (
+  { db, userId }: RepoScope,
+  subCategoryId: string,
+): ReturnType<SubCategoriesRepo['countReferences']> => {
+  const [byCat] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(transactions)
+    .where(ownedWhere(transactions.userId, userId, eq(transactions.categoryId, subCategoryId)));
+  const [bySub] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(transactions)
+    .where(ownedWhere(transactions.userId, userId, eq(transactions.subcategoryId, subCategoryId)));
+  const [recRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(recurringRules)
+    .where(ownedWhere(recurringRules.userId, userId, eq(recurringRules.categoryId, subCategoryId)));
+  const [subRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(categories)
+    .where(visibleWhere(categories.userId, userId, eq(categories.parentId, subCategoryId)));
+  return {
+    transactions: (byCat?.count ?? 0) + (bySub?.count ?? 0),
+    recurring: recRow?.count ?? 0,
+    subCategories: subRow?.count ?? 0,
+  };
+};
+
+export const subCategoriesRepo = (db: Db, userId: string): SubCategoriesRepo => {
+  const scope: RepoScope = { db, userId };
+  return {
+    list: () => list(scope),
+    listByParent: (parentId) => listByParent(scope, parentId),
+    findByName: (name) => findByName(scope, name),
+    countReferences: (subCategoryId) => countReferences(scope, subCategoryId),
+  };
+};
