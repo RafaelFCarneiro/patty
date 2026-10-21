@@ -72,8 +72,8 @@ echo "== guide step 4: put the snapshot into the fintrack-data volume as /data/f
 compose create >/dev/null
 IMAGE_VERSION="$(compose run --rm --no-deps --entrypoint node fintrack -p "require('./package.json').version")" || fail "could not read the image's version"
 [ -n "$IMAGE_VERSION" ] || fail "the image reports no version"
-compose run --rm --no-deps --entrypoint sh -v "$PWD/fintrack.snapshot.db:/in.db:ro" fintrack \
-  -c 'cp /in.db /data/fintrack.db && chmod 600 /data/fintrack.db' || fail "loading the snapshot into the volume failed"
+compose run --rm --no-deps -T --entrypoint sh fintrack \
+  -c 'umask 077; cat > /data/fintrack.db && chmod 600 /data/fintrack.db' < ./fintrack.snapshot.db || fail "loading the snapshot into the volume failed"
 
 echo "== guide step 5: key readable by the container's user, then up"
 # Docker Desktop maps ownership itself; on Linux the 0600 file must belong to uid 1000 (CI may lack sudo: widen instead).

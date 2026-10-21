@@ -66,6 +66,13 @@ describe('keyDestination', () => {
     expect(viaLink.isErr()).toBe(true);
   });
 
+  it('refuses the real database directory when the database file itself is a symlink', () => {
+    const alias = join(otherDirectory, 'fintrack.db');
+    symlinkSync(databaseFile, alias);
+    const viaFileLink = keyDestination(exporterFor(alias), join(dataDirectory, 'key'));
+    expect(viaFileLink._unsafeUnwrapErr()).toBe(CLI_MESSAGES.keyBesideData(dataDirectory));
+  });
+
   it('refuses an existing file, and a dangling symlink', () => {
     const taken = join(otherDirectory, 'taken');
     writeFileSync(taken, 'x');

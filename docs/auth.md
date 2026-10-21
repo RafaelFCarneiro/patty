@@ -549,14 +549,14 @@ cannot read your OS keychain, so the key goes to a file it mounts as a secret. T
    If your database is not at the default path, set `DB_PATH` for both commands, as you do for the server.
 4. **Put the snapshot into the `fintrack-data` volume as `/data/fintrack.db`**, owned by the image's `node` user (uid 1000).
    Compose prefixes the volume name with the project, so use `docker compose`, not a guessed `docker volume` name. This
-   creates the volume, then copies the file in from a throwaway container that runs as that user:
+   creates the volume, then streams the file in through stdin to a throwaway container that runs as that user (the host's `0600` file is read by you, so it works whatever your host uid is, and the container creates its own owner-only copy):
 
    ```bash
    npm view @rafaelfcarneiro/fintrack version
    docker compose create
    docker compose run --rm --no-deps --entrypoint node fintrack -p "require('./package.json').version"
-   docker compose run --rm --no-deps --entrypoint sh -v "$PWD/fintrack.snapshot.db:/in.db:ro" fintrack \
-     -c 'cp /in.db /data/fintrack.db && chmod 600 /data/fintrack.db'
+   docker compose run --rm --no-deps -T --entrypoint sh fintrack \
+     -c 'umask 077; cat > /data/fintrack.db && chmod 600 /data/fintrack.db' < ./fintrack.snapshot.db
    ```
 
    The first two lines compare the newest published version with the image's (step 1). Do the copy on a volume with no database in it yet: it overwrites `/data/fintrack.db`.
