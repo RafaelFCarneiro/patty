@@ -1,4 +1,4 @@
-import { closeSync, openSync, rmSync, writeSync } from 'node:fs';
+import { closeSync, openSync, rmSync, writeFileSync } from 'node:fs';
 import { Result } from 'neverthrow';
 import { reasonOf } from '../../../models/error.js';
 import { EXCLUSIVE_CREATE_FLAG, PRIVATE_FILE_MODE } from '../../../models/export.js';
@@ -22,7 +22,7 @@ only there: it is never printed. Run it from the terminal that holds the key, be
 const writeKeyFile = Result.fromThrowable((path: string, key: string): void => {
   const file = openSync(path, EXCLUSIVE_CREATE_FLAG, PRIVATE_FILE_MODE);
   try {
-    writeSync(file, `${key}\n`);
+    writeFileSync(file, `${key}\n`); // writes it all or throws; writeSync may stop short
   } catch (cause) {
     rmSync(path, { force: true });
     throw cause;
