@@ -1,6 +1,11 @@
+import { PRIVATE_FILE_MODE, type ExportedRowCounts } from '../../models/export.js';
+import { NPX_COMMAND } from '../../models/package.js';
 import { INVITE_PATH } from '../../models/auth/origin.js';
 import type { PasswordReset } from '../../models/auth/password.js';
 import type { IssuedInvite, RevokedCredentials, UserSummary } from '../../models/auth/users.js';
+
+const MOVE_GUIDE = 'docs/auth.md, "Moving an npm install to Docker"';
+const fileMode = (): string => PRIVATE_FILE_MODE.toString(8).padStart(4, '0');
 
 const endedCredentials = (revoked: RevokedCredentials): string =>
   `sessions ended: ${revoked.sessionsEnded}, tokens and sign-ins revoked: ${revoked.tokensRevoked}`;
@@ -37,6 +42,25 @@ export const CLI_MESSAGES = {
   enabled: (username: string) =>
     `Enabled "${username}". They can log in again; their earlier sessions, tokens and sign-ins stay revoked.`,
   roleSet: (username: string, role: string) => `"${username}" is now ${role}.`,
+  keyExported: (path: string) =>
+    [
+      `Database key written to ${path} (mode ${fileMode()}, never overwritten).`,
+      "Use it as FINTRACK_DB_KEY_FILE, or as the container's fintrack_db_key secret. Keep it away from the data and its backups.",
+      `Next: ${NPX_COMMAND} db export --to <file>, then follow ${MOVE_GUIDE}.`,
+    ].join('\n'),
+  snapshotExported: (path: string, counts: ExportedRowCounts) =>
+    [
+      `Database snapshot written to ${path} (mode ${fileMode()}, encrypted under the same key, never overwritten).`,
+      `Rows: ${Object.entries(counts)
+        .map(([table, rows]) => `${table} ${rows}`)
+        .join(', ')}`,
+      `Compare these after the move: ${MOVE_GUIDE}.`,
+    ].join('\n'),
+  destinationExists: (path: string) => `${path} already exists; choose a new file (an export never overwrites)`,
+  destinationDirectoryMissing: (path: string) => `the directory of ${path} does not exist`,
+  keyBesideData: (directory: string) =>
+    `${directory} holds (or contains) the database; the key must never sit next to the data it unlocks. Choose another directory`,
+  snapshotIsDatabase: (path: string) => `${path} is the database itself; choose another file`,
   failure: (reason: string) => `fintrack: ${reason}`,
   unexpectedArgument: (argument: string) => `unexpected argument "${argument}"`,
 } as const;

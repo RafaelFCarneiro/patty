@@ -14,13 +14,14 @@ export const AUTH_POSITIONALS = 0;
 /** `login` and `logout` take flags only. */
 export const SIGN_IN_POSITIONALS = 0;
 
-export const CliCommand = z.enum(['setup', 'auth', 'login', 'logout', 'users']);
+export const CliCommand = z.enum(['setup', 'auth', 'login', 'logout', 'users', 'key', 'db']);
 export type CliCommand = z.infer<typeof CliCommand>;
 
 export const AuthSubcommand = z.enum(['setup', 'reset-password']);
 export type AuthSubcommand = z.infer<typeof AuthSubcommand>;
 
 const OPTION_MAX_LENGTH = 256;
+const PATH_MAX_LENGTH = 4096;
 
 export const ClaimOptionsSchema = z
   .object({
@@ -89,3 +90,18 @@ export const TargetUsernameSchema = z
   .string()
   .transform(normalizeUsername)
   .pipe(z.string().min(1).max(OPTION_MAX_LENGTH));
+
+/** `key export` and `db export`: one subcommand each, no positionals, and the file to write named by `--to`. */
+export const KeySubcommand = z.enum(['export']);
+export type KeySubcommand = z.infer<typeof KeySubcommand>;
+export const DbSubcommand = z.enum(['export']);
+export type DbSubcommand = z.infer<typeof DbSubcommand>;
+export const EXPORT_POSITIONALS = 0;
+
+export const ExportOptionsSchema = z.object({
+  to: z.string({ required_error: 'the destination is required: --to <file>' }).min(1).max(PATH_MAX_LENGTH),
+});
+export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
+
+/** The flags both export subcommands take, in `parseArgs` form. */
+export const EXPORT_FLAGS = { to: { type: 'string' } } as const;

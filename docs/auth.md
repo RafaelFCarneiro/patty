@@ -11,7 +11,7 @@ The flows as diagrams (startup, setup, login, the auth hook, logout/SSE, existin
 > [Threat model](#threat-model-so-far)) — and **admin user management by invitation** ([Users](#users-roles-and-invitations)). **Authentication is on by
 > default, on every install** — a local npm one included: the owner is claimed in the terminal during `setup` ([First setup](#first-setup)), and
 > **a stdio session signs in too**, through the browser, for a duration the person chooses ([Signing in Claude (stdio)](#signing-in-claude-stdio)).
-> MCP OAuth (Phase 3) and `fintrack key export` come later — see [What comes next](#what-comes-next).
+> Moving an npm install into Docker: [the guide](#moving-an-npm-install-to-docker). MCP OAuth (Phase 3) comes later — see [What comes next](#what-comes-next).
 
 ## Auth modes
 
@@ -80,8 +80,8 @@ An instance starts with **one owner**, and every path to the data you already ha
 **An existing database (for example, one built up over stdio) therefore keeps all its data.** Upgrade, claim the owner
 once ([First setup](#first-setup)), and log in to the data you already have. Nothing is copied or migrated.
 
-> Moving an npm/stdio database into the Docker volume (and exporting its keychain key) needs `fintrack key export`, which is not
-> built yet ([What comes next](#what-comes-next)). Until then, claiming works on a database file the container can already open.
+> Moving an npm/stdio database into the Docker volume, with the key from your keychain, is a short guide:
+> [Moving an npm install to Docker](#moving-an-npm-install-to-docker).
 
 ## First setup
 
@@ -517,6 +517,69 @@ Behind a reverse proxy set `TRUST_PROXY`, or every client shares the proxy's IP 
 lock everyone out. Prefer a **hop count** (`TRUST_PROXY=1` for one proxy) or the proxy's address/CIDR over `true`:
 `true` trusts any client's `X-Forwarded-For`, which lets an attacker pick the IP the limiter sees.
 
+## Moving an npm install to Docker
+
+The data and its encryption key have to travel together, and the key must never sit next to the data. The container
+cannot read your OS keychain, so the key goes to a file it mounts as a secret. Two terminal commands do the exporting
+(`key export` and `db export`; they are not reachable from MCP, HTTP or a token — whoever can run them already holds the key):
+
+- `key export --to <file>` writes the database key to a new file usable as `FINTRACK_DB_KEY_FILE`. It resolves the key the way
+  the server does (file, then env var, then keychain), proves it by opening your database with it and reading once, and
+  only then writes. The file is created owner-only (`0600`), is never overwritten (there is no `--force`), and cannot be in
+  the database's own directory or under it (real paths are compared, so a relative path or a symlink does not get around it).
+  The key is never printed, logged or put in an error.
+- `db export --to <file>` writes a consistent, still-encrypted snapshot (`VACUUM INTO`, the same mechanism as the
+  [backups made before a migration](#backups-made-before-a-migration)), owner-only, never overwriting. It is standalone (no
+  `-wal` file) and opens with the same key. It prints the row counts of the accounts and transactions tables (counts only)
+  so you can compare them after the move. It opens the database as it is: nothing is migrated or seeded, so the export
+  never upgrades your npm database; the container migrates its own copy on first start.
+
+1. **Use a container image at least as new as your npm build.** A database that a newer build migrated is refused by an
+   older one ([Refusing an older build](#refusing-an-older-build)). `npx …@latest` runs the newest published build; the
+   image's version is checked in step 4, once the key file exists (compose mounts it as a secret). If the image is older,
+   pull or build a newer one first (a too-old image refuses the database at startup and changes nothing).
+2. **Stop every FinTrack client** (Claude Desktop/Code, VS Code), so nothing writes after the snapshot.
+3. **Export the key and the data**, in the directory that holds `compose.yaml`:
+
+   ```bash
+   (umask 077; npx @rafaelfcarneiro/fintrack@latest key export --to ./fintrack_db_key)
+   npx @rafaelfcarneiro/fintrack@latest db export --to ./fintrack.snapshot.db
+   ```
+
+   If your database is not at the default path, set `DB_PATH` for both commands, as you do for the server.
+4. **Put the snapshot into the `fintrack-data` volume as `/data/fintrack.db`**, owned by the image's `node` user (uid 1000).
+   Compose prefixes the volume name with the project, so use `docker compose`, not a guessed `docker volume` name. This
+   creates the volume, then copies the file in from a throwaway container that runs as that user:
+
+   ```bash
+   npm view @rafaelfcarneiro/fintrack version
+   docker compose create
+   docker compose run --rm --no-deps --entrypoint node fintrack -p "require('./package.json').version"
+   docker compose run --rm --no-deps --entrypoint sh -v "$PWD/fintrack.snapshot.db:/in.db:ro" fintrack \
+     -c 'cp /in.db /data/fintrack.db && chmod 600 /data/fintrack.db'
+   ```
+
+   The first two lines compare the newest published version with the image's (step 1). Do the copy on a volume with no database in it yet: it overwrites `/data/fintrack.db`.
+5. **On Linux, `sudo chown 1000 fintrack_db_key`** (the container's user must own the `0600` file; skip this on Docker Desktop), then
+   `docker compose up -d`.
+6. **Sign in.**
+   - **You already claimed the owner on npm** (you ran `setup` or `auth setup`): no setup code is printed. Log in at
+     <http://127.0.0.1:51737/ui/login> with the same username and password.
+   - **You never claimed it:** `docker compose logs fintrack` shows the setup code; claim it at `/ui/setup`
+     ([The setup code](#the-setup-code)).
+7. **Verify.** The dashboard shows your accounts and transactions, and the counts match what `db export` printed.
+8. **Reconnect the MCP clients to the container.** Create a personal access token at `/ui/access/tokens` and use the HTTP
+   config from [`mcp-clients.md`](mcp-clients.md#docker-container-http-on-12700151737). The old stdio config still points at
+   the npm database, which is no longer the one in use.
+9. **Clean up.**
+   - Delete `fintrack.snapshot.db`.
+   - Keep `fintrack_db_key`, and back it up somewhere other than where the volume's backup goes: with the key beside the data,
+     the encryption protects nothing.
+   - Keep the old `~/.fintrack` (and its keychain entry) until you are satisfied, then delete it yourself. Nothing here deletes it.
+
+`scripts/docker-move-smoke.sh` runs steps 3–7 against an image (an npm-style database with a claimed owner and one account), so
+the commands above are the commands that are tested.
+
 ## Backups made before a migration
 
 Before applying a migration that **rewrites existing data** — Phase 1's owner insert is the first — startup
@@ -585,7 +648,7 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
   FinTrack can read the key and the database directly, so the login separates *people and network callers*, not your own
   account's processes. **The stdio sign-in does not change that**: it separates *which user, which scopes and for how long* a
   client acts *through FinTrack*; a program running as your OS account can still read the keychain entry (and the database key beside it), or start FinTrack with
-  `FINTRACK_AUTH=disabled` against your database. It is not a wall against your own OS account. Back up the key and the volume together, and protect both.
+  `FINTRACK_AUTH=disabled` against your database. It is not a wall against your own OS account. Back up the key and the volume, but not in the same place, and protect both.
 - **Other local programs and local web apps, with auth explicitly `disabled` on loopback.** A web page from another *site* can
   no longer reach it (the `Host`/`Origin` rule above), but any program running as any user on your machine can still
   connect to `127.0.0.1` and act as the owner. That includes a web app served from `localhost` on a *different port*
@@ -614,4 +677,3 @@ password reset, no never-expiring tokens; the stdio browser sign-in with a chose
 | Step / phase | Adds |
 |---|---|
 | 3 — MCP OAuth | An in-process OAuth 2.1 authorization server so OAuth-capable MCP clients can connect; the documented reverse-proxy + TLS deployment supersedes the loopback-only publish rule. |
-| 4, remainder | `fintrack key export` and the npm→Docker move guide (ADR-033 §7). |

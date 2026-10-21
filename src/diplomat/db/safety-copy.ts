@@ -6,8 +6,8 @@ import { applyPendingMigrationsHolding } from './migration-barrier.js';
 import { lastAppliedMillis, readJournal } from './migration-journal.js';
 import type { SqlReader } from './tenancy-integrity.js';
 import { withMigrationLock } from './migration-lock.js';
+import { EXCLUSIVE_CREATE_FLAG, PRIVATE_FILE_MODE } from '../../models/export.js';
 
-const BACKUP_FILE_MODE = 0o600;
 const TEMP_SUFFIX = '.tmp';
 
 /** Where the pre-migration copy of `dbFile` goes (ADR-033 §7) — next to the database, same encrypted
@@ -36,10 +36,10 @@ const databaseFile = async (db: Db): Promise<string> => {
 // SQLite's own snapshot: `VACUUM INTO` copies the committed state in ONE read transaction, so it is consistent
 // even while another process keeps writing, and it carries the same encryption key (a plain file copy after a
 // WAL checkpoint cannot promise either — a running writer can commit, or auto-checkpoint, mid-copy). The target
-// must be empty or absent; creating it ourselves first, 0600, means it is never readable by anyone else.
-const snapshotTo = async (db: Db, destination: string): Promise<void> => {
-  rmSync(destination, { force: true });
-  closeSync(openSync(destination, 'wx', BACKUP_FILE_MODE));
+// must be empty or absent; creating it ourselves first, 0600 and never over an existing file, means it is never
+// readable by anyone else. The one `VACUUM INTO` in the repo: the safety copy and `db export` both call it.
+export const snapshotTo = async (db: Db, destination: string): Promise<void> => {
+  closeSync(openSync(destination, EXCLUSIVE_CREATE_FLAG, PRIVATE_FILE_MODE));
   await db.run(sql`VACUUM INTO ${destination}`);
 };
 
@@ -94,6 +94,7 @@ export const backupBeforeRewriting = async (db: Db, migrationsFolder: string): P
     const destination = backupPath(dbFile, tag);
     // Snapshot then rename: a crash mid-snapshot never leaves a truncated file under the final name.
     const partial = `${destination}${TEMP_SUFFIX}`;
+    rmSync(partial, { force: true });
     await snapshotTo(db, partial);
     renameSync(partial, destination);
     console.error(`fintrack: backed up the database before migration ${tag} → ${destination}`);

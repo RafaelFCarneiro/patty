@@ -136,8 +136,12 @@ export const enableWal = async (client: ReturnType<typeof createClient>): Promis
  * The encryption key comes from FINTRACK_DB_KEY_FILE, FINTRACK_DB_KEY or the OS keychain (generated
  * on first run); throws if none is available so the DB is never opened unencrypted.
  */
-export const openDatabase = async (config: DbConfig): Promise<Db> => {
-  const encryptionKey = await resolveEncryptionKey(config);
+export const openDatabase = async (config: DbConfig): Promise<Db> =>
+  openDatabaseWithKey(config, await resolveEncryptionKey(config));
+
+/** Opens the database with a key already in hand — what `openDatabase` does after resolving one, and what the key
+ *  export does after proving it. Neither migrates nor seeds: that is `bootstrap`'s. */
+export const openDatabaseWithKey = async (config: Pick<Config, 'DB_PATH'>, encryptionKey: string): Promise<Db> => {
   // mode 0o700 applies only when the directory is first created; pre-existing directories
   // keep their current permissions (Node does not retroactively tighten them).
   mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 });

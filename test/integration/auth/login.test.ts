@@ -24,6 +24,7 @@ import {
   useAuthApp,
   type MemoryStore,
 } from './helpers.js';
+import { unusedExporter } from '../../unit/fixtures/exporter.js';
 
 const createApp = useAuthApp();
 
@@ -87,6 +88,7 @@ const rig = async (setup: Setup = {}) => {
     },
     interruptSignal: () => interrupt.signal,
     clients: { find: () => undefined },
+    exporter: unusedExporter,
   };
   return { ctx, cookie, out, err, io, shell, server, stores, storeFor, waits, interrupt };
 };

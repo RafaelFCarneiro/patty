@@ -250,16 +250,25 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
   - The log line names the backup path.
   - The migration is also rehearsed against a copy of a real database before the phase merges (see the
     migration plan).
-- **Moving an npm/stdio database to Docker.** The data and the key have to travel together.
+- **Moving an npm/stdio database to Docker.** The data and the key have to travel together, and the key must never sit
+  next to the data.
   - The key lives in the OS keychain (service `fintrack`, account `db-encryption-key`), and the container
     can't read a keychain.
-  - A **`fintrack key export --to <file>`** command (owner-only file mode, refusing to overwrite) writes it to a
-    file usable as `FINTRACK_DB_KEY_FILE`.
-  - Stop the stdio process, copy `fintrack.db` (after the WAL checkpoint the command performs) into the
-    `fintrack-data` volume, start the container with the exported key, then claim the owner with the setup
-    code.
+  - A **`fintrack key export --to <file>`** command (terminal-only, like `auth` and `users`) writes it to a file usable
+    as `FINTRACK_DB_KEY_FILE`. It resolves the key as the server does, proves it by opening the database and reading once
+    (a key that does not open it writes nothing), creates the file `wx` and `0600` (never overwriting, no `--force`),
+    refuses a destination in the database's directory or under it (compared by real path), and never prints the key.
+  - A **`fintrack db export --to <file>`** command writes the data as a `VACUUM INTO` snapshot, not a file copy after a
+    WAL checkpoint, for the same reason as the safety copy above: it is consistent even while a stdio process writes,
+    standalone (no `-wal`) and encrypted under the same key. It is the same helper the safety copy uses, creates the file
+    `wx` and `0600`, and prints row counts of the owned tables (counts only) to compare after the move. Like `key export`
+    it opens the database without migrating or seeding, so an export never upgrades the source.
+  - Stop the stdio clients, export both files, load the snapshot into the `fintrack-data` volume, and start the
+    container with the exported key.
+  - Who signs in depends on whether the owner was claimed: an owner already claimed on npm logs in with the same
+    username and password (no setup code is printed); an unclaimed one claims it with the setup code.
   - `docs/auth.md` documents this as a step-by-step guide, including a verification step: the claimed account
-    shows the existing accounts and transactions.
+    shows the existing accounts and transactions. `scripts/docker-move-smoke.sh` runs the guide's commands end to end.
 
 ## Options considered
 
@@ -322,7 +331,7 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
      through every controller and repo; resolvers scoped per user; per-user idempotency uniqueness; the
      settings split; a per-user change bus and scheduler; stdio identity comes from ADR-034's sign-in (so
      `FINTRACK_USER` is dropped); admin user management unlocked.
-   - Ships: `fintrack key export`, and the npm→Docker move guide in `docs/auth.md` (§7).
+   - Ships: `fintrack key export` and `fintrack db export`, and the npm→Docker move guide in `docs/auth.md` (§7).
    - Tests:
      - a cross-user isolation suite that hits every read and write path as user B against user A's ids and
        expects not-found;
@@ -339,7 +348,7 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
 5. [x] Phase 4 — multi-user tenancy.
    - [x] Step 1 (`feat/tenancy-data`): `user_id` on every owned row (migration `0021_tenancy_data`, backfilled to the owner, with the safety copy and integrity check), user-scoped deps and appliers, per-user settings and change events, the isolation suite.
    - [x] Step 2 (`feat/user-management`): admin creates users by invitation (migration `0022_user_management`: `invites`, `users.last_login_at`, `settings.max_sign_in_duration`); claim at `/ui/access/invite`; reissue, disable, enable, set-role; the instance sign-in cap (ADR-034 §4); `fintrack users …` in the trusted terminal; the always-one-active-admin guard; the isolation suite also run against a user created through this product path.
-6. [ ] `fintrack key export` and the npm→Docker move guide (§7) — the tail of Phase 4 step 2 as first drawn, not built with it.
+6. [x] `fintrack key export`, `fintrack db export` and the npm→Docker move guide (§7) — the tail of Phase 4 step 2 as first drawn, not built with it.
 
 Every phase is feature-sized (schema + multiple layers + security-sensitive). Each gets the DoD verification
 subagent, charged with checking that:
