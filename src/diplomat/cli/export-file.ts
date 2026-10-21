@@ -24,12 +24,18 @@ const locate = (to: string): Result<Located, string> => {
 const refuseExisting = ({ destination }: Located): Result<string, string> =>
   statLink(destination).isOk() ? err(CLI_MESSAGES.destinationExists(destination)) : ok(destination);
 
+/** The directory the database really lives in: through a symlink on the file itself, else (no such file yet — the
+ *  caller's key proof says so) through the directory's own. */
+const dataDirectoryOf = (databaseFile: string): Result<string, string> =>
+  realPath(databaseFile)
+    .map((real) => dirname(real))
+    .orElse(() => realPath(dirname(databaseFile)))
+    .mapErr(() => CLI_MESSAGES.destinationDirectoryMissing(databaseFile));
+
 /** Where the key may be written: a new file, in a directory that is not the database's (nor under it). */
 export const keyDestination = (exporter: Exporter, to: string): Result<string, string> =>
   locate(to).andThen((located) =>
-    realPath(exporter.databasePath())
-      .map((databaseFile) => dirname(databaseFile))
-      .mapErr(() => CLI_MESSAGES.destinationDirectoryMissing(exporter.databasePath()))
+    dataDirectoryOf(exporter.databasePath())
       .andThen((dataDirectory) =>
         isBesideData(dataDirectory, located.directory)
           ? err(CLI_MESSAGES.keyBesideData(located.directory))
