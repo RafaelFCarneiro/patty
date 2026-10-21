@@ -61,6 +61,27 @@ describe('withMigrationLock', () => {
     expect(events).toEqual(['first:start', 'first:end', 'second:start']);
   });
 
+  it('a waiting starter keeps the event loop free while it polls for the lock', async () => {
+    let releaseFirst: () => void = () => undefined;
+    let firstHoldsLock: () => void = () => undefined;
+    const acquired = new Promise<void>((resolve) => (firstHoldsLock = resolve));
+    const first = withMigrationLock(dbFile, async () => {
+      firstHoldsLock();
+      await new Promise<void>((resolve) => (releaseFirst = resolve));
+    });
+    await acquired;
+    const second = withMigrationLock(dbFile, async () => undefined);
+
+    let ticks = 0;
+    const timer = setInterval(() => (ticks += 1), 10);
+    await tick(300);
+    clearInterval(timer);
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(ticks).toBeGreaterThanOrEqual(20);
+  });
+
   it('is not wedged by a leftover companion file (a crashed holder leaves nothing to clean up)', async () => {
     await withMigrationLock(dbFile, async () => undefined);
     expect(existsSync(lockPath(dbFile))).toBe(true); // kept on purpose: removing it would let two inodes be locked

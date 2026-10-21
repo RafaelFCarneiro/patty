@@ -5,6 +5,7 @@ import { isSqliteBusy } from './sqliteErrors.js';
 const LOCK_SUFFIX = '.migrate.lock';
 const POLL_INTERVAL_MS = 100;
 const WAIT_LIMIT_MS = 60_000;
+const NEVER_BLOCK_IN_SQLITE_MS = 0;
 
 export const lockPath = (dbFile: string): string => `${dbFile}${LOCK_SUFFIX}`;
 
@@ -33,7 +34,7 @@ export const withMigrationLock = async <T>(dbFile: string, work: () => Promise<T
   const path = lockPath(dbFile);
   const client = createClient({ url: pathToFileURL(path).href });
   try {
-    await client.execute('PRAGMA busy_timeout = 0');
+    await client.execute(`PRAGMA busy_timeout = ${NEVER_BLOCK_IN_SQLITE_MS}`);
     await acquireExclusive(client, path, Date.now() + WAIT_LIMIT_MS);
     try {
       return await work();
