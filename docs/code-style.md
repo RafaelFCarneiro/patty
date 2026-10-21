@@ -345,7 +345,7 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 
 ## Naming & misc
 
-- Files: camelCase matching the domain (`credit-cards.ts`); tests live under `test/unit/`/`test/integration/`
+- Files and folders: kebab-case matching the domain (`credit-cards.ts`); tests live under `test/unit/`/`test/integration/`
   in a mirrored path, not colocated (`test/unit/logic/bill.test.ts`, never `src/logic/bill.test.ts` — see
   `CLAUDE.md`'s Commands section; the vitest config only scans `test/unit/**`/`test/integration/**`, so a
   colocated `src/**/*.test.ts` file silently never runs).
