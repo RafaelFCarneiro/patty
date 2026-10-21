@@ -21,10 +21,10 @@
       // throw/no-throw: correct for a malformed code like USDC, silently wrong precision for a
       // well-formed-but-unrecognized 3-letter code like BTC until the engine is updated.
       try {
-        // eslint-disable-next-line no-new -- probing for a thrown RangeError is the whole point
+        // Constructed only to probe for a thrown RangeError.
         new Intl.NumberFormat(undefined, { style: 'currency', currency: code });
         return true;
-      } catch (e) {
+      } catch {
         return false;
       }
     }
