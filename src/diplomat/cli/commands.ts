@@ -1,6 +1,8 @@
 import { CliCommand } from '../../wire/in/cli.js';
 import { NPX_COMMAND } from '../../models/package.js';
 import { runAuthCommand } from './commands/auth.js';
+import { runDbCommand } from './commands/db.js';
+import { runKeyCommand } from './commands/key.js';
 import { runLogin, runLogout } from './commands/login.js';
 import { runSetupCommand } from './commands/setup.js';
 import { runUsersCommand } from './commands/users.js';
@@ -19,28 +21,24 @@ Commands:
   logout           Revoke the saved sign-in and remove it from the keychain
   auth <command>   Owner login: setup, reset-password
   users <command>  Manage who can sign in: list, invite, reissue, disable, enable, role
+  key <command>    Export the database key (export --to <file>) to move an npm install to Docker
+  db <command>     Export an encrypted snapshot of the database (export --to <file>)
 
-The setup, auth and users commands print their own help when run with no arguments. With no command at all, FinTrack runs as an MCP server (stdio).
+The setup, auth, users, key and db commands print their own help when run with no arguments. With no command at all, FinTrack runs as an MCP server (stdio).
 `.trimStart();
 
-const runKnownCommand = (command: CliCommand, rest: readonly string[], io: CliIo): Promise<number> => {
-  switch (command) {
-    case CliCommand.enum.setup:
-      return runSetupCommand(rest, io);
-    case CliCommand.enum.login:
-      return runLogin(rest, io);
-    case CliCommand.enum.logout:
-      return runLogout(rest, io);
-    case CliCommand.enum.auth:
-      return runAuthCommand(rest, io);
-    case CliCommand.enum.users:
-      return runUsersCommand(rest, io);
-    default: {
-      const _exhaustive: never = command;
-      throw new Error(`unmapped command: ${String(_exhaustive)}`);
-    }
-  }
-};
+type CommandRunner = (rest: readonly string[], io: CliIo) => Promise<number>;
+
+// Exhaustive by type: a command added to `CliCommand` without a runner fails to compile.
+const RUNNERS = {
+  setup: runSetupCommand,
+  login: runLogin,
+  logout: runLogout,
+  auth: runAuthCommand,
+  users: runUsersCommand,
+  key: runKeyCommand,
+  db: runDbCommand,
+} as const satisfies Record<CliCommand, CommandRunner>;
 
 /** Every argument is a command: an unknown one prints the usage and fails — it never falls through to starting a
  *  server, which is what an old or stale build once did with `auth setup`. */
@@ -57,7 +55,7 @@ export const runCli = async (args: readonly string[], io: CliIo): Promise<number
     return EXIT_FAILURE;
   }
   try {
-    return await runKnownCommand(known.data, rest, io);
+    return await RUNNERS[known.data](rest, io);
   } catch (cause) {
     io.err(CLI_MESSAGES.failure(reasonOf(cause)));
     return EXIT_FAILURE;

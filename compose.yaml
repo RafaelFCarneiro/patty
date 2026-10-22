@@ -15,8 +15,10 @@
 # MCP clients and scripts authenticate /mcp and /api with a personal access token (Authorization: Bearer ftk_…)
 # created at /ui/access/tokens — see docs/mcp-clients.md.
 #
-# Keep the key: without it the database in the fintrack-data volume cannot be decrypted. Back up the
-# volume and the key together. Run exactly one replica per volume (SQLite, in-process scheduler).
+# Moving an existing npm/stdio database into this volume (with its key): docs/auth.md, "Moving an npm install to Docker".
+#
+# Keep the key: without it the database in the fintrack-data volume cannot be decrypted. Back up the key too,
+# but somewhere other than the volume's backup (with both together, the encryption protects nothing). Run exactly one replica per volume (SQLite, in-process scheduler).
 services:
   fintrack:
     image: ghcr.io/rafaelfcarneiro/fintrack:latest

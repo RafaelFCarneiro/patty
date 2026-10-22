@@ -1,8 +1,9 @@
 import { parseArgs, type ParseArgsConfig } from 'node:util';
-import type { ResultAsync } from 'neverthrow';
+import type { Result, ResultAsync } from 'neverthrow';
 import type { ZodType, ZodTypeDef } from 'zod';
 import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter } from '../../controllers/deps.js';
 import { reasonOf } from '../../models/error.js';
+import type { ExportedRowCounts } from '../../models/export.js';
 import { databaseAheadMessage, type DatabaseAhead } from '../../models/database.js';
 import { CLI_MESSAGES } from './messages.js';
 import { isPromptEnded, PROMPT_MESSAGES, type PromptFailure } from './prompt.js';
@@ -34,6 +35,22 @@ export type Shell = {
   signIn: (profile: string) => SignInInterpreter;
 };
 
+/**
+ * What `key export` and `db export` need from the database and its key, and nothing else. The key never crosses this
+ * port except as the value `provenKey` hands the one command that writes it where the person pointed. Neither method
+ * migrates or seeds: an export must not upgrade a database as a side effect.
+ */
+export type Exporter = {
+  /** The database file this process would open (`DB_PATH`). */
+  databasePath: () => string;
+  /** The key the database opens with — resolved as the server does — after opening it and reading once. The error
+   *  says why it did not open; it never carries the key. */
+  provenKey: () => Promise<Result<string, string>>;
+  /** Writes a consistent, still-encrypted snapshot to `destination` (created here: new, owner-only) and counts the
+   *  rows it holds. A failure leaves nothing at `destination`. */
+  writeSnapshot: (destination: string) => Promise<Result<ExportedRowCounts, string>>;
+};
+
 export type CliIo = {
   /** The database, opened and migrated — or why it cannot be used (a build older than the database). */
   openShell: () => ResultAsync<Shell, DatabaseAhead>;
@@ -49,6 +66,8 @@ export type CliIo = {
   interruptSignal: () => AbortSignal;
   /** The MCP clients `setup` can write a configuration for. */
   clients: ClientConfigs;
+  /** The database and its key, for the export commands. */
+  exporter: Exporter;
 };
 
 /** Runs `work` on the opened shell and closes it. When the database is newer than this build, says so on stderr
@@ -80,6 +99,13 @@ export const failed = (io: CliIo, reason: string): number => exitCodeOf(fail(io,
 export const exitCodeOfPrompt = (io: CliIo, failure: PromptFailure): number => {
   if (!isPromptEnded(failure)) return failed(io, failure.message);
   return failure.how === PromptEnd.enum.interrupted ? EXIT_INTERRUPTED : failed(io, PROMPT_ABORTED_MESSAGE);
+};
+
+/** An unknown subcommand of `group`: says so, prints that group's help, and fails. */
+export const refuseUnknownSubcommand = (io: CliIo, group: string, name: string, help: string): number => {
+  io.err(CLI_MESSAGES.failure(`unknown ${group} command "${name}"`));
+  io.err(help);
+  return EXIT_FAILURE;
 };
 
 export const exitCodeOf = (succeeded: boolean): number => (succeeded ? EXIT_OK : EXIT_FAILURE);

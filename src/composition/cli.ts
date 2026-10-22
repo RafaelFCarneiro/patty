@@ -12,6 +12,7 @@ import { closeDatabase, openDatabase, type Db } from '../diplomat/db/driver.js';
 import { createEngineContext } from '../diplomat/db/engine.js';
 import type { DatabaseAhead } from '../models/database.js';
 import { AuthMode } from '../models/auth/mode.js';
+import { createExporter } from './export.js';
 import { createSignInFor } from './sign-in/wiring.js';
 
 /**
@@ -83,6 +84,7 @@ const defaultCliIo = (): CliIo => ({
   wait: waitOrAbort,
   interruptSignal,
   clients: clientConfigs,
+  exporter: createExporter(),
 });
 
 /** The command line, ready to run: the router bound to the real terminal, database, keychain and config files. */

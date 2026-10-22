@@ -23,6 +23,7 @@ import {
   userRows,
   USERS_URL,
 } from './user-helpers.js';
+import { unusedExporter } from '../../unit/fixtures/exporter.js';
 
 const createApp = useAuthApp();
 
@@ -56,6 +57,7 @@ const harness = (ctx: AppContext, inviteOrigin: string | null = LOOPBACK_ORIGIN)
     wait: async () => undefined,
     interruptSignal: () => new AbortController().signal,
     clients: { find: () => undefined },
+    exporter: unusedExporter,
   };
   return { out, err, io, run: (...args) => runUsersCommand(args, io) };
 };
