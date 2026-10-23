@@ -131,8 +131,9 @@ const submitDecision = (pages: ConnectPages) => async (req: FastifyRequest, repl
   const input: ApproveGrantInput = { userCode: code, access, duration, password };
   const answered = await answerGrant(pages, req, decision, input);
   if (answered.isOk()) return answeredPage(reply, decision);
-  return isWrongPassword(answered.error)
-    ? retryConsent(reply, consent, input)
+  if (isWrongPassword(answered.error)) return retryConsent(reply, consent, input);
+  return answered.error.code === authErrors.rateLimited.code
+    ? limited(reply)
     : failed(pages, reply, req.ip, answered.error);
 };
 

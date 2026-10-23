@@ -554,6 +554,7 @@ describe('POST /ui/connect — approving re-asks the password (step-up)', () => 
     const limited = await answerConnect(ctx, cookie, code, { decision: 'approve' });
 
     expect(limited.statusCode).toBe(429);
+    expect(limited.body).toContain('Slow down');
     expect(await pending(ctx)).toEqual([{ status: 'pending' }]);
   });
 

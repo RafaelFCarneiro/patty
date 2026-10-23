@@ -70,9 +70,14 @@ describe('sessions', () => {
   });
 
   it('still ends at the absolute maximum for a session seen every day', () => {
-    const days = Math.ceil(SESSION_ABSOLUTE_MAX_MS / DAY_MS);
-    const final = Array.from({ length: days }, (_unused, day) => later((day + 1) * DAY_MS - 1)).reduce(
-      (current, seen) => touched(current, seen),
+    const visitGapMs = DAY_MS - 1;
+    const visits = Math.ceil(SESSION_ABSOLUTE_MAX_MS / visitGapMs);
+    const final = Array.from({ length: visits }, (_unused, visit) => later((visit + 1) * visitGapMs)).reduce(
+      (current, seen) => {
+        if (seen.getTime() >= later(SESSION_ABSOLUTE_MAX_MS).getTime()) return current;
+        expect(isSessionExpired(current, seen)).toBe(false);
+        return touched(current, seen);
+      },
       session(),
     );
     expect(isSessionExpired(final, later(SESSION_ABSOLUTE_MAX_MS - 1))).toBe(false);
