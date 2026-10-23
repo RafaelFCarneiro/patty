@@ -8,7 +8,7 @@ import {
 } from '../../../src/models/auth/grant.js';
 import { PrincipalVia } from '../../../src/models/auth/principal.js';
 import { startGrant } from '../../../src/controllers/grants.js';
-import { MAX_CODE_LOOKUP_FAILURES_PER_IP } from '../../../src/diplomat/http/rate-limiter.js';
+import { MAX_CODE_LOOKUP_FAILURES_PER_IP, MAX_FAILURES_PER_USERNAME } from '../../../src/diplomat/http/rate-limiter.js';
 import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import {
   answerConnect,
@@ -453,6 +453,131 @@ describe('POST /ui/connect', () => {
       expect((await answerConnect(ctx, cookie, 'GUESS-GUESS', { decision: 'approve' })).statusCode).toBe(404);
     }
     expect((await answerConnect(ctx, cookie, 'GUESS-GUESS', { decision: 'approve' })).statusCode).toBe(429);
+  });
+});
+
+describe('POST /ui/connect — approving re-asks the password (step-up)', () => {
+  const WRONG = 'definitely-not-the-password';
+  const pending = (ctx: Ctx) => ctx.db.all(sql`SELECT status FROM client_grants`);
+  const minted = (ctx: Ctx) => ctx.db.all(sql`SELECT 1 FROM access_tokens`);
+  const credentialsEpoch = (ctx: Ctx) =>
+    ctx.db.all<{ at: string | null }>(sql`SELECT credentials_changed_at AS at FROM users WHERE id = 'user-owner'`);
+
+  it('approves with the right password and writes the approver’s credentials_changed_at', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const code = await requestCode(ctx);
+    const before = await credentialsEpoch(ctx);
+
+    const res = await answerConnect(ctx, cookie, code, { decision: 'approve' });
+
+    expect(res.statusCode).toBe(200);
+    expect(await pending(ctx)).toEqual([{ status: 'approved' }]);
+    const [after] = await credentialsEpoch(ctx);
+    expect(after!.at).not.toBeNull();
+    expect(after).not.toEqual(before[0]);
+  });
+
+  it('refuses a wrong password: the page says so, the request stays pending, nothing is minted', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const code = await requestCode(ctx);
+
+    const res = await answerConnect(ctx, cookie, code, { decision: 'approve', access: 'write', password: WRONG });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toContain('That password is not correct.');
+    expect(await pending(ctx)).toEqual([{ status: 'pending' }]);
+    expect(await minted(ctx)).toEqual([]);
+  });
+
+  it('never echoes the password, keeps the choices, leaves the field empty and stays retryable', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const code = await requestCode(ctx);
+
+    const res = await answerConnect(ctx, cookie, code, {
+      decision: 'approve',
+      access: 'write',
+      duration: '7d',
+      password: WRONG,
+    });
+
+    expect(res.body).not.toContain(WRONG);
+    expect(res.body).not.toContain(PASSWORD);
+    expect(radios(res.body, 'access')).toContainEqual({ value: 'write', checked: true });
+    expect(radios(res.body, 'duration')).toContainEqual({ value: '7d', checked: true });
+    expect(res.body).toMatch(
+      /<input[^>]*type="password"[^>]*name="password"|<input[^>]*name="password"[^>]*type="password"/,
+    );
+    expect(res.body).toContain('autocomplete="current-password"');
+    expect(res.body).not.toMatch(/name="password"[^>]*value=/);
+    expect(res.headers.location).toBeUndefined();
+
+    const retry = await answerConnect(ctx, cookie, code, { decision: 'approve' });
+    expect(retry.statusCode).toBe(200);
+    expect(await pending(ctx)).toEqual([{ status: 'approved' }]);
+  });
+
+  it('refuses a missing password and leaves the request pending', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const code = await requestCode(ctx);
+
+    for (const password of [null, ''] as const) {
+      const res = await answerConnect(ctx, cookie, code, { decision: 'approve', password });
+      expect(res.statusCode).toBe(403);
+    }
+    expect(await pending(ctx)).toEqual([{ status: 'pending' }]);
+    expect(await minted(ctx)).toEqual([]);
+  });
+
+  it('denies without a password', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const code = await requestCode(ctx);
+
+    const res = await answerConnect(ctx, cookie, code, { decision: 'deny' });
+
+    expect(res.statusCode).toBe(200);
+    expect(await pending(ctx)).toEqual([{ status: 'denied' }]);
+  });
+
+  it('counts wrong passwords toward the throttle, even for a later right one', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const code = await requestCode(ctx);
+    for (let attempt = 0; attempt < MAX_FAILURES_PER_USERNAME; attempt += 1) {
+      expect((await answerConnect(ctx, cookie, code, { decision: 'approve', password: WRONG })).statusCode).toBe(403);
+    }
+
+    const limited = await answerConnect(ctx, cookie, code, { decision: 'approve' });
+
+    expect(limited.statusCode).toBe(429);
+    expect(limited.body).toContain('Slow down');
+    expect(await pending(ctx)).toEqual([{ status: 'pending' }]);
+  });
+
+  it('clears the strikes on a right password, so earlier wrong ones do not add up across approvals', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    for (let round = 0; round < 2; round += 1) {
+      const code = await requestCode(ctx);
+      for (let attempt = 0; attempt < MAX_FAILURES_PER_USERNAME - 1; attempt += 1) {
+        expect((await answerConnect(ctx, cookie, code, { decision: 'approve', password: WRONG })).statusCode).toBe(403);
+      }
+      expect((await answerConnect(ctx, cookie, code, { decision: 'approve' })).statusCode).toBe(200);
+    }
+  });
+
+  it('keeps the page’s password field labelled and required for Approve, but not for Deny', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const body = (await getConnect(ctx, `?code=${await requestCode(ctx)}`, { cookie })).body;
+
+    expect(body).toContain('type="password"');
+    expect(body).toContain('required');
+    expect(body).toMatch(/value="deny"[^>]*formnovalidate/);
   });
 });
 

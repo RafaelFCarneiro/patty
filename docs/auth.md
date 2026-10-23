@@ -175,7 +175,7 @@ Without the code nobody can claim an exposed instance: there is no window in whi
 - A **session** is an opaque 256-bit random token in the `fintrack_session` cookie
   (`HttpOnly`, `SameSite=Lax`, `Path=/`, plus `Secure` when `PUBLIC_URL` is `https`). The database stores only the
   token's SHA-256, so reading the database yields no usable session.
-- **Expiry is sliding with an absolute cap:** 7 days after last use, and never more than 30 days after login.
+- **Expiry is sliding with an absolute cap:** 24 hours after last use, and never more than 30 days after login.
   The cookie itself lives for the 30-day cap and is never re-issued — the server's idle expiry is what ends a quiet
   session. Activity is recorded at most every 5 minutes. Expired sessions are deleted when they are presented, at each login,
   and at startup.
@@ -205,8 +205,8 @@ So the sign-in happens outside the protocol, and what it produces is read from t
 2. You open the link. If you are not logged in you log in first and land on the same page. The page shows **the client's name and
    version ("reported by the client"), the profile, when it asked, and the code** — confirm the code is the one Claude showed —
    and the warning *Only approve if you just asked a Claude session on this machine to connect.*
-3. You choose **access** (read only, or read and write) and **how long** (below), then **Approve** or **Deny**. The form is
-   pre-selected with what you chose last time for this client and profile (read-only for 24 hours the first time).
+3. You choose **access** (read only, or read and write) and **how long** (below), then enter **your password** and choose **Approve**, or choose **Deny** (which asks for no password). The form is
+   pre-selected with what you chose last time for this client and profile (read-only for 24 hours the first time). Approving mints a credential just as creating a token does, so it re-asks the password (step-up): a wrong or missing one leaves the request pending for you to retry within its 10 minutes, and counts toward a throttle of its own with the login page's limits.
 4. Claude's next call goes through. The process polls for the approval every 2 seconds, so a sign-in you approved is picked up
    even before the next call.
 
@@ -273,7 +273,7 @@ login** (authentication required, the same database) and closes it afterwards �
 
 On a multi-user instance, user A could send user B the link and hope B approves it, handing A's client B's data. The defences are layered: the page needs **B's own login**;
 it shows the **code**, which must match what the client displayed, plus the client's name and the time, with an explicit warning; the link and code **grant nothing by
-themselves** (only a logged-in person's approval does, and it binds to *that* person); and a request expires in 10 minutes and can be redeemed once. The URL
+themselves** (only a logged-in person's approval does, it needs *that* person's password as well as their session, and it binds to them); and a request expires in 10 minutes and can be redeemed once. The URL
 carries only the user code; the device code that redeems it never leaves the process that asked, and only its hash is stored.
 
 What none of this does: see [the limit on your own OS account](#threat-model-so-far) below.
@@ -627,7 +627,7 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 - **Leaving the instance with nobody to administer it**, including by two admins acting on each other at once.
 - **A program that merely runs a FinTrack stdio server in your name** (a client config you did not write, a script that spawns it): it gets "not signed in" until *you* approve a
   request in the browser, for the scopes and duration you pick, and you can revoke it any time at `/ui/access/tokens`.
-- **A sign-in link used as a lure** (the phishing defence, [above](#phishing-and-its-limits)): the link and code grant nothing by themselves, approval needs your own login
+- **A sign-in link used as a lure** (the phishing defence, [above](#phishing-and-its-limits)): the link and code grant nothing by themselves, approval needs your own login *and* your password
   and binds to you, the page names the client and the code, and a request lives 10 minutes and works once.
 - A stolen stdio sign-in being replayed over HTTP (it is accepted on the stdio channel only), and a "this session only" sign-in outliving its process (revoked at exit, capped at 12 hours).
 - An old or global `npx` build running against a newer database ([Refusing an older build](#refusing-an-older-build)).

@@ -589,7 +589,7 @@ holds a credential — except under an explicit `FINTRACK_AUTH=disabled`, where 
   request ends a login and, for stdio, is retired so the next request asks afresh; an unexpected failure is "could not check", never a sign-out. The state
   diagram is in `docs/auth-flows.md`.
 - *The grant* (`controllers/grants.ts`; rules in `logic/auth/grant.ts`): `startGrant` (device code returned once, only its sha256 stored; user code drawn
-  until no pending grant holds it), `approveGrant`/`denyGrant` (browser **session only**; the grant must be pending and unexpired; the approval binds the approving user, the chosen
+  until no pending grant holds it), `approveGrant`/`denyGrant` (browser **session only**; `approveGrant` re-asks the approver's password through `controllers/step-up.ts`'s `confirmedUser`, shared with token creation and the user-management actions, so a wrong or missing one leaves the grant pending, while `denyGrant` asks for none; the grant must be pending and unexpired; the approval binds the approving user, the chosen
   scopes and the chosen duration **clamped to the instance cap** (`clampToCap`; only approvals are clamped — a sign-in already granted, or a grant approved before the cap fell, keeps its expiry), and `approved_at`; `session` is refused for a `cli` grant), `redeemGrant` (single use: it mints the `kind: stdio` token — expiry
   `signInExpiry(approved_at, duration)`, absolute and capped at `MAX_SIGN_IN_DURATION_MS` — and marks the grant `redeemed` in the same batch, so a replay is refused by the version guard; `pending`/`denied`/`expired`/`invalid` are the other answers, the
   terminal ones final), `findConsent` (the consent page's data and pre-selection: the asker's hint, else this user's `lastRedeemed` choice for this client and profile, else read-only/24 h — all clamped to the instance cap — plus `durations`, what the page may offer: `offeredDurations(channel, cap)`, nothing above `settings.max_sign_in_duration`),
@@ -635,7 +635,7 @@ There is no self-registration and an admin never learns a password:
 **Startup order** (`composition/boot.ts`, and every command that opens the database): `openDatabase` → `bootstrap` = **version guard** (`diplomat/db/version-guard.ts`'s `checkDatabaseNotAhead`:
 the database's newest applied migration, `migration-journal.ts`'s `lastAppliedMillis`, against the newest this build's journal ships — `logic/migration.ts`'s `isDatabaseAhead`; a database that is ahead makes `bootstrap` return an error `DatabaseAhead` (`models/database.ts`), which `main.ts` and the CLI print with `databaseAheadMessage` and exit 1; nothing has been written) → safety copy (if a data-rewriting migration is pending) → migrate → seed → `prepareAuth` (identity deps; prune expired sessions and grants) → connect stdio → sidecar → announce the setup code.
 
-**Sessions.** Opaque 32-byte base64url token; `sha256(token)` stored. Sliding idle expiry
+**Sessions.** Opaque 32-byte base64url token; `sha256(token)` stored. Sliding idle expiry of 24 hours
 (`SESSION_IDLE_TTL_MS`) capped by `SESSION_ABSOLUTE_MAX_MS` from creation; `last_seen_at`/`expires_at` rewritten at most
 every `SESSION_TOUCH_INTERVAL_MS`; logout deletes the row; expired rows are deleted when presented, at login and at
 startup. Cookie: `HttpOnly; SameSite=Lax; Path=/; Max-Age`, `Secure` iff `PUBLIC_URL` is `https`.

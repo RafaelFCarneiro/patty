@@ -201,23 +201,33 @@ export const userCodeIn = (outcome: GateOutcome): string => {
   return code;
 };
 
+/** What a person submits at `/ui/connect`; an approval carries the login password unless the test says otherwise
+ *  (`password: null` leaves the field out entirely). */
+export type ConnectAnswer = {
+  decision: 'approve' | 'deny';
+  access?: TokenAccess;
+  duration?: SignInDuration;
+  password?: string | null;
+};
+
+const connectFields = (code: string, answer: ConnectAnswer) => {
+  const password = answer.password === undefined ? PASSWORD : answer.password;
+  return {
+    code,
+    decision: answer.decision,
+    access: answer.access ?? 'read',
+    duration: answer.duration ?? '24h',
+    ...(answer.decision === 'approve' && password !== null ? { password } : {}),
+  };
+};
+
 /** The person at `/ui/connect`: opens the link's page, then posts their decision, as a browser would. */
-export const answerConnect = (
-  ctx: AppContext,
-  cookie: string,
-  code: string,
-  decision: { decision: 'approve' | 'deny'; access?: TokenAccess; duration?: SignInDuration },
-) =>
+export const answerConnect = (ctx: AppContext, cookie: string, code: string, decision: ConnectAnswer) =>
   ctx.app.inject({
     method: 'POST',
     url: '/ui/connect',
     headers: browserHeaders(cookie),
-    payload: formBody({
-      code,
-      decision: decision.decision,
-      access: decision.access ?? 'read',
-      duration: decision.duration ?? '24h',
-    }),
+    payload: formBody(connectFields(code, decision)),
   });
 
 export const approveConnect = async (
@@ -290,11 +300,7 @@ export const countedTemporaryServer = (ctx: AppContext) => {
 };
 
 /** A browser at `origin`: log in as the owner, then answer a pending request — over real HTTP, like a person would. */
-export const answerAt = async (
-  origin: string,
-  code: string,
-  decision: { decision: 'approve' | 'deny'; access?: TokenAccess; duration?: SignInDuration },
-): Promise<number> => {
+export const answerAt = async (origin: string, code: string, decision: ConnectAnswer): Promise<number> => {
   const headers = { 'content-type': 'application/x-www-form-urlencoded', origin };
   const login = await fetch(`${origin}/ui/login`, {
     method: 'POST',
@@ -307,12 +313,7 @@ export const answerAt = async (
   const answered = await fetch(`${origin}/ui/connect`, {
     method: 'POST',
     headers: { ...headers, cookie },
-    body: formBody({
-      code,
-      decision: decision.decision,
-      access: decision.access ?? 'read',
-      duration: decision.duration ?? '24h',
-    }),
+    body: formBody(connectFields(code, decision)),
   });
   return answered.status;
 };

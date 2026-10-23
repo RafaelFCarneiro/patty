@@ -94,7 +94,7 @@ const approve = (origin: string, cookie: string, code: string, access: 'read' | 
   fetch(`${origin}/ui/connect`, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', origin, cookie },
-    body: form({ code, decision: 'approve', access, duration: 'session' }),
+    body: form({ code, decision: 'approve', access, duration: 'session', password: PASSWORD }),
   });
 
 const database = async () => {

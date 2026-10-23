@@ -76,6 +76,7 @@ const approvalFor = (userCode: string) => ({
   userCode,
   access: TokenAccess.enum.read,
   duration: SignInDuration.enum['24h'],
+  password: MEMBER_PASSWORD,
 });
 
 /** The instance settings row a migration guarantees: the default cap, never written until an admin changes it. */
@@ -910,7 +911,7 @@ describe('a request authorized before a change to its author cannot outlive that
     const { session } = stdioSessionFor(ctx);
     const userCode = userCodeIn(await session.resolve());
     const principal = await sessionPrincipalFor(ctx, ana.userId);
-    const input = { userCode, access: 'read' as const, duration: '24h' as const };
+    const input = { userCode, access: 'read' as const, duration: '24h' as const, password: MEMBER_PASSWORD };
 
     const stale = (await approveGrant(deps, principal, input))._unsafeUnwrap();
     await post(ctx, owner, `${USERS_URL}/${ana.userId}/disable`, { password: PASSWORD });
@@ -1025,7 +1026,12 @@ describe('a redemption cannot outlive a cap lowered while it was in flight', () 
     const started = (
       await run(() => startGrant(deps, { client: { name: 't', version: '1' }, profile: 'p', channel: 'stdio' }))
     )._unsafeUnwrap();
-    const input = { userCode: started.userCode, access: 'read' as const, duration: '30d' as const };
+    const input = {
+      userCode: started.userCode,
+      access: 'read' as const,
+      duration: '30d' as const,
+      password: MEMBER_PASSWORD,
+    };
     (await run(() => approveGrant(deps, principal, input)))._unsafeUnwrap();
 
     // The redemption reads the cap (30 days), then an admin — a different user — lowers it before it commits.

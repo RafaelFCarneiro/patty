@@ -5,7 +5,6 @@ import type { AppError } from '../common/errors.js';
 import { guard, okOr, orRefuse } from '../common/result.js';
 import { signInCapOf } from '../logic/auth/grant.js';
 import { hasCredentials } from '../logic/auth/owner.js';
-import { canLogin } from '../logic/auth/password.js';
 import { removeSession } from '../logic/auth/revoke.js';
 import { planDisable, planReissue, planRole } from '../logic/auth/user-plans.js';
 import {
@@ -53,6 +52,7 @@ import {
 } from '../models/auth/users.js';
 import { startSession } from './auth.js';
 import type { AuthDeps } from './deps.js';
+import { confirmedUser } from './step-up.js';
 
 const updateUser = (user: UserEntity): Persistable => persistence.update({ entity: USER_ENTITY_TAG, model: user });
 
@@ -69,12 +69,6 @@ const persistOf = (plan: UserPlan): Persistable[] => [
   ...R.map(plan.tokens, (token) => persistence.update({ entity: ACCESS_TOKEN_ENTITY_TAG, model: token })),
 ];
 
-const stepUpMatches = async (deps: AuthDeps, acting: UserEntity | null, password: string | undefined) =>
-  canLogin(
-    acting,
-    await deps.secrets.verifyPassword(acting?.passwordHash ?? deps.secrets.dummyPasswordHash, password ?? ''),
-  );
-
 const admit = (deps: AuthDeps, actor: Actor, options: { stepUp: boolean }): ResultAsync<Admitted, AppError> =>
   safeTry(async function* () {
     const acting = actor.kind === ActorKind.enum.session ? await deps.users.findById(actor.principal.userId) : null;
@@ -85,7 +79,9 @@ const admit = (deps: AuthDeps, actor: Actor, options: { stepUp: boolean }): Resu
       liveSessionOf(sessions, actor.principal.sessionId, deps.clock()),
       authErrors.unauthenticated,
     );
-    if (options.stepUp) yield* guard(await stepUpMatches(deps, acting, actor.password), authErrors.invalidCredentials);
+    if (options.stepUp) {
+      yield* okOr(await confirmedUser(deps, acting, actor.password), authErrors.invalidCredentials);
+    }
     return ok({ actingUserId: acting?.id ?? null, acting, session });
   });
 

@@ -25,7 +25,7 @@ import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { OWNER_PRINCIPAL, type Principal, PrincipalVia } from '../../../src/models/auth/principal.js';
 import { AccessTokenKind } from '../../../src/models/auth/token.js';
 import { conflict } from '../../../src/models/error.js';
-import { authDepsOf, bearer, claimOwner, movableClock, useAuthApp } from './helpers.js';
+import { authDepsOf, bearer, claimOwner, movableClock, PASSWORD, useAuthApp } from './helpers.js';
 
 const createApp = useAuthApp();
 
@@ -139,7 +139,12 @@ describe('approveGrant / denyGrant', () => {
     const started = await start(w);
 
     const approved = await w.run(() =>
-      approveGrant(w.deps, w.session, { userCode: started.userCode, access: 'write', duration: '7d' }),
+      approveGrant(w.deps, w.session, {
+        userCode: started.userCode,
+        access: 'write',
+        duration: '7d',
+        password: PASSWORD,
+      }),
     );
 
     expect(approved.isOk()).toBe(true);
@@ -154,7 +159,11 @@ describe('approveGrant / denyGrant', () => {
     const started = await start(w);
     const typed = started.userCode.toLowerCase().replace('-', ' ');
     expect(
-      (await w.run(() => approveGrant(w.deps, w.session, { userCode: typed, access: 'read', duration: '24h' }))).isOk(),
+      (
+        await w.run(() =>
+          approveGrant(w.deps, w.session, { userCode: typed, access: 'read', duration: '24h', password: PASSWORD }),
+        )
+      ).isOk(),
     ).toBe(true);
   });
 
@@ -168,7 +177,12 @@ describe('approveGrant / denyGrant', () => {
     const principal: Principal = { ...OWNER_PRINCIPAL, via };
 
     const answered = await w.run(() =>
-      approveGrant(w.deps, principal, { userCode: started.userCode, access: 'write', duration: '30d' }),
+      approveGrant(w.deps, principal, {
+        userCode: started.userCode,
+        access: 'write',
+        duration: '30d',
+        password: PASSWORD,
+      }),
     );
     const denied = await w.run(() => denyGrant(w.deps, principal, started.userCode));
 
@@ -181,21 +195,31 @@ describe('approveGrant / denyGrant', () => {
     const clock = movableClock();
     const w = await world({ clock: clock.now });
     const unknown = await w.run(() =>
-      approveGrant(w.deps, w.session, { userCode: 'ZZZZ-ZZZZ', access: 'read', duration: '24h' }),
+      approveGrant(w.deps, w.session, { userCode: 'ZZZZ-ZZZZ', access: 'read', duration: '24h', password: PASSWORD }),
     );
     expect(unknown._unsafeUnwrapErr()).toEqual(authErrors.invalidGrant);
 
     const answered = await start(w);
     await w.run(() => denyGrant(w.deps, w.session, answered.userCode));
     const again = await w.run(() =>
-      approveGrant(w.deps, w.session, { userCode: answered.userCode, access: 'read', duration: '24h' }),
+      approveGrant(w.deps, w.session, {
+        userCode: answered.userCode,
+        access: 'read',
+        duration: '24h',
+        password: PASSWORD,
+      }),
     );
     expect(again._unsafeUnwrapErr()).toEqual(authErrors.invalidGrant);
 
     const stale = await start(w);
     clock.advance(CLIENT_GRANT_TTL_MS);
     const late = await w.run(() =>
-      approveGrant(w.deps, w.session, { userCode: stale.userCode, access: 'read', duration: '24h' }),
+      approveGrant(w.deps, w.session, {
+        userCode: stale.userCode,
+        access: 'read',
+        duration: '24h',
+        password: PASSWORD,
+      }),
     );
     expect(late._unsafeUnwrapErr()).toEqual(authErrors.invalidGrant);
   });
@@ -204,10 +228,20 @@ describe('approveGrant / denyGrant', () => {
     const w = await world();
     const started = await start(w);
     const first = await w.run(() =>
-      approveGrant(w.deps, w.session, { userCode: started.userCode, access: 'read', duration: '24h' }),
+      approveGrant(w.deps, w.session, {
+        userCode: started.userCode,
+        access: 'read',
+        duration: '24h',
+        password: PASSWORD,
+      }),
     );
     const second = await w.run(() =>
-      approveGrant(w.deps, w.session, { userCode: started.userCode, access: 'write', duration: '30d' }),
+      approveGrant(w.deps, w.session, {
+        userCode: started.userCode,
+        access: 'write',
+        duration: '30d',
+        password: PASSWORD,
+      }),
     );
     expect(first.isOk()).toBe(true);
     expect(second._unsafeUnwrapErr()).toEqual(authErrors.invalidGrant);
@@ -220,7 +254,12 @@ describe('approveGrant / denyGrant', () => {
     const w = await world();
     const started = await start(w, { ...STDIO_REQUEST, channel: GrantChannel.enum.cli });
     const answered = await w.run(() =>
-      approveGrant(w.deps, w.session, { userCode: started.userCode, access: 'read', duration: 'session' }),
+      approveGrant(w.deps, w.session, {
+        userCode: started.userCode,
+        access: 'read',
+        duration: 'session',
+        password: PASSWORD,
+      }),
     );
     expect(answered._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
     expect(await w.ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'pending' }]);
@@ -245,7 +284,7 @@ describe('redeemGrant', () => {
     userCode: string,
     access: 'read' | 'write' = 'read',
     duration: '24h' | '7d' | '30d' | 'session' = '24h',
-  ) => w.run(() => approveGrant(w.deps, w.session, { userCode, access, duration }));
+  ) => w.run(() => approveGrant(w.deps, w.session, { userCode, access, duration, password: PASSWORD }));
 
   it('says "pending" until a person answers, and writes nothing', async () => {
     const w = await world();
@@ -409,7 +448,14 @@ describe('findConsent — what the consent page shows and pre-selects', () => {
   it('remembers the last completed choice for the same client and profile — and only that', async () => {
     const w = await world();
     const first = await start(w);
-    await w.run(() => approveGrant(w.deps, w.session, { userCode: first.userCode, access: 'write', duration: '7d' }));
+    await w.run(() =>
+      approveGrant(w.deps, w.session, {
+        userCode: first.userCode,
+        access: 'write',
+        duration: '7d',
+        password: PASSWORD,
+      }),
+    );
     await w.run(() => redeemGrant(w.deps, first.deviceCode));
 
     const again = await start(w);
@@ -434,11 +480,20 @@ describe('findConsent — what the consent page shows and pre-selects', () => {
     const w = await world();
     const older = await start(w); // requested first…
     const newer = await start(w); // …requested second
-    await w.run(() => approveGrant(w.deps, w.session, { userCode: newer.userCode, access: 'read', duration: '7d' }));
+    await w.run(() =>
+      approveGrant(w.deps, w.session, { userCode: newer.userCode, access: 'read', duration: '7d', password: PASSWORD }),
+    );
     await w.run(() => redeemGrant(w.deps, newer.deviceCode));
     await new Promise((resolve) => setTimeout(resolve, 5));
     // …but the OLDER request is approved last, so it is the person's latest completed choice.
-    await w.run(() => approveGrant(w.deps, w.session, { userCode: older.userCode, access: 'write', duration: '30d' }));
+    await w.run(() =>
+      approveGrant(w.deps, w.session, {
+        userCode: older.userCode,
+        access: 'write',
+        duration: '30d',
+        password: PASSWORD,
+      }),
+    );
     await w.run(() => redeemGrant(w.deps, older.deviceCode));
 
     const next = await start(w);
@@ -452,7 +507,12 @@ describe('findConsent — what the consent page shows and pre-selects', () => {
     const w = await world();
     const approvedOnly = await start(w);
     await w.run(() =>
-      approveGrant(w.deps, w.session, { userCode: approvedOnly.userCode, access: 'write', duration: '30d' }),
+      approveGrant(w.deps, w.session, {
+        userCode: approvedOnly.userCode,
+        access: 'write',
+        duration: '30d',
+        password: PASSWORD,
+      }),
     );
     const denied = await start(w);
     await w.run(() => denyGrant(w.deps, w.session, denied.userCode));
@@ -467,7 +527,14 @@ describe('findConsent — what the consent page shows and pre-selects', () => {
   it('lets the asker’s hint win over the last choice', async () => {
     const w = await world();
     const first = await start(w);
-    await w.run(() => approveGrant(w.deps, w.session, { userCode: first.userCode, access: 'write', duration: '7d' }));
+    await w.run(() =>
+      approveGrant(w.deps, w.session, {
+        userCode: first.userCode,
+        access: 'write',
+        duration: '7d',
+        password: PASSWORD,
+      }),
+    );
     await w.run(() => redeemGrant(w.deps, first.deviceCode));
     const hinted = await start(w, { ...STDIO_REQUEST, hint: { access: 'read', duration: '30d' } });
     expect((await findConsent(w.deps, OWNER_USER_ID, hinted.userCode))?.choice).toEqual({
@@ -483,7 +550,12 @@ describe('pruneExpiredGrants', () => {
     const w = await world({ clock: clock.now });
     const redeemed = await start(w);
     await w.run(() =>
-      approveGrant(w.deps, w.session, { userCode: redeemed.userCode, access: 'read', duration: '24h' }),
+      approveGrant(w.deps, w.session, {
+        userCode: redeemed.userCode,
+        access: 'read',
+        duration: '24h',
+        password: PASSWORD,
+      }),
     );
     await w.run(() => redeemGrant(w.deps, redeemed.deviceCode));
     await start(w);
@@ -506,7 +578,7 @@ describe('pruneExpiredGrants', () => {
     choice: { access: 'read' | 'write'; duration: '24h' | '7d' | '30d' },
   ) => {
     const started = await start(w, input);
-    await w.run(() => approveGrant(w.deps, w.session, { userCode: started.userCode, ...choice }));
+    await w.run(() => approveGrant(w.deps, w.session, { userCode: started.userCode, ...choice, password: PASSWORD }));
     await w.run(() => redeemGrant(w.deps, started.deviceCode));
     await new Promise((resolve) => setTimeout(resolve, 3)); // distinct approval times
     return started;
@@ -556,7 +628,12 @@ describe('pruneExpiredGrants', () => {
     const pending = await start(w);
     const approved = await start(w);
     await w.run(() =>
-      approveGrant(w.deps, w.session, { userCode: approved.userCode, access: 'read', duration: '24h' }),
+      approveGrant(w.deps, w.session, {
+        userCode: approved.userCode,
+        access: 'read',
+        duration: '24h',
+        password: PASSWORD,
+      }),
     );
 
     await w.run(() => pruneExpiredGrants(w.deps));

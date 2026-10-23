@@ -10,14 +10,12 @@ import { validation } from '../../../models/error.js';
 import { CreateTokenFormSchema } from '../../../wire/in/auth.js';
 import { SEE_OTHER, TOKEN_REVOKE_PATH, TOKENS_PATH } from '../auth-paths.js';
 import type { AuthRoutesContext } from '../context.js';
-import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../form-pages.js';
+import { addFormParser, FORM_BODY_LIMIT_BYTES, page, STEP_UP_REFUSED_STATUS } from '../form-pages.js';
 import { createAttemptLimiter } from '../rate-limiter.js';
 import { requireSession } from '../session.js';
 import { renderTokenCreatedPage, renderTokensPage } from '../token-pages.js';
 
 const INVALID_FORM_STATUS = httpStatus(validation([]));
-// A wrong step-up password is a refused action inside a valid session, not a missing credential.
-const STEP_UP_REFUSED_STATUS = httpStatus(authErrors.sessionRequired);
 const RATE_LIMITED_STATUS = httpStatus(authErrors.rateLimited);
 
 const firstIssue = (error: z.ZodError): string => error.issues[0]?.message ?? AUTH_MESSAGES.tryAgain;

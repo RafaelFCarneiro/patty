@@ -1,9 +1,9 @@
+import { err } from 'neverthrow';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { approveGrant, denyGrant, findConsent } from '../../../controllers/grants.js';
-import type { Principal } from '../../../models/auth/principal.js';
 import { authErrors } from '../../../models/auth/errors.js';
-import type { ApproveGrantInput } from '../../../models/auth/grant.js';
+import type { ApproveGrantInput, Consent } from '../../../models/auth/grant.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
 import { CONNECT_CODE_PARAM } from '../../../models/auth/origin.js';
 import { validation } from '../../../models/error.js';
@@ -11,9 +11,11 @@ import { ConnectDecision, ConnectFormSchema, ConnectQuerySchema } from '../../..
 import { CONNECT_PATH } from '../auth-paths.js';
 import type { AuthRoutesContext } from '../context.js';
 import { renderConnectPage, renderConnectResultPage } from '../connect-pages.js';
-import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../form-pages.js';
+import { addFormParser, FORM_BODY_LIMIT_BYTES, page, STEP_UP_REFUSED_STATUS } from '../form-pages.js';
 import {
+  createAttemptLimiter,
   createRateLimiter,
+  type AttemptLimiter,
   LOGIN_ATTEMPT_WINDOW_MS,
   MAX_CODE_LOOKUP_FAILURES_PER_IP,
   type RateLimiter,
@@ -39,6 +41,8 @@ const MESSAGES = {
 type ConnectPages = {
   ctx: AuthRoutesContext;
   lookups: RateLimiter;
+  /** Guessing the approver's password gets the login page's limits, on a counter of its own (as on the token page). */
+  passwords: AttemptLimiter;
 };
 
 const result = async (
@@ -80,32 +84,57 @@ const showConsent = (pages: ConnectPages) => async (req: FastifyRequest, reply: 
   return page(reply, OK_STATUS, await renderConnectPage(consent));
 };
 
-const answerGrant = (
-  { ctx }: ConnectPages,
-  principal: Principal,
-  decision: ConnectDecision,
-  input: ApproveGrantInput,
-) =>
+const isWrongPassword = (error: AppError): boolean => error.code === authErrors.invalidCredentials.code;
+
+// Only an approval re-asks the password; denying grants nothing. The strike is taken before the slow verification.
+const approve = async ({ ctx, passwords }: ConnectPages, req: FastifyRequest, input: ApproveGrantInput) => {
+  const { userId } = req.principal!;
+  if (passwords.isLimited(req.ip, userId)) return err(authErrors.rateLimited);
+  const approved = await passwords.attempt(req.ip, userId, () =>
+    ctx.runEffects(() => approveGrant(ctx.deps, req.principal!, input)),
+  );
+  if (approved.isOk()) passwords.recordSuccess(req.ip, userId);
+  else if (!isWrongPassword(approved.error)) passwords.forgive(req.ip, userId);
+  return approved;
+};
+
+const answerGrant = (pages: ConnectPages, req: FastifyRequest, decision: ConnectDecision, input: ApproveGrantInput) =>
   decision === ConnectDecision.enum.approve
-    ? ctx.runEffects(() => approveGrant(ctx.deps, principal, input))
-    : ctx.runEffects(() => denyGrant(ctx.deps, principal, input.userCode));
+    ? approve(pages, req, input)
+    : pages.ctx.runEffects(() => denyGrant(pages.ctx.deps, req.principal!, input.userCode));
 
 const answeredPage = (reply: FastifyReply, decision: ConnectDecision) =>
   decision === ConnectDecision.enum.approve
     ? result(reply, OK_STATUS, HEADINGS.approved, MESSAGES.approved, { answered: true })
     : result(reply, OK_STATUS, HEADINGS.denied, MESSAGES.denied, { answered: true });
 
+// The request stays pending: the same consent page again, with the person's choices kept and the password field empty.
+const retryConsent = async (reply: FastifyReply, consent: Consent, input: ApproveGrantInput) =>
+  page(
+    reply,
+    STEP_UP_REFUSED_STATUS,
+    await renderConnectPage({
+      ...consent,
+      choice: { access: input.access, duration: input.duration },
+      error: AUTH_MESSAGES.invalidPassword,
+    }),
+  );
+
 const submitDecision = (pages: ConnectPages) => async (req: FastifyRequest, reply: FastifyReply) => {
   const parsed = ConnectFormSchema.safeParse(req.body);
   if (!parsed.success) return result(reply, INVALID_FORM_STATUS, HEADINGS.invalid, AUTH_MESSAGES.tryAgain);
   if (pages.lookups.isLimited(req.ip)) return limited(reply);
 
-  const { decision, code, access, duration } = parsed.data;
-  const principal = req.principal!;
-  const consent = await lookUp(pages, req.ip, principal.userId, code);
+  const { decision, code, access, duration, password } = parsed.data;
+  const consent = await lookUp(pages, req.ip, req.principal!.userId, code);
   if (consent === null) return invalid(reply);
-  const answered = await answerGrant(pages, principal, decision, { userCode: code, access, duration });
-  return answered.isErr() ? failed(pages, reply, req.ip, answered.error) : answeredPage(reply, decision);
+  const input: ApproveGrantInput = { userCode: code, access, duration, password };
+  const answered = await answerGrant(pages, req, decision, input);
+  if (answered.isOk()) return answeredPage(reply, decision);
+  if (isWrongPassword(answered.error)) return retryConsent(reply, consent, input);
+  return answered.error.code === authErrors.rateLimited.code
+    ? limited(reply)
+    : failed(pages, reply, req.ip, answered.error);
 };
 
 /**
@@ -117,6 +146,7 @@ const submitDecision = (pages: ConnectPages) => async (req: FastifyRequest, repl
 export const registerConnectRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {
   const pages: ConnectPages = {
     ctx,
+    passwords: createAttemptLimiter(),
     lookups: createRateLimiter({
       windowMs: LOGIN_ATTEMPT_WINDOW_MS,
       maxFailures: MAX_CODE_LOOKUP_FAILURES_PER_IP,

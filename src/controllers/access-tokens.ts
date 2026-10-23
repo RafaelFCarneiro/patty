@@ -3,7 +3,6 @@ import * as R from 'remeda';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
-import { canLogin } from '../logic/auth/password.js';
 import { liveSessionOf } from '../logic/auth/session.js';
 import { withCredentialsChanged } from '../logic/auth/users.js';
 import {
@@ -26,6 +25,7 @@ import {
   type CreatedAccessToken,
 } from '../models/auth/token.js';
 import type { AuthDeps } from './deps.js';
+import { confirmedUser } from './step-up.js';
 
 export const createToken = (
   deps: AuthDeps,
@@ -35,11 +35,7 @@ export const createToken = (
   safeTry(async function* () {
     const userId = principal.userId;
     const user = await deps.users.findById(userId);
-    const passwordMatches = await deps.secrets.verifyPassword(
-      user?.passwordHash ?? deps.secrets.dummyPasswordHash,
-      input.password,
-    );
-    const account = yield* okOr(canLogin(user, passwordMatches) ? user : null, authErrors.invalidCredentials);
+    const account = yield* okOr(await confirmedUser(deps, user, input.password), authErrors.invalidCredentials);
 
     yield* guard(principal.via === PrincipalVia.enum.session, authErrors.sessionRequired);
     const now = deps.clock();

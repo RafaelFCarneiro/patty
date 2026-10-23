@@ -1,10 +1,16 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { httpStatus } from '../../common/errors.js';
+import { authErrors } from '../../models/auth/errors.js';
 import { HTML_CONTENT_TYPE } from './ui-files.js';
 
 /** Server-rendered, form-posting pages (the sign-in pages and the token pages): one set of headers and one
  *  urlencoded parser, so no page can be a little less locked down than its neighbour. */
 
 export const FORM_BODY_LIMIT_BYTES = 8 * 1024;
+
+// A wrong step-up password is a refused action inside a valid session, not a missing credential.
+export const STEP_UP_REFUSED_STATUS = httpStatus(authErrors.sessionRequired);
+
 const FORM_CONTENT_TYPE = 'application/x-www-form-urlencoded';
 
 // These pages are tiny, self-contained and framed by nobody: lock everything down (no scripts, no
