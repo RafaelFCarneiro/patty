@@ -35,8 +35,18 @@
           <legend>Stay signed in for</legend>
           {{durationOptions}}
         </fieldset>
+        <label class="connect-password"
+          >Your password, to approve
+          <input
+            type="password"
+            name="{{passwordName}}"
+            autocomplete="current-password"
+            maxlength="{{passwordMaxLength}}"
+            required
+          />
+        </label>
         <button type="submit" name="decision" value="approve">Approve</button>
-        <button type="submit" name="decision" value="deny" class="connect-deny">Deny</button>
+        <button type="submit" name="decision" value="deny" class="connect-deny" formnovalidate>Deny</button>
       </form>
     </main>
   </body>

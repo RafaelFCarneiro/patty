@@ -52,6 +52,7 @@ import { type Principal, PrincipalVia } from '../models/auth/principal.js';
 import { TOKEN_ACCESS_SCOPES } from '../models/auth/token.js';
 import { conflict } from '../models/error.js';
 import type { AuthDeps } from './deps.js';
+import { confirmedUser } from './step-up.js';
 
 const plainResult = (kind: Exclude<RedeemKind, typeof RedeemKind.enum.signed_in>): RedeemResult => ({ kind });
 
@@ -113,6 +114,7 @@ export const approveGrant = (
     const now = deps.clock();
     const sessions = await deps.sessions.listByUser(approver.id);
     const session = yield* okOr(liveSessionOf(sessions, principal.sessionId, now), authErrors.unauthenticated);
+    yield* okOr(await confirmedUser(deps, approver, input.password), authErrors.invalidCredentials);
     const grant = yield* answerableGrant(deps, input.userCode);
     yield* guard(durationAllowedFor(grant.channel, input.duration), authErrors.sessionDurationRefused);
     const duration = clampToCap(input.duration, await instanceCap(deps));

@@ -15,6 +15,7 @@ export const DEFAULT_LANDING_PATH = UI_ROOT_PATH;
 /** The connect page: a one-segment path under `/ui`, reached from a link the stdio process prints. */
 export const CONNECT_PATH = `${UI_ROOT_PATH}/connect`;
 export const CONNECT_CODE_PARAM = 'code';
+export const CONNECT_PASSWORD_PARAM = 'password';
 
 /** The invite page: the link an admin hands a new user, `…/ui/access/invite?code=…`; the code may also be typed in. */
 export const INVITE_PATH = `${UI_ROOT_PATH}/access/invite`;

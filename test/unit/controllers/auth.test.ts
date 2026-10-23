@@ -36,6 +36,7 @@ import {
   UserRole,
 } from '../../../src/models/auth/owner.js';
 import { PrincipalVia } from '../../../src/models/auth/principal.js';
+import { DAY_MS } from '../../../src/models/auth/time.js';
 import { ALL_SCOPES } from '../../../src/models/auth/scope.js';
 import {
   SESSION_IDLE_TTL_MS,
@@ -384,6 +385,22 @@ describe('authenticate', () => {
     const { persist, response } = await outcomeOf(authenticate(depsFor({ users, sessions: [expired] }), 'sha(TOKEN)'));
     expect(opsOf(persist)).toEqual([`${PersistOp.enum.delete}:${SESSION_ENTITY_TAG}`]);
     expect(response).toBeNull();
+  });
+
+  it('deletes a session not seen for just over 24 hours, and slides one seen within it', async () => {
+    const idle = (ms: number) => new Date(NOW.getTime() + ms);
+    const expired = await outcomeOf(
+      authenticate(depsFor({ users, sessions: [sessionRow()], now: idle(DAY_MS + 1) }), 'sha(TOKEN)'),
+    );
+    expect(opsOf(expired.persist)).toEqual([`${PersistOp.enum.delete}:${SESSION_ENTITY_TAG}`]);
+    expect(expired.response).toBeNull();
+
+    const seen = idle(DAY_MS - 1);
+    const slid = await outcomeOf(authenticate(depsFor({ users, sessions: [sessionRow()], now: seen }), 'sha(TOKEN)'));
+    expect(opsOf(slid.persist)).toEqual([`${PersistOp.enum.update}:${SESSION_ENTITY_TAG}`]);
+    expect((slid.persist[0] as { model: SessionEntity }).model.expiresAt).toBe(
+      new Date(seen.getTime() + DAY_MS).toISOString(),
+    );
   });
 
   it('deletes the session of a user who can no longer log in', async () => {

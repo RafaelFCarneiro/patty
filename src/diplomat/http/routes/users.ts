@@ -36,14 +36,12 @@ import {
   USERS_PATH,
 } from '../auth-paths.js';
 import type { AuthRoutesContext } from '../context.js';
-import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../form-pages.js';
+import { addFormParser, FORM_BODY_LIMIT_BYTES, page, STEP_UP_REFUSED_STATUS } from '../form-pages.js';
 import { createAttemptLimiter, type AttemptLimiter } from '../rate-limiter.js';
 import { requireAdmin, requireSession } from '../session.js';
 import { renderInvitedPage, renderUsersPage } from '../user-pages.js';
 
 const INVALID_FORM_STATUS = httpStatus(validation([]));
-// A wrong step-up password is a refused action inside a valid session, not a missing credential.
-const STEP_UP_REFUSED_STATUS = httpStatus(authErrors.sessionRequired);
 
 // What each refusal says on this edge. The domain's messages are neutral; the next step is worded here, in the page's
 // own vocabulary (a button on a row), never in the domain's.

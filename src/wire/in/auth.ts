@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { type ClientInfo, SignInDuration } from '../../models/auth/grant.js';
-import { CONNECT_CODE_PARAM, DEFAULT_LANDING_PATH, INVITE_CODE_PARAM, isUiPath } from '../../models/auth/origin.js';
+import {
+  CONNECT_CODE_PARAM,
+  CONNECT_PASSWORD_PARAM,
+  DEFAULT_LANDING_PATH,
+  INVITE_CODE_PARAM,
+  isUiPath,
+} from '../../models/auth/origin.js';
 import { UserRole } from '../../models/auth/owner.js';
 import { SignInCap } from '../../models/auth/users.js';
 import { PASSWORD_MAX_LENGTH, PasswordSchema, UsernameSchema, normalizeUsername } from '../../models/auth/password.js';
@@ -80,6 +86,8 @@ export const ConnectFormSchema = z.object({
   decision: ConnectDecision,
   access: TokenAccess,
   duration: SignInDuration,
+  // Only an approval needs it; the controller refuses an absent one like a wrong one.
+  [CONNECT_PASSWORD_PARAM]: z.string().max(PASSWORD_MAX_LENGTH).optional(),
 });
 export type ConnectForm = z.infer<typeof ConnectFormSchema>;
 

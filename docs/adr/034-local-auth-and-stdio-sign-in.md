@@ -81,7 +81,7 @@ The flow is modeled on the OAuth device authorization grant (RFC 8628), run enti
    - a scope choice (read-only, or read and write);
    - a **duration** choice (§4);
    - a warning: "Only approve if you just asked a Claude session on this machine to connect."
-4. **Approve:** the grant becomes `approved`, bound to the user who approved it, with the chosen scopes and
+4. **Approve:** the approver re-enters their login password (step-up, like creating a personal access token); a wrong or missing password leaves the grant `pending`. The grant becomes `approved`, bound to the user who approved it, with the chosen scopes and
    duration. **Deny:** it becomes `denied`.
 5. **The stdio process redeems the grant.**
    - On the next tool call (and with a short poll while a sign-in is pending), it redeems the grant with its

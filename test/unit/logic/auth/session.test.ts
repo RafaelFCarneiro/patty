@@ -7,6 +7,7 @@ import {
   slidingExpiry,
   touched,
 } from '../../../../src/logic/auth/session.js';
+import { DAY_MS } from '../../../../src/models/auth/time.js';
 import { OWNER_USER_ID, UserRole, type UserEntity } from '../../../../src/models/auth/owner.js';
 import {
   SESSION_ABSOLUTE_MAX_MS,
@@ -52,6 +53,30 @@ describe('sessions', () => {
   it('slides the expiry forward from the time of use', () => {
     const use = later(SESSION_IDLE_TTL_MS / 2);
     expect(Date.parse(slidingExpiry(NOW.toISOString(), use)) - use.getTime()).toBe(SESSION_IDLE_TTL_MS);
+  });
+
+  it('lets a session idle for 24 hours, and no longer', () => {
+    expect(SESSION_IDLE_TTL_MS).toBe(DAY_MS);
+    expect(isSessionExpired(session(), later(DAY_MS - 1))).toBe(false);
+    expect(isSessionExpired(session(), later(DAY_MS))).toBe(true);
+    expect(isSessionExpired(session(), later(DAY_MS + 1))).toBe(true);
+  });
+
+  it('slides a session seen within 24 hours a full window forward', () => {
+    const seen = later(DAY_MS - SESSION_TOUCH_INTERVAL_MS);
+    const next = touched(session(), seen);
+    expect(Date.parse(next.expiresAt) - seen.getTime()).toBe(DAY_MS);
+    expect(isSessionExpired(next, later(2 * DAY_MS - SESSION_TOUCH_INTERVAL_MS - 1))).toBe(false);
+  });
+
+  it('still ends at the absolute maximum for a session seen every day', () => {
+    const days = Math.ceil(SESSION_ABSOLUTE_MAX_MS / DAY_MS);
+    const final = Array.from({ length: days }, (_unused, day) => later((day + 1) * DAY_MS - 1)).reduce(
+      (current, seen) => touched(current, seen),
+      session(),
+    );
+    expect(isSessionExpired(final, later(SESSION_ABSOLUTE_MAX_MS - 1))).toBe(false);
+    expect(isSessionExpired(final, later(SESSION_ABSOLUTE_MAX_MS))).toBe(true);
   });
 
   it('never slides past the absolute maximum', () => {

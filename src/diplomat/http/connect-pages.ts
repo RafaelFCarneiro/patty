@@ -1,5 +1,7 @@
 import * as R from 'remeda';
 import { type Consent, type GrantRequest, SignInDuration } from '../../models/auth/grant.js';
+import { CONNECT_PASSWORD_PARAM } from '../../models/auth/origin.js';
+import { PASSWORD_MAX_LENGTH } from '../../models/auth/password.js';
 import { TokenAccess } from '../../models/auth/token.js';
 import { sessionOnlyLabel } from '../../logic/auth/grant.js';
 import { ACCESS_LABEL, errorBlock, escapeHtml, fillTemplate, formatMinute } from './auth-pages.js';
@@ -44,6 +46,8 @@ export const renderConnectPage = async (fields: Consent & { error?: string }): P
     profile: escapeHtml(fields.request.profile),
     requestedAt: formatMinute(fields.request.createdAt),
     userCode: escapeHtml(fields.request.userCode),
+    passwordName: CONNECT_PASSWORD_PARAM,
+    passwordMaxLength: String(PASSWORD_MAX_LENGTH),
     accessOptions: accessOptions(fields.choice.access),
     durationOptions: durationOptions(fields.request, fields.durations, fields.choice.duration),
     error: errorBlock(fields.error),

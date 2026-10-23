@@ -235,7 +235,7 @@ flowchart TD
     G --> H{Cookie present?}
     H -- no --> N
     H -- yes --> I[sha256 token → session row → user]
-    I --> J{Valid?<br/>not idle-expired: 7 d sliding<br/>under the 30 d absolute cap<br/>user claimed, not disabled}
+    I --> J{Valid?<br/>not idle-expired: 24 h sliding<br/>under the 30 d absolute cap<br/>user claimed, not disabled}
     J -- no --> K[Delete the session row] --> N
     J -- yes --> L2{Last seen ≥ 5 min ago?}
     L2 -- yes --> M[Slide expiry: UPDATE session] --> O
@@ -437,8 +437,8 @@ sequenceDiagram
     else
         R-->>P: consent page (CSP, no-store): client name, code, warning, access, duration, Approve / Deny
     end
-    P->>R: POST /ui/connect {code, decision, access, duration} (cookie + same Origin)
-    R->>G: runEffects(approveGrant | denyGrant) — session principal only
+    P->>R: POST /ui/connect {code, decision, access, duration, password (approve only)} (cookie + same Origin)
+    R->>G: runEffects(approveGrant | denyGrant) — session principal only; approve re-asks the password (step-up), a wrong or missing one leaves the grant pending
     G->>DB: UPDATE grant → approved (approver = this session's user, scopes, duration, approved_at) | denied
 
     loop every 2 s, and on each gated call

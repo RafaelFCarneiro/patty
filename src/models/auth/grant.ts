@@ -94,7 +94,8 @@ export type GrantChoice = { access: TokenAccess; duration: SignInDuration };
 /** What the consent page shows for a pending request: who asks, the form's pre-selection, and what may be chosen. */
 export type Consent = { request: GrantRequest; choice: GrantChoice; durations: SignInDuration[] };
 
-export type ApproveGrantInput = { userCode: string } & GrantChoice;
+/** Approving mints a credential, exactly like creating a token: it re-asks the login password (step-up). */
+export type ApproveGrantInput = { userCode: string; password?: string } & GrantChoice;
 
 export type SignedIn = {
   token: string;
