@@ -41,14 +41,20 @@ afterEach(() => vi.useRealTimers());
 describe('StdioSession — a sidecar that is not serving a link of its own', () => {
   it('asks the temporary page’s approver for the password too: a wrong one keeps the request pending', async () => {
     const { ctx, session } = await sessionWithTemporaryServer();
-    const asked = await session.resolve();
-    const origin = originOf(asked.kind === 'not_signed_in' ? asked.message : '');
+    try {
+      const asked = await session.resolve();
+      const origin = originOf(asked.kind === 'not_signed_in' ? asked.message : '');
 
-    expect(await answerAt(origin, userCodeIn(asked), { decision: 'approve', password: 'not-the-password' })).toBe(403);
-    expect(await answerAt(origin, userCodeIn(asked), { decision: 'approve', password: null })).toBe(403);
+      expect(await answerAt(origin, userCodeIn(asked), { decision: 'approve', password: 'not-the-password' })).toBe(
+        403,
+      );
+      expect(await answerAt(origin, userCodeIn(asked), { decision: 'approve', password: null })).toBe(403);
 
-    expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'pending' }]);
-    expect(await session.resolve()).toMatchObject({ kind: 'not_signed_in' });
+      expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'pending' }]);
+      expect(await session.resolve()).toMatchObject({ kind: 'not_signed_in' });
+    } finally {
+      await session.close();
+    }
   });
 
   it('serves /ui/connect from a temporary server of its own; the link works end to end on THIS database', async () => {
