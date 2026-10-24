@@ -18,7 +18,7 @@ FinTrack stores each amount in the transaction's own currency and **never conver
 (`get_spending_summary`, `get_budget_status`, all `find_correlations` modes) is grouped per currency. That is a
 deliberate invariant: without a rate source, any cross-currency sum is arbitrary.
 
-The user holds value across **fiat and crypto** — BRL, USD, plus USDC and BTC — and wants a consolidated view in
+The user holds value across **fiat and crypto** — BRL, USD, plus USDC and BTC (MXN and COP were added later as plain fiat, additive, Feature Design 022) — and wants a consolidated view in
 a home currency, most concretely: *when I read an account's value and its currency isn't my home currency, show
 me the converted amount too*, and a net-worth total across all of them.
 

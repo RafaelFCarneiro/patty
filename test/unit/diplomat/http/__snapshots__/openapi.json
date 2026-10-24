@@ -162,6 +162,8 @@
                         "enum": [
                           "USD",
                           "BRL",
+                          "MXN",
+                          "COP",
                           "USDC",
                           "BTC"
                         ],
@@ -292,6 +294,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -347,6 +351,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ],
@@ -631,6 +637,8 @@
                             "enum": [
                               "USD",
                               "BRL",
+                              "MXN",
+                              "COP",
                               "USDC",
                               "BTC"
                             ],
@@ -668,6 +676,8 @@
                                 "enum": [
                                   "USD",
                                   "BRL",
+                                  "MXN",
+                                  "COP",
                                   "USDC",
                                   "BTC"
                                 ],
@@ -724,6 +734,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ],
@@ -1063,6 +1075,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -1119,6 +1133,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ],
@@ -1759,6 +1775,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -1856,6 +1874,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ]
@@ -2063,6 +2083,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ]
@@ -2535,6 +2557,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -2632,6 +2656,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ]
@@ -2839,6 +2865,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ]
@@ -3324,6 +3352,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ],
@@ -3454,6 +3484,8 @@
                                     "enum": [
                                       "USD",
                                       "BRL",
+                                      "MXN",
+                                      "COP",
                                       "USDC",
                                       "BTC"
                                     ]
@@ -3657,6 +3689,8 @@
                                     "enum": [
                                       "USD",
                                       "BRL",
+                                      "MXN",
+                                      "COP",
                                       "USDC",
                                       "BTC"
                                     ]
@@ -3860,6 +3894,8 @@
                                     "enum": [
                                       "USD",
                                       "BRL",
+                                      "MXN",
+                                      "COP",
                                       "USDC",
                                       "BTC"
                                     ]
@@ -4219,6 +4255,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ]
@@ -4691,6 +4729,8 @@
                               "enum": [
                                 "USD",
                                 "BRL",
+                                "MXN",
+                                "COP",
                                 "USDC",
                                 "BTC"
                               ]
@@ -4869,6 +4909,8 @@
                               "enum": [
                                 "USD",
                                 "BRL",
+                                "MXN",
+                                "COP",
                                 "USDC",
                                 "BTC"
                               ]
@@ -6494,6 +6536,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -6605,6 +6649,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ]
@@ -6812,6 +6858,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ]
@@ -7297,6 +7345,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ],
@@ -7440,6 +7490,8 @@
                                     "enum": [
                                       "USD",
                                       "BRL",
+                                      "MXN",
+                                      "COP",
                                       "USDC",
                                       "BTC"
                                     ]
@@ -7643,6 +7695,8 @@
                                     "enum": [
                                       "USD",
                                       "BRL",
+                                      "MXN",
+                                      "COP",
                                       "USDC",
                                       "BTC"
                                     ]
@@ -7846,6 +7900,8 @@
                                     "enum": [
                                       "USD",
                                       "BRL",
+                                      "MXN",
+                                      "COP",
                                       "USDC",
                                       "BTC"
                                     ]
@@ -8103,6 +8159,8 @@
                         "enum": [
                           "USD",
                           "BRL",
+                          "MXN",
+                          "COP",
                           "USDC",
                           "BTC"
                         ],
@@ -8173,6 +8231,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -8234,6 +8294,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ],
@@ -8593,6 +8655,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -8635,6 +8699,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ],
@@ -9409,6 +9475,8 @@
                             "enum": [
                               "USD",
                               "BRL",
+                              "MXN",
+                              "COP",
                               "USDC",
                               "BTC"
                             ]
@@ -10720,6 +10788,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ]
@@ -11192,6 +11262,8 @@
                               "enum": [
                                 "USD",
                                 "BRL",
+                                "MXN",
+                                "COP",
                                 "USDC",
                                 "BTC"
                               ]
@@ -11370,6 +11442,8 @@
                               "enum": [
                                 "USD",
                                 "BRL",
+                                "MXN",
+                                "COP",
                                 "USDC",
                                 "BTC"
                               ]
@@ -11679,6 +11753,8 @@
                         "enum": [
                           "USD",
                           "BRL",
+                          "MXN",
+                          "COP",
                           "USDC",
                           "BTC"
                         ],
@@ -11735,6 +11811,8 @@
                         "enum": [
                           "USD",
                           "BRL",
+                          "MXN",
+                          "COP",
                           "USDC",
                           "BTC"
                         ],
@@ -11745,6 +11823,8 @@
                         "enum": [
                           "USD",
                           "BRL",
+                          "MXN",
+                          "COP",
                           "USDC",
                           "BTC"
                         ],
@@ -11796,6 +11876,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -11806,6 +11888,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -11851,6 +11935,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ],
@@ -11861,6 +11947,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ],
@@ -11991,6 +12079,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ],
@@ -12001,6 +12091,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ],
@@ -12070,6 +12162,8 @@
                                     "enum": [
                                       "USD",
                                       "BRL",
+                                      "MXN",
+                                      "COP",
                                       "USDC",
                                       "BTC"
                                     ],
@@ -12080,6 +12174,8 @@
                                     "enum": [
                                       "USD",
                                       "BRL",
+                                      "MXN",
+                                      "COP",
                                       "USDC",
                                       "BTC"
                                     ],
@@ -12129,6 +12225,8 @@
                                 "enum": [
                                   "USD",
                                   "BRL",
+                                  "MXN",
+                                  "COP",
                                   "USDC",
                                   "BTC"
                                 ]
@@ -12138,6 +12236,8 @@
                                 "enum": [
                                   "USD",
                                   "BRL",
+                                  "MXN",
+                                  "COP",
                                   "USDC",
                                   "BTC"
                                 ]
@@ -12275,6 +12375,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ],
@@ -12310,6 +12412,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -12336,6 +12440,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ],
@@ -12540,6 +12646,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ]
@@ -12716,6 +12824,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ]
@@ -13164,6 +13274,8 @@
                         "enum": [
                           "USD",
                           "BRL",
+                          "MXN",
+                          "COP",
                           "USDC",
                           "BTC"
                         ],
@@ -13270,6 +13382,8 @@
                     "enum": [
                       "USD",
                       "BRL",
+                      "MXN",
+                      "COP",
                       "USDC",
                       "BTC"
                     ],
@@ -13342,6 +13456,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ],
@@ -13741,6 +13857,8 @@
                                 "enum": [
                                   "USD",
                                   "BRL",
+                                  "MXN",
+                                  "COP",
                                   "USDC",
                                   "BTC"
                                 ]
@@ -14144,6 +14262,8 @@
                       "enum": [
                         "USD",
                         "BRL",
+                        "MXN",
+                        "COP",
                         "USDC",
                         "BTC"
                       ]
@@ -14786,6 +14906,8 @@
                             "enum": [
                               "USD",
                               "BRL",
+                              "MXN",
+                              "COP",
                               "USDC",
                               "BTC"
                             ]
@@ -16378,6 +16500,8 @@
               "enum": [
                 "USD",
                 "BRL",
+                "MXN",
+                "COP",
                 "USDC",
                 "BTC"
               ],
@@ -16425,6 +16549,8 @@
                             "enum": [
                               "USD",
                               "BRL",
+                              "MXN",
+                              "COP",
                               "USDC",
                               "BTC"
                             ]
@@ -16484,6 +16610,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ],
@@ -16513,6 +16641,8 @@
                                 "enum": [
                                   "USD",
                                   "BRL",
+                                  "MXN",
+                                  "COP",
                                   "USDC",
                                   "BTC"
                                 ],
@@ -16857,6 +16987,8 @@
               "enum": [
                 "USD",
                 "BRL",
+                "MXN",
+                "COP",
                 "USDC",
                 "BTC"
               ],
@@ -16907,6 +17039,8 @@
                             "enum": [
                               "USD",
                               "BRL",
+                              "MXN",
+                              "COP",
                               "USDC",
                               "BTC"
                             ]
@@ -16968,6 +17102,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ],
@@ -16997,6 +17133,8 @@
                                 "enum": [
                                   "USD",
                                   "BRL",
+                                  "MXN",
+                                  "COP",
                                   "USDC",
                                   "BTC"
                                 ],
@@ -17138,6 +17276,8 @@
                         "enum": [
                           "USD",
                           "BRL",
+                          "MXN",
+                          "COP",
                           "USDC",
                           "BTC"
                         ],
@@ -17219,6 +17359,8 @@
               "enum": [
                 "USD",
                 "BRL",
+                "MXN",
+                "COP",
                 "USDC",
                 "BTC"
               ],
@@ -17284,6 +17426,8 @@
                                   "enum": [
                                     "USD",
                                     "BRL",
+                                    "MXN",
+                                    "COP",
                                     "USDC",
                                     "BTC"
                                   ],
@@ -17395,6 +17539,8 @@
                           "enum": [
                             "USD",
                             "BRL",
+                            "MXN",
+                            "COP",
                             "USDC",
                             "BTC"
                           ],
@@ -17424,6 +17570,8 @@
                                 "enum": [
                                   "USD",
                                   "BRL",
+                                  "MXN",
+                                  "COP",
                                   "USDC",
                                   "BTC"
                                 ],

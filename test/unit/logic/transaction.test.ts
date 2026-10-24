@@ -61,6 +61,18 @@ describe('deriveIdempotencyKey', () => {
     expect(deriveIdempotencyKey(identity({ amount: 5.999 }), 2)).toBe(deriveIdempotencyKey(identity({ amount: 6 }), 2));
   });
 
+  it.each([CurrencyCode.enum.MXN, CurrencyCode.enum.COP])(
+    'rounds %s amounts to 2 decimals (its ISO 4217 minor unit), colliding values differing only past it',
+    (currency) => {
+      expect(deriveIdempotencyKey(identity({ currency, amount: 5.999 }), 2)).toBe(
+        deriveIdempotencyKey(identity({ currency, amount: 6 }), 2),
+      );
+      expect(deriveIdempotencyKey(identity({ currency, amount: 6.01 }), 2)).not.toBe(
+        deriveIdempotencyKey(identity({ currency, amount: 6 }), 2),
+      );
+    },
+  );
+
   it('gives DISTINCT keys for two amounts differing only past the 2nd decimal when decimals is 8 (BTC)', () => {
     const a = identity({ amount: 0.12345671, currency: CurrencyCode.enum.BTC });
     const b = identity({ amount: 0.12345679, currency: CurrencyCode.enum.BTC });

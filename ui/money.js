@@ -9,8 +9,7 @@
 (function () {
   'use strict';
 
-  // The one 'BRL' literal in this file — defaultLocale's comparison and window.DEFAULT_CURRENCY
-  // both read this instead of repeating the literal.
+  // window.DEFAULT_CURRENCY reads this instead of repeating the literal.
   var BRL = 'BRL';
 
   var isoCurrencyCache = null;
@@ -37,11 +36,18 @@
     return (meta && meta[code]) || null;
   }
 
-  // Matches the per-fragment convention this replaces (isBRL/isUSD ? 'pt-BR' : 'en-US') — BRL
-  // formats in its own market's digit grouping, everything else defaults to en-US unless a call
-  // site passes an explicit locale (e.g. budget.html's app-locale-driven formatCurrency).
+  // Each peso formats in its own market's style (BRL pt-BR, MXN es-MX, COP es-CO); everything
+  // else defaults to en-US unless a call site passes an explicit locale (e.g. budget.html's
+  // app-locale-driven formatCurrency). The one literal per code lives here.
+  var DEFAULT_LOCALE = 'en-US';
+  var LOCALE_BY_CURRENCY = {
+    BRL: 'pt-BR',
+    MXN: 'es-MX',
+    COP: 'es-CO',
+  };
+
   function defaultLocale(code) {
-    return code === BRL ? 'pt-BR' : 'en-US';
+    return LOCALE_BY_CURRENCY[code] || DEFAULT_LOCALE;
   }
 
   window.formatMoney = function (value, currencyCode, opts) {

@@ -67,6 +67,25 @@ describe('window.formatMoney (ui/money.js)', () => {
     expect(formatMoney(0.12345678, 'BTC')).toBe('BTC 0.12');
   });
 
+  it('formats MXN and COP in their own market style (es-MX, es-CO), leaving BRL and USD unchanged', () => {
+    const formatMoney = loadFormatMoney();
+    expect(formatMoney(1234.5, 'MXN')).toBe(
+      new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(1234.5),
+    );
+    expect(formatMoney(1234.5, 'COP')).toBe(
+      new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(1234.5),
+    );
+    expect(formatMoney(1234.5, 'MXN')).not.toBe(
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'MXN' }).format(1234.5),
+    );
+    expect(formatMoney(1234.5, 'BRL')).toBe(
+      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(1234.5),
+    );
+    expect(formatMoney(1234.5, 'USD')).toBe(
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(1234.5),
+    );
+  });
+
   it('accepts an explicit locale override (budget.html threads the app locale through)', () => {
     const formatMoney = loadFormatMoney({ BTC: { code: 'BTC', symbol: '₿', name: 'Bitcoin', decimals: 8 } });
     expect(formatMoney(1234.5, 'BRL', { locale: 'en-US' })).toBe(

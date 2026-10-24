@@ -11,6 +11,8 @@ describe('GET /api/currencies', () => {
     const byCode = Object.fromEntries(body.map((c) => [c.code, c]));
     expect(byCode.BRL).toMatchObject({ decimals: 2 });
     expect(byCode.USD).toMatchObject({ decimals: 2 });
+    expect(byCode.MXN).toMatchObject({ decimals: 2, symbol: 'MX$', name: 'Peso Mexicano' });
+    expect(byCode.COP).toMatchObject({ decimals: 2, symbol: 'COL$', name: 'Peso Colombiano' });
     expect(byCode.USDC).toMatchObject({ decimals: 6 });
     expect(byCode.BTC).toMatchObject({ decimals: 8, symbol: '₿' });
   });

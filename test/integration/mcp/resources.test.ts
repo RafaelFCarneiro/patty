@@ -68,6 +68,8 @@ describe('MCP reference resources (Feature Design 018)', () => {
       decimals: number;
     }>;
     const byCode = Object.fromEntries(currencies.map((c) => [c.code, c]));
+    expect(byCode.MXN).toMatchObject({ symbol: 'MX$', decimals: 2 });
+    expect(byCode.COP).toMatchObject({ symbol: 'COL$', decimals: 2 });
     expect(byCode.BTC).toMatchObject({ symbol: '₿', decimals: 8 });
     expect(byCode.USDC).toMatchObject({ decimals: 6 });
   });
