@@ -60,4 +60,16 @@ describe('cards.html currency handling', () => {
     const names = document.getElementById('pay-account').children.map((option) => option.textContent);
     expect(names).toEqual([`Main ${currency}`]);
   });
+
+  it.each([
+    ['BTC', '0.00000001'],
+    ['USDC', '0.000001'],
+    ['MXN', '0.01'],
+  ])('lets the confirm-amount input take %s precision', (currency, step) => {
+    const { sandbox, document } = loadFragment('cards');
+    sandbox.activeCard = card(currency);
+    sandbox.confirmTx('t1', 'Coffee', '2026-10-01', 0.0001);
+    expect(document.getElementById('confirm-tx-amount').step).toBe(step);
+    expect(document.getElementById('confirm-tx-amount').min).toBe(step);
+  });
 });

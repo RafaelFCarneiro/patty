@@ -2962,6 +2962,7 @@
                 dateInput.max = todayStr;
             }
             
+            applyCurrencyPrecision(['confirm-tx-amount'], activeCard?.currency ?? window.DEFAULT_CURRENCY);
             document.getElementById('confirm-tx-amount').value = amount || '';
             
             openModal('modal-confirm-tx');
