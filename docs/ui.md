@@ -80,9 +80,14 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   `window.__fintrackCurrencies`, populated once at shell boot from `GET /api/currencies`
   (`app.js`'s `bootPromise`, sequenced before the first `loadDashboard()` call so the metadata is never missing
   on first paint). Every fragment that formats money calls this instead of its own `Intl.NumberFormat(...,
-  {style:'currency', ...})`. It also exports `window.DEFAULT_CURRENCY` ('BRL') and the currency-map arithmetic
+  {style:'currency', ...})`. It also exports `window.DEFAULT_CURRENCY` — the user's base currency (`app.js` reads `GET /api/preferences`
+  after the currency metadata and, before the first fragment renders, calls `window.setBaseCurrency(code)`,
+  which sets `DEFAULT_CURRENCY` and `BASE_CURRENCY` only for a code the metadata knows; a failed or unknown
+  value keeps the last-resort `'BRL'` and never blocks the page) — and the currency-map arithmetic
   every dashboard's per-currency aggregation depends on (issue #174) — `addMultiCurrency(map, currency,
-  amount)`, `valueIn(map, currency)`, `primaryCurrencyOf(map)`, `magnitudeOf(map)`, `mergeCurrencyMaps(...maps)`
+  amount)`, `valueIn(map, currency)`, `primaryCurrencyOf(map)` (the base currency when the map has it, else the
+  most active currency — non-zero, then largest amount — else the first key alphabetically; an empty map gives
+  `DEFAULT_CURRENCY`), `magnitudeOf(map)`, `mergeCurrencyMaps(...maps)`
   (additive; `Object.assign`/spread would silently drop a currency present in more than one input map instead
   of summing it), and `formatMultiCurrencyWith(map, formatFn, delimiter?)` (renders every currency in a map
   side by side via the caller's own `formatFn`; skips a zeroed-out currency only when a non-zero one is ALSO
@@ -329,3 +334,13 @@ published entities. A fragment that never sets the hook simply has no live updat
 **Known limit (by design, ADR-027):** the change bus reaches only subscribers on this process — a write from a
 *different* stdio server won't push here. Mitigated because ADR-024 steers multi-client use to the single
 HTTP-transport server; a periodic client-side poll can backstop if cross-process live-update ever matters.
+
+## Currency in `pending.html` and `cards.html`
+
+No dashboard names a currency. `pending.html` takes its primary currency from `primaryCurrencyOf` over its own
+period's data: the KPI cards show it first and every other currency as a secondary line, and the category and
+top-5 charts show one currency at a time — the primary by default, with a currency selector (hidden when the
+period has expenses in a single currency) to switch; the chart titles interpolate the selected code
+(`{currency}` in the `pending_chart_*` translations). `cards.html` builds its add/edit currency `<select>`s
+from `window.__fintrackCurrencies` (sorted, code plus symbol): the add form preselects `DEFAULT_CURRENCY`, the
+edit form (read-only) shows the card's own currency, and every fallback is `DEFAULT_CURRENCY`.

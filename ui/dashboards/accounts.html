@@ -2153,7 +2153,7 @@
 
             if (!sourceAcc || !toWrapper) return;
 
-            // Only accounts sharing the SAME currency (BRL or USD) and not source account itself
+            // Only accounts sharing the SAME currency and not source account itself
             const validDestinations = accounts
                 .filter(a => a.name !== sourceName && a.currency === sourceAcc.currency)
                 .map(a => a.name);

@@ -1300,7 +1300,7 @@
                     </div>
                     <div class="compact-bill-row total-area">
                         <span class="compact-bill-label" id="bill-total-label">Total da Fatura</span>
-                        <span class="compact-bill-total-amount" id="bill-total-val">R$ 0,00</span>
+                        <span class="compact-bill-total-amount" id="bill-total-val">—</span>
                     </div>
                 </div>
 
@@ -1383,7 +1383,7 @@
                         </div>
                         <div class="form-group" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
                             <div>
-                                <label for="add-amount">Valor (R$)</label>
+                                <label for="add-amount">Valor</label>
                                 <input type="number" step="0.01" min="0.01" id="add-amount" class="form-control" placeholder="0,00" required>
                             </div>
                             <div>
@@ -1442,7 +1442,7 @@
                             <input type="text" id="card-add-name" class="form-control" placeholder="Ex: Nu Ultravioleta" oninput="updateCardPreview()" required>
                         </div>
                         <div class="form-group">
-                            <label for="card-add-limit" data-i18n="label_limit">Limite (R$)</label>
+                            <label for="card-add-limit" data-i18n="label_limit">Limite</label>
                             <input type="number" step="0.01" min="1" id="card-add-limit" class="form-control" placeholder="0,00" oninput="updateCardPreview()" required>
                         </div>
                         <div style="display:grid; grid-template-columns: 1fr 1.8fr; gap:0.75rem; margin-bottom: 1.25rem;">
@@ -1459,8 +1459,7 @@
                             <div class="form-group" style="margin-bottom:0;">
                                 <label for="card-add-currency" data-i18n="label_currency">Moeda</label>
                                 <select id="card-add-currency" class="form-control select-custom" onchange="updateCardPreview()">
-                                    <option value="BRL">BRL (R$)</option>
-                                    <option value="USD">USD ($)</option>
+                                    <!-- Populated from the currency metadata -->
                                 </select>
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
@@ -1521,7 +1520,9 @@
                         <div style="display:grid; grid-template-columns: 1fr 1.8fr; gap:0.75rem; margin-bottom: 1.25rem;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label for="card-edit-currency" data-i18n="label_currency">Moeda</label>
-                                <input type="text" id="card-edit-currency" class="form-control" disabled style="background: rgba(255,255,255,0.02); color: var(--text-dark);">
+                                <select id="card-edit-currency" class="form-control select-custom" disabled style="background: rgba(255,255,255,0.02); color: var(--text-dark);">
+                                    <!-- Populated from the currency metadata; a card's currency is fixed -->
+                                </select>
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label for="card-edit-payment-account" data-i18n="label_payment_account">Conta Padrão</label>
@@ -1593,7 +1594,7 @@
                 </div>
                 <div class="form-group" style="text-align:center; padding: 1rem 0; background:rgba(0,0,0,0.2); border-radius:10px; border:1px dashed var(--panel-border);">
                     <label style="margin-bottom:0;">Valor Total a Pagar</label>
-                    <div id="pay-bill-total" style="font-size:1.8rem; font-weight:800; color:var(--income-color);">R$ 0,00</div>
+                    <div id="pay-bill-total" style="font-size:1.8rem; font-weight:800; color:var(--income-color);">—</div>
                 </div>
                 <div class="form-group">
                     <label for="pay-account">Débito na Conta Corrente</label>
@@ -2343,7 +2344,7 @@
                     const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
                     
                     const count = group.txs.length;
-                    const groupTotalStr = window.formatMoney(group.total, activeCard ? activeCard.currency : 'BRL');
+                    const groupTotalStr = window.formatMoney(group.total, activeCard?.currency ?? window.DEFAULT_CURRENCY);
 
                     // Create day group element
                     const dayGroupDiv = document.createElement('div');
@@ -2480,6 +2481,20 @@
             }
         }
 
+        // Fills a currency <select> from the shell's currency metadata (sorted by code, with its
+        // symbol) and preselects `selected`; a code the metadata lacks is still offered so a card
+        // never shows a currency other than its own.
+        function fillCurrencyOptions(selectId, selected) {
+            const meta = window.__fintrackCurrencies || {};
+            const codes = Array.from(new Set([...Object.keys(meta), selected])).sort();
+            const select = document.getElementById(selectId);
+            select.innerHTML = codes.map(code => {
+                const label = meta[code] ? `${code} (${meta[code].symbol})` : code;
+                return `<option value="${escapeHtml(code)}">${escapeHtml(label)}</option>`;
+            }).join('');
+            select.value = selected;
+        }
+
         // Open modal to Add credit card
         function openAddCardModal() {
             // Reset form
@@ -2508,6 +2523,7 @@
             };
             
             // Default select values
+            fillCurrencyOptions('card-add-currency', window.DEFAULT_CURRENCY);
             document.getElementById('card-add-closing-day').value = 5;
             document.getElementById('card-add-due-day').value = 15;
             
@@ -2524,7 +2540,7 @@
             
             const name = nameInput.value || 'Nome do Cartão';
             const limitVal = parseFloat(limitInput.value) || 0;
-            const currency = document.getElementById('card-add-currency').value || 'BRL';
+            const currency = document.getElementById('card-add-currency').value || window.DEFAULT_CURRENCY;
             
             // Determine card brand logo
             let brand = 'VISA';
@@ -2658,7 +2674,7 @@
             document.getElementById('card-edit-limit').value = activeCard.limit;
             document.getElementById('card-edit-closing-day').value = activeCard.closingDay;
             document.getElementById('card-edit-due-day').value = activeCard.dueDay;
-            document.getElementById('card-edit-currency').value = activeCard.currency;
+            fillCurrencyOptions('card-edit-currency', activeCard.currency);
 
             // Populate payment account select
             const payAccSelect = document.getElementById('card-edit-payment-account');
@@ -2701,7 +2717,7 @@
             
             const name = nameInput.value || 'Nome do Cartão';
             const limitVal = parseFloat(limitInput.value) || 0;
-            const currency = document.getElementById('card-edit-currency').value || 'BRL';
+            const currency = document.getElementById('card-edit-currency').value || window.DEFAULT_CURRENCY;
             
             // Determine card brand logo
             let brand = 'VISA';
@@ -3012,7 +3028,7 @@
             const accSelect = document.getElementById('pay-account');
             accSelect.innerHTML = '';
             
-            // Only checking accounts or wallets matching the card currency (BRL or USD)
+            // Only checking accounts or wallets matching the card's own currency
             const validAccounts = accounts.filter(a => a.type !== 'credit' && a.currency === activeCard.currency);
             
             validAccounts.forEach(a => {
