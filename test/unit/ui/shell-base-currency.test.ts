@@ -14,6 +14,7 @@ type Routes = Record<string, () => unknown>;
 const bootShell = async (routes: Routes) => {
   let onReady: (() => void) | undefined;
   const loaded: string[] = [];
+  const stream: { onmessage?: (event: { data: string }) => void } = {};
   const respond = (url: string) => {
     const path = url.split('?')[0] ?? '';
     const handler = routes[path];
@@ -39,7 +40,11 @@ const bootShell = async (routes: Routes) => {
   const sandbox: Record<string, unknown> = {
     document, console: { ...console, error() {} }, fetch: respond, Intl, Number, Object, Math, Array, Promise,
     Date, String, JSON, encodeURIComponent, setTimeout, clearTimeout, URLSearchParams,
-    EventSource: class { addEventListener() {} },
+    EventSource: class {
+      constructor() {
+        return stream;
+      }
+    },
     location: { pathname: '/ui/overview', search: '' },
     history: { pushState() {} },
     addEventListener() {},
@@ -50,7 +55,7 @@ const bootShell = async (routes: Routes) => {
   vm.runInContext(read('app.js'), sandbox);
   onReady?.();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  return { sandbox, loaded };
+  return { sandbox, loaded, stream };
 };
 
 const currencies = Object.values(currencyMetadata);
@@ -83,5 +88,19 @@ describe('shell boot (ui/app.js)', () => {
     });
     expect(sandbox.DEFAULT_CURRENCY).toBe('BRL');
     expect(loaded.length).toBeGreaterThan(0);
+  });
+
+  it('refreshes the default on a userSettings event before the fragment is told', async () => {
+    let base = 'USD';
+    const { sandbox, stream } = await bootShell({
+      '/api/currencies': () => currencies,
+      '/api/preferences': () => ({ baseCurrency: base }),
+    });
+    const seen: string[] = [];
+    sandbox.fintrackOnDataChanged = () => seen.push(sandbox.DEFAULT_CURRENCY as string);
+    base = 'MXN';
+    stream.onmessage?.({ data: JSON.stringify({ entities: ['userSettings'] }) });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(seen).toEqual(['MXN']);
   });
 });

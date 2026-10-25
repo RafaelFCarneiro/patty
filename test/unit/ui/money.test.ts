@@ -288,6 +288,12 @@ describe('window.primaryCurrencyOf with a base currency (ui/money.js)', () => {
     expect(money.primaryCurrencyOf({ USD: 900, BRL: 10 })).toBe('BRL');
   });
 
+  it('keeps a base currency whose own amount is zero', () => {
+    const money = loadMoney();
+    money.setBaseCurrency('BRL');
+    expect(money.primaryCurrencyOf({ BRL: 0, USD: -100 })).toBe('BRL');
+  });
+
   it('ignores a base currency absent from the map and picks the most active currency', () => {
     const money = loadMoney();
     money.setBaseCurrency('MXN');

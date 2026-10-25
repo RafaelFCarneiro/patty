@@ -367,9 +367,20 @@
       } catch {
         return;
       }
-      if (typeof window.fintrackOnDataChanged === 'function' && Array.isArray(payload.entities)) {
-        window.fintrackOnDataChanged(payload.entities);
-      }
+      if (!Array.isArray(payload.entities)) return;
+      var forward = function () {
+        if (typeof window.fintrackOnDataChanged === 'function') window.fintrackOnDataChanged(payload.entities);
+      };
+      if (payload.entities.indexOf('userSettings') === -1) return forward();
+      // A base-currency change updates the default before the fragment re-renders with it.
+      fetchJson(Api.preferences)
+        .then(function (prefs) {
+          window.setBaseCurrency(prefs && prefs.baseCurrency);
+        })
+        .catch(function (err) {
+          console.error('Could not refresh preferences:', err);
+        })
+        .then(forward);
     };
   }
 

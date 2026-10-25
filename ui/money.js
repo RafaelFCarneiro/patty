@@ -118,14 +118,14 @@
   // Multi-currency amounts are never converted or summed together — a single number (a KPI, a
   // percentage, a chart value) can only ever read ONE real currency's own amount, never a
   // blended/converted total. This picks which currency represents a row/cell for such comparisons:
-  // the user's base currency when the map has it (window.BASE_CURRENCY, set by the shell only when
+  // the user's base currency when the map has it, even at zero (window.BASE_CURRENCY, set by the shell only when
   // the user chose one), else the one with the most activity (non-zero, then largest amount), else
   // the first key alphabetically. An empty map falls back to DEFAULT_CURRENCY.
   window.primaryCurrencyOf = function (map) {
     var all = Object.keys(map || {});
+    if (window.BASE_CURRENCY && all.indexOf(window.BASE_CURRENCY) !== -1) return window.BASE_CURRENCY;
     var keys = all.filter(function (c) { return map[c]; });
     if (keys.length === 0) keys = all;
-    if (window.BASE_CURRENCY && keys.indexOf(window.BASE_CURRENCY) !== -1) return window.BASE_CURRENCY;
     keys.sort(function (a, b) {
       var activity = (map[b] ? 1 : 0) - (map[a] ? 1 : 0);
       if (activity !== 0) return activity;

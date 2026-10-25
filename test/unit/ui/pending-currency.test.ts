@@ -109,6 +109,11 @@ describe('pending.html currency handling', () => {
     sandbox.updateKPIs();
     sandbox.renderCharts();
     expect(sandbox.chartCurrency).toBe('BRL');
+    // The automatic fallback is not a user choice: a later period follows its own primary currency.
+    sandbox.allTransactions = [tx({ amount: 5, currency: 'BRL' }), tx({ amount: 900, currency: 'USD' })];
+    sandbox.updateKPIs();
+    sandbox.renderCharts();
+    expect(sandbox.chartCurrency).toBe('BRL');
   });
 
   it.each([

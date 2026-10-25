@@ -1043,7 +1043,7 @@
             // blended/converted total) — the KPI cards above already show every currency correctly.
             try {
                 if (typeof Chart !== 'undefined') {
-                    const chartCurrency = primaryCurrencyOf(Object.assign({}, effIncome, pendIncome, effExpense, pendExpense));
+                    const chartCurrency = primaryCurrencyOf(mergeCurrencyMaps(effIncome, pendIncome, effExpense, pendExpense));
                     renderComparativeCharts(
                         valueIn(effIncome, chartCurrency),
                         valueIn(pendIncome, chartCurrency),

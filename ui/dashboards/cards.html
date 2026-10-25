@@ -2413,6 +2413,7 @@
                 cycleSelect.appendChild(opt);
             });
 
+            applyCurrencyPrecision(['add-amount'], activeCard?.currency ?? window.DEFAULT_CURRENCY);
             openModal('modal-add-tx');
         }
 
@@ -2481,6 +2482,18 @@
             }
         }
 
+        // Amount inputs accept the currency's own precision (a BTC limit of 0.05, a USDC one of
+        // 1.000001), not a fiat cent.
+        function applyCurrencyPrecision(inputIds, code) {
+            const decimals = ((window.__fintrackCurrencies || {})[code] || {}).decimals ?? 2;
+            const step = (10 ** -decimals).toFixed(decimals);
+            inputIds.forEach(id => {
+                const input = document.getElementById(id);
+                input.step = step;
+                input.min = step;
+            });
+        }
+
         // Fills a currency <select> from the shell's currency metadata (sorted by code, with its
         // symbol) and preselects `selected`; a code the metadata lacks is still offered so a card
         // never shows a currency other than its own.
@@ -2493,6 +2506,10 @@
                 return `<option value="${escapeHtml(code)}">${escapeHtml(label)}</option>`;
             }).join('');
             select.value = selected;
+            applyCurrencyPrecision(
+                selectId === 'card-add-currency' ? ['card-add-limit'] : ['card-edit-limit'],
+                selected,
+            );
         }
 
         // Open modal to Add credit card
@@ -2541,6 +2558,7 @@
             const name = nameInput.value || 'Nome do Cartão';
             const limitVal = parseFloat(limitInput.value) || 0;
             const currency = document.getElementById('card-add-currency').value || window.DEFAULT_CURRENCY;
+            applyCurrencyPrecision(['card-add-limit'], currency);
             
             // Determine card brand logo
             let brand = 'VISA';
