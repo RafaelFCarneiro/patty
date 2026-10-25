@@ -1124,7 +1124,7 @@
                     <div class="panel-header">
                         <div class="panel-title">
                             <i class="fa-solid fa-chart-pie"></i>
-                            <span id="chart-title-category" data-i18n="pending_chart_by_category">Despesas por Categoria ({currency})</span>
+                            <span id="chart-title-category" data-i18n="pending_chart_by_category">Despesas por Categoria</span>
                         </div>
                     </div>
                     <div class="chart-box">
@@ -1136,7 +1136,7 @@
                     <div class="panel-header">
                         <div class="panel-title">
                             <i class="fa-solid fa-chart-bar"></i>
-                            <span id="chart-title-top" data-i18n="pending_chart_top_expenses">Maiores Despesas Previstas ({currency})</span>
+                            <span id="chart-title-top" data-i18n="pending_chart_top_expenses">Maiores Despesas Previstas</span>
                         </div>
                     </div>
                     <div class="chart-box">
@@ -1955,7 +1955,8 @@
         function syncChartCurrency(expenses) {
             const codes = Array.from(new Set(expenses.map(t => t.currency || window.DEFAULT_CURRENCY)))
                 .sort((a, b) => (a === primary ? -1 : b === primary ? 1 : a.localeCompare(b)));
-            chartCurrency = chartCurrencyChosen && codes.includes(chartCurrency) ? chartCurrency : primary;
+            const fallback = codes.includes(primary) ? primary : (codes[0] ?? primary);
+            chartCurrency = chartCurrencyChosen && codes.includes(chartCurrency) ? chartCurrency : fallback;
 
             const group = document.getElementById('chart-currency-group');
             const select = document.getElementById('chart-currency-select');

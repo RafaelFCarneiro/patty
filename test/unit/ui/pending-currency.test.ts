@@ -86,6 +86,31 @@ describe('pending.html currency handling', () => {
     expect(sandbox.chartCurrency).toBe('USD');
   });
 
+  it('shows the expense currency when the primary currency has no expenses, never an empty chart', () => {
+    const { sandbox, charts } = loadPending([
+      tx({ type: 'income', amount: 900, currency: 'BRL' }),
+      tx({ type: 'expense', amount: 40, currency: 'USD' }),
+    ]);
+    expect(sandbox.primary).toBe('BRL');
+    expect(sandbox.chartCurrency).toBe('USD');
+    expect(charts[0]?.data.datasets[0]?.data).toEqual([40]);
+  });
+
+  it('falls back to the primary currency when the chosen chart currency leaves the period', () => {
+    const { sandbox, document } = loadPending(
+      [tx({ amount: 300, currency: 'BRL' }), tx({ amount: 40, currency: 'USD' })],
+      'BRL',
+    );
+    const select = document.getElementById('chart-currency-select');
+    select.value = 'USD';
+    select.fireEvent('change');
+    expect(sandbox.chartCurrency).toBe('USD');
+    sandbox.allTransactions = [tx({ amount: 300, currency: 'BRL' })];
+    sandbox.updateKPIs();
+    sandbox.renderCharts();
+    expect(sandbox.chartCurrency).toBe('BRL');
+  });
+
   it.each([
     ['en', 'Expenses by Category (MXN)', 'Top Pending Expenses (MXN)'],
     ['pt', 'Despesas por Categoria (MXN)', 'Maiores Despesas Previstas (MXN)'],
