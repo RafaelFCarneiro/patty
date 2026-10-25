@@ -18,7 +18,7 @@ import type {
   SetExchangeRateInput,
 } from '../../../src/models/currency-rate.js';
 
-const { BRL, USD, USDC, BTC } = CurrencyCode.enum;
+const { BRL, USD, MXN, COP, USDC, BTC } = CurrencyCode.enum;
 
 const rate = (overrides: Partial<CurrencyRate> = {}): CurrencyRate => ({
   id: 'rate-1',
@@ -36,6 +36,12 @@ const NOW = new Date('2026-08-10T12:00:00.000Z');
 describe('isCryptoPair', () => {
   it('is false for a pure fiat pair', () => {
     expect(isCryptoPair(USD, BRL)).toBe(false);
+  });
+
+  it('is false for MXN and COP pairs — both are fiat', () => {
+    expect(isCryptoPair(MXN, USD)).toBe(false);
+    expect(isCryptoPair(USD, COP)).toBe(false);
+    expect(isCryptoPair(MXN, COP)).toBe(false);
   });
 
   it('is true when the from side is crypto', () => {
@@ -107,6 +113,14 @@ describe('convert', () => {
     const asOf = new Date(NOW.getTime() - 25 * 60 * 60 * 1000).toISOString();
     const result = convert(10, USD, BRL, [rate({ asOf })], NOW, OPTIONS);
     expect(result.stale).toBe(true);
+  });
+
+  it('MXN and COP rates use the fiat threshold: 23h is fresh, 25h is stale', () => {
+    const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 60 * 60 * 1000).toISOString();
+    const fresh = [rate({ fromCode: MXN, toCode: USD, rate: 0.05, asOf: hoursAgo(23) })];
+    const stale = [rate({ fromCode: COP, toCode: USD, rate: 0.00025, asOf: hoursAgo(25) })];
+    expect(convert(100, MXN, USD, fresh, NOW, OPTIONS).stale).toBe(false);
+    expect(convert(100, COP, USD, stale, NOW, OPTIONS).stale).toBe(true);
   });
 
   it('a pair touching crypto uses the tighter crypto threshold, even converting into fiat', () => {

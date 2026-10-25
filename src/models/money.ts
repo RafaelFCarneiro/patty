@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
-export const CurrencyCode = z.enum(['USD', 'BRL', 'USDC', 'BTC']);
+export const CurrencyCode = z.enum(['USD', 'BRL', 'MXN', 'COP', 'USDC', 'BTC']);
 export type CurrencyCode = z.infer<typeof CurrencyCode>;
 
 export const Money = z.number().positive();
 
-/** A currency's own fractional digits (BRL/USD 2, USDC 6, BTC 8 — ADR-026) — rounding a total to a
+/** A currency's own fractional digits (fiat 2, USDC 6, BTC 8 — ADR-026) — rounding a total to a
  *  flat 2 decimals would corrupt a native BTC/USDC amount. */
 export type DecimalsFor = (currency: CurrencyCode) => number;
 

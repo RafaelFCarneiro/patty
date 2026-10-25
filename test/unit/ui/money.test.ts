@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
+import { CURRENCIES } from '../../../src/diplomat/db/seed/currencies.js';
 
 // ui/money.js is a plain browser-global script (no build step, no module system — matches the rest
 // of ui/, see ui/app.js's own header comment) loaded via <script src> in shell.html, so it can't be
@@ -65,6 +66,36 @@ describe('window.formatMoney (ui/money.js)', () => {
   it('degrades gracefully (code as symbol, 2 decimals) when metadata has not loaded yet', () => {
     const formatMoney = loadFormatMoney(undefined);
     expect(formatMoney(0.12345678, 'BTC')).toBe('BTC 0.12');
+  });
+
+  it('formats MXN and COP in their own market style (es-MX, es-CO) with a symbol distinct from USD', () => {
+    const formatMoney = loadFormatMoney();
+    const viaIntl = (locale: string, currency: string, symbol: string) =>
+      new Intl.NumberFormat(locale, { style: 'currency', currency })
+        .formatToParts(1234.5)
+        .map((part) => (part.type === 'currency' ? symbol : part.value))
+        .join('');
+    expect(formatMoney(1234.5, 'MXN')).toBe(viaIntl('es-MX', 'MXN', 'MX$'));
+    expect(formatMoney(1234.5, 'COP')).toBe(viaIntl('es-CO', 'COP', 'COL$'));
+    expect(formatMoney(1234.5, 'MXN')).toContain('MX$');
+    expect(formatMoney(1234.5, 'COP')).toContain('COL$');
+    expect(formatMoney(1234.5, 'MXN')).not.toBe(formatMoney(1234.5, 'USD'));
+    expect(formatMoney(1234.5, 'MXN', { locale: 'en-US' })).toBe('MX$1,234.50');
+  });
+
+  it('leaves BRL and USD formatting unchanged', () => {
+    const formatMoney = loadFormatMoney();
+    expect(formatMoney(1234.5, 'BRL')).toBe(
+      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(1234.5),
+    );
+    expect(formatMoney(1234.5, 'USD')).toBe(
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(1234.5),
+    );
+  });
+
+  it.each(['MXN', 'COP'] as const)('uses the same %s symbol as the currency seed', (code) => {
+    const seeded = CURRENCIES.find((currency) => currency.code === code);
+    expect(loadFormatMoney()(1, code)).toContain(seeded?.symbol);
   });
 
   it('accepts an explicit locale override (budget.html threads the app locale through)', () => {

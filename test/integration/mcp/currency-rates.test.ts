@@ -20,6 +20,41 @@ describe('MCP integration > exchange rates', () => {
     }
   });
 
+  it.each(['MXN', 'COP'])('set_exchange_rate accepts %s <-> USD in both directions', async (peso) => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const asOf = '2026-08-10T10:00:00.000Z';
+      const forward = (await callTool(client, {
+        name: 'set_exchange_rate',
+        args: { from: peso, to: 'USD', rate: 0.05, asOf },
+      })) as RateView;
+      const inverse = (await callTool(client, {
+        name: 'set_exchange_rate',
+        args: { from: 'USD', to: peso, rate: 20, asOf },
+      })) as RateView;
+      expect(forward).toMatchObject({ from: peso, to: 'USD', rate: 0.05 });
+      expect(inverse).toMatchObject({ from: 'USD', to: peso, rate: 20 });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('set_exchange_rate still rejects a currency outside the enum (ARS)', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await expect(
+        callTool(client, {
+          name: 'set_exchange_rate',
+          args: { from: 'ARS', to: 'USD', rate: 0.001, asOf: '2026-08-10T10:00:00.000Z' },
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('set_exchange_rate rejects from === to', async () => {
     const { client, transport } = makeClient();
     try {

@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { CurrencyCode, CurrencySchema, Money } from '../../../src/models/money.js';
 
 describe('CurrencyCode', () => {
-  it('accepts fiat and crypto codes (ADR-026)', () => {
-    expect(CurrencyCode.options).toEqual(['USD', 'BRL', 'USDC', 'BTC']);
+  it('accepts fiat (incl. MXN, COP) and crypto codes (ADR-026, Feature Design 022)', () => {
+    expect(CurrencyCode.options).toEqual(['USD', 'BRL', 'MXN', 'COP', 'USDC', 'BTC']);
   });
 
   it('rejects an unknown code', () => {
     expect(CurrencyCode.safeParse('EUR').success).toBe(false);
+    expect(CurrencyCode.safeParse('ARS').success).toBe(false);
   });
 });
 
