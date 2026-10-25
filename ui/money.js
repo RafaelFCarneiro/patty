@@ -46,6 +46,24 @@
     COP: 'es-CO',
   };
 
+  // Intl renders both pesos with a bare '$' in their own locale, indistinguishable from USD, so their
+  // currency part is swapped for the prefixed symbol (the same one the seed stores) while the locale's
+  // digit grouping stays. Keep in sync with diplomat/db/seed/currencies.ts (a unit test pins it).
+  var SYMBOL_BY_CURRENCY = {
+    MXN: 'MX$',
+    COP: 'COL$',
+  };
+
+  function formatIso(loc, code, amount) {
+    var formatter = new Intl.NumberFormat(loc, { style: 'currency', currency: code });
+    var symbol = SYMBOL_BY_CURRENCY[code];
+    if (!symbol) return formatter.format(amount);
+    return formatter
+      .formatToParts(amount)
+      .map(function (part) { return part.type === 'currency' ? symbol : part.value; })
+      .join('');
+  }
+
   function defaultLocale(code) {
     return LOCALE_BY_CURRENCY[code] || DEFAULT_LOCALE;
   }
@@ -55,7 +73,7 @@
     var amount = Number(value) || 0;
     var loc = opts.locale || defaultLocale(currencyCode);
     if (isIsoCurrency(currencyCode)) {
-      return new Intl.NumberFormat(loc, { style: 'currency', currency: currencyCode }).format(amount);
+      return formatIso(loc, currencyCode, amount);
     }
     var meta = metaFor(currencyCode);
     var decimals = meta ? meta.decimals : 2;

@@ -73,7 +73,7 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   shell page, not per navigation).
 - **`ui/money.js`** (ADR-026 Phase 1) — shell-provided `window.formatMoney(value, currencyCode, opts?)`, loaded
   before `app.js` so it's ready before the first fragment script runs. ISO fiat (BRL/USD/MXN/COP) formats via
-  `Intl.NumberFormat`'s currency style, each in its own market's locale (`pt-BR`, `es-MX`, `es-CO`; `en-US` otherwise); a non-ISO code (USDC/BTC) falls back to that currency's own
+  `Intl.NumberFormat`'s currency style, each in its own market's locale (`pt-BR`, `es-MX`, `es-CO`; `en-US` otherwise); MXN and COP swap their bare `$` for the seed symbols `MX$`/`COL$` so neither reads as USD; a non-ISO code (USDC/BTC) falls back to that currency's own
   symbol + decimals instead — **not** via try/catch (a syntactically-valid-but-unrecognized 3-letter code like
   `BTC` never throws there; it silently mis-formats with a fiat-shaped 2 decimals and no real symbol), but via
   an explicit `Intl.supportedValuesOf('currency')` membership check. Symbol/decimals come from
