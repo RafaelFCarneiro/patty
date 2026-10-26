@@ -12,7 +12,7 @@ import { createCreditCard } from '../controllers/credit-card/credit-card.js';
 import { addCardPurchase } from '../controllers/credit-card/transaction.js';
 import { setExchangeRate } from '../controllers/currency-rates.js';
 import { scopedFor, type Deps, type Scoped } from '../controllers/deps.js';
-import { markDemoInstance } from '../controllers/instance.js';
+import { completeDemoSeed, markDemoInstance } from '../controllers/instance.js';
 import { applyDueRecurring, createRecurring } from '../controllers/recurring.js';
 import { setBaseCurrency, setLocale } from '../controllers/settings.js';
 import { createTag } from '../controllers/tags.js';
@@ -20,14 +20,20 @@ import type { Db } from '../diplomat/db/driver.js';
 import { instanceRepo } from '../diplomat/db/repos/instance.js';
 import { instanceSettingsRepo } from '../diplomat/db/repos/instance-settings.js';
 import { DEMO_PACKS } from '../diplomat/db/seed/demo/index.js';
-import { clockDateOf, planDemo } from '../logic/demo.js';
+import { clockDateOf, demoSeedStart, planDemo } from '../logic/demo.js';
 import { toIsoDate } from '../logic/period.js';
 import { OWNER_PRINCIPAL } from '../models/auth/principal.js';
-import { demoErrors, DemoStepKind, type DemoCountry, type DemoSeedReport, type DemoStep } from '../models/demo.js';
-import { isDemoInstance } from '../models/instance.js';
+import {
+  demoErrors,
+  DemoSeedStatus,
+  DemoStepKind,
+  type DemoCountry,
+  type DemoSeedReport,
+  type DemoStep,
+} from '../models/demo.js';
 import { TransactionSource } from '../models/transaction.js';
 import { bindAuthRunEffects } from './auth.js';
-import { createRuntime, type RuntimeConfig } from './runtime.js';
+import { createRuntime, type Runtime, type RuntimeConfig } from './runtime.js';
 
 /**
  * Composition root of the demo seed: runs the generator's plan (`logic/demo.ts`) through the same write flows the MCP
@@ -82,33 +88,53 @@ const noonOf = (isoDate: string): Date => {
   return new Date(year, month - 1, day, NOON);
 };
 
-/**
- * Seeds `db` as a demo for `country`, relative to `today`. A fresh database is marked `demo` first (the marker, not a
- * path, says it is one) and then filled. A database that already holds data is left alone when it is a demo (so running
- * the demo again does not duplicate anything) and refused when it is not.
- */
-export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result<DemoSeedReport, AppError>> => {
-  const clock = { now: options.today };
-  const runtime = createRuntime(db, { ...options.config, FINTRACK_LOCALE: undefined }, { clock: () => clock.now });
-  const scoped = scopedFor(runtime, OWNER_PRINCIPAL);
+const runAuthFlow = <T>(runtime: Runtime, flow: () => ResultAsync<FlowOutcome<T>, AppError>) =>
+  bindAuthRunEffects(runtime.authRunEffects)(flow);
 
-  if (await instanceRepo(db).hasUserData()) {
-    return isDemoInstance(await runtime.instanceKind())
-      ? ok({ seeded: false, steps: {} })
-      : err(demoErrors.notDemoDatabase);
-  }
-
-  const marked = await bindAuthRunEffects(runtime.authRunEffects)(() =>
-    markDemoInstance({ instanceSettings: instanceSettingsRepo(db) }),
-  );
-  if (marked.isErr()) return err(marked.error);
-
-  const today = toIsoDate(options.today);
-  const plan = planDemo(DEMO_PACKS[options.country], today, options.today.toISOString());
+const runPlan = async (
+  scoped: Scoped,
+  plan: readonly DemoStep[],
+  clock: { now: Date },
+  today: string,
+): Promise<Result<void, AppError>> => {
   for (const step of plan) {
     clock.now = noonOf(clockDateOf(step, today));
     const result = await runStep(scoped, step);
     if (result.isErr()) return err(failedStep(step, result.error));
   }
-  return ok({ seeded: true, steps: R.countBy(plan, (step) => step.kind) });
+  return ok(undefined);
+};
+
+/**
+ * Seeds `db` as a demo for `country`, relative to `today`. A fresh database is marked `demo` first (the marker, not a
+ * path, says it is one), filled, and — as the very last step, through a flow like the marker — marked complete. A
+ * database that already holds data is left alone when it is a seeded demo (so running the demo again does not duplicate
+ * anything), and reported rather than touched when it is not a demo or its seed never finished.
+ */
+export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result<DemoSeedReport, AppError>> => {
+  const clock = { now: options.today };
+  const runtime = createRuntime(db, { ...options.config, FINTRACK_LOCALE: undefined }, { clock: () => clock.now });
+  const scoped = scopedFor(runtime, OWNER_PRINCIPAL);
+  const instanceSettings = instanceSettingsRepo(db);
+
+  const start = demoSeedStart({
+    hasUserData: await instanceRepo(db).hasUserData(),
+    kind: await runtime.instanceKind(),
+    seededAt: (await instanceSettings.get()).demoSeededAt,
+  });
+  if (start !== 'fresh') return ok({ status: start, steps: {} });
+
+  const marked = await runAuthFlow(runtime, () => markDemoInstance({ instanceSettings }));
+  if (marked.isErr()) return err(marked.error);
+
+  const today = toIsoDate(options.today);
+  const plan = planDemo(DEMO_PACKS[options.country], today, options.today.toISOString());
+  const ran = await runPlan(scoped, plan, clock, today);
+  if (ran.isErr()) return err(ran.error);
+
+  const completed = await runAuthFlow(runtime, () =>
+    completeDemoSeed({ instanceSettings }, options.today.toISOString()),
+  );
+  if (completed.isErr()) return err(completed.error);
+  return ok({ status: DemoSeedStatus.enum.seeded, steps: R.countBy(plan, (step) => step.kind) });
 };

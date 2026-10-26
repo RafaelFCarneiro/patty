@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { isLoopbackHost, LOOPBACK_HOST } from './common/net.js';
 import { AuthMode, DEFAULT_AUTH_MODE } from './models/auth/mode.js';
 import { DEFAULT_PROFILE, ProfileSchema } from './models/auth/sign-in.js';
+import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from './models/demo.js';
 import { Locale } from './models/locale.js';
 
 export const McpTransport = z.enum(['stdio', 'http']);
@@ -11,6 +12,9 @@ export const McpTransport = z.enum(['stdio', 'http']);
 // Absolute default so the DB is always created in a stable, writable location
 // regardless of the cwd when spawned by an MCP client (e.g. Claude Desktop).
 const DEFAULT_DB_PATH = join(homedir(), '.fintrack', 'fintrack.db');
+
+/** The demo's throwaway database, beside the real one and never the same file (Feature Design 022 §1). */
+export const DEMO_DB_PATH = join(homedir(), '.fintrack', 'demo.db');
 
 // Deliberately NOT 3000/3001/8000/8080/etc — those are the most commonly used ports across
 // Node/Fastify/React dev-server defaults, so picking one of them maximizes collision risk with
@@ -95,6 +99,12 @@ const Env = z
     PUBLIC_URL: optionalEnv(PublicUrl),
     // Passed to Fastify so rate limiting sees the real client IP behind a reverse proxy.
     TRUST_PROXY: optionalEnv(TrustProxy),
+    // Opens the demo: the fixed published key and no login (loopback only). The database's own marker, not this
+    // variable, is what says it is a demo (Feature Design 022 §2-3).
+    [DEMO_ENV_VAR]: z
+      .string()
+      .optional()
+      .transform((v) => v === DEMO_ENV_ON),
     MCP_TRANSPORT: McpTransport.default(McpTransport.enum.stdio),
     // HTTP sidecar alongside stdio MCP (ADR-013 Decision 7) — on by default: the dashboard/REST
     // surface is a core feature, not an add-on. A bind failure is caught and non-fatal (stdio
@@ -113,6 +123,13 @@ const Env = z
     path: ['FINTRACK_DB_KEY_FILE'],
     message: 'FINTRACK_DB_KEY and FINTRACK_DB_KEY_FILE are both set — the key source is ambiguous; set only one',
   })
+  .refine((env) => !(env.FINTRACK_DEMO && (env.FINTRACK_DB_KEY || env.FINTRACK_DB_KEY_FILE)), {
+    path: [DEMO_ENV_VAR],
+    message: `${DEMO_ENV_VAR} fixes the database key — do not also set FINTRACK_DB_KEY or FINTRACK_DB_KEY_FILE`,
+  })
+  .transform((env) =>
+    env.FINTRACK_DEMO ? { ...env, FINTRACK_DB_KEY: DEMO_DB_KEY, FINTRACK_AUTH: AuthMode.enum.disabled } : env,
+  )
   .refine((env) => !(env.FINTRACK_AUTH === AuthMode.enum.disabled && isExposed(env)), {
     path: ['FINTRACK_AUTH'],
     message:
@@ -124,3 +141,13 @@ const Env = z
 export type Config = z.infer<typeof Env>;
 
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => Env.parse(env);
+
+/** The demo server's configuration: the demo database, its own port, the demo key, no login — whatever the process
+ *  environment says about the real install (the demo never reads or writes the real `DB_PATH`). */
+export const demoConfig = (dbPath: string): Config =>
+  loadConfig({
+    DB_PATH: dbPath,
+    PORT: String(DEMO_PORT),
+    MCP_TRANSPORT: McpTransport.enum.http,
+    [DEMO_ENV_VAR]: DEMO_ENV_ON,
+  });

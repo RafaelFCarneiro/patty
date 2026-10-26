@@ -27,3 +27,19 @@ export const markDemoInstance = (
     });
     return ok({ persist: [write], response: InstanceKind.enum.demo });
   });
+
+/** Writes the completion marker, the demo seeder's last step: a demo that has it was seeded in full, one that does not
+ *  was interrupted. Recording it again keeps the first time. */
+export const completeDemoSeed = (
+  deps: Pick<AuthDeps, 'instanceSettings'>,
+  seededAt: string,
+): ResultAsync<FlowOutcome<string>, AppError> =>
+  safeTry(async function* () {
+    const current = await deps.instanceSettings.get();
+    if (current.demoSeededAt !== null) return ok({ persist: [], response: current.demoSeededAt });
+    const write = persistence.update({
+      entity: INSTANCE_SETTINGS_ENTITY_TAG,
+      model: { ...current, demoSeededAt: seededAt },
+    });
+    return ok({ persist: [write], response: seededAt });
+  });

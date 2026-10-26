@@ -95,7 +95,7 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   another through one runner, so `adapters/demo.ts`'s `outcomeToDb` (every entity's `entityDbAdapter` pair applied in turn —
   each rewrites only its own tag) is applied to each flow's outcome there, exactly as for the auth flows below; the
   controllers are unchanged. The seeder holds no write method of its own: it only calls the flows and sets the clock
-  `deps.clock()` reads. Marking the database a demo (`markDemoInstance`) is an `instance_settings` update through the auth runner.
+  `deps.clock()` reads. Marking the database a demo (`markDemoInstance`) and, as the seed's last step, recording that it finished (`completeDemoSeed`, writing `demo_seeded_at`) are `instance_settings` updates through the auth runner.
 - **Exception — the auth flows (ADR-033) are adapted once at the composition root.** `login`/`claimOwner`/
   `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions`, the CLI's `claimOwnerLocally`/`resetPassword` (`composition/cli.ts` binds its own runner the same way) and the access-token flows (`createToken`/
   `revokeToken`/`revokeSignInByHash`/`authenticateToken`, `controllers/access-tokens.ts`) and the stdio sign-in flows (`startGrant`/`approveGrant`/`denyGrant`/`redeemGrant`/`pruneExpiredGrants`, `controllers/grants.ts`) and the user-management flows (`inviteUser`/`reissueInvite`/`claimInvite`/`disableUser`/`enableUser`/`setRole`/`setSignInCap`, `controllers/users.ts`, run from the users and invite pages and the `users` command) are run from several shell sites (the auth hook,

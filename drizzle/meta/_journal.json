@@ -183,6 +183,13 @@
       "when": 1793019256222,
       "tag": "0025_instance_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1793040889072,
+      "tag": "0026_demo_seeded_at",
+      "breakpoints": true
     }
   ]
 }

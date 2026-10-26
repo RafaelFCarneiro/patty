@@ -3,6 +3,7 @@ import type { Result } from 'neverthrow';
 import { isPortInUse, portInUseMessage } from './common/net.js';
 import { loadConfig, McpTransport } from './config.js';
 import { databaseAheadMessage, type DatabaseAhead } from './models/database.js';
+import { StartupRefusal } from './models/error.js';
 
 // Each flow is a composition module, loaded only when it runs: the CLI never pays for a server, a stdio start never
 // loads Fastify (the stdio module loads it itself only when the sidecar is on), and an HTTP start never loads the CLI.
@@ -41,6 +42,10 @@ const main = async (): Promise<void> => {
 main().catch((e: unknown) => {
   if (isPortInUse(e)) {
     console.error(portInUseMessage(e));
+    process.exit(EXIT_FAILURE);
+  }
+  if (e instanceof StartupRefusal) {
+    console.error(e.message);
     process.exit(EXIT_FAILURE);
   }
   // Only unexpected errors get here (a refused start is a Result, handled above): the stack is the diagnosis.

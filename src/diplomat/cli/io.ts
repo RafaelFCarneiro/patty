@@ -5,6 +5,7 @@ import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter } from '../
 import { reasonOf } from '../../models/error.js';
 import type { ExportedRowCounts } from '../../models/export.js';
 import { databaseAheadMessage, type DatabaseAhead } from '../../models/database.js';
+import type { DemoCountry, DemoFailure, DemoSeedStatus } from '../../models/demo.js';
 import { CLI_MESSAGES } from './messages.js';
 import { isPromptEnded, PROMPT_MESSAGES, type PromptFailure } from './prompt.js';
 import { PROMPT_ABORTED_MESSAGE, PromptEnd, type Terminal } from './terminal.js';
@@ -51,6 +52,23 @@ export type Exporter = {
   writeSnapshot: (destination: string) => Promise<Result<ExportedRowCounts, string>>;
 };
 
+/** `country` unset: the demo picks the one that fits the OS locale. */
+export type DemoRequest = { country?: DemoCountry; reset: boolean };
+
+export type DemoPrepared = { status: DemoSeedStatus; databasePath: string; country: DemoCountry };
+
+/**
+ * What `demo` needs: the demo database prepared (reset if asked and allowed, created and seeded if need be) and then
+ * served on the demo's own port. The safety rules live behind it — only a database that says it is a demo is ever
+ * deleted, never the real one — and every refusal comes back as a `DemoFailure`, not an exception.
+ */
+export type DemoShell = {
+  databasePath: string;
+  prepare: (request: DemoRequest) => Promise<Result<DemoPrepared, DemoFailure>>;
+  /** Starts the demo's dashboards, REST and MCP on `DEMO_PORT`; the process then stays up until interrupted. */
+  serve: () => Promise<Result<void, DemoFailure>>;
+};
+
 export type CliIo = {
   /** The database, opened and migrated — or why it cannot be used (a build older than the database). */
   openShell: () => ResultAsync<Shell, DatabaseAhead>;
@@ -68,6 +86,8 @@ export type CliIo = {
   clients: ClientConfigs;
   /** The database and its key, for the export commands. */
   exporter: Exporter;
+  /** The throwaway demo database, for `demo`. */
+  demo: DemoShell;
 };
 
 /** Runs `work` on the opened shell and closes it. When the database is newer than this build, says so on stderr

@@ -1,6 +1,6 @@
 # Feature Design 022: Demo instance — a seeded, throwaway FinTrack to try before installing
 
-**Type:** Feature design · **Design status:** Accepted · **Implementation status:** In progress (phase 2) ·
+**Type:** Feature design · **Design status:** Accepted · **Implementation status:** In progress (phase 3) ·
 **Date:** 2026-10-23 · Builds on the multi-user/tenancy work (ADR-033) without using it: the demo is a
 **separate database**, never a user inside a real one. Reuses the write flows as they are (no demo-only write
 path) and the MCP prompts of Feature Design 019.
@@ -28,7 +28,12 @@ npx @rafaelfcarneiro/fintrack@latest demo [--country br|us|mx|co] [--reset]
 
 - Creates (or reuses) `~/.fintrack/demo.db` (`DEMO_DB_PATH`), never the real `DB_PATH`. Seeds it on first run
   and prints where the dashboards are. `--reset` deletes and re-seeds it — after proving the file it is about to
-  delete is a demo database (§3); it refuses to delete anything else.
+  delete is a demo database (§3); it refuses to delete anything else. After seeding, `demo` serves the dashboards,
+  REST and MCP on the demo port until interrupted (no login, §2) and says so; run again it reuses a seeded demo.
+- A seed that stops partway never leaves a half-seeded demo that reads as finished: the seeder records completion as
+  its last step (`settings.demo_seeded_at`, written through a flow like the marker). `demo` deletes a database it just
+  created when its first seed fails; a demo found later without that marker is reported as interrupted, with the
+  `--reset` command, instead of "already seeded".
 - `--country` picks the demo's data set, and with it the language and currency (§4): `br` (pt, BRL), `us`
   (en, USD), `mx` (es, MXN), `co` (es, COP). A language alone can't choose, since Spanish has two data sets.
   Default: the OS locale's region when it is one of the four (`es-CO` → `co`); otherwise its language
@@ -55,9 +60,14 @@ npx @rafaelfcarneiro/fintrack@latest demo [--country br|us|mx|co] [--reset]
 - **The marker, not the file name or an env var, is the source of truth.** Everything that shows "demo" reads
   it from the database: the UI banner, the MCP server instructions, `get_status` (`demo: true`). An env var or a
   path can be wrong; the database can't be "accidentally" demo.
-- `--reset` opens the file with the demo key and checks `instance_kind = demo` before deleting it.
+- `--reset` opens the file with the demo key and checks `instance_kind = demo` before deleting it. A path that is the
+  real `DB_PATH` (also through a symlink), a file that does not open with the demo key, and a database marked
+  `standard` are all refused and left byte for byte as they were.
 - The demo never runs against a `standard` database: `fintrack demo` refuses a `DEMO_DB_PATH` whose database
-  is not marked demo.
+  is not marked demo and holds data. (An empty database that opens with the demo key and was never marked — a run
+  that died between creating the file and marking it — has nothing to lose and is seeded.)
+- A process started with `FINTRACK_DEMO=1` (the demo key, auth off) refuses to serve a database that is not marked
+  demo, so the public key and the open door never apply to anything else.
 
 ### 4. The seed: four months, four countries, three languages, generated through the real flows
 

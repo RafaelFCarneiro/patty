@@ -6,14 +6,20 @@ import * as R from 'remeda';
 import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/sign-in.js';
 import { clientConfigFailures, type ClientConfigFailure } from '../../models/client-config.js';
+import { DEMO_SERVER_NAME } from '../../models/demo.js';
+import { DEMO_DB_PATH } from '../../config.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
 import {
   mergeMcpServersKey,
   mergeServersKey,
   resolveConfigObject,
+  SERVER_NAME,
   STDIO_ENTRY,
   VSCODE_ENTRY,
+  withDemo,
+  withoutServer,
   withProfile,
+  type ServersKey,
 } from './merge.js';
 
 // ---------------------------------------------------------------------------
@@ -74,13 +80,15 @@ const claudeDesktopConfigPath = (): string => {
 // Per-client setup handlers
 // ---------------------------------------------------------------------------
 
+type ConfigReport = Result<ClientSetupReport, ClientConfigFailure>;
+
 /** Reads the client's file, merges the FinTrack entry in, writes it back, and reports. */
 const writeEntry = (
   configPath: string,
   merge: (existing: Record<string, unknown>, entry: Record<string, unknown>) => Record<string, unknown>,
   entry: Record<string, unknown>,
   next: string,
-): Result<ClientSetupReport, ClientConfigFailure> =>
+): ConfigReport =>
   readJsonOrEmpty(configPath).andThen(({ config, warnings }) =>
     writeJson(configPath, merge(config, entry))
       .map((): ClientSetupReport => ({ warnings, lines: [`  Updated: ${configPath}`, next] }))
@@ -88,69 +96,124 @@ const writeEntry = (
       .mapErr((failure) => ({ ...failure, warnings })),
   );
 
-const setupClaudeCode = (profile: string): Result<ClientSetupReport, ClientConfigFailure> =>
-  writeEntry(
-    join(home, '.claude', 'mcp.json'),
-    mergeMcpServersKey,
-    withProfile(STDIO_ENTRY, profile),
-    '  Verify with: claude mcp list',
-  );
+const nothingToRemove = (reason: string): ConfigReport => ok({ warnings: [], lines: [`  ${reason}`] });
 
-const setupClaudeDesktop = (profile: string): Result<ClientSetupReport, ClientConfigFailure> =>
-  writeEntry(
-    claudeDesktopConfigPath(),
-    mergeMcpServersKey,
-    withProfile(STDIO_ENTRY, profile),
-    '  Fully quit and reopen Claude Desktop to apply.',
-  );
+/** Removes only the `fintrack-demo` entry. A file that is missing, or holds no such entry, is left exactly as it is. */
+const removeDemoEntry = (configPath: string, key: ServersKey, next: string): ConfigReport => {
+  if (!existsSync(configPath)) return nothingToRemove(`No demo entry to remove: ${configPath} does not exist`);
+  return readJsonOrEmpty(configPath).andThen(({ config, warnings }) => {
+    const without = withoutServer(config, key, DEMO_SERVER_NAME);
+    if (without === null) return nothingToRemove(`No ${DEMO_SERVER_NAME} entry in ${configPath}`);
+    return writeJson(configPath, without)
+      .map((): ClientSetupReport => ({ warnings, lines: [`  Removed ${DEMO_SERVER_NAME} from ${configPath}`, next] }))
+      .mapErr((failure) => ({ ...failure, warnings }));
+  });
+};
 
-const setupCopilot = (profile: string): Result<ClientSetupReport, ClientConfigFailure> =>
-  writeEntry(
-    join(process.cwd(), '.vscode', 'mcp.json'),
-    mergeServersKey,
-    withProfile(VSCODE_ENTRY, profile),
-    '  Reload VS Code window (Cmd/Ctrl+Shift+P → "Developer: Reload Window") to apply.',
-  );
+type FileClient = {
+  label: string;
+  path: () => string;
+  key: ServersKey;
+  entry: Record<string, unknown>;
+  next: string;
+};
 
-const setupAntigravity = (profile: string): Result<ClientSetupReport, ClientConfigFailure> =>
-  writeEntry(
-    join(home, '.gemini', 'config', 'mcp_config.json'),
-    mergeMcpServersKey,
-    withProfile(STDIO_ENTRY, profile),
-    '  Reopen Antigravity or type /mcp in the CLI to refresh.',
-  );
+const MERGE_BY_KEY = {
+  mcpServers: mergeMcpServersKey,
+  servers: mergeServersKey,
+} as const satisfies Record<ServersKey, typeof mergeMcpServersKey>;
+
+/** A client with a JSON config file: `fintrack` for the real install, `fintrack-demo` beside it for the demo. */
+const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig => ({
+  label,
+  run: (profile) => writeEntry(path(), MERGE_BY_KEY[key], withProfile(entry, profile), next),
+  addDemo: () =>
+    writeEntry(
+      path(),
+      (existing, demoEntry) => MERGE_BY_KEY[key](existing, demoEntry, DEMO_SERVER_NAME),
+      withDemo(entry, DEMO_DB_PATH),
+      next,
+    ),
+  removeDemo: () => removeDemoEntry(path(), key, next),
+});
 
 // Codex CLI MCP configuration path and format is not yet stable: describe the snippet and let the user place it.
-const setupCodex = (profile: string): Result<ClientSetupReport, ClientConfigFailure> =>
-  ok({
-    warnings: [],
-    lines: [
-      `  Codex CLI: add the following to your MCP config file:
+/** `{ "A": "1", "B": "2" }` — one line, as the snippet has always shown the env. */
+const inlineObject = (env: Record<string, string>): string =>
+  `{ ${Object.entries(env)
+    .map(([name, value]) => `"${name}": "${value}"`)
+    .join(', ')} }`;
+
+const codexSnippet = (
+  name: string,
+  env: Record<string, string> | null,
+): string => `  Codex CLI: add the following to your MCP config file:
 
   {
     "mcpServers": {
-      "fintrack": {
+      "${name}": {
         "command": "npx",
-        "args": ["-y", "${PACKAGE_SPEC}"]${profile === DEFAULT_PROFILE ? '' : `,\n        "env": { "${PROFILE_ENV_VAR}": "${profile}" }`}
+        "args": ["-y", "${PACKAGE_SPEC}"]${env === null ? '' : `,\n        "env": ${inlineObject(env)}`}
       }
     }
   }
 
-  Refer to the Codex CLI docs for the exact config file location.`,
-    ],
+  Refer to the Codex CLI docs for the exact config file location.`;
+
+const setupCodex = (profile: string): ConfigReport =>
+  ok({
+    warnings: [],
+    lines: [codexSnippet(SERVER_NAME, profile === DEFAULT_PROFILE ? null : { [PROFILE_ENV_VAR]: profile })],
   });
+
+const codex: ClientConfig = {
+  label: 'OpenAI Codex',
+  run: setupCodex,
+  addDemo: () => ok({ warnings: [], lines: [codexSnippet(DEMO_SERVER_NAME, withDemo(STDIO_ENTRY, DEMO_DB_PATH).env)] }),
+  removeDemo: () =>
+    ok({ warnings: [], lines: [`  Codex CLI: remove the "${DEMO_SERVER_NAME}" entry from your MCP config file.`] }),
+};
 
 // ---------------------------------------------------------------------------
 // Client registry
 // ---------------------------------------------------------------------------
 
+const claudeCode = fileClient({
+  label: 'Claude Code (CLI)',
+  path: () => join(home, '.claude', 'mcp.json'),
+  key: 'mcpServers',
+  entry: STDIO_ENTRY,
+  next: '  Verify with: claude mcp list',
+});
+const claudeDesktop = fileClient({
+  label: 'Claude Desktop',
+  path: claudeDesktopConfigPath,
+  key: 'mcpServers',
+  entry: STDIO_ENTRY,
+  next: '  Fully quit and reopen Claude Desktop to apply.',
+});
+const copilot = fileClient({
+  label: 'VS Code / GitHub Copilot',
+  path: () => join(process.cwd(), '.vscode', 'mcp.json'),
+  key: 'servers',
+  entry: VSCODE_ENTRY,
+  next: '  Reload VS Code window (Cmd/Ctrl+Shift+P → "Developer: Reload Window") to apply.',
+});
+const antigravity = fileClient({
+  label: 'Google Antigravity',
+  path: () => join(home, '.gemini', 'config', 'mcp_config.json'),
+  key: 'mcpServers',
+  entry: STDIO_ENTRY,
+  next: '  Reopen Antigravity or type /mcp in the CLI to refresh.',
+});
+
 const TOOLS: Readonly<Record<string, ClientConfig>> = {
-  'claude-code': { label: 'Claude Code (CLI)', run: setupClaudeCode },
-  'claude-desktop': { label: 'Claude Desktop', run: setupClaudeDesktop },
-  copilot: { label: 'VS Code / GitHub Copilot', run: setupCopilot },
-  vscode: { label: 'VS Code / GitHub Copilot', run: setupCopilot },
-  antigravity: { label: 'Google Antigravity', run: setupAntigravity },
-  codex: { label: 'OpenAI Codex', run: setupCodex },
+  'claude-code': claudeCode,
+  'claude-desktop': claudeDesktop,
+  copilot,
+  vscode: copilot,
+  antigravity,
+  codex,
 };
 
 const findClient = (tool: string): ClientConfig | undefined => TOOLS[tool.trim().toLowerCase()];

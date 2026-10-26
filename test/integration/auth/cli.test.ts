@@ -28,6 +28,7 @@ import {
   USERNAME,
 } from './helpers.js';
 import { unusedExporter } from '../../unit/fixtures/exporter.js';
+import { unusedDemo } from '../../unit/fixtures/demo.js';
 
 const createApp = useAuthApp();
 
@@ -66,6 +67,7 @@ const harness = (ctx: AppContext, input: { stdin?: string; terminal?: boolean } 
     interruptSignal: () => new AbortController().signal,
     clients: { find: () => undefined },
     exporter: unusedExporter,
+    demo: unusedDemo,
   };
   return { io, out, err, run: (...args) => runAuthCommand(args, io) };
 };

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT, DEMO_SERVER_NAME } from '../../../../src/models/demo.js';
 import {
   mergeMcpServersKey,
   mergeServersKey,
   resolveConfigObject,
   STDIO_ENTRY,
   VSCODE_ENTRY,
+  withDemo,
+  withoutServer,
   withProfile,
 } from '../../../../src/diplomat/client-config/merge.js';
 
@@ -122,5 +125,40 @@ describe('withProfile (ADR-034 §5.2)', () => {
   it('adds FINTRACK_PROFILE to the entry’s env only for a non-default profile, keeping the rest', () => {
     expect(withProfile(STDIO_ENTRY, 'work')).toEqual({ ...STDIO_ENTRY, env: { FINTRACK_PROFILE: 'work' } });
     expect(withProfile(VSCODE_ENTRY, 'work')).toEqual({ ...VSCODE_ENTRY, env: { FINTRACK_PROFILE: 'work' } });
+  });
+});
+
+describe('the demo entry', () => {
+  it('merges under its own name and leaves the fintrack entry alone', () => {
+    const existing = { mcpServers: { fintrack: { command: 'real' } } };
+    const demo = withDemo(STDIO_ENTRY, '/home/x/.fintrack/demo.db');
+    expect(mergeMcpServersKey(existing, demo, DEMO_SERVER_NAME).mcpServers).toEqual({
+      fintrack: { command: 'real' },
+      [DEMO_SERVER_NAME]: demo,
+    });
+    expect(mergeServersKey({}, demo, DEMO_SERVER_NAME)).toEqual({ servers: { [DEMO_SERVER_NAME]: demo } });
+  });
+
+  it('runs the same server against the demo database, port and key switch', () => {
+    expect(withDemo(VSCODE_ENTRY, '/home/x/.fintrack/demo.db')).toEqual({
+      ...VSCODE_ENTRY,
+      env: { DB_PATH: '/home/x/.fintrack/demo.db', PORT: String(DEMO_PORT), [DEMO_ENV_VAR]: DEMO_ENV_ON },
+    });
+  });
+});
+
+describe('withoutServer', () => {
+  it('drops only the named server and keeps every other key', () => {
+    const existing = { theme: 'dark', mcpServers: { a: { command: 'a' }, b: { command: 'b' } } };
+    expect(withoutServer(existing, 'mcpServers', 'a')).toEqual({ theme: 'dark', mcpServers: { b: { command: 'b' } } });
+    expect(existing.mcpServers).toHaveProperty('a');
+  });
+
+  it.each([
+    ['no servers key', {}],
+    ['a servers key that is not an object', { mcpServers: [] }],
+    ['no such server', { mcpServers: { other: {} } }],
+  ])('is null when there is nothing to remove (%s)', (_label, existing) => {
+    expect(withoutServer(existing, 'mcpServers', 'a')).toBeNull();
   });
 });

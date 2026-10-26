@@ -24,6 +24,7 @@ import {
   USERS_URL,
 } from './user-helpers.js';
 import { unusedExporter } from '../../unit/fixtures/exporter.js';
+import { unusedDemo } from '../../unit/fixtures/demo.js';
 
 const createApp = useAuthApp();
 
@@ -58,6 +59,7 @@ const harness = (ctx: AppContext, inviteOrigin: string | null = LOOPBACK_ORIGIN)
     interruptSignal: () => new AbortController().signal,
     clients: { find: () => undefined },
     exporter: unusedExporter,
+    demo: unusedDemo,
   };
   return { out, err, io, run: (...args) => runUsersCommand(args, io) };
 };

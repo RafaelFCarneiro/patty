@@ -86,6 +86,10 @@ export type ClientSetupReport = {
 export type ClientConfig = {
   label: string;
   run: (profile: string) => Result<ClientSetupReport, ClientConfigFailure>;
+  /** Adds the client's `fintrack-demo` entry beside the `fintrack` one, which it never touches. */
+  addDemo: () => Result<ClientSetupReport, ClientConfigFailure>;
+  /** Removes only the `fintrack-demo` entry. */
+  removeDemo: () => Result<ClientSetupReport, ClientConfigFailure>;
 };
 
 export type ClientConfigs = {
