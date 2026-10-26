@@ -1,8 +1,10 @@
 import type { IncomingMessage } from 'node:http';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { FastifyInstance } from 'fastify';
 import type { Tenancy } from '../../controllers/deps.js';
+import type { InstanceKind } from '../../models/instance.js';
 import { hasScope, requiredMcpScope } from '../../logic/auth/scope.js';
 import { MCP_PATH } from '../../models/auth/bearer.js';
 import { authErrors } from '../../models/auth/errors.js';
@@ -24,6 +26,11 @@ import { toolScopesOf } from './scopes.js';
  * `insufficient_scope` challenge before any tool runs. The principal then travels to the tools as `req.raw.auth`
  * (the SDK's `AuthInfo`), where `scopes.ts` checks it again.
  */
+// Only `initialize` carries the server instructions, so only it reads the marker: a ping or a tool call must not
+// fail because that read did.
+const kindForInitialize = async (tenancy: Tenancy, body: unknown): Promise<InstanceKind | undefined> =>
+  [body].flat().some(isInitializeRequest) ? tenancy.instanceKind() : undefined;
+
 export const registerMcpRoute = (app: FastifyInstance, tenancy: Tenancy, version: string, publicUrl?: string): void => {
   const scopeGuard = { gate: authInfoGate };
   // Built once, only to learn which scope each tool needs; the per-request server below is identical.
@@ -43,7 +50,7 @@ export const registerMcpRoute = (app: FastifyInstance, tenancy: Tenancy, version
       },
     },
     async (req, reply) => {
-      const server = buildMcpServer(tenancy, version, scopeGuard, await tenancy.instanceKind());
+      const server = buildMcpServer(tenancy, version, scopeGuard, await kindForInitialize(tenancy, req.body));
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

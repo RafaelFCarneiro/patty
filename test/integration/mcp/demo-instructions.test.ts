@@ -6,11 +6,13 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { sql } from 'drizzle-orm';
+import Fastify from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DEMO_SERVER_INSTRUCTIONS } from '../../../src/diplomat/mcp/instructions.js';
 import { buildMcpServer } from '../../../src/diplomat/mcp/server.js';
 import { ownerGate } from '../../../src/diplomat/mcp/gate.js';
 import { InstanceKind } from '../../../src/models/instance.js';
+import { registerHttpApp } from '../../../src/composition/http.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 
 const dirs: string[] = [];
@@ -89,5 +91,42 @@ describe('get_status over MCP', () => {
   it('reports demo: true on a demo database and false otherwise', async () => {
     expect((await statusOver(await appOf(InstanceKind.enum.demo))).demo).toBe(true);
     expect((await statusOver(await appOf(InstanceKind.enum.standard))).demo).toBe(false);
+  });
+});
+
+describe('/mcp with an unreadable marker', () => {
+  const post = async (method: string, params?: Record<string, unknown>): Promise<Response> => {
+    const ctx = await appOf(InstanceKind.enum.demo);
+    const failing = {
+      ...ctx.runtime,
+      instanceKind: async (): Promise<InstanceKind> => {
+        throw new Error('marker unreadable');
+      },
+    };
+    const app = Fastify();
+    registerHttpApp(app, failing, ctx.version, ctx.auth);
+    apps.push({ ...ctx, app });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const { port } = app.server.address() as AddressInfo;
+    return fetch(`http://127.0.0.1:${port}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    });
+  };
+
+  it('still answers a ping: only initialize reads the marker', async () => {
+    const res = await post('ping');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ result: {} });
+  });
+
+  it('refuses initialize rather than connect a client without the demo warning', async () => {
+    const res = await post('initialize', {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1' },
+    });
+    expect(res.status).toBe(500);
   });
 });
