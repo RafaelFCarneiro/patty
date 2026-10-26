@@ -1,5 +1,6 @@
 import * as R from 'remeda';
 import { Locale } from '../models/locale.js';
+import { DEFAULT_INSTANCE_KIND, isDemoInstance } from '../models/instance.js';
 import type { StatusOut } from '../wire/out/status.js';
 import type { Deps } from './deps.js';
 import type { DatabaseState, Health } from '../models/database.js';
@@ -13,9 +14,17 @@ export const getHealth = async (deps: Pick<Deps, 'health'>): Promise<Health> => 
 });
 
 export const getStatus = async (deps: Deps, version: string): Promise<StatusOut> =>
-  R.pipe(await Promise.all([databaseState(deps), deps.locale().catch(R.constant(Locale.enum.en))]), ([db, locale]) => ({
-    name: 'fintrack',
-    version,
-    db,
-    locale,
-  }));
+  R.pipe(
+    await Promise.all([
+      databaseState(deps),
+      deps.locale().catch(R.constant(Locale.enum.en)),
+      deps.instance.kind().catch(R.constant(DEFAULT_INSTANCE_KIND)),
+    ]),
+    ([db, locale, kind]) => ({
+      name: 'fintrack',
+      version,
+      db,
+      locale,
+      demo: isDemoInstance(kind),
+    }),
+  );

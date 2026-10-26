@@ -1,6 +1,6 @@
 # Feature Design 022: Demo instance — a seeded, throwaway FinTrack to try before installing
 
-**Type:** Feature design · **Design status:** Accepted · **Implementation status:** In progress (phase 0) ·
+**Type:** Feature design · **Design status:** Accepted · **Implementation status:** In progress (phase 1) ·
 **Date:** 2026-10-23 · Builds on the multi-user/tenancy work (ADR-033) without using it: the demo is a
 **separate database**, never a user inside a real one. Reuses the write flows as they are (no demo-only write
 path) and the MCP prompts of Feature Design 019.

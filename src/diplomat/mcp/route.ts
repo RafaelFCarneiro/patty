@@ -43,7 +43,7 @@ export const registerMcpRoute = (app: FastifyInstance, tenancy: Tenancy, version
       },
     },
     async (req, reply) => {
-      const server = buildMcpServer(tenancy, version, scopeGuard);
+      const server = buildMcpServer(tenancy, version, scopeGuard, await tenancy.instanceKind());
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

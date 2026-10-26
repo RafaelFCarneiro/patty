@@ -1,4 +1,5 @@
 import { PersistOp, type FlowOutcome, type Persistable } from '@rfc0/effect-runner';
+import { InstanceKind } from '../../../src/models/instance.js';
 import type { ResultAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import type { AppError } from '../../../src/common/errors.js';
@@ -127,7 +128,12 @@ const depsFor = ({
   sessions = [],
   tokens = [],
   invites = [],
-  settings = { id: INSTANCE_SETTINGS_ID, maxSignInDuration: DEFAULT_SIGN_IN_CAP, version: 0 },
+  settings = {
+    id: INSTANCE_SETTINGS_ID,
+    maxSignInDuration: DEFAULT_SIGN_IN_CAP,
+    instanceKind: InstanceKind.enum.standard,
+    version: 0,
+  },
   now = NOW,
 }: World = {}): AuthDeps => {
   let ids = 0;
@@ -658,12 +664,22 @@ describe('setRole', () => {
 
 describe('setSignInCap', () => {
   it('updates the existing singleton at the version read, asserting the acting admin first', async () => {
-    const settings = { id: INSTANCE_SETTINGS_ID, maxSignInDuration: '7d' as const, version: 3 };
+    const settings = {
+      id: INSTANCE_SETTINGS_ID,
+      maxSignInDuration: '7d' as const,
+      instanceKind: InstanceKind.enum.standard,
+      version: 3,
+    };
     const changed = await outcomeOf(
       setSignInCap(depsFor({ users: [ROOT], settings }), sessionActor('root'), { maxSignInDuration: '24h' }),
     );
     expect(opsOf(changed.persist)).toEqual([CHECK_USER, `${PersistOp.enum.update}:${INSTANCE_SETTINGS_ENTITY_TAG}`]);
-    expect(modelOf(changed.persist[1])).toEqual({ id: INSTANCE_SETTINGS_ID, maxSignInDuration: '24h', version: 3 });
+    expect(modelOf(changed.persist[1])).toEqual({
+      id: INSTANCE_SETTINGS_ID,
+      maxSignInDuration: '24h',
+      instanceKind: InstanceKind.enum.standard,
+      version: 3,
+    });
   });
 
   it('changes nothing when the cap is already that value, including the default', async () => {
@@ -674,7 +690,16 @@ describe('setSignInCap', () => {
   it('reads the default (30 days) until an admin sets one', async () => {
     expect(await currentSignInCap(depsFor())).toBe('30d');
     expect(
-      await currentSignInCap(depsFor({ settings: { id: INSTANCE_SETTINGS_ID, maxSignInDuration: '24h', version: 0 } })),
+      await currentSignInCap(
+        depsFor({
+          settings: {
+            id: INSTANCE_SETTINGS_ID,
+            maxSignInDuration: '24h',
+            instanceKind: InstanceKind.enum.standard,
+            version: 0,
+          },
+        }),
+      ),
     ).toBe('24h');
   });
 });

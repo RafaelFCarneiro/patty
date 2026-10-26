@@ -224,12 +224,17 @@
     executeScripts(container);
   }
 
+  // The server marks <body> on a demo database (Feature Design 022 §5); titles set after load keep the prefix.
+  function demoTitlePrefix() {
+    return document.body.getAttribute('data-instance-kind') === 'demo' ? '[Demo] ' : '';
+  }
+
   function loadDashboard(name) {
     var container = document.getElementById('content');
     setLoading(container, 'Loading dashboard…');
     return fetchJson(Api.dashboard(name) + '?t=' + Date.now())
       .then(function (dashboard) {
-        document.title = 'FinTrack — ' + dashboard.name;
+        document.title = demoTitlePrefix() + 'FinTrack — ' + dashboard.name;
         renderFragment(container, dashboard.html);
       })
       .catch(function (err) {

@@ -4,3 +4,4 @@
 export const PACKAGE_NAME = '@rafaelfcarneiro/fintrack';
 export const PACKAGE_SPEC = `${PACKAGE_NAME}@latest`;
 export const NPX_COMMAND = `npx ${PACKAGE_SPEC}`;
+export const REPOSITORY_URL = 'https://github.com/RafaelFCarneiro/fintrack';

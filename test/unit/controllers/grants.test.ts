@@ -1,4 +1,5 @@
 import { PersistOp, type FlowOutcome } from '@rfc0/effect-runner';
+import { InstanceKind } from '../../../src/models/instance.js';
 import type { ResultAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import type { AppError } from '../../../src/common/errors.js';
@@ -83,7 +84,14 @@ const depsFor = (users: UserEntity[] = [claimedOwner()]): AuthDeps =>
     users: { findById: async (id: string) => users.find((user) => user.id === id) ?? null },
     sessions: { listByUser: async () => [sessionRow()] },
     clientGrants: { findPendingByUserCode: async () => pendingGrant() },
-    instanceSettings: { get: async () => ({ id: 'singleton', maxSignInDuration: DEFAULT_SIGN_IN_CAP, version: 0 }) },
+    instanceSettings: {
+      get: async () => ({
+        id: 'singleton',
+        maxSignInDuration: DEFAULT_SIGN_IN_CAP,
+        instanceKind: InstanceKind.enum.standard,
+        version: 0,
+      }),
+    },
     clock: () => NOW,
     secrets,
   }) as unknown as AuthDeps;

@@ -13,6 +13,7 @@ import type { DatabaseAhead } from '../models/database.js';
 import { redactSecretQuery } from '../logic/auth/redact.js';
 import { AuthMode } from '../models/auth/mode.js';
 import { registerAuthHook } from '../diplomat/http/hooks/auth.js';
+import { registerDemoMarkerHook } from '../diplomat/http/hooks/demo-marker.js';
 import { registerRoutes } from '../diplomat/http/routes.js';
 import { registerMcpRoute } from '../diplomat/mcp/route.js';
 
@@ -77,6 +78,7 @@ export const registerHttpApp = (
   // Ordering is wiring: the auth hook goes on first, so it runs ahead of every route registered below and
   // also guards a request no route matches.
   registerAuthHook(app, auth);
+  registerDemoMarkerHook(app, surface.instanceKind);
   registerRoutes(app, { ...surface, version }, surface.changeBus.subscribe, auth);
   registerMcpRoute(app, surface, version, auth.mode === AuthMode.enum.required ? auth.publicUrl : undefined);
 };

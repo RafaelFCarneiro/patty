@@ -732,3 +732,26 @@ header, .dashboard-header {
 .user-status-active { color: var(--income-color); }
 .user-status-invited { color: var(--warning-color); }
 .user-status-disabled { color: var(--text-muted); }
+
+/* Demo marker (Feature Design 022 §5): injected on every page when the database is a demo. */
+.demo-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    padding: 0.5rem 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1a1204;
+    background: var(--warning-color);
+}
+.demo-banner a {
+    color: inherit;
+    text-decoration: underline;
+}
+body[data-instance-kind="demo"] {
+    padding-top: 2.25rem;
+}
+body[data-instance-kind="demo"] .sidebar {
+    top: 2.25rem;
+}

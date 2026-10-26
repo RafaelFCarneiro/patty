@@ -80,7 +80,12 @@ const approvalFor = (userCode: string) => ({
 });
 
 /** The instance settings row a migration guarantees: the default cap, never written until an admin changes it. */
-const DEFAULT_SETTINGS_ROW = { id: INSTANCE_SETTINGS_ID, max_sign_in_duration: DEFAULT_SIGN_IN_CAP, version: 0 };
+const DEFAULT_SETTINGS_ROW = {
+  id: INSTANCE_SETTINGS_ID,
+  max_sign_in_duration: DEFAULT_SIGN_IN_CAP,
+  instance_kind: 'standard',
+  version: 0,
+};
 
 describe('invite → claim → login', () => {
   it('lets an admin invite a person who then chooses their own password and lands signed in', async () => {

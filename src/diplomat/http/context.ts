@@ -15,6 +15,7 @@ const DOCUMENTATION_ONLY = (): never => {
 export const documentationContext = (version: string): HttpContext => ({
   version,
   publicDeps: { health: { reachable: DOCUMENTATION_ONLY } },
+  instanceKind: DOCUMENTATION_ONLY,
   depsFor: DOCUMENTATION_ONLY,
   runEffectsFor: DOCUMENTATION_ONLY,
   runEffectsSequenceFor: DOCUMENTATION_ONLY,

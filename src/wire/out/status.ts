@@ -6,6 +6,7 @@ export const StatusOut = z.object({
   version: z.string(),
   db: z.enum(['ok', 'error']),
   locale: Locale,
+  demo: z.boolean().describe("True when this database is a demo: sample data, not the person's finances"),
 });
 export type StatusOut = z.infer<typeof StatusOut>;
 

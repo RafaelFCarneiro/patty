@@ -17,6 +17,8 @@ import type { CurrenciesRepo } from '../diplomat/db/repos/currencies.js';
 import type { CurrencyRatesRepo } from '../diplomat/db/repos/currency-rates.js';
 import type { DashboardsRepo } from '../diplomat/db/repos/dashboards.js';
 import type { HealthRepo } from '../diplomat/db/repos/health.js';
+import type { InstanceKind } from '../models/instance.js';
+import type { InstanceRepo } from '../diplomat/db/repos/instance.js';
 import type { MerchantsRepo } from '../diplomat/db/repos/merchants.js';
 import type { RecurringRepo } from '../diplomat/db/repos/recurring.js';
 import type { SettingsRepo } from '../diplomat/db/repos/settings.js';
@@ -43,6 +45,7 @@ export type Deps = {
   currencyRates: CurrencyRatesRepo;
   dashboards: DashboardsRepo;
   health: HealthRepo;
+  instance: InstanceRepo;
   merchants: MerchantsRepo;
   recurring: RecurringRepo;
   settings: SettingsRepo;
@@ -133,6 +136,8 @@ export type Scoped = {
 };
 
 export type Tenancy = {
+  /** What the database says it is — instance-wide, so no principal is needed to ask. */
+  instanceKind: () => Promise<InstanceKind>;
   depsFor: (principal: Principal) => Deps;
   runEffectsFor: (principal: Principal) => RunEffects;
   runEffectsSequenceFor: (principal: Principal) => RunEffectsSequence;
