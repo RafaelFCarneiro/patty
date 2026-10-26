@@ -66,6 +66,8 @@ npx @rafaelfcarneiro/fintrack@latest demo [--country br|us|mx|co] [--reset]
 - The demo never runs against a `standard` database: `fintrack demo` refuses a `DEMO_DB_PATH` whose database
   is not marked demo and holds data. (An empty database that opens with the demo key and was never marked — a run
   that died between creating the file and marking it — has nothing to lose and is seeded.)
+- Known limit: `--reset` does not check whether another process (a running `fintrack-demo` server or another `demo`) has the
+  file open; stop it first.
 - A process started with `FINTRACK_DEMO=1` (the demo key, auth off) refuses to serve a database that is not marked
   demo, so the public key and the open door never apply to anything else.
 

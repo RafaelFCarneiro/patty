@@ -24,6 +24,7 @@ import { clockDateOf, demoSeedStart, planDemo } from '../logic/demo.js';
 import { toIsoDate } from '../logic/period.js';
 import { OWNER_PRINCIPAL } from '../models/auth/principal.js';
 import {
+  DEMO_SEED_FRESH,
   demoErrors,
   DemoSeedStatus,
   DemoStepKind,
@@ -122,7 +123,7 @@ export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result
     kind: await runtime.instanceKind(),
     seededAt: (await instanceSettings.get()).demoSeededAt,
   });
-  if (start !== 'fresh') return ok({ status: start, steps: {} });
+  if (start !== DEMO_SEED_FRESH) return ok({ status: start, steps: {} });
 
   const marked = await runAuthFlow(runtime, () => markDemoInstance({ instanceSettings }));
   if (marked.isErr()) return err(marked.error);

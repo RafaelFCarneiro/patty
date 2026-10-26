@@ -153,6 +153,14 @@ describe('demo — safety: it never touches what is not a demo database', () => 
     check();
   });
 
+  it('refuses a dangling symlink to where the real database will be, and creates nothing', async () => {
+    symlinkSync(realPath, demoPath);
+    expect((await shellWith().prepare({ country: DemoCountry.enum.us, reset: false }))._unsafeUnwrapErr().code).toBe(
+      real_database,
+    );
+    expect(existsSync(realPath)).toBe(false);
+  });
+
   it.each([false, true])('refuses a database under another key (reset=%s) and leaves it as it was', async (reset) => {
     await createDatabase(demoPath, OTHER_KEY);
     const check = untouched(demoPath);

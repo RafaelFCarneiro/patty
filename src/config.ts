@@ -11,10 +11,11 @@ export const McpTransport = z.enum(['stdio', 'http']);
 
 // Absolute default so the DB is always created in a stable, writable location
 // regardless of the cwd when spawned by an MCP client (e.g. Claude Desktop).
-const DEFAULT_DB_PATH = join(homedir(), '.fintrack', 'fintrack.db');
+const DATA_DIRECTORY = join(homedir(), '.fintrack');
+const DEFAULT_DB_PATH = join(DATA_DIRECTORY, 'fintrack.db');
 
 /** The demo's throwaway database, beside the real one and never the same file (Feature Design 022 §1). */
-export const DEMO_DB_PATH = join(homedir(), '.fintrack', 'demo.db');
+export const DEMO_DB_PATH = join(DATA_DIRECTORY, 'demo.db');
 
 // Deliberately NOT 3000/3001/8000/8080/etc — those are the most commonly used ports across
 // Node/Fastify/React dev-server defaults, so picking one of them maximizes collision risk with

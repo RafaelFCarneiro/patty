@@ -7,6 +7,7 @@ import { AccountType } from '../models/account.js';
 import type { BillPeriod } from '../models/bill.js';
 import {
   DEFAULT_DEMO_COUNTRY,
+  DEMO_SEED_FRESH,
   DemoCountry,
   DemoFunding,
   DemoSeedStatus,
@@ -438,8 +439,12 @@ export type DemoSeedFacts = { hasUserData: boolean; kind: InstanceKind; seededAt
 
 /** Where a seed run starts from what the database already says: nothing to do (`present`), a refusal (`not_demo`,
  *  `interrupted`), or `fresh` — which also covers a demo marked before any data landed, whose seed starts over. */
-export const demoSeedStart = ({ hasUserData, kind, seededAt }: DemoSeedFacts): DemoSeedStatus | 'fresh' => {
-  if (!hasUserData) return 'fresh';
+export const demoSeedStart = ({
+  hasUserData,
+  kind,
+  seededAt,
+}: DemoSeedFacts): DemoSeedStatus | typeof DEMO_SEED_FRESH => {
+  if (!hasUserData) return DEMO_SEED_FRESH;
   if (!isDemoInstance(kind)) return DemoSeedStatus.enum.not_demo;
   return seededAt === null ? DemoSeedStatus.enum.interrupted : DemoSeedStatus.enum.present;
 };

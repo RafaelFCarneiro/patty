@@ -1,5 +1,5 @@
 import { err, ok, type Result } from 'neverthrow';
-import { DemoFailureCode, type DemoProbe } from '../models/demo.js';
+import { DemoFailureCode, DemoProbeAbsence, type DemoProbe } from '../models/demo.js';
 import { InstanceKind } from '../models/instance.js';
 
 export type DemoDatabaseFacts = {
@@ -22,7 +22,7 @@ export const planDemoDatabase = ({
   probe,
 }: DemoDatabaseFacts): Result<{ deleteFirst: boolean }, DemoRefusal> => {
   if (isRealDatabase) return err(DemoFailureCode.enum.real_database);
-  if (probe === 'unreadable') return err(DemoFailureCode.enum.not_demo);
+  if (probe === DemoProbeAbsence.enum.unreadable) return err(DemoFailureCode.enum.not_demo);
   if (probe === InstanceKind.enum.standard && reset) return err(DemoFailureCode.enum.not_demo);
   return ok({ deleteFirst: reset && probe === InstanceKind.enum.demo });
 };

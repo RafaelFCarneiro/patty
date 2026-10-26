@@ -1,4 +1,4 @@
-import { httpOrigin, LOOPBACK_HOST } from '../../../common/net.js';
+import { DASHBOARD_PATH, httpOrigin, LOOPBACK_HOST } from '../../../common/net.js';
 import { DEMO_PORT, DemoCountry, DemoFailureCode, DemoSeedStatus, type DemoFailure } from '../../../models/demo.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import { DEMO_FLAG, DEMO_POSITIONALS, DemoOptionsSchema } from '../../../wire/in/cli.js';
@@ -8,7 +8,7 @@ const RESET_FLAG = 'reset';
 const COUNTRY_FLAG = 'country';
 const DEMO_FLAGS = { [COUNTRY_FLAG]: { type: 'string' }, [RESET_FLAG]: { type: 'boolean' } } as const;
 
-const dashboardUrl = (): string => `${httpOrigin(LOOPBACK_HOST, DEMO_PORT)}/ui/overview`;
+const dashboardUrl = (): string => `${httpOrigin(LOOPBACK_HOST, DEMO_PORT)}${DASHBOARD_PATH}`;
 const RESET_HINT = `${NPX_COMMAND} demo --${RESET_FLAG}`;
 
 export const DEMO_HELP = `

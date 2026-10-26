@@ -4,7 +4,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { version } from '../common/build-version.js';
 import type { Config } from '../config.js';
 import { boot } from './boot.js';
-import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';
+import { DASHBOARD_PATH, httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';
 import type { Tenancy } from '../controllers/deps.js';
 import { DISABLED_AUTH, type HttpAuth, type HttpContext } from '../diplomat/http/context.js';
 import type { ChangeBus } from '@rfc0/effect-runner';
@@ -106,7 +106,7 @@ export const startHttpSidecar = async (
     const boundPort = (app.server.address() as AddressInfo).port;
     const origin = httpOrigin(host, boundPort);
     console.error(
-      `fintrack: HTTP sidecar up — REST ${origin}/api · MCP ${origin}/mcp · dashboard ${origin}/ui/overview`,
+      `fintrack: HTTP sidecar up — REST ${origin}/api · MCP ${origin}/mcp · dashboard ${origin}${DASHBOARD_PATH}`,
     );
     return { app, listening: true };
   } catch (e) {

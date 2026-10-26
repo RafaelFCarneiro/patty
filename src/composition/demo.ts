@@ -1,5 +1,5 @@
-import { existsSync, realpathSync, rmSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, lstatSync, readlinkSync, realpathSync, rmSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { err, ok, type Result } from 'neverthrow';
 import { demoConfig, DEMO_DB_PATH, loadConfig } from '../config.js';
 import { isPortInUse } from '../common/net.js';
@@ -13,6 +13,7 @@ import { databaseAheadMessage } from '../models/database.js';
 import {
   DEMO_DB_KEY,
   DemoFailureCode,
+  DemoProbeAbsence,
   demoFailures,
   type DemoCountry,
   type DemoFailure,
@@ -48,8 +49,22 @@ const osLocale = (): string | undefined =>
   OS_LOCALE_VARIABLES.map((name) => process.env[name]).find((value) => value) ??
   Intl.DateTimeFormat().resolvedOptions().locale;
 
-/** The same file through symlinks and relative spellings: a path that does not exist yet is only resolved. */
-const canonicalPath = (path: string): string => (existsSync(path) ? realpathSync(path) : resolve(path));
+const isSymlink = (path: string): boolean => {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
+
+/** The same file through symlinks and relative spellings. A link to a file that does not exist yet (dangling) is
+ *  followed too, and a path that does not exist is its existing directory's real path plus its name. */
+const canonicalPath = (path: string): string => {
+  if (isSymlink(path)) return canonicalPath(resolve(dirname(path), readlinkSync(path)));
+  if (existsSync(path)) return realpathSync(path);
+  const directory = dirname(resolve(path));
+  return existsSync(directory) ? join(realpathSync(directory), basename(path)) : resolve(path);
+};
 
 const removeDatabaseFiles = (databasePath: string): void =>
   DATABASE_FILE_SUFFIXES.forEach((suffix) => rmSync(`${databasePath}${suffix}`, { force: true }));
@@ -57,7 +72,7 @@ const removeDatabaseFiles = (databasePath: string): void =>
 /** What the file at `databasePath` says it is, from opening it with the demo key — nothing is migrated or written. A
  *  file that does not open that way (another key, not a database, a schema without the marker) is not a demo. */
 const probeDatabase = async (databasePath: string): Promise<DemoProbe> => {
-  if (!existsSync(databasePath)) return 'missing';
+  if (!existsSync(databasePath)) return DemoProbeAbsence.enum.missing;
   try {
     const db = await openDatabaseWithKey({ DB_PATH: databasePath }, DEMO_DB_KEY);
     try {
@@ -66,7 +81,7 @@ const probeDatabase = async (databasePath: string): Promise<DemoProbe> => {
       closeDatabase(db);
     }
   } catch {
-    return 'unreadable';
+    return DemoProbeAbsence.enum.unreadable;
   }
 };
 
@@ -128,12 +143,12 @@ export const createDemoShell = (options: DemoShellOptions = {}): DemoShell => {
     prepare: async (request) => {
       const isRealDatabase = canonicalPath(databasePath) === canonicalPath(realDatabasePath());
       // The real database is never opened, not even to look at it.
-      const probe = isRealDatabase ? 'missing' : await probeDatabase(databasePath);
+      const probe = isRealDatabase ? DemoProbeAbsence.enum.missing : await probeDatabase(databasePath);
       const plan = planDemoDatabase({ isRealDatabase, reset: request.reset, probe });
       if (plan.isErr()) return err(demoFailures.of(plan.error));
       if (plan.value.deleteFirst) removeDatabaseFiles(databasePath);
 
-      const createdHere = probe === 'missing' || plan.value.deleteFirst;
+      const createdHere = probe === DemoProbeAbsence.enum.missing || plan.value.deleteFirst;
       const country = request.country ?? resolveDemoCountry(osLocale());
       const status = await seedOrClean(seed, databasePath, { country }, today(), createdHere);
       return status.andThen((seeded) => {

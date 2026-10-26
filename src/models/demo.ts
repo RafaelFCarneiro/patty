@@ -178,5 +178,9 @@ export const demoFailures = {
 
 /** What a look at the demo path found, before anything is migrated, seeded or deleted: no file, a file that does not
  *  open with the demo key (or is not a FinTrack database), or a database and what it says it is. */
-export const DemoProbe = z.enum(['missing', 'unreadable']).or(InstanceKind);
+export const DemoProbeAbsence = z.enum(['missing', 'unreadable']);
+export const DemoProbe = DemoProbeAbsence.or(InstanceKind);
 export type DemoProbe = z.infer<typeof DemoProbe>;
+
+/** Where a seed run starts when there is nothing to report: the database holds no data yet. */
+export const DEMO_SEED_FRESH = 'fresh';
