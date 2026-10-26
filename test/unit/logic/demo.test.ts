@@ -10,6 +10,7 @@ import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 
 const TODAY = '2026-10-26';
+const RATES_AS_OF = '2026-10-26T18:42:07.000Z';
 const WINDOW_START = '2026-06-01';
 const COUNTRIES = Object.values(DemoCountry.enum);
 const K = DemoStepKind.enum;
@@ -27,7 +28,8 @@ const LOCALE_OF = {
   [DemoCountry.enum.co]: Locale.enum.es,
 } as const;
 
-const planFor = (country: DemoCountry, today = TODAY): readonly DemoStep[] => planDemo(DEMO_PACKS[country], today);
+const planFor = (country: DemoCountry, today = TODAY): readonly DemoStep[] =>
+  planDemo(DEMO_PACKS[country], today, RATES_AS_OF);
 const ofKind = <Kind extends DemoStepKind>(plan: readonly DemoStep[], kind: Kind) =>
   plan.filter((step): step is Extract<DemoStep, { kind: Kind }> => step.kind === kind);
 
@@ -39,6 +41,14 @@ describe('planDemo — determinism', () => {
   it('changes with the country and with today', () => {
     expect(planFor(DemoCountry.enum.us)).not.toEqual(planFor(DemoCountry.enum.br));
     expect(planFor(DemoCountry.enum.us)).not.toEqual(planFor(DemoCountry.enum.us, '2026-11-12'));
+  });
+});
+
+describe('planDemo — exchange rates', () => {
+  it('are observed at the instant given, not at a fixed hour of the day', () => {
+    const rates = ofKind(planFor(DemoCountry.enum.br), K.rate);
+    expect(rates.length).toBeGreaterThan(0);
+    expect(rates.every((step) => step.input.asOf === RATES_AS_OF)).toBe(true);
   });
 });
 

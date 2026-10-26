@@ -6,8 +6,6 @@ import * as R from 'remeda';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { seedDemo } from '../../../src/composition/demo-seed.js';
 import { createRuntime } from '../../../src/composition/runtime.js';
-import * as tagAdapters from '../../../src/adapters/tags.js';
-import { createTag } from '../../../src/controllers/tags.js';
 import { getAccountBalances } from '../../../src/controllers/account/account.js';
 import { getBudgetStatus } from '../../../src/controllers/budgets.js';
 import { listCreditCards } from '../../../src/controllers/credit-card/credit-card.js';
@@ -81,12 +79,11 @@ describe('seedDemo — marking and idempotency', () => {
   });
 
   it('names the step that failed, as a validation error', async () => {
-    const { deps, runEffects } = owner();
-    (await runEffects(() => createTag(deps, 'work').map(tagAdapters.outcomeToDb)))._unsafeUnwrap();
+    await db.run(sql`DELETE FROM categories`);
     const failed = await seed(DemoCountry.enum.us);
     expect(failed._unsafeUnwrapErr()).toMatchObject({
       code: 'validation',
-      issues: [expect.stringContaining('demo seed failed at tag (2026-06-01)')],
+      issues: [expect.stringContaining('demo seed failed at')],
     });
   });
 
@@ -96,6 +93,37 @@ describe('seedDemo — marking and idempotency', () => {
       sql`INSERT INTO user_settings (user_id, locale, locale_source) VALUES ('user-owner', 'xx', 'explicit')`,
     );
     expect(await owner().deps.instance.locale()).toBe('en');
+  });
+
+  it.each([
+    [
+      'an accountless transaction',
+      'INSERT INTO transactions (id, user_id, description, amount, type, status, date, currency, source, ' +
+        'idempotency_key, classification_method, confidence, version) ' +
+        "VALUES ('t1','user-owner','x',1,'expense','effective','2026-10-01','USD','mcp','k1','none',0,0)",
+    ],
+    ['a tag', "INSERT INTO tags (id, user_id, name, version) VALUES ('g1','user-owner','solo',0)"],
+  ])('refuses an unmarked database holding %s', async (_label, insert) => {
+    await db.run(sql.raw(insert));
+    expect((await seed(DemoCountry.enum.us)).isErr()).toBe(true);
+    expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
+  });
+
+  it('refuses an unmarked database holding another user’s accounts', async () => {
+    await db.run(
+      sql`INSERT INTO users (id, username, role, created_at) VALUES ('user-2', 'other', 'member', '2026-01-01T00:00:00.000Z')`,
+    );
+    await db.run(
+      sql`INSERT INTO accounts (id, user_id, name, type, currency, initial_balance, version) VALUES ('a2','user-2','Theirs','checking','USD',0,0)`,
+    );
+    expect((await seed(DemoCountry.enum.us)).isErr()).toBe(true);
+    expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
+  });
+
+  it('stamps exchange rates with the seed instant, so they start fresh', async () => {
+    await seed(DemoCountry.enum.br);
+    const rows = await db.all<{ as_of: string }>(sql`SELECT as_of FROM currency_rates`);
+    expect(rows.map((row) => row.as_of)).toEqual(rows.map(() => TODAY.toISOString()));
   });
 
   it('seeds an empty database that is not yet marked, and marks it', async () => {
@@ -124,7 +152,7 @@ describe.each(COUNTRIES)('seeded demo — %s', (country) => {
   });
 
   it('generates every transaction through the flows: the plan’s writes all landed', async () => {
-    const plan = planDemo(pack, '2026-10-26');
+    const plan = planDemo(pack, '2026-10-26', TODAY.toISOString());
     const spent = plan.filter((step) => ['expense', 'income', 'purchase', 'transfer'].includes(step.kind)).length;
     const billPayments = plan.filter((step) => step.kind === 'payBill').length - 1;
     expect(await count('transactions', "type != 'transfer' OR bill_id IS NULL")).toBeGreaterThan(spent - 1);

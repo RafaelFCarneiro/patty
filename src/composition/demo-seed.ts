@@ -17,6 +17,7 @@ import { applyDueRecurring, createRecurring } from '../controllers/recurring.js'
 import { setBaseCurrency, setLocale } from '../controllers/settings.js';
 import { createTag } from '../controllers/tags.js';
 import type { Db } from '../diplomat/db/driver.js';
+import { instanceRepo } from '../diplomat/db/repos/instance.js';
 import { instanceSettingsRepo } from '../diplomat/db/repos/instance-settings.js';
 import { DEMO_PACKS } from '../diplomat/db/seed/demo/index.js';
 import { clockDateOf, planDemo } from '../logic/demo.js';
@@ -91,7 +92,7 @@ export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result
   const runtime = createRuntime(db, { ...options.config, FINTRACK_LOCALE: undefined }, { clock: () => clock.now });
   const scoped = scopedFor(runtime, OWNER_PRINCIPAL);
 
-  if ((await scoped.deps.accounts.list()).length > 0) {
+  if (await instanceRepo(db).hasUserData()) {
     return isDemoInstance(await runtime.instanceKind())
       ? ok({ seeded: false, steps: {} })
       : err(demoErrors.notDemoDatabase);
@@ -103,7 +104,7 @@ export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result
   if (marked.isErr()) return err(marked.error);
 
   const today = toIsoDate(options.today);
-  const plan = planDemo(DEMO_PACKS[options.country], today);
+  const plan = planDemo(DEMO_PACKS[options.country], today, options.today.toISOString());
   for (const step of plan) {
     clock.now = noonOf(clockDateOf(step, today));
     const result = await runStep(scoped, step);

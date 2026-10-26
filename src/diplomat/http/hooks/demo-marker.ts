@@ -38,7 +38,7 @@ const BANNER_LINK_URL = `${REPOSITORY_URL}#readme`;
 const bannerHtml = (locale: Locale): string => {
   const { label, message, linkText } = DEMO_BANNER_COPY[locale];
   return (
-    '<div class="demo-banner" role="note">' +
+    `<div class="demo-banner" role="note" lang="${locale}">` +
     `<strong>${escapeHtml(label)}</strong> — ${escapeHtml(message)} ` +
     `<a href="${BANNER_LINK_URL}" target="_blank" rel="noopener noreferrer">${escapeHtml(linkText)}</a>` +
     '</div>'

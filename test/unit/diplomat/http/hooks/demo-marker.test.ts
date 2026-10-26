@@ -29,6 +29,10 @@ describe('markDemoPage', () => {
     expect(marked.indexOf('demo-banner')).toBeLessThan(marked.indexOf('<main>'));
   });
 
+  it.each(LOCALES)('declares the banner’s own language (%s) inside an English page', (locale) => {
+    expect(markDemoPage(PAGE, locale)).toContain(`<div class="demo-banner" role="note" lang="${locale}">`);
+  });
+
   it('says the same thing in the three languages, in different words', () => {
     expect(markDemoPage(PAGE, Locale.enum.en)).toContain('sample data, not your finances.');
     expect(markDemoPage(PAGE, Locale.enum.pt)).toContain('dados de exemplo, não as suas finanças.');

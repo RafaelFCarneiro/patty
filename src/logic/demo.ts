@@ -39,7 +39,6 @@ const FREELANCE_MONTH_OFFSETS: readonly number[] = [-3, -1];
 const SAVINGS_TRANSFER_DAY = 6;
 const INVESTMENT_TRANSFER_DAY = 7;
 const WALLET_TRANSFER_DAY = 12;
-const RATE_TIME = 'T12:00:00.000Z';
 const SPEND_PREFIX = { main: 'main', global: 'global' } as const;
 const STEP = DemoStepKind.enum;
 
@@ -292,7 +291,7 @@ const budgetStepsOf = (pack: DemoPack, spending: readonly DemoStep[], today: str
   );
 };
 
-const ratesStepsOf = (pack: DemoPack, today: string, start: string): DemoStep[] => {
+const ratesStepsOf = (pack: DemoPack, ratesAsOf: string, start: string): DemoStep[] => {
   const usdc = pack.usdRate;
   const btc = pack.usdRate * DEMO_BTC_USD_PRICE;
   const quoted = [
@@ -305,7 +304,7 @@ const ratesStepsOf = (pack: DemoPack, today: string, start: string): DemoStep[] 
     .map(({ from, rate }) => ({
       kind: STEP.rate,
       date: start,
-      input: { from, to: pack.currency, rate, asOf: `${today}${RATE_TIME}`, source: DEMO_RATE_SOURCE },
+      input: { from, to: pack.currency, rate, asOf: ratesAsOf, source: DEMO_RATE_SOURCE },
     }));
 };
 
@@ -353,23 +352,25 @@ const recurringStepsOf = (pack: DemoPack, start: string): DemoStep[] => {
   ];
 };
 
-const setupStepsOf = (pack: DemoPack, today: string, start: string): DemoStep[] => [
+const setupStepsOf = (pack: DemoPack, ratesAsOf: string, start: string): DemoStep[] => [
   { kind: STEP.locale, date: start, input: { locale: pack.locale, source: LocaleSource.enum.explicit } },
   { kind: STEP.baseCurrency, date: start, input: { baseCurrency: pack.currency } },
   ...accountStepsOf(pack, start),
   ...cardStepsOf(pack, start),
   ...pack.tags.map((name): DemoStep => ({ kind: STEP.tag, date: start, name })),
-  ...ratesStepsOf(pack, today, start),
+  ...ratesStepsOf(pack, ratesAsOf, start),
   ...recurringStepsOf(pack, start),
 ];
 
 /**
  * The whole demo as an ordered list of writes, each to be run through the real flow of the same name with the clock
  * set to its date (`min(date, today)` — a pending item is dated ahead of today). Pure: a function of the seed, the
- * country pack and `today`. Dated steps sort stably, so the setup (dated at the window's start) leads, a bill is paid
+ * country pack, `today` and the instant the exchange rates are observed at (`ratesAsOf`, a full timestamp: a rate
+ * stamped earlier than the seed would read as stale at once).
+ * Dated steps sort stably, so the setup (dated at the window's start) leads, a bill is paid
  * after the purchases it holds (its due date follows its closing date), and recurring rules materialize last.
  */
-export const planDemo = (pack: DemoPack, today: string): readonly DemoStep[] => {
+export const planDemo = (pack: DemoPack, today: string, ratesAsOf: string): readonly DemoStep[] => {
   const months = windowOf(today);
   const first = months[0] ?? monthContext(today, 0);
   const start = dateIn(first, 1);
@@ -380,7 +381,7 @@ export const planDemo = (pack: DemoPack, today: string): readonly DemoStep[] => 
   ];
   return R.sortBy(
     [
-      ...setupStepsOf(pack, today, start),
+      ...setupStepsOf(pack, ratesAsOf, start),
       ...budgetStepsOf(pack, spending, today, start),
       ...spending,
       ...transferStepsOf(pack, months),
