@@ -141,12 +141,17 @@ export const openDatabase = async (config: DbConfig): Promise<Db> =>
 
 /** Opens the database with a key already in hand — what `openDatabase` does after resolving one, and what the key
  *  export does after proving it. Neither migrates nor seeds: that is `bootstrap`'s. */
-export const openDatabaseWithKey = async (config: Pick<Config, 'DB_PATH'>, encryptionKey: string): Promise<Db> => {
+export const openDatabaseWithKey = async (
+  config: Pick<Config, 'DB_PATH'>,
+  encryptionKey: string,
+  { initializeJournal = true }: { initializeJournal?: boolean } = {},
+): Promise<Db> => {
   // mode 0o700 applies only when the directory is first created; pre-existing directories
   // keep their current permissions (Node does not retroactively tighten them).
   mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 });
   const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey });
-  await enableWal(client);
+  // A look at a database that may not be ours (the demo probe) must not change its persistent journal mode.
+  if (initializeJournal) await enableWal(client);
   // busy_timeout is per-connection (ADR-024), so it is asserted unconditionally on every open.
   await assertBusyTimeout(client);
   return drizzle(client, { schema });

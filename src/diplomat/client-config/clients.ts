@@ -137,10 +137,11 @@ const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig
 });
 
 // Codex CLI MCP configuration path and format is not yet stable: describe the snippet and let the user place it.
-/** `{ "A": "1", "B": "2" }` — one line, as the snippet has always shown the env. */
+/** `{ "A": "1", "B": "2" }` — one line, as the snippet has always shown the env; names and values are escaped as
+ *  JSON (a Windows path or a quote in a path must still paste as valid JSON). */
 const inlineObject = (env: Record<string, string>): string =>
   `{ ${Object.entries(env)
-    .map(([name, value]) => `"${name}": "${value}"`)
+    .map(([name, value]) => `${JSON.stringify(name)}: ${JSON.stringify(value)}`)
     .join(', ')} }`;
 
 const codexSnippet = (

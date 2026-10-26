@@ -204,7 +204,15 @@ export const DEMO_SEED_FRESH = 'fresh';
 
 /** What `demo` found at the demo path. `isRealDatabase` also holds when the path cannot be resolved (a symlink loop, a
  *  chain of dangling links): it cannot be shown to be anything else. */
-export type DemoDatabaseFacts = { isRealDatabase: boolean; reset: boolean; probe: DemoProbe };
+export type DemoDatabaseFacts = {
+  isRealDatabase: boolean;
+  /** The demo path is a symlink: the file it names is not the one the demo would open, probe and delete. */
+  isAlias: boolean;
+  reset: boolean;
+  probe: DemoProbe;
+  /** A readable database already holds finances (read without touching it, before any migration). */
+  holdsData: boolean;
+};
 
 export type DemoRefusal = typeof DemoFailureCode.enum.real_database | typeof DemoFailureCode.enum.not_demo;
 

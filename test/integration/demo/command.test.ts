@@ -1,14 +1,18 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
+import { createClient } from '@libsql/client';
+import { drizzle } from 'drizzle-orm/libsql';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { boot } from '../../../src/composition/boot.js';
 import { createDemoShell } from '../../../src/composition/demo.js';
 import { seedDemo } from '../../../src/composition/demo-seed.js';
 import { demoConfig } from '../../../src/config.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
+import * as schema from '../../../src/diplomat/db/schema.js';
 import { closeDatabase, openDatabaseWithKey, type Db } from '../../../src/diplomat/db/driver.js';
 import type { DemoShell } from '../../../src/diplomat/cli/io.js';
 import { startupRefusalMessage } from '../../../src/models/startup.js';
@@ -177,6 +181,61 @@ describe('demo — safety: it never touches what is not a demo database', () => 
       expect(refused._unsafeUnwrapErr().code).toBe(real_database);
     }
     expect(existsSync(realPath)).toBe(false);
+  });
+
+  it('refuses a missing demo file whose directory is a symlinked alias of the real database’s directory', async () => {
+    mkdirSync(join(dir, 'real'));
+    symlinkSync(join(dir, 'real'), join(dir, 'alias'));
+    const real = join(dir, 'real', 'x', 'fintrack.db');
+    const shell = shellWith({ databasePath: join(dir, 'alias', 'x', 'fintrack.db'), realDatabasePath: () => real });
+    expect((await shell.prepare({ country: DemoCountry.enum.us, reset: false }))._unsafeUnwrapErr().code).toBe(
+      real_database,
+    );
+    expect(existsSync(join(dir, 'real', 'x'))).toBe(false);
+  });
+
+  it.each([false, true])(
+    'refuses a symlink to a demo database elsewhere (reset=%s) and leaves the target alone',
+    async (reset) => {
+      const target = join(dir, 'elsewhere.db');
+      await shellWith({ databasePath: target }).prepare({ country: DemoCountry.enum.us, reset: false });
+      symlinkSync(target, demoPath);
+      const before = readFileSync(target);
+      expect((await shellWith().prepare({ country: DemoCountry.enum.us, reset }))._unsafeUnwrapErr().code).toBe(
+        not_demo,
+      );
+      expect(existsSync(target)).toBe(true);
+      expect(readFileSync(target).equals(before)).toBe(true);
+    },
+  );
+
+  it('refuses a standard database that holds data before anything is migrated or seeded', async () => {
+    await createDatabase(demoPath, DEMO_DB_KEY, async (db) => {
+      await seedDemo(db, { country: DemoCountry.enum.us, today: TODAY, config: CONFIG });
+      await db.run(sql`UPDATE settings SET instance_kind = 'standard' WHERE id = 'singleton'`);
+    });
+    const seed = vi.fn();
+    const refused = await shellWith({ seed }).prepare({ country: DemoCountry.enum.us, reset: false });
+    expect(refused._unsafeUnwrapErr().code).toBe(not_demo);
+    expect(seed).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('does not change the journal mode of a database it refuses (reset=%s)', async (reset) => {
+    const setup = createClient({ url: pathToFileURL(demoPath).href, encryptionKey: DEMO_DB_KEY });
+    await setup.execute('PRAGMA journal_mode = DELETE');
+    const db = drizzle(setup, { schema });
+    await bootstrap(db);
+    await seedDemo(db, { country: DemoCountry.enum.us, today: TODAY, config: CONFIG });
+    await db.run(sql`UPDATE settings SET instance_kind = 'standard' WHERE id = 'singleton'`);
+    setup.close();
+    expect((await shellWith().prepare({ country: DemoCountry.enum.us, reset }))._unsafeUnwrapErr().code).toBe(not_demo);
+
+    const client = createClient({ url: pathToFileURL(demoPath).href, encryptionKey: DEMO_DB_KEY });
+    try {
+      expect((await client.execute('PRAGMA journal_mode')).rows[0]?.['journal_mode']).toBe('delete');
+    } finally {
+      client.close();
+    }
   });
 
   it.each([false, true])('refuses a database under another key (reset=%s) and leaves it as it was', async (reset) => {

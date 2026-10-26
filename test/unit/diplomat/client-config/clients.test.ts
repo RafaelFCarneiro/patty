@@ -149,6 +149,14 @@ describe('what each client reports', () => {
     expect(failure.warnings).toEqual([expect.stringContaining('does not contain a JSON object at the root')]);
   });
 
+  it('codex escapes the demo path, so a Windows path or a quote still pastes as valid JSON', async () => {
+    const { clientConfigs } = await withHome();
+    const path = 'C:\\Users\\al"ice\\.fintrack\\demo.db';
+    const [snippet] = clientConfigs.find('codex')!.addDemo(path)._unsafeUnwrap().lines;
+    const env = /"env": (\{.*\})/.exec(snippet ?? '')?.[1] ?? '';
+    expect(JSON.parse(env)).toMatchObject({ DB_PATH: path });
+  });
+
   it('codex describes the snippet as one line of report, and writes no file', async () => {
     const { clientConfigs } = await withHome();
     const report = clientConfigs.find('codex')!.run('work')._unsafeUnwrap();

@@ -702,11 +702,13 @@ database: `composition/boot.ts` refuses to serve a database that does not say it
 prints the message and exits non-zero). `demoConfig` is built from scratch, never from the process environment, so the real install's
 `DB_PATH`, key and port cannot leak into the demo. `DemoShell.prepare` is gather → decide → execute in the shell:
 `createDemoShell` (`composition/demo.ts`) is only that sequence — look, decide, delete/seed/clean up, map — and holds no
-file-system or environment call of its own. *Look*: `diplomat/db/database-files.ts` resolves `canonicalPath` (real path;
-one dangling link is followed; a link loop or a chain of dangling links is `null`, treated as the real database since it
-cannot be shown to be anything else) and `probeDatabase` (the file opened with the demo key, nothing migrated, reading
-`instance_kind`; missing / unreadable / its kind). *Decide*: the pure `logic/demo-database.ts`'s `planDemoDatabase`
-(`real_database` and `not_demo` refusals; delete first only for a `--reset` on a database that says `demo`; `createdHere`,
+file-system or environment call of its own. *Look*: `diplomat/db/database-files.ts` resolves `canonicalPath` (real path,
+resolving the nearest existing ancestor of a file that does not exist yet; one dangling link is followed; a link loop or a
+chain of dangling links is `null`, treated as the real database since it cannot be shown to be anything else),
+`isSymlink` (a symlink at the demo path is refused outright: probing, opening and deleting must all act on the same
+file) and `probeDatabase` (the file opened with the demo key without initializing its journal mode — no migration, no
+write — reading `instance_kind` and whether it holds user data; missing / unreadable / its kind). *Decide*: the pure `logic/demo-database.ts`'s `planDemoDatabase`
+(`real_database` and `not_demo` refusals — the latter also for an alias, and for a `standard` database that holds data, before anything is migrated; delete first only for a `--reset` on a database that says `demo`; `createdHere`,
 whether this run owns the file) and `failureOfSeedStatus` (the seed status → the failure it is reported as). *Execute*:
 the shell deletes (`removeDatabaseFiles`), bootstraps and seeds. The OS language comes from `config.ts`'s `osLocale`.
 The seeder reads where it starts through `controllers/instance.ts`'s `demoSeedStatus` (the three facts → the pure

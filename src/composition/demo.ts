@@ -4,7 +4,13 @@ import { formatAppError } from '../common/errors.js';
 import { isPortInUse } from '../common/net.js';
 import type { DemoShell } from '../diplomat/cli/io.js';
 import { bootstrap } from '../diplomat/db/bootstrap.js';
-import { canonicalPath, databaseExists, probeDatabase, removeDatabaseFiles } from '../diplomat/db/database-files.js';
+import {
+  canonicalPath,
+  databaseExists,
+  isSymlink,
+  probeDatabase,
+  removeDatabaseFiles,
+} from '../diplomat/db/database-files.js';
 import { closeDatabase, openDatabaseWithKey } from '../diplomat/db/driver.js';
 import { resolveDemoCountry } from '../logic/demo.js';
 import { failureOfSeedStatus, planDemoDatabase } from '../logic/demo-database.js';
@@ -52,8 +58,12 @@ const lookAtDatabase = async (
   const demo = canonicalPath(databasePath);
   const real = canonicalPath(realDatabasePath);
   const isRealDatabase = demo === null || real === null || demo === real;
-  const probe = isRealDatabase ? DemoProbeAbsence.enum.missing : await probeDatabase(databasePath);
-  return { isRealDatabase, reset, probe };
+  const isAlias = isSymlink(databasePath);
+  const { probe, holdsData } =
+    isRealDatabase || isAlias
+      ? { probe: DemoProbeAbsence.enum.missing, holdsData: false }
+      : await probeDatabase(databasePath);
+  return { isRealDatabase, isAlias, reset, probe, holdsData };
 };
 
 type SeedRun = { seed: typeof seedDemo; databasePath: string; country: DemoCountry; today: Date };

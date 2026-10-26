@@ -1,32 +1,50 @@
 import { describe, expect, it } from 'vitest';
-import { failureOfSeedStatus, planDemoDatabase } from '../../../src/logic/demo-database.js';
+import { failureOfSeedStatus, planDemoDatabase as planFor } from '../../../src/logic/demo-database.js';
 import { DemoFailureCode, DemoSeedStatus, type DemoProbe } from '../../../src/models/demo.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 
 const { real_database, not_demo } = DemoFailureCode.enum;
 const PROBES: readonly DemoProbe[] = ['missing', 'unreadable', InstanceKind.enum.standard, InstanceKind.enum.demo];
 
+type Facts = Parameters<typeof planFor>[0];
+const plan = (facts: Pick<Facts, 'isRealDatabase' | 'reset' | 'probe'> & Partial<Facts>) =>
+  planFor({ isAlias: false, holdsData: false, ...facts });
+
 describe('planDemoDatabase', () => {
+  it.each([false, true])('refuses a symlink at the demo path (reset=%s), whatever it points at', (reset) => {
+    for (const probe of ['missing', InstanceKind.enum.demo, InstanceKind.enum.standard] as const) {
+      expect(plan({ isRealDatabase: false, isAlias: true, reset, probe })._unsafeUnwrapErr()).toBe(not_demo);
+    }
+  });
+
+  it.each([false, true])(
+    'refuses a standard database that holds data before anything is migrated (reset=%s)',
+    (reset) => {
+      const facts = { isRealDatabase: false, reset, probe: InstanceKind.enum.standard, holdsData: true } as const;
+      expect(plan(facts)._unsafeUnwrapErr()).toBe(not_demo);
+    },
+  );
+
   it.each(PROBES)('refuses the real database whatever it holds (%s), with or without a reset', (probe) => {
     for (const reset of [false, true]) {
-      expect(planDemoDatabase({ isRealDatabase: true, reset, probe })._unsafeUnwrapErr()).toBe(real_database);
+      expect(plan({ isRealDatabase: true, reset, probe })._unsafeUnwrapErr()).toBe(real_database);
     }
   });
 
   it('refuses a file that does not open as a demo database, and never deletes it', () => {
     for (const reset of [false, true]) {
-      expect(planDemoDatabase({ isRealDatabase: false, reset, probe: 'unreadable' })._unsafeUnwrapErr()).toBe(not_demo);
+      expect(plan({ isRealDatabase: false, reset, probe: 'unreadable' })._unsafeUnwrapErr()).toBe(not_demo);
     }
   });
 
   it('refuses to reset a standard database', () => {
     const facts = { isRealDatabase: false, reset: true, probe: InstanceKind.enum.standard } as const;
-    expect(planDemoDatabase(facts)._unsafeUnwrapErr()).toBe(not_demo);
+    expect(plan(facts)._unsafeUnwrapErr()).toBe(not_demo);
   });
 
   it('leaves a standard database to the seeder when no reset was asked (empty: seeded; with data: refused)', () => {
     const facts = { isRealDatabase: false, reset: false, probe: InstanceKind.enum.standard } as const;
-    expect(planDemoDatabase(facts)._unsafeUnwrap()).toMatchObject({ deleteFirst: false });
+    expect(plan(facts)._unsafeUnwrap()).toMatchObject({ deleteFirst: false });
   });
 
   it.each([
@@ -37,7 +55,7 @@ describe('planDemoDatabase', () => {
   ] as const)(
     'reset=%s on %s → delete first: %s (only a demo database is ever deleted)',
     (reset, probe, deleteFirst) => {
-      expect(planDemoDatabase({ isRealDatabase: false, reset, probe })._unsafeUnwrap()).toMatchObject({ deleteFirst });
+      expect(plan({ isRealDatabase: false, reset, probe })._unsafeUnwrap()).toMatchObject({ deleteFirst });
     },
   );
 });
@@ -50,7 +68,7 @@ describe('planDemoDatabase — who owns the file', () => {
     ['a demo left in place', false, InstanceKind.enum.demo, false],
     ['an empty standard database that was already there', false, InstanceKind.enum.standard, false],
   ] as const)('createdHere for %s', (_label, reset, probe, createdHere) => {
-    expect(planDemoDatabase({ isRealDatabase: false, reset, probe })._unsafeUnwrap().createdHere).toBe(createdHere);
+    expect(plan({ isRealDatabase: false, reset, probe })._unsafeUnwrap().createdHere).toBe(createdHere);
   });
 });
 

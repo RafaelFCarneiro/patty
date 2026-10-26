@@ -18,12 +18,14 @@ import { InstanceKind } from '../models/instance.js';
  */
 export const planDemoDatabase = ({
   isRealDatabase,
+  isAlias,
   reset,
   probe,
+  holdsData,
 }: DemoDatabaseFacts): Result<DemoDatabasePlan, DemoRefusal> => {
   if (isRealDatabase) return err(DemoFailureCode.enum.real_database);
-  if (probe === DemoProbeAbsence.enum.unreadable) return err(DemoFailureCode.enum.not_demo);
-  if (probe === InstanceKind.enum.standard && reset) return err(DemoFailureCode.enum.not_demo);
+  if (isAlias || probe === DemoProbeAbsence.enum.unreadable) return err(DemoFailureCode.enum.not_demo);
+  if (probe === InstanceKind.enum.standard && (reset || holdsData)) return err(DemoFailureCode.enum.not_demo);
   const deleteFirst = reset && probe === InstanceKind.enum.demo;
   return ok({ deleteFirst, createdHere: deleteFirst || probe === DemoProbeAbsence.enum.missing });
 };
