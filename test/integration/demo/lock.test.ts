@@ -1,5 +1,5 @@
-import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -22,52 +22,35 @@ type Tally = { acquired: number; violations: number };
 
 const runWorker = (): Promise<Tally> =>
   new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [
-      '--import',
-      'tsx',
-      WORKER,
-      databasePath,
-      join(dir, 'inside'),
-      String(ROUNDS),
-    ]);
+    const args = ['--import', 'tsx', WORKER, databasePath, join(dir, 'inside'), String(ROUNDS)];
+    const child = spawn(process.execPath, args);
     let out = '';
     child.stdout.on('data', (chunk) => (out += String(chunk)));
     child.once('error', reject);
     child.once('close', (code) => (code === 0 ? resolve(JSON.parse(out) as Tally) : reject(new Error(`exit ${code}`))));
   });
 
-const contend = async (): Promise<Tally[]> => Promise.all(Array.from({ length: WORKERS }, runWorker));
+const contend = (): Promise<Tally[]> => Promise.all(Array.from({ length: WORKERS }, runWorker));
+const total = (tallies: Tally[], field: keyof Tally): number => tallies.reduce((sum, tally) => sum + tally[field], 0);
 
+// The lock is held by the operating system (an exclusive SQLite transaction): nothing to go stale or reclaim.
 describe('the demo database lock across processes', () => {
   it(
     'never admits two holders at once while processes race for it',
     async () => {
       const tallies = await contend();
-      expect(tallies.reduce((sum, tally) => sum + tally.violations, 0)).toBe(0);
-      expect(tallies.reduce((sum, tally) => sum + tally.acquired, 0)).toBeGreaterThan(0);
+      expect(total(tallies, 'violations')).toBe(0);
+      expect(total(tallies, 'acquired')).toBeGreaterThan(0);
     },
     TIMEOUT_MS,
   );
 
   it(
-    'never admits two holders when they all find the same stale lock (reclaim race)',
+    'never admits two holders across a second wave of contenders on the same lock file',
     async () => {
-      const gone = spawnSync(process.execPath, ['-e', '']).pid;
-      writeFileSync(`${databasePath}.lock`, `${gone}:stale-token`);
-      const tallies = await contend();
-      expect(tallies.reduce((sum, tally) => sum + tally.violations, 0)).toBe(0);
-      expect(tallies.reduce((sum, tally) => sum + tally.acquired, 0)).toBeGreaterThan(0);
-    },
-    TIMEOUT_MS,
-  );
-
-  it(
-    'never exposes a lock that does not yet name its owner (publication is atomic)',
-    async () => {
-      const tallies = await contend();
-      const lockFiles = spawnSync('ls', [dir], { encoding: 'utf8' }).stdout;
-      expect(lockFiles).not.toMatch(/\.tmp|\.stale/);
-      expect(tallies.reduce((sum, tally) => sum + tally.violations, 0)).toBe(0);
+      const tallies = [...(await contend()), ...(await contend())];
+      expect(total(tallies, 'violations')).toBe(0);
+      expect(total(tallies, 'acquired')).toBeGreaterThan(0);
     },
     TIMEOUT_MS,
   );

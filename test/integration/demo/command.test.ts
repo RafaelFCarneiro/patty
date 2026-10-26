@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -13,6 +13,7 @@ import { createDemoShell } from '../../../src/composition/demo.js';
 import { seedDemo } from '../../../src/composition/demo-seed.js';
 import { demoConfig } from '../../../src/config.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
+import { acquireDatabaseLock } from '../../../src/diplomat/db/database-files.js';
 import * as schema from '../../../src/diplomat/db/schema.js';
 import { closeDatabase, openDatabaseWithKey, type Db } from '../../../src/diplomat/db/driver.js';
 import type { DemoShell } from '../../../src/diplomat/cli/io.js';
@@ -277,8 +278,6 @@ describe('demo — safety: it never touches what is not a demo database', () => 
 });
 
 describe('demo — two runs at once', () => {
-  const lockOf = () => `${demoPath}.lock`;
-
   it('lets one first run create the database and tells the other to wait, deleting nothing', async () => {
     const shell = shellWith();
     const [first, second] = await Promise.all([
@@ -288,32 +287,33 @@ describe('demo — two runs at once', () => {
     expect(first._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.seeded);
     expect(second._unsafeUnwrapErr().code).toBe(busy);
     expect(await seededAtOf()).toBe(TODAY.toISOString());
-    expect(existsSync(lockOf())).toBe(false);
   });
 
-  it('is busy while a live process holds the lock, and creates nothing', async () => {
-    writeFileSync(lockOf(), String(process.pid));
+  it('is busy while another holder has the lock, and creates nothing', async () => {
+    const held = await acquireDatabaseLock(demoPath);
     expect((await shellWith().prepare({ country: DemoCountry.enum.us, reset: false }))._unsafeUnwrapErr().code).toBe(
       busy,
     );
     expect(existsSync(demoPath)).toBe(false);
-    expect(existsSync(lockOf())).toBe(true);
+    await held?.release();
   });
 
-  it('takes over a lock left by a process that is gone', async () => {
-    const gone = spawnSync(process.execPath, ['-e', '']).pid;
-    writeFileSync(lockOf(), String(gone));
+  it('is not blocked by a run that died holding the lock: the operating system released it', async () => {
+    const holder = spawn(process.execPath, ['--import', 'tsx', 'test/integration/demo/lock-holder.ts', demoPath]);
+    await new Promise((resolve) => holder.stdout.once('data', resolve));
+    holder.kill('SIGKILL');
+    await new Promise((resolve) => holder.once('close', resolve));
     const prepared = await shellWith().prepare({ country: DemoCountry.enum.us, reset: false });
     expect(prepared._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.seeded);
-    expect(existsSync(lockOf())).toBe(false);
   });
 
   it('releases the lock after a failed seed and after a refusal', async () => {
     await shellWith({ seed: failingFirstStep }).prepare({ country: DemoCountry.enum.us, reset: false });
-    expect(existsSync(lockOf())).toBe(false);
     writeFileSync(demoPath, 'not a database');
     await shellWith().prepare({ country: DemoCountry.enum.us, reset: true });
-    expect(existsSync(lockOf())).toBe(false);
+    const again = await acquireDatabaseLock(demoPath);
+    expect(again).not.toBeNull();
+    await again?.release();
   });
 
   it('refuses the real database before creating any lock file', async () => {
@@ -396,6 +396,14 @@ describe('demo — serving', () => {
     const refused = (await boot(demoConfig(demoPath)))._unsafeUnwrapErr();
     expect(refused).toEqual({ code: DemoNotReadyCode.enum.demo_not_ready, databasePath: demoPath });
     expect(startupRefusalMessage(refused)).toMatch(/demo$/);
+  });
+
+  it('refuses to start on a demo database that does not exist, and creates nothing', async () => {
+    const missing = join(dir, 'sub', 'no-demo.db');
+    const refused = (await boot(demoConfig(missing)))._unsafeUnwrapErr();
+    expect(refused).toEqual({ code: DemoNotReadyCode.enum.demo_not_ready, databasePath: missing });
+    expect(existsSync(missing)).toBe(false);
+    expect(existsSync(join(dir, 'sub'))).toBe(false);
   });
 
   it('opens a seeded demo with the demo key and no login', async () => {

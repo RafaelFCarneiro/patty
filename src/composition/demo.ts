@@ -130,12 +130,12 @@ const prepareDemo = async (context: ShellContext, request: DemoRequest): Promise
     const early = planDemoDatabase(await lookAtDatabase(databasePath, location, request.reset));
     if (early.isErr()) return err(demoFailures.of(early.error));
   }
-  const lock = acquireDatabaseLock(databasePath);
+  const lock = await acquireDatabaseLock(databasePath);
   if (lock === null) return err(demoFailures.of(DemoFailureCode.enum.busy));
   try {
     return await prepareLocked(context, request);
   } finally {
-    lock.release();
+    await lock.release();
   }
 };
 

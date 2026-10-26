@@ -78,12 +78,13 @@ const TrustProxy = z
 
 const Env = z
   .object({
+    // Unset: the real database — or, under FINTRACK_DEMO, the demo's, so an omitted path never reaches the real one.
     DB_PATH: z
       .string()
-      .default(DEFAULT_DB_PATH)
       .refine(isAbsolute, {
         message: `DB_PATH must be an absolute path — "~" is not expanded by Node. Use a full path, e.g. ${DEFAULT_DB_PATH}`,
-      }),
+      })
+      .optional(),
     FINTRACK_DB_KEY: EncryptionKey.optional(),
     // File holding the key (e.g. a Docker secret at /run/secrets/fintrack_db_key) — keeps it out of
     // `docker inspect`, unlike the env var (ADR-032).
@@ -134,6 +135,10 @@ const Env = z
     path: [DEMO_ENV_VAR],
     message: `${DEMO_ENV_VAR} fixes the database key — do not also set FINTRACK_DB_KEY or FINTRACK_DB_KEY_FILE`,
   })
+  .transform((env) => ({
+    ...env,
+    DB_PATH: env.DB_PATH ?? (env.FINTRACK_DEMO ? DEMO_DB_PATH : DEFAULT_DB_PATH),
+  }))
   .transform((env) =>
     env.FINTRACK_DEMO ? { ...env, FINTRACK_DB_KEY: DEMO_DB_KEY, FINTRACK_AUTH: AuthMode.enum.disabled } : env,
   )

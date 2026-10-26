@@ -13,7 +13,7 @@ const sleep = (ms: number): void => void Atomics.wait(new Int32Array(new SharedA
 let acquired = 0;
 let violations = 0;
 for (let round = 0; round < Number(rounds); round += 1) {
-  const lock = acquireDatabaseLock(databasePath);
+  const lock = await acquireDatabaseLock(databasePath);
   if (lock === null) continue;
   acquired += 1;
   try {
@@ -23,7 +23,7 @@ for (let round = 0; round < Number(rounds); round += 1) {
   } catch {
     violations += 1;
   } finally {
-    lock.release();
+    await lock.release();
   }
 }
 process.stdout.write(JSON.stringify({ acquired, violations }));

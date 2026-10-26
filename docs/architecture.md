@@ -433,7 +433,7 @@ by default**; `disabled` is an explicit, loopback-only opt-out, and under it bot
 | `FINTRACK_AUTH` | `AuthMode` (`required` \| `disabled`). Default `DEFAULT_AUTH_MODE` (`models/auth/mode.ts`) = `required` for **every** run, loopback included. `isExposed` — a non-loopback `HOST`, or `PUBLIC_URL`, or a `TRUST_PROXY` other than `false`/`0` — no longer picks the default; it only rejects an explicit `disabled` on such an instance. |
 | `PUBLIC_URL` | Optional `http(s)` **origin** (`new URL(v).origin === v`: no path, no trailing slash; empty = unset). `https` → cookie `Secure`. A CSRF expected origin. |
 | `TRUST_PROXY` | Optional; `true`/`false`/hop count/address list → Fastify `trustProxy`. |
-| `FINTRACK_DEMO` | `1` = open the demo: the fixed published key (`DEMO_DB_KEY`) and `FINTRACK_AUTH=disabled`, whatever the environment says; combining it with `FINTRACK_DB_KEY`/`FINTRACK_DB_KEY_FILE` is an error, and the loopback-only rule for disabled auth still applies. The database's own marker, not this variable, says it is a demo (boot refuses one that is not). |
+| `FINTRACK_DEMO` | `1` = open the demo: the fixed published key (`DEMO_DB_KEY`) and `FINTRACK_AUTH=disabled`, whatever the environment says; an omitted `DB_PATH` defaults to the demo database (`DEMO_DB_PATH`), never the real one, and boot refuses — without creating any file — a path that holds no database; combining it with `FINTRACK_DB_KEY`/`FINTRACK_DB_KEY_FILE` is an error, and the loopback-only rule for disabled auth still applies. The database's own marker, not this variable, says it is a demo (boot refuses one that is not). |
 | `FINTRACK_PROFILE` | `ProfileSchema` (letters, digits, `.` `_` `-`, ≤ 64); default `DEFAULT_PROFILE`. Names which saved stdio sign-in a process uses. |
 | `FINTRACK_TOKEN` | Optional personal access token a stdio process signs in with. Not judged at startup — the stdio session checks it on every call. |
 
@@ -711,10 +711,10 @@ write — reading `instance_kind` and whether it holds user data; missing / unre
 (`real_database` and `not_demo` refusals — the latter also for an alias, and for a `standard` database that holds data, before anything is migrated; delete first only for a `--reset` on a database that says `demo`; `createdHere`,
 whether this run owns the file) and `failureOfSeedStatus` (the seed status → the failure it is reported as). *Execute*:
 the shell deletes (`removeDatabaseFiles`), bootstraps and seeds. The whole preparation — from the first probe through
-seeding and cleanup — runs under a cross-process lock (`acquireDatabaseLock`: a `<db>.lock` file holding `pid:token`, published
-atomically by hard-linking a staged file so it never exists half-written; a lock whose process is gone is reclaimed by an
-atomic rename to a private tombstone and a check it is still the stale one seen; release removes only a lock still
-carrying the run's own token; a live holder is `busy`; stress-tested across processes in `test/integration/demo/lock.test.ts`), so `createdHere` really
+seeding and cleanup — runs under a cross-process lock (`acquireDatabaseLock`: an exclusive SQLite transaction held on a small `<db>.lock`
+database, so the operating system owns it — a run that dies, however it dies, releases it; there is no staleness to
+detect and nothing to reclaim; the lock file is never deleted; a held lock is `busy`; stress-tested across processes in
+`test/integration/demo/lock.test.ts`), so `createdHere` really
 means "ours"; refusals that need no file (the real database, an alias) are answered before any lock file is created. The OS language comes from `config.ts`'s `osLocale`.
 The seeder reads where it starts through `controllers/instance.ts`'s `demoSeedStatus` (the three facts → the pure
 `demoSeedStart`). The real database is never opened to

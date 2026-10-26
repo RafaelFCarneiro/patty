@@ -1,6 +1,7 @@
 import { err, ok, safeTry } from 'neverthrow';
 import type { Config } from '../config.js';
 import { bootstrap } from '../diplomat/db/bootstrap.js';
+import { databaseExists } from '../diplomat/db/database-files.js';
 import { closeDatabase, openDatabase } from '../diplomat/db/driver.js';
 import { demoNotReady } from '../models/demo.js';
 import { isDemoInstance } from '../models/instance.js';
@@ -14,6 +15,8 @@ import { createRuntime } from './runtime.js';
  */
 export const boot = (config: Config) =>
   safeTry(async function* () {
+    // A demo process opens an existing demo database; it never creates a file (least of all at the real path) to look.
+    if (config.FINTRACK_DEMO && !databaseExists(config.DB_PATH)) return err(demoNotReady(config.DB_PATH));
     const db = await openDatabase(config);
     yield* bootstrap(db);
     const runtime = createRuntime(db, config);

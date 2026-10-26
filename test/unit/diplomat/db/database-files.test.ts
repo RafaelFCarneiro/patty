@@ -1,6 +1,5 @@
 import {
   existsSync,
-  readdirSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -74,36 +73,32 @@ describe('removeDatabaseFiles', () => {
 });
 
 describe('acquireDatabaseLock', () => {
-  it('is exclusive until released, and creates the directory it needs', () => {
+  it('is exclusive until released, and creates the directory it needs', async () => {
     const path = join(dir, 'nested', 'd.db');
-    const first = acquireDatabaseLock(path);
+    const first = await acquireDatabaseLock(path);
     expect(first).not.toBeNull();
-    expect(acquireDatabaseLock(path)).toBeNull();
-    first?.release();
-    expect(existsSync(`${path}.lock`)).toBe(false);
-    expect(acquireDatabaseLock(path)).not.toBeNull();
+    expect(await acquireDatabaseLock(path)).toBeNull();
+    await first?.release();
+    const again = await acquireDatabaseLock(path);
+    expect(again).not.toBeNull();
+    await again?.release();
   });
 
-  it('takes over a lock whose owner is gone, and respects one whose owner is alive', () => {
+  it('with three contenders: one holds, the others are refused, and one gets it once it is released', async () => {
     const path = join(dir, 'd.db');
-    writeFileSync(`${path}.lock`, 'not-a-pid');
-    expect(acquireDatabaseLock(path)).not.toBeNull();
-    writeFileSync(`${path}.lock`, `${process.pid}:token`);
-    expect(acquireDatabaseLock(path)).toBeNull();
+    const a = await acquireDatabaseLock(path);
+    const b = await acquireDatabaseLock(path);
+    const c = await acquireDatabaseLock(path);
+    expect([a === null, b === null, c === null]).toEqual([false, true, true]);
+    await a?.release();
+    const next = await acquireDatabaseLock(path);
+    expect(next).not.toBeNull();
+    await next?.release();
   });
 
-  it('releases only its own lock: after a takeover the file is someone else’s', () => {
+  it('keeps the lock file after release (deleting it would give waiting runs a different file to lock)', async () => {
     const path = join(dir, 'd.db');
-    const first = acquireDatabaseLock(path);
-    writeFileSync(`${path}.lock`, `${process.pid}:someone-else`);
-    first?.release();
+    await (await acquireDatabaseLock(path))?.release();
     expect(existsSync(`${path}.lock`)).toBe(true);
-  });
-
-  it('leaves no staging or tombstone file behind, taking over or not', () => {
-    const path = join(dir, 'd.db');
-    writeFileSync(`${path}.lock`, '1999999999:dead');
-    acquireDatabaseLock(path)?.release();
-    expect(readdirSync(dir).filter((name) => /\.(tmp|stale)$/.test(name))).toEqual([]);
   });
 });

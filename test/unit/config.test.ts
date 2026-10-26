@@ -245,6 +245,22 @@ describe('the demo (FINTRACK_DEMO)', () => {
   });
 });
 
+describe('DB_PATH under the demo', () => {
+  it('defaults to the demo database, never the real one, when it is omitted', () => {
+    delete process.env['DB_PATH'];
+    process.env[DEMO_ENV_VAR] = DEMO_ENV_ON;
+    expect(loadConfig().DB_PATH).toBe(DEMO_DB_PATH);
+    delete process.env[DEMO_ENV_VAR];
+    expect(loadConfig().DB_PATH).not.toBe(DEMO_DB_PATH);
+  });
+
+  it('is respected when set', () => {
+    process.env['DB_PATH'] = '/custom/demo.db';
+    process.env[DEMO_ENV_VAR] = DEMO_ENV_ON;
+    expect(loadConfig().DB_PATH).toBe('/custom/demo.db');
+  });
+});
+
 describe('osLocale', () => {
   it('takes the first locale variable that is set, in LC_ALL, LC_MESSAGES, LANG order', () => {
     expect(osLocale({ LC_ALL: 'es_CO.UTF-8', LANG: 'en_US.UTF-8' })).toBe('es_CO.UTF-8');
