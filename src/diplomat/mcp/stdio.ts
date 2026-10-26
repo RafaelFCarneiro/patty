@@ -1,6 +1,7 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { SignInInterpreter, Tenancy } from '../../controllers/deps.js';
+import { instanceFactsOf } from '../../controllers/instance.js';
 import { AuthMode } from '../../models/auth/mode.js';
 import { ownerGate, type PrincipalGate } from './gate.js';
 import { buildMcpServer } from './server.js';
@@ -35,7 +36,7 @@ export const connectStdio = async (tenancy: Tenancy, version: string, auth: Stdi
         })
       : undefined;
   const gate: PrincipalGate = session ? () => session.resolve() : ownerGate;
-  const server = buildMcpServer(tenancy, version, { gate }, await tenancy.instanceKind());
+  const server = buildMcpServer(tenancy, version, { gate }, await instanceFactsOf(tenancy));
   await server.connect(new StdioServerTransport());
   return { server, session };
 };

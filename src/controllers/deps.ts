@@ -138,6 +138,8 @@ export type Scoped = {
 export type Tenancy = {
   /** What the database says it is — instance-wide, so no principal is needed to ask. */
   instanceKind: () => Promise<InstanceKind>;
+  /** The language a demo database speaks (its owner's locale) — read only when the database is a demo. */
+  instanceLocale: () => Promise<Locale>;
   depsFor: (principal: Principal) => Deps;
   runEffectsFor: (principal: Principal) => RunEffects;
   runEffectsSequenceFor: (principal: Principal) => RunEffectsSequence;

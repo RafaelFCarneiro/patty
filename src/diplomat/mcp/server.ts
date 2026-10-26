@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Tenancy } from '../../controllers/deps.js';
-import { DEFAULT_INSTANCE_KIND, type InstanceKind } from '../../models/instance.js';
+import { DEFAULT_INSTANCE, type InstanceFacts } from '../../models/instance.js';
 import { documentationContext } from '../http/context.js';
 import { buildOpenApiDocument } from '../http/openapi.js';
 import { buildRouteDefinitions } from '../http/routes.js';
@@ -19,9 +19,9 @@ export const buildMcpServer = (
   tenancy: Tenancy,
   version: string,
   scopeGuard: ScopeGuardOptions,
-  kind: InstanceKind = DEFAULT_INSTANCE_KIND,
+  instance: InstanceFacts = DEFAULT_INSTANCE,
 ): McpServer => {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version }, { instructions: serverInstructions(kind) });
+  const server = new McpServer({ name: MCP_SERVER_NAME, version }, { instructions: serverInstructions(instance) });
   guardScopes(server, scopeGuard);
   const ctx = createMcpContext(tenancy, version);
 

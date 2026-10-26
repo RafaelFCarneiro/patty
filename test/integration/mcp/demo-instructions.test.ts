@@ -12,19 +12,26 @@ import { DEMO_SERVER_INSTRUCTIONS } from '../../../src/diplomat/mcp/instructions
 import { buildMcpServer } from '../../../src/diplomat/mcp/server.js';
 import { ownerGate } from '../../../src/diplomat/mcp/gate.js';
 import { InstanceKind } from '../../../src/models/instance.js';
+import { Locale } from '../../../src/models/locale.js';
+import { instanceFactsOf } from '../../../src/controllers/instance.js';
 import { registerHttpApp } from '../../../src/composition/http.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 
 const dirs: string[] = [];
 const apps: AppContext[] = [];
 
-const appOf = async (kind: InstanceKind, opts: Parameters<typeof buildApp>[0] = {}) => {
+const appOf = async (kind: InstanceKind, opts: Parameters<typeof buildApp>[0] = {}, locale?: Locale) => {
   const dir = mkdtempSync(join(tmpdir(), 'fintrack-demo-mcp-'));
   dirs.push(dir);
   const ctx = await buildApp({ dbPath: join(dir, 'test.db'), ...opts });
   apps.push(ctx);
   await ctx.app.ready();
   await ctx.db.run(sql`UPDATE settings SET instance_kind = ${kind} WHERE id = 'singleton'`);
+  if (locale) {
+    await ctx.db.run(
+      sql`INSERT INTO user_settings (user_id, locale, locale_source) VALUES ('user-owner', ${locale}, 'explicit')`,
+    );
+  }
   return ctx;
 };
 
@@ -34,7 +41,7 @@ afterEach(async () => {
 });
 
 const instructionsOverMemory = async (ctx: AppContext): Promise<string | undefined> => {
-  const server = buildMcpServer(ctx.runtime, ctx.version, { gate: ownerGate }, await ctx.runtime.instanceKind());
+  const server = buildMcpServer(ctx.runtime, ctx.version, { gate: ownerGate }, await instanceFactsOf(ctx.runtime));
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'demo-instructions-test', version: '1' });
   await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
@@ -45,8 +52,13 @@ const instructionsOverMemory = async (ctx: AppContext): Promise<string | undefin
 };
 
 describe('MCP server instructions', () => {
-  it('a demo database sends the demo instructions at initialize', async () => {
-    expect(await instructionsOverMemory(await appOf(InstanceKind.enum.demo))).toBe(DEMO_SERVER_INSTRUCTIONS);
+  it('a demo database sends the demo instructions at initialize, in English by default', async () => {
+    expect(await instructionsOverMemory(await appOf(InstanceKind.enum.demo))).toBe(DEMO_SERVER_INSTRUCTIONS.en);
+  });
+
+  it.each(Object.values(Locale.enum))('a demo database speaks the owner’s language (%s)', async (locale) => {
+    const ctx = await appOf(InstanceKind.enum.demo, {}, locale);
+    expect(await instructionsOverMemory(ctx)).toBe(DEMO_SERVER_INSTRUCTIONS[locale]);
   });
 
   it('a standard database sends none', async () => {
@@ -66,8 +78,9 @@ describe('MCP server instructions over streamable HTTP /mcp', () => {
     return instructions;
   };
 
-  it('is sent for a demo database', async () => {
-    expect(await instructionsOverHttp(await appOf(InstanceKind.enum.demo))).toBe(DEMO_SERVER_INSTRUCTIONS);
+  it('is sent for a demo database, in the owner’s language', async () => {
+    const ctx = await appOf(InstanceKind.enum.demo, {}, Locale.enum.pt);
+    expect(await instructionsOverHttp(ctx)).toBe(DEMO_SERVER_INSTRUCTIONS.pt);
   });
 
   it('is omitted for a standard database', async () => {

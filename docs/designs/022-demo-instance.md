@@ -1,6 +1,6 @@
 # Feature Design 022: Demo instance — a seeded, throwaway FinTrack to try before installing
 
-**Type:** Feature design · **Design status:** Accepted · **Implementation status:** In progress (phase 1) ·
+**Type:** Feature design · **Design status:** Accepted · **Implementation status:** In progress (phase 2) ·
 **Date:** 2026-10-23 · Builds on the multi-user/tenancy work (ADR-033) without using it: the demo is a
 **separate database**, never a user inside a real one. Reuses the write flows as they are (no demo-only write
 path) and the MCP prompts of Feature Design 019.
@@ -108,7 +108,10 @@ npx @rafaelfcarneiro/fintrack@latest demo [--country br|us|mx|co] [--reset]
 
 - **UI:** a persistent banner on every page (shell and auth pages alike) — "Demo — sample data, not your
   finances. [Install FinTrack for your own data]" — in a distinct accent; every page `<title>` starts with
-  `[Demo]`. Driven by the marker (§3), so it cannot be missing on a demo database.
+  `[Demo]`. Driven by the marker (§3), so it cannot be missing on a demo database. The banner (and the MCP
+  `instructions` below) is written in the demo's language — `en`, `pt` or `es`, from the owner's
+  `user_settings.locale`, which the seeder sets from the country pack. The banner link still points at the
+  repository README until the distribution decision (public package) is made.
 - **Terminal:** `fintrack demo` prints that it is a demo, the dashboard URL, and how to install for real.
 - **MCP:** the server sends `instructions` at initialize when the database is a demo: it is a demo with sample
   data; say so once when you start working with it; never use it for the person's real finances; for those, use
