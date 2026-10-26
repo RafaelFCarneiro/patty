@@ -19,7 +19,7 @@ import {
   type DemoTripItem,
 } from '../models/demo.js';
 import { BudgetPeriod } from '../models/budget.js';
-import { LocaleSource } from '../models/locale.js';
+import { Locale, LocaleSource } from '../models/locale.js';
 import { CurrencyCode, FIAT_DECIMALS } from '../models/money.js';
 import { RecurringPeriod } from '../models/recurring.js';
 
@@ -403,9 +403,9 @@ const REGION_COUNTRY: Readonly<Record<string, DemoCountry>> = {
   CO: DemoCountry.enum.co,
 };
 const LANGUAGE_COUNTRY: Readonly<Record<string, DemoCountry>> = {
-  pt: DemoCountry.enum.br,
-  es: DemoCountry.enum.mx,
-  en: DemoCountry.enum.us,
+  [Locale.enum.pt]: DemoCountry.enum.br,
+  [Locale.enum.es]: DemoCountry.enum.mx,
+  [Locale.enum.en]: DemoCountry.enum.us,
 };
 
 /** The demo's default country for an OS locale tag (`es-CO`, `pt_BR.UTF-8`): its region when it is one of the four,

@@ -134,6 +134,8 @@ export type DemoStep =
 export type DemoSeedReport = { seeded: boolean; steps: Partial<Record<DemoStepKind, number>> };
 
 export const demoErrors = {
+  stepFailed: (kind: DemoStepKind, date: string, reason: string): ValidationError =>
+    validation([`demo seed failed at ${kind} (${date}): ${reason}`]),
   notDemoDatabase: validation([
     'This database already holds data and is not marked as a demo — refusing to put sample data in it.',
   ]) satisfies ValidationError,

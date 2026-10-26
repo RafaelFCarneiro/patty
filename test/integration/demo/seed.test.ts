@@ -6,6 +6,8 @@ import * as R from 'remeda';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { seedDemo } from '../../../src/composition/demo-seed.js';
 import { createRuntime } from '../../../src/composition/runtime.js';
+import * as tagAdapters from '../../../src/adapters/tags.js';
+import { createTag } from '../../../src/controllers/tags.js';
 import { getAccountBalances } from '../../../src/controllers/account/account.js';
 import { getBudgetStatus } from '../../../src/controllers/budgets.js';
 import { listCreditCards } from '../../../src/controllers/credit-card/credit-card.js';
@@ -76,6 +78,24 @@ describe('seedDemo — marking and idempotency', () => {
     const refused = await seed(DemoCountry.enum.br);
     expect(refused._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
     expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
+  });
+
+  it('names the step that failed, as a validation error', async () => {
+    const { deps, runEffects } = owner();
+    (await runEffects(() => createTag(deps, 'work').map(tagAdapters.outcomeToDb)))._unsafeUnwrap();
+    const failed = await seed(DemoCountry.enum.us);
+    expect(failed._unsafeUnwrapErr()).toMatchObject({
+      code: 'validation',
+      issues: [expect.stringContaining('demo seed failed at tag (2026-06-01)')],
+    });
+  });
+
+  it('speaks English when the stored language is missing or not one we know', async () => {
+    expect(await owner().deps.instance.locale()).toBe('en');
+    await db.run(
+      sql`INSERT INTO user_settings (user_id, locale, locale_source) VALUES ('user-owner', 'xx', 'explicit')`,
+    );
+    expect(await owner().deps.instance.locale()).toBe('en');
   });
 
   it('seeds an empty database that is not yet marked, and marks it', async () => {

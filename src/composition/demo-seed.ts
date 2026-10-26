@@ -23,7 +23,6 @@ import { clockDateOf, planDemo } from '../logic/demo.js';
 import { toIsoDate } from '../logic/period.js';
 import { OWNER_PRINCIPAL } from '../models/auth/principal.js';
 import { demoErrors, DemoStepKind, type DemoCountry, type DemoSeedReport, type DemoStep } from '../models/demo.js';
-import { validation } from '../models/error.js';
 import { isDemoInstance } from '../models/instance.js';
 import { TransactionSource } from '../models/transaction.js';
 import { bindAuthRunEffects } from './auth.js';
@@ -75,7 +74,7 @@ const runStep = (scoped: Scoped, step: DemoStep): ResultAsync<unknown, AppError>
   (HANDLERS[step.kind] as (scoped: Scoped, step: DemoStep) => ResultAsync<unknown, AppError>)(scoped, step);
 
 const failedStep = (step: DemoStep, error: AppError): AppError =>
-  validation([`demo seed failed at ${step.kind} (${step.date}): ${formatAppError(error)}`]);
+  demoErrors.stepFailed(step.kind, step.date, formatAppError(error));
 
 const noonOf = (isoDate: string): Date => {
   const [year = 0, month = 1, day = 1] = isoDate.split('-').map(Number);
