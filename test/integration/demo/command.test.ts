@@ -1,5 +1,14 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -220,6 +229,24 @@ describe('demo — safety: it never touches what is not a demo database', () => 
     const refused = await shellWith({ seed }).prepare({ country: DemoCountry.enum.us, reset: false });
     expect(refused._unsafeUnwrapErr().code).toBe(not_demo);
     expect(seed).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('leaves a refused database and its write-ahead log as found (reset=%s)', async (reset) => {
+    // What an unclean shutdown leaves: the database file plus a log of committed pages that were never checkpointed.
+    const writer = createClient({ url: pathToFileURL(join(dir, 'live.db')).href, encryptionKey: DEMO_DB_KEY });
+    await writer.execute('PRAGMA journal_mode = WAL');
+    const live = drizzle(writer, { schema });
+    await bootstrap(live);
+    await seedDemo(live, { country: DemoCountry.enum.us, today: TODAY, config: CONFIG });
+    await live.run(sql`UPDATE settings SET instance_kind = 'standard' WHERE id = 'singleton'`);
+    copyFileSync(join(dir, 'live.db'), demoPath);
+    copyFileSync(join(dir, 'live.db-wal'), `${demoPath}-wal`);
+    writer.close();
+
+    const before = { db: readFileSync(demoPath), wal: readFileSync(`${demoPath}-wal`) };
+    expect((await shellWith().prepare({ country: DemoCountry.enum.us, reset }))._unsafeUnwrapErr().code).toBe(not_demo);
+    expect(readFileSync(demoPath).equals(before.db)).toBe(true);
+    expect(readFileSync(`${demoPath}-wal`).equals(before.wal)).toBe(true);
   });
 
   it.each([false, true])('does not change the journal mode of a database it refuses (reset=%s)', async (reset) => {

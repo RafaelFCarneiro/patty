@@ -1,6 +1,16 @@
+import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@libsql/client';
-import { existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+} from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { DEMO_DB_KEY, DemoProbeAbsence, type DemoProbe } from '../../models/demo.js';
 import { closeDatabase, openDatabaseWithKey } from './driver.js';
@@ -52,19 +62,43 @@ export type DatabaseLook = { probe: DemoProbe; holdsData: boolean };
 const MISSING: DatabaseLook = { probe: DemoProbeAbsence.enum.missing, holdsData: false };
 const UNREADABLE: DatabaseLook = { probe: DemoProbeAbsence.enum.unreadable, holdsData: false };
 
-/** What the file at `databasePath` says it is and whether it holds finances, from opening it with the demo key —
- *  read-only in effect: no journal-mode change, no migration, no write. A file that does not open that way (another
- *  key, not a database, a schema without the marker) is not a demo. */
+/** The database and its write-ahead log: what a reader needs to see everything that was committed. */
+const PROBE_FILE_SUFFIXES = ['', '-wal'] as const;
+
+/** Runs `look` on a private copy of the database files, which are removed afterwards. Opening the original would let
+ *  SQLite recover or checkpoint a write-ahead log left by an unclean shutdown on close — a write to a file the probe
+ *  must leave exactly as it found it — and libSQL has no read-only open. */
+const onCopyOf = async <T>(databasePath: string, look: (copyPath: string) => Promise<T>): Promise<T> => {
+  const directory = mkdtempSync(join(tmpdir(), 'fintrack-probe-'));
+  try {
+    PROBE_FILE_SUFFIXES.forEach((suffix) => {
+      if (existsSync(`${databasePath}${suffix}`)) {
+        copyFileSync(`${databasePath}${suffix}`, join(directory, `probe.db${suffix}`));
+      }
+    });
+    return await look(join(directory, 'probe.db'));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+
+const lookAtOpenable = async (path: string): Promise<DatabaseLook> => {
+  const db = await openDatabaseWithKey({ DB_PATH: path }, DEMO_DB_KEY, { initializeJournal: false });
+  try {
+    const repo = instanceRepo(db);
+    return { probe: await repo.kind(), holdsData: await repo.hasUserData() };
+  } finally {
+    closeDatabase(db);
+  }
+};
+
+/** What the file at `databasePath` says it is and whether it holds finances, from opening a private copy with the demo
+ *  key: the original is never opened, so it is never written (no journal change, no checkpoint, no migration). A file
+ *  that does not open that way (another key, not a database, a schema without the marker) is not a demo. */
 export const probeDatabase = async (databasePath: string): Promise<DatabaseLook> => {
   if (!existsSync(databasePath)) return MISSING;
   try {
-    const db = await openDatabaseWithKey({ DB_PATH: databasePath }, DEMO_DB_KEY, { initializeJournal: false });
-    try {
-      const repo = instanceRepo(db);
-      return { probe: await repo.kind(), holdsData: await repo.hasUserData() };
-    } finally {
-      closeDatabase(db);
-    }
+    return await onCopyOf(databasePath, lookAtOpenable);
   } catch {
     return UNREADABLE;
   }
