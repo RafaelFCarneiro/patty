@@ -64,6 +64,8 @@ export type DemoPrepared = { status: DemoSeedStatus; databasePath: string; count
  */
 export type DemoShell = {
   databasePath: string;
+  /** Whether the demo database file exists yet (it is created by `demo`). */
+  hasDatabase: () => boolean;
   prepare: (request: DemoRequest) => Promise<Result<DemoPrepared, DemoFailure>>;
   /** Starts the demo's dashboards, REST and MCP on `DEMO_PORT`; the process then stays up until interrupted. */
   serve: () => Promise<Result<void, DemoFailure>>;

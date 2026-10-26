@@ -11,8 +11,15 @@ import { demoConfig } from '../../../src/config.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabaseWithKey, type Db } from '../../../src/diplomat/db/driver.js';
 import type { DemoShell } from '../../../src/diplomat/cli/io.js';
-import { StartupRefusal } from '../../../src/models/error.js';
-import { DEMO_DB_KEY, DEMO_PORT, DemoCountry, DemoFailureCode, DemoSeedStatus } from '../../../src/models/demo.js';
+import { startupRefusalMessage } from '../../../src/models/startup.js';
+import {
+  DEMO_DB_KEY,
+  DEMO_PORT,
+  DemoCountry,
+  DemoNotReadyCode,
+  DemoFailureCode,
+  DemoSeedStatus,
+} from '../../../src/models/demo.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 
 const TODAY = new Date(2026, 9, 26, 9);
@@ -161,6 +168,17 @@ describe('demo — safety: it never touches what is not a demo database', () => 
     expect(existsSync(realPath)).toBe(false);
   });
 
+  it('refuses a symlink loop at the demo path instead of recursing, and creates nothing', async () => {
+    const hop = join(dir, 'hop.db');
+    symlinkSync(hop, demoPath);
+    symlinkSync(demoPath, hop);
+    for (const reset of [false, true]) {
+      const refused = await shellWith().prepare({ country: DemoCountry.enum.us, reset });
+      expect(refused._unsafeUnwrapErr().code).toBe(real_database);
+    }
+    expect(existsSync(realPath)).toBe(false);
+  });
+
   it.each([false, true])('refuses a database under another key (reset=%s) and leaves it as it was', async (reset) => {
     await createDatabase(demoPath, OTHER_KEY);
     const check = untouched(demoPath);
@@ -268,8 +286,9 @@ describe('demo — serving', () => {
 
   it('a process told to open the demo refuses a database that is not one, and says how to create it', async () => {
     await createDatabase(demoPath, DEMO_DB_KEY);
-    await expect(boot(demoConfig(demoPath))).rejects.toThrow(StartupRefusal);
-    await expect(boot(demoConfig(demoPath))).rejects.toThrow(/demo$/);
+    const refused = (await boot(demoConfig(demoPath)))._unsafeUnwrapErr();
+    expect(refused).toEqual({ code: DemoNotReadyCode.enum.demo_not_ready, databasePath: demoPath });
+    expect(startupRefusalMessage(refused)).toMatch(/demo$/);
   });
 
   it('opens a seeded demo with the demo key and no login', async () => {

@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { completeDemoSeed, instanceFactsOf, markDemoInstance } from '../../../src/controllers/instance.js';
+import {
+  completeDemoSeed,
+  demoSeedStatus,
+  instanceFactsOf,
+  markDemoInstance,
+} from '../../../src/controllers/instance.js';
 import type { AuthDeps } from '../../../src/controllers/deps.js';
 import { PersistOp } from '@rfc0/effect-runner';
 import { INSTANCE_SETTINGS_ENTITY_TAG } from '../../../src/models/auth/entity.js';
 import { SignInCap } from '../../../src/models/auth/users.js';
 import { InstanceKind } from '../../../src/models/instance.js';
+import { DemoSeedStatus } from '../../../src/models/demo.js';
 import { Locale } from '../../../src/models/locale.js';
 
 const tenancyOf = (kind: InstanceKind, locale: Locale = Locale.enum.pt) => ({
@@ -82,5 +88,21 @@ describe('completeDemoSeed', () => {
     const earlier = '2026-10-01T08:00:00.000Z';
     const outcome = (await completeDemoSeed(settingsWith(InstanceKind.enum.demo, earlier), SEEDED_AT))._unsafeUnwrap();
     expect(outcome).toEqual({ persist: [], response: earlier });
+  });
+});
+
+describe('demoSeedStatus', () => {
+  const depsOf = (hasUserData: boolean, kind: InstanceKind, seededAt: string | null) => ({
+    instance: { hasUserData: async () => hasUserData, kind: async () => kind },
+    ...settingsWith(kind, seededAt),
+  });
+
+  it.each([
+    ['an empty database', depsOf(false, InstanceKind.enum.standard, null), 'fresh'],
+    ['a seeded demo', depsOf(true, InstanceKind.enum.demo, '2026-10-26T12:00:00.000Z'), DemoSeedStatus.enum.present],
+    ['an interrupted demo', depsOf(true, InstanceKind.enum.demo, null), DemoSeedStatus.enum.interrupted],
+    ['a standard database with data', depsOf(true, InstanceKind.enum.standard, null), DemoSeedStatus.enum.not_demo],
+  ])('reads the three facts for %s and answers the pure rule’s verdict', async (_label, deps, expected) => {
+    expect(await demoSeedStatus(deps as unknown as Parameters<typeof demoSeedStatus>[0])).toBe(expected);
   });
 });

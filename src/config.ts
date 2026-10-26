@@ -14,6 +14,12 @@ export const McpTransport = z.enum(['stdio', 'http']);
 const DATA_DIRECTORY = join(homedir(), '.fintrack');
 const DEFAULT_DB_PATH = join(DATA_DIRECTORY, 'fintrack.db');
 
+const OS_LOCALE_VARIABLES = ['LC_ALL', 'LC_MESSAGES', 'LANG'] as const;
+
+/** The OS locale tag (`es_CO.UTF-8`, `pt-BR`): the first of the locale variables that is set, else the runtime's. */
+export const osLocale = (env: NodeJS.ProcessEnv = process.env): string | undefined =>
+  OS_LOCALE_VARIABLES.map((name) => env[name]).find((value) => value) ?? Intl.DateTimeFormat().resolvedOptions().locale;
+
 /** The demo's throwaway database, beside the real one and never the same file (Feature Design 022 §1). */
 export const DEMO_DB_PATH = join(DATA_DIRECTORY, 'demo.db');
 

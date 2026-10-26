@@ -24,7 +24,7 @@ const rig = (prepared: Result<DemoPrepared, DemoFailure>, served: Result<void, D
   const err: string[] = [];
   const prepare = vi.fn(async (_request: DemoRequest) => prepared);
   const serve = vi.fn(async () => served);
-  const demo: DemoShell = { databasePath: DATABASE_PATH, prepare, serve };
+  const demo: DemoShell = { databasePath: DATABASE_PATH, hasDatabase: () => true, prepare, serve };
   const io = {
     out: (line: string) => out.push(line),
     err: (line: string) => err.push(line),

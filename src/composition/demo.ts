@@ -1,32 +1,31 @@
-import { existsSync, lstatSync, readlinkSync, realpathSync, rmSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
 import { err, ok, type Result } from 'neverthrow';
-import { demoConfig, DEMO_DB_PATH, loadConfig } from '../config.js';
+import { demoConfig, DEMO_DB_PATH, loadConfig, osLocale } from '../config.js';
+import { formatAppError } from '../common/errors.js';
 import { isPortInUse } from '../common/net.js';
 import type { DemoShell } from '../diplomat/cli/io.js';
 import { bootstrap } from '../diplomat/db/bootstrap.js';
+import { canonicalPath, databaseExists, probeDatabase, removeDatabaseFiles } from '../diplomat/db/database-files.js';
 import { closeDatabase, openDatabaseWithKey } from '../diplomat/db/driver.js';
-import { instanceRepo } from '../diplomat/db/repos/instance.js';
 import { resolveDemoCountry } from '../logic/demo.js';
-import { planDemoDatabase } from '../logic/demo-database.js';
-import { databaseAheadMessage } from '../models/database.js';
+import { failureOfSeedStatus, planDemoDatabase } from '../logic/demo-database.js';
+import { startupRefusalMessage } from '../models/startup.js';
 import {
   DEMO_DB_KEY,
   DemoFailureCode,
   DemoProbeAbsence,
   demoFailures,
   type DemoCountry,
+  type DemoDatabaseFacts,
   type DemoFailure,
-  type DemoProbe,
   type DemoSeedStatus,
 } from '../models/demo.js';
-import { formatAppError } from '../common/errors.js';
 import { seedDemo } from './demo-seed.js';
 
 /**
- * Composition root of `fintrack demo`: looks at the file at the demo path, decides (pure, `logic/demo-database.ts`)
- * whether it may be reset, seeds it through the write flows, and serves it. The demo never reads or writes the real
- * `DB_PATH`, and the only file it ever deletes is a database that says, inside itself, that it is a demo.
+ * Composition root of `fintrack demo`, as a sequence: look at the file at the demo path, decide (pure,
+ * `logic/demo-database.ts`) what may be done with it, delete / seed / clean up, and map the outcome to what the CLI
+ * reports. The demo never reads or writes the real `DB_PATH`, and the only file it ever deletes is a database that
+ * says, inside itself, that it is a demo.
  */
 
 // Fastify loads only for the one command that serves: the CLI's other commands never pay for it.
@@ -42,92 +41,44 @@ export type DemoShellOptions = {
   seed?: typeof seedDemo;
 };
 
-const OS_LOCALE_VARIABLES = ['LC_ALL', 'LC_MESSAGES', 'LANG'] as const;
-const DATABASE_FILE_SUFFIXES = ['', '-wal', '-shm', '-journal'] as const;
-
-const osLocale = (): string | undefined =>
-  OS_LOCALE_VARIABLES.map((name) => process.env[name]).find((value) => value) ??
-  Intl.DateTimeFormat().resolvedOptions().locale;
-
-const isSymlink = (path: string): boolean => {
-  try {
-    return lstatSync(path).isSymbolicLink();
-  } catch {
-    return false;
-  }
-};
-
-/** The same file through symlinks and relative spellings. A link to a file that does not exist yet (dangling) is
- *  followed too, and a path that does not exist is its existing directory's real path plus its name. */
-const canonicalPath = (path: string): string => {
-  if (isSymlink(path)) return canonicalPath(resolve(dirname(path), readlinkSync(path)));
-  if (existsSync(path)) return realpathSync(path);
-  const directory = dirname(resolve(path));
-  return existsSync(directory) ? join(realpathSync(directory), basename(path)) : resolve(path);
-};
-
-const removeDatabaseFiles = (databasePath: string): void =>
-  DATABASE_FILE_SUFFIXES.forEach((suffix) => rmSync(`${databasePath}${suffix}`, { force: true }));
-
-/** What the file at `databasePath` says it is, from opening it with the demo key — nothing is migrated or written. A
- *  file that does not open that way (another key, not a database, a schema without the marker) is not a demo. */
-const probeDatabase = async (databasePath: string): Promise<DemoProbe> => {
-  if (!existsSync(databasePath)) return DemoProbeAbsence.enum.missing;
-  try {
-    const db = await openDatabaseWithKey({ DB_PATH: databasePath }, DEMO_DB_KEY);
-    try {
-      return await instanceRepo(db).kind();
-    } finally {
-      closeDatabase(db);
-    }
-  } catch {
-    return DemoProbeAbsence.enum.unreadable;
-  }
-};
-
-type SeedRequest = { country: DemoCountry };
-
 const seedFailure = (reason: string): DemoFailure => demoFailures.of(DemoFailureCode.enum.seed_failed, reason);
 
-const seedDatabase = async (
-  seed: typeof seedDemo,
+/** Look: what the demo path is. The real database is never opened, not even to look at it. */
+const lookAtDatabase = async (
   databasePath: string,
-  request: SeedRequest,
-  today: Date,
-): Promise<Result<DemoSeedStatus, DemoFailure>> => {
+  realDatabasePath: string,
+  reset: boolean,
+): Promise<DemoDatabaseFacts> => {
+  const demo = canonicalPath(databasePath);
+  const real = canonicalPath(realDatabasePath);
+  const isRealDatabase = demo === null || real === null || demo === real;
+  const probe = isRealDatabase ? DemoProbeAbsence.enum.missing : await probeDatabase(databasePath);
+  return { isRealDatabase, reset, probe };
+};
+
+type SeedRun = { seed: typeof seedDemo; databasePath: string; country: DemoCountry; today: Date };
+
+const seedDatabase = async ({ seed, databasePath, country, today }: SeedRun) => {
   const db = await openDatabaseWithKey({ DB_PATH: databasePath }, DEMO_DB_KEY);
   try {
     const bootstrapped = await bootstrap(db);
-    if (bootstrapped.isErr()) return err(seedFailure(databaseAheadMessage(bootstrapped.error.version)));
-    const seeded = await seed(db, { country: request.country, today, config: demoConfig(databasePath) });
+    if (bootstrapped.isErr()) return err(seedFailure(startupRefusalMessage(bootstrapped.error)));
+    const seeded = await seed(db, { country, today, config: demoConfig(databasePath) });
     return seeded.map((report) => report.status).mapErr((error) => seedFailure(formatAppError(error)));
   } finally {
     closeDatabase(db);
   }
 };
 
-const FAILURE_OF_STATUS: Readonly<Record<DemoSeedStatus, DemoFailureCode | null>> = {
-  seeded: null,
-  present: null,
-  interrupted: DemoFailureCode.enum.interrupted,
-  not_demo: DemoFailureCode.enum.not_demo,
-};
-
 /** A seed that fails or throws on a database created by this very run leaves nothing behind: half a demo is worse than
  *  none. A database that was already there is not ours to delete. */
-const seedOrClean = async (
-  seed: typeof seedDemo,
-  databasePath: string,
-  request: SeedRequest,
-  today: Date,
-  createdHere: boolean,
-): Promise<Result<DemoSeedStatus, DemoFailure>> => {
+const seedOrClean = async (run: SeedRun, createdHere: boolean): Promise<Result<DemoSeedStatus, DemoFailure>> => {
   try {
-    const seeded = await seedDatabase(seed, databasePath, request, today);
-    if (seeded.isErr() && createdHere) removeDatabaseFiles(databasePath);
+    const seeded = await seedDatabase(run);
+    if (seeded.isErr() && createdHere) removeDatabaseFiles(run.databasePath);
     return seeded;
   } catch (cause) {
-    if (createdHere) removeDatabaseFiles(databasePath);
+    if (createdHere) removeDatabaseFiles(run.databasePath);
     throw cause;
   }
 };
@@ -140,19 +91,16 @@ export const createDemoShell = (options: DemoShellOptions = {}): DemoShell => {
 
   return {
     databasePath,
+    hasDatabase: () => databaseExists(databasePath),
     prepare: async (request) => {
-      const isRealDatabase = canonicalPath(databasePath) === canonicalPath(realDatabasePath());
-      // The real database is never opened, not even to look at it.
-      const probe = isRealDatabase ? DemoProbeAbsence.enum.missing : await probeDatabase(databasePath);
-      const plan = planDemoDatabase({ isRealDatabase, reset: request.reset, probe });
+      const plan = planDemoDatabase(await lookAtDatabase(databasePath, realDatabasePath(), request.reset));
       if (plan.isErr()) return err(demoFailures.of(plan.error));
       if (plan.value.deleteFirst) removeDatabaseFiles(databasePath);
 
-      const createdHere = probe === DemoProbeAbsence.enum.missing || plan.value.deleteFirst;
       const country = request.country ?? resolveDemoCountry(osLocale());
-      const status = await seedOrClean(seed, databasePath, { country }, today(), createdHere);
+      const status = await seedOrClean({ seed, databasePath, country, today: today() }, plan.value.createdHere);
       return status.andThen((seeded) => {
-        const failure = FAILURE_OF_STATUS[seeded];
+        const failure = failureOfSeedStatus(seeded);
         return failure === null ? ok({ status: seeded, databasePath, country }) : err(demoFailures.of(failure));
       });
     },
@@ -160,7 +108,7 @@ export const createDemoShell = (options: DemoShellOptions = {}): DemoShell => {
       try {
         const { runHttp } = await loadHttpModule();
         const started = await runHttp(demoConfig(databasePath));
-        return started.mapErr((ahead) => seedFailure(databaseAheadMessage(ahead.version)));
+        return started.mapErr((refusal) => seedFailure(startupRefusalMessage(refusal)));
       } catch (cause) {
         if (isPortInUse(cause)) return err(demoFailures.of(DemoFailureCode.enum.port_in_use));
         throw cause;

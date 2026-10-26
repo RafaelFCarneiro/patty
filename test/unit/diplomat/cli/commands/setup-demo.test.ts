@@ -36,10 +36,12 @@ const loadSetup = async () => {
     clients: clientConfigs,
     openShell,
     openTerminal,
+    demo: { databasePath: demoDatabase(), hasDatabase: () => existsSync(demoDatabase()) },
   } as unknown as CliIo;
   return { run: (...args: string[]) => runSetupCommand(args, io), out, err, openShell, openTerminal };
 };
 
+const demoDatabase = () => join(homeDir, '.fintrack', 'demo.db');
 const claudeCodeFile = () => join(homeDir, '.claude', 'mcp.json');
 const readConfig = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as Record<string, any>;
 const demoEnv = () => ({
@@ -81,11 +83,24 @@ describe('setup <client> --demo', () => {
     expect(readConfig(file).servers).not.toHaveProperty('fintrack');
   });
 
-  it('writes no fintrack entry of its own when there was none, and says how to seed the data', async () => {
-    const { run, out } = await loadSetup();
+  it('writes no fintrack entry of its own when there was none', async () => {
+    const { run } = await loadSetup();
     expect(await run('claude-code', '--demo')).toBe(0);
     expect(Object.keys(readConfig(claudeCodeFile()).mcpServers)).toEqual([DEMO_SERVER_NAME]);
-    expect(out.join('\n')).toContain(' demo ');
+  });
+
+  it('says to run demo once while the demo database does not exist yet', async () => {
+    const { run, out } = await loadSetup();
+    expect(await run('claude-code', '--demo')).toBe(0);
+    expect(out).toContain('  Run `npx @rafaelfcarneiro/fintrack@latest demo` once to create the demo data.');
+  });
+
+  it('says nothing about it once the demo database exists', async () => {
+    const { run, out } = await loadSetup();
+    mkdirSync(join(homeDir, '.fintrack'), { recursive: true });
+    writeFileSync(demoDatabase(), '');
+    expect(await run('claude-code', '--demo')).toBe(0);
+    expect(out.join('\n')).not.toContain('once to create the demo data');
   });
 
   it('prints the Codex snippet under the demo name, with the demo environment', async () => {

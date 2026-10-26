@@ -12,15 +12,13 @@ import { createCreditCard } from '../controllers/credit-card/credit-card.js';
 import { addCardPurchase } from '../controllers/credit-card/transaction.js';
 import { setExchangeRate } from '../controllers/currency-rates.js';
 import { scopedFor, type Deps, type Scoped } from '../controllers/deps.js';
-import { completeDemoSeed, markDemoInstance } from '../controllers/instance.js';
+import { completeDemoSeed, demoSeedStatus, markDemoInstance } from '../controllers/instance.js';
 import { applyDueRecurring, createRecurring } from '../controllers/recurring.js';
 import { setBaseCurrency, setLocale } from '../controllers/settings.js';
 import { createTag } from '../controllers/tags.js';
 import type { Db } from '../diplomat/db/driver.js';
-import { instanceRepo } from '../diplomat/db/repos/instance.js';
-import { instanceSettingsRepo } from '../diplomat/db/repos/instance-settings.js';
 import { DEMO_PACKS } from '../diplomat/db/seed/demo/index.js';
-import { clockDateOf, demoSeedStart, planDemo } from '../logic/demo.js';
+import { clockDateOf, planDemo } from '../logic/demo.js';
 import { toIsoDate } from '../logic/period.js';
 import { OWNER_PRINCIPAL } from '../models/auth/principal.js';
 import {
@@ -33,7 +31,7 @@ import {
   type DemoStep,
 } from '../models/demo.js';
 import { TransactionSource } from '../models/transaction.js';
-import { bindAuthRunEffects } from './auth.js';
+import { bindAuthRunEffects, createAuthDeps } from './auth.js';
 import { createRuntime, type Runtime, type RuntimeConfig } from './runtime.js';
 
 /**
@@ -92,6 +90,8 @@ const noonOf = (isoDate: string): Date => {
 const runAuthFlow = <T>(runtime: Runtime, flow: () => ResultAsync<FlowOutcome<T>, AppError>) =>
   bindAuthRunEffects(runtime.authRunEffects)(flow);
 
+// A loop, not `runEffectsSequence`: the plan stops at the first failed step (every later step builds on the earlier
+// ones), whereas `runEffectsSequence` carries on past a failed line.
 const runPlan = async (
   scoped: Scoped,
   plan: readonly DemoStep[],
@@ -116,13 +116,9 @@ export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result
   const clock = { now: options.today };
   const runtime = createRuntime(db, { ...options.config, FINTRACK_LOCALE: undefined }, { clock: () => clock.now });
   const scoped = scopedFor(runtime, OWNER_PRINCIPAL);
-  const instanceSettings = instanceSettingsRepo(db);
+  const { instanceSettings } = await createAuthDeps(db);
 
-  const start = demoSeedStart({
-    hasUserData: await instanceRepo(db).hasUserData(),
-    kind: await runtime.instanceKind(),
-    seededAt: (await instanceSettings.get()).demoSeededAt,
-  });
+  const start = await demoSeedStatus({ instance: scoped.deps.instance, instanceSettings });
   if (start !== DEMO_SEED_FRESH) return ok({ status: start, steps: {} });
 
   const marked = await runAuthFlow(runtime, () => markDemoInstance({ instanceSettings }));

@@ -5,7 +5,7 @@ import { httpOrigin } from '../common/net.js';
 import type { Config } from '../config.js';
 import { connectStdio, type StdioAuth, type StdioConnection } from '../diplomat/mcp/stdio.js';
 import { signInOrigin } from '../logic/auth/origin.js';
-import type { DatabaseAhead } from '../models/database.js';
+import type { StartupRefusal } from '../models/startup.js';
 import { AuthMode } from '../models/auth/mode.js';
 import type { HttpAuth } from '../diplomat/http/context.js';
 import type { PreparedAuth } from './auth.js';
@@ -69,7 +69,7 @@ const shutDownOnDisconnect = (shutdown: () => void): void => {
   process.stdin.once('close', shutdown);
 };
 
-export const runStdio = (config: Config): ResultAsync<void, DatabaseAhead> =>
+export const runStdio = (config: Config): ResultAsync<void, StartupRefusal> =>
   safeTry(async function* () {
     const { runtime, prepared } = yield* boot(config);
     const link = signInLink(config);

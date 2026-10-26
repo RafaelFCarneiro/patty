@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { planDemoDatabase } from '../../../src/logic/demo-database.js';
-import { DemoFailureCode, type DemoProbe } from '../../../src/models/demo.js';
+import { failureOfSeedStatus, planDemoDatabase } from '../../../src/logic/demo-database.js';
+import { DemoFailureCode, DemoSeedStatus, type DemoProbe } from '../../../src/models/demo.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 
 const { real_database, not_demo } = DemoFailureCode.enum;
@@ -26,7 +26,7 @@ describe('planDemoDatabase', () => {
 
   it('leaves a standard database to the seeder when no reset was asked (empty: seeded; with data: refused)', () => {
     const facts = { isRealDatabase: false, reset: false, probe: InstanceKind.enum.standard } as const;
-    expect(planDemoDatabase(facts)._unsafeUnwrap()).toEqual({ deleteFirst: false });
+    expect(planDemoDatabase(facts)._unsafeUnwrap()).toMatchObject({ deleteFirst: false });
   });
 
   it.each([
@@ -37,7 +37,30 @@ describe('planDemoDatabase', () => {
   ] as const)(
     'reset=%s on %s → delete first: %s (only a demo database is ever deleted)',
     (reset, probe, deleteFirst) => {
-      expect(planDemoDatabase({ isRealDatabase: false, reset, probe })._unsafeUnwrap()).toEqual({ deleteFirst });
+      expect(planDemoDatabase({ isRealDatabase: false, reset, probe })._unsafeUnwrap()).toMatchObject({ deleteFirst });
     },
   );
+});
+
+describe('planDemoDatabase — who owns the file', () => {
+  it.each([
+    ['a missing file', false, 'missing', true],
+    ['a missing file, with a reset', true, 'missing', true],
+    ['a demo being reset (recreated by this run)', true, InstanceKind.enum.demo, true],
+    ['a demo left in place', false, InstanceKind.enum.demo, false],
+    ['an empty standard database that was already there', false, InstanceKind.enum.standard, false],
+  ] as const)('createdHere for %s', (_label, reset, probe, createdHere) => {
+    expect(planDemoDatabase({ isRealDatabase: false, reset, probe })._unsafeUnwrap().createdHere).toBe(createdHere);
+  });
+});
+
+describe('failureOfSeedStatus', () => {
+  it.each([
+    [DemoSeedStatus.enum.seeded, null],
+    [DemoSeedStatus.enum.present, null],
+    [DemoSeedStatus.enum.interrupted, DemoFailureCode.enum.interrupted],
+    [DemoSeedStatus.enum.not_demo, DemoFailureCode.enum.not_demo],
+  ])('%s → %s', (status, failure) => {
+    expect(failureOfSeedStatus(status)).toBe(failure);
+  });
 });

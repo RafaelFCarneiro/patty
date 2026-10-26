@@ -15,6 +15,8 @@ import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migration-barrier.js'
 import { LOGIN_MESSAGES } from '../../../src/diplomat/cli/commands/login.js';
 import { USAGE } from '../../../src/diplomat/cli/commands.js';
 import { databaseAheadMessage } from '../../../src/models/database.js';
+import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, demoNotReady } from '../../../src/models/demo.js';
+import { startupRefusalMessage } from '../../../src/models/startup.js';
 
 /**
  * The real binary, as a script or an installer runs it: a child process with a piped (non-TTY) stdin, its own
@@ -269,5 +271,31 @@ describe('an older build against a newer database (the binary)', () => {
     expect(result.exit).toBe(1);
     expect(result.stderr).toContain(AHEAD);
     expect(fingerprint()).toEqual(before);
+  });
+});
+
+describe('a process told to open the demo against a database that is not one (the binary)', () => {
+  const startDemoServer = (transport: 'stdio' | 'http') => {
+    const { FINTRACK_DB_KEY: _key, ...env } = process.env;
+    return spawnSync(process.execPath, ['--import', 'tsx', 'src/main.ts'], {
+      encoding: 'utf8',
+      timeout: SPAWN_TIMEOUT_MS,
+      env: { ...env, DB_PATH: dbPath, HOME: home, MCP_TRANSPORT: transport, [DEMO_ENV_VAR]: DEMO_ENV_ON },
+    });
+  };
+
+  it.each(['stdio', 'http'] as const)('%s: prints the refusal, no stack, and exits non-zero', async (transport) => {
+    const db = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: DEMO_DB_KEY });
+    try {
+      await bootstrap(db);
+    } finally {
+      closeDatabase(db);
+    }
+
+    const result = startDemoServer(transport);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(startupRefusalMessage(demoNotReady(dbPath)));
+    expect(result.stderr).not.toContain('    at ');
   });
 });

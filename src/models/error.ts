@@ -39,6 +39,3 @@ export const ambiguous = <E extends string>(entity: E, query: string, candidates
 
 /** The words of whatever was thrown: an `Error`'s message, else the value as text. */
 export const reasonOf = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
-
-/** A start the process refuses with a complete message of its own: the entrypoint prints the message, not a stack. */
-export class StartupRefusal extends Error {}

@@ -32,9 +32,18 @@ export const DEMO_SERVER_NAME = 'fintrack-demo';
 export const DEMO_ENV_VAR = 'FINTRACK_DEMO';
 export const DEMO_ENV_ON = '1';
 
-/** Said when a process told to open the demo finds a database that is not one: it never serves it. */
-export const demoNotReadyMessage = (dbPath: string): string =>
-  `fintrack: ${DEMO_ENV_VAR} is set, but ${dbPath} is not a demo database. Create it with: ${NPX_COMMAND} demo`;
+/** A process told to open the demo (`FINTRACK_DEMO`) that finds a database that is not one: an expected refusal, never
+ *  served (same shape as `DatabaseAhead`). */
+export const DemoNotReadyCode = z.enum(['demo_not_ready']);
+export type DemoNotReady = { code: typeof DemoNotReadyCode.enum.demo_not_ready; databasePath: string };
+
+export const demoNotReady = (databasePath: string): DemoNotReady => ({
+  code: DemoNotReadyCode.enum.demo_not_ready,
+  databasePath,
+});
+
+export const demoNotReadyMessage = ({ databasePath }: DemoNotReady): string =>
+  `fintrack: ${DEMO_ENV_VAR} is set, but ${databasePath} is not a demo database. Create it with: ${NPX_COMMAND} demo`;
 
 /** Where a generated purchase comes from. The pack names the accounts and cards; the generator maps these to them. */
 export const DemoFunding = z.enum(['checking', 'wallet', 'primaryCard', 'secondaryCard', 'global']);
@@ -184,3 +193,16 @@ export type DemoProbe = z.infer<typeof DemoProbe>;
 
 /** Where a seed run starts when there is nothing to report: the database holds no data yet. */
 export const DEMO_SEED_FRESH = 'fresh';
+
+/** What `demo` found at the demo path. `isRealDatabase` also holds when the path cannot be resolved (a symlink loop, a
+ *  chain of dangling links): it cannot be shown to be anything else. */
+export type DemoDatabaseFacts = { isRealDatabase: boolean; reset: boolean; probe: DemoProbe };
+
+export type DemoRefusal = typeof DemoFailureCode.enum.real_database | typeof DemoFailureCode.enum.not_demo;
+
+/** What `demo` may do with that file: delete it first (`--reset` on a demo database), and whether this run owns the
+ *  file once it is seeded (it did not exist, or was just deleted) — so a failed seed may remove it. */
+export type DemoDatabasePlan = { deleteFirst: boolean; createdHere: boolean };
+
+/** What a database says about its seed. */
+export type DemoSeedFacts = { hasUserData: boolean; kind: InstanceKind; seededAt: string | null };

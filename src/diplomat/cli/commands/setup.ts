@@ -64,7 +64,7 @@ Examples:
   settingUp: (label: string) => `Setting up FinTrack MCP for ${label}...`,
   settingUpDemo: (change: DemoEntryChange, label: string) =>
     `${change === DemoEntryChange.enum.add ? 'Adding' : 'Removing'} the ${DEMO_SERVER_NAME} MCP entry for ${label}...`,
-  demoNext: `  Create or refresh its data with: ${NPX_COMMAND} demo — the ${DEMO_SERVER_NAME} server only opens a seeded demo database.`,
+  demoNotCreated: `  Run \`${NPX_COMMAND} demo\` once to create the demo data.`,
   done: 'Done.',
   /** Said when a client's configuration file could not be used: the same words whichever file it was. */
   configFailure: (failure: ClientConfigFailure) =>
@@ -73,6 +73,9 @@ Examples:
 
 /** What `setup` needs of the I/O: where to print, and the client config files. */
 type SetupIo = Pick<CliIo, 'out' | 'err' | 'clients'>;
+
+/** What the demo entry needs besides the client files: where the demo database is, and whether it exists yet. */
+type DemoSetupIo = SetupIo & { demo: Pick<CliIo['demo'], 'databasePath' | 'hasDatabase'> };
 
 /** Writes the client's configuration and answers the exit code: help is `EXIT_OK`, an unknown tool or a configuration
  *  file that cannot be read or written is reported on stderr and is `EXIT_FAILURE`. */
@@ -124,7 +127,7 @@ export const runGuidedSetup = async (
 
 /** `--demo` / `--remove-demo`: edits only the client's `fintrack-demo` entry. It claims no owner and signs nothing in —
  *  the demo has no login — and never opens a database. */
-export const runDemoEntry = (io: SetupIo, tool: string | undefined, change: DemoEntryChange): number => {
+export const runDemoEntry = (io: DemoSetupIo, tool: string | undefined, change: DemoEntryChange): number => {
   if (!tool) {
     io.out(SETUP_MESSAGES.help);
     return EXIT_OK;
@@ -135,11 +138,11 @@ export const runDemoEntry = (io: SetupIo, tool: string | undefined, change: Demo
     return EXIT_FAILURE;
   }
   io.out(SETUP_MESSAGES.settingUpDemo(change, client.label));
-  return (change === DemoEntryChange.enum.add ? client.addDemo() : client.removeDemo()).match(
+  return (change === DemoEntryChange.enum.add ? client.addDemo(io.demo.databasePath) : client.removeDemo()).match(
     (report) => {
       report.warnings.forEach((warning) => io.err(warning));
       report.lines.forEach((line) => io.out(line));
-      if (change === DemoEntryChange.enum.add) io.out(SETUP_MESSAGES.demoNext);
+      if (change === DemoEntryChange.enum.add && !io.demo.hasDatabase()) io.out(SETUP_MESSAGES.demoNotCreated);
       io.out(SETUP_MESSAGES.done);
       return EXIT_OK;
     },

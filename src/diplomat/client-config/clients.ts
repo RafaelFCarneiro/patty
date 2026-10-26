@@ -7,7 +7,6 @@ import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../contr
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/sign-in.js';
 import { clientConfigFailures, type ClientConfigFailure } from '../../models/client-config.js';
 import { DEMO_SERVER_NAME } from '../../models/demo.js';
-import { DEMO_DB_PATH } from '../../config.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
 import {
   mergeMcpServersKey,
@@ -127,11 +126,11 @@ const MERGE_BY_KEY = {
 const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig => ({
   label,
   run: (profile) => writeEntry(path(), MERGE_BY_KEY[key], withProfile(entry, profile), next),
-  addDemo: () =>
+  addDemo: (databasePath) =>
     writeEntry(
       path(),
       (existing, demoEntry) => MERGE_BY_KEY[key](existing, demoEntry, DEMO_SERVER_NAME),
-      withDemo(entry, DEMO_DB_PATH),
+      withDemo(entry, databasePath),
       next,
     ),
   removeDemo: () => removeDemoEntry(path(), key, next),
@@ -169,7 +168,8 @@ const setupCodex = (profile: string): ConfigReport =>
 const codex: ClientConfig = {
   label: 'OpenAI Codex',
   run: setupCodex,
-  addDemo: () => ok({ warnings: [], lines: [codexSnippet(DEMO_SERVER_NAME, withDemo(STDIO_ENTRY, DEMO_DB_PATH).env)] }),
+  addDemo: (databasePath) =>
+    ok({ warnings: [], lines: [codexSnippet(DEMO_SERVER_NAME, withDemo(STDIO_ENTRY, databasePath).env)] }),
   removeDemo: () =>
     ok({ warnings: [], lines: [`  Codex CLI: remove the "${DEMO_SERVER_NAME}" entry from your MCP config file.`] }),
 };

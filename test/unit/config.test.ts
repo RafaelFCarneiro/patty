@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { isAbsolute } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { IPV4_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
-import { demoConfig, DEMO_DB_PATH, EncryptionKey, loadConfig } from '../../src/config.js';
+import { demoConfig, DEMO_DB_PATH, EncryptionKey, loadConfig, osLocale } from '../../src/config.js';
 import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from '../../src/models/demo.js';
 import { AuthMode } from '../../src/models/auth/mode.js';
 
@@ -242,5 +242,17 @@ describe('the demo (FINTRACK_DEMO)', () => {
     delete process.env['DB_PATH'];
     expect(DEMO_DB_PATH).not.toBe(loadConfig().DB_PATH);
     expect(DEMO_DB_PATH.startsWith(homedir())).toBe(true);
+  });
+});
+
+describe('osLocale', () => {
+  it('takes the first locale variable that is set, in LC_ALL, LC_MESSAGES, LANG order', () => {
+    expect(osLocale({ LC_ALL: 'es_CO.UTF-8', LANG: 'en_US.UTF-8' })).toBe('es_CO.UTF-8');
+    expect(osLocale({ LC_ALL: '', LC_MESSAGES: 'pt_BR.UTF-8', LANG: 'en_US.UTF-8' })).toBe('pt_BR.UTF-8');
+    expect(osLocale({ LANG: 'en_US.UTF-8' })).toBe('en_US.UTF-8');
+  });
+
+  it('falls back to the runtime’s locale when none is set', () => {
+    expect(osLocale({})).toBe(Intl.DateTimeFormat().resolvedOptions().locale);
   });
 });

@@ -13,6 +13,7 @@ import {
   DemoSeedStatus,
   DemoStepKind,
   type DemoCardSpec,
+  type DemoSeedFacts,
   type DemoFixedLine,
   type DemoPack,
   type DemoPendingLine,
@@ -21,7 +22,7 @@ import {
   type DemoTripItem,
 } from '../models/demo.js';
 import { BudgetPeriod } from '../models/budget.js';
-import { isDemoInstance, type InstanceKind } from '../models/instance.js';
+import { isDemoInstance } from '../models/instance.js';
 import { Locale, LocaleSource } from '../models/locale.js';
 import { CurrencyCode, FIAT_DECIMALS } from '../models/money.js';
 import { RecurringPeriod } from '../models/recurring.js';
@@ -434,8 +435,6 @@ export const resolveDemoCountry = (osLocale: string | undefined): DemoCountry =>
   const region = (next !== undefined && SCRIPT_SUBTAG.test(next) ? afterScript : next) ?? '';
   return REGION_COUNTRY[region.toUpperCase()] ?? LANGUAGE_COUNTRY[language.toLowerCase()] ?? DEFAULT_DEMO_COUNTRY;
 };
-
-export type DemoSeedFacts = { hasUserData: boolean; kind: InstanceKind; seededAt: string | null };
 
 /** Where a seed run starts from what the database already says: nothing to do (`present`), a refusal (`not_demo`,
  *  `interrupted`), or `fresh` — which also covers a demo marked before any data landed, whose seed starts over. */
