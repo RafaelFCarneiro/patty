@@ -165,16 +165,6 @@ describe('window.valueIn (ui/money.js)', () => {
 });
 
 describe('window.primaryCurrencyOf (ui/money.js)', () => {
-  it('picks BRL when present, regardless of magnitude', () => {
-    const { primaryCurrencyOf } = loadCurrencyHelpers();
-    expect(primaryCurrencyOf({ BRL: 1, USD: 100000 })).toBe('BRL');
-  });
-
-  it('picks alphabetically first among non-BRL currencies', () => {
-    const { primaryCurrencyOf } = loadCurrencyHelpers();
-    expect(primaryCurrencyOf({ USD: 50, BTC: 0.01 })).toBe('BTC');
-  });
-
   it('ignores zero-valued entries when a non-zero currency is also present', () => {
     const { primaryCurrencyOf } = loadCurrencyHelpers();
     expect(primaryCurrencyOf({ USD: 0, BTC: 0.01 })).toBe('BTC');
@@ -269,5 +259,80 @@ describe('window.formatMultiCurrencyWith (ui/money.js)', () => {
   it('shows every currency present when all of them are zero, rather than picking one', () => {
     const { formatMultiCurrencyWith } = loadCurrencyHelpers();
     expect(formatMultiCurrencyWith({ BRL: 0, USD: 0 }, stubFormat)).toBe('BRL 0 / USD 0');
+  });
+});
+
+// primaryCurrencyOf / setBaseCurrency pick the representative currency from the user's base
+// currency and the data, never from a hardcoded BRL.
+type Money = {
+  primaryCurrencyOf: (map: Record<string, number>) => string;
+  setBaseCurrency: (code?: string | null) => void;
+  DEFAULT_CURRENCY: string;
+  BASE_CURRENCY?: string;
+};
+
+const loadMoney = (): Money => {
+  const window: Record<string, unknown> = {
+    __fintrackCurrencies: Object.fromEntries(CURRENCIES.map((currency) => [currency.code, currency])),
+  };
+  const sandbox = { window, Intl, Number, Object, Math, Array };
+  vm.createContext(sandbox);
+  vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
+  return window as unknown as Money;
+};
+
+describe('window.primaryCurrencyOf with a base currency (ui/money.js)', () => {
+  it('prefers the base currency when the map has it, even when another currency is more active', () => {
+    const money = loadMoney();
+    money.setBaseCurrency('BRL');
+    expect(money.primaryCurrencyOf({ USD: 900, BRL: 10 })).toBe('BRL');
+  });
+
+  it('keeps a base currency whose own amount is zero', () => {
+    const money = loadMoney();
+    money.setBaseCurrency('BRL');
+    expect(money.primaryCurrencyOf({ BRL: 0, USD: -100 })).toBe('BRL');
+  });
+
+  it('ignores a base currency absent from the map and picks the most active currency', () => {
+    const money = loadMoney();
+    money.setBaseCurrency('MXN');
+    expect(money.primaryCurrencyOf({ USD: 900, BRL: 10 })).toBe('USD');
+  });
+
+  it('picks the most active currency when no base currency is set, USD-only data giving USD', () => {
+    const money = loadMoney();
+    expect(money.primaryCurrencyOf({ USD: 5 })).toBe('USD');
+    expect(money.primaryCurrencyOf({ BRL: 10, USD: 900 })).toBe('USD');
+  });
+
+  it('prefers non-zero currencies, then breaks ties alphabetically', () => {
+    const money = loadMoney();
+    expect(money.primaryCurrencyOf({ BRL: 0, USD: 3 })).toBe('USD');
+    expect(money.primaryCurrencyOf({ USD: 3, COP: 3 })).toBe('COP');
+    expect(money.primaryCurrencyOf({ USD: 0, COP: 0 })).toBe('COP');
+  });
+
+  it('falls back to DEFAULT_CURRENCY for an empty map', () => {
+    const money = loadMoney();
+    expect(money.primaryCurrencyOf({})).toBe('BRL');
+    money.setBaseCurrency('USD');
+    expect(money.primaryCurrencyOf({})).toBe('USD');
+  });
+});
+
+describe('window.setBaseCurrency (ui/money.js)', () => {
+  it('makes a known base currency the default', () => {
+    const money = loadMoney();
+    money.setBaseCurrency('COP');
+    expect(money.DEFAULT_CURRENCY).toBe('COP');
+    expect(money.BASE_CURRENCY).toBe('COP');
+  });
+
+  it.each([['XYZ'], [''], [null], [undefined]])('ignores %j and keeps the last-resort default', (code) => {
+    const money = loadMoney();
+    money.setBaseCurrency(code);
+    expect(money.DEFAULT_CURRENCY).toBe('BRL');
+    expect(money.BASE_CURRENCY).toBeUndefined();
   });
 });

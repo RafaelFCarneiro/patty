@@ -1591,7 +1591,7 @@
             });
 
             const chartCurrency = primaryCurrencyOf(
-                Object.assign({}, ...months.map(p => colSums[`${p.year}-${p.month}`]?.income), ...months.map(p => colSums[`${p.year}-${p.month}`]?.expense))
+                mergeCurrencyMaps(...months.map(p => colSums[`${p.year}-${p.month}`]?.income), ...months.map(p => colSums[`${p.year}-${p.month}`]?.expense))
             );
 
             const incomeData = [];

@@ -146,9 +146,10 @@ describe('renderKPIs (ui/dashboards/overview.html)', () => {
 
   it('colors the balance KPI from its own primary currency, never a cross-currency blend', () => {
     // BRL is negative (expense-heavy) while USD is positive — primaryCurrencyOf must pick BRL
-    // (present, so preferred over alphabetical) and color from BRL's own sign, not some blended
+    // (the base currency, present in the data) and color from BRL's own sign, not some blended
     // cross-currency number that ADR-026 explicitly forbids computing.
     const { sandbox, documentStub } = loadOverviewSandbox();
+    sandbox.BASE_CURRENCY = 'BRL'; // the user's base currency wins when the data has it
     sandbox.allTransactions = [
       tx({ type: 'expense', amount: 500, currency: 'BRL' }),
       tx({ type: 'income', amount: 1000, currency: 'USD' }),

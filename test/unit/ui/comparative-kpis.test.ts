@@ -198,6 +198,7 @@ describe('calculateAndRenderAll KPIs (ui/dashboards/comparative.html)', () => {
 
   it('colors the balance KPI from its own primary currency, never a cross-currency blend', () => {
     const { sandbox, documentStub } = loadComparativeSandbox();
+    sandbox.BASE_CURRENCY = 'BRL'; // the user's base currency wins when the data has it
     withMonth(sandbox);
     sandbox.allTransactions = [
       tx({ type: 'expense', amount: 500, currency: 'BRL' }),

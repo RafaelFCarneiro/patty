@@ -107,6 +107,7 @@
     status: '/api/status',
     dashboards: '/api/dashboards',
     currencies: '/api/currencies',
+    preferences: '/api/preferences',
     dashboard: function (name) {
       return '/api/dashboards/' + encodeURIComponent(name);
     },
@@ -366,9 +367,20 @@
       } catch {
         return;
       }
-      if (typeof window.fintrackOnDataChanged === 'function' && Array.isArray(payload.entities)) {
-        window.fintrackOnDataChanged(payload.entities);
-      }
+      if (!Array.isArray(payload.entities)) return;
+      var forward = function () {
+        if (typeof window.fintrackOnDataChanged === 'function') window.fintrackOnDataChanged(payload.entities);
+      };
+      if (payload.entities.indexOf('userSettings') === -1) return forward();
+      // A base-currency change updates the default before the fragment re-renders with it.
+      fetchJson(Api.preferences)
+        .then(function (prefs) {
+          window.setBaseCurrency(prefs && prefs.baseCurrency);
+        })
+        .catch(function (err) {
+          console.error('Could not refresh preferences:', err);
+        })
+        .then(forward);
     };
   }
 
@@ -441,6 +453,19 @@
             err.message +
             '. Crypto amounts (BTC/USDC) may display at the wrong precision until this is refreshed.',
         );
+      });
+
+    // Base currency resolves before any fragment renders (a fragment reads DEFAULT_CURRENCY
+    // synchronously); a failure keeps the last-resort default and never blocks the page.
+    bootPromise = bootPromise
+      .then(function () {
+        return fetchJson(Api.preferences);
+      })
+      .then(function (prefs) {
+        window.setBaseCurrency(prefs && prefs.baseCurrency);
+      })
+      .catch(function (err) {
+        console.error('Could not load preferences; keeping the default currency:', err);
       });
 
     bootPromise.then(function () {

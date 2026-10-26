@@ -1137,7 +1137,7 @@ async function loadDashboardData() {
 
         // Render Charts — Chart.js needs single numeric series, so pick ONE real currency (never a
         // converted/blended total; the KPI cards above already show every currency correctly).
-        const compareChartCurrency = primaryCurrencyOf(Object.assign({}, totalIncome, totalBudgetLimit));
+        const compareChartCurrency = primaryCurrencyOf(mergeCurrencyMaps(totalIncome, totalBudgetLimit));
         renderMonthlyCompareChart({
             currency: compareChartCurrency,
             effIncome: valueIn(incomeTotalEff, compareChartCurrency),
@@ -1276,7 +1276,7 @@ function renderExpenseBudgetCategories(budgetCategoryMap) {
         // A displayed pct/over-budget flag/progress bar can only read one real currency's own
         // limit-vs-committed — never a blended total across currencies (formatMultiCurrency below
         // still shows every currency correctly as text).
-        const rowCurrency = primaryCurrencyOf(Object.assign({}, data.limit, data.committed));
+        const rowCurrency = primaryCurrencyOf(mergeCurrencyMaps(data.limit, data.committed));
         const rowLimit = valueIn(data.limit, rowCurrency);
         const rowCommitted = valueIn(data.committed, rowCurrency);
         const rowRemaining = valueIn(data.remaining, rowCurrency);
@@ -1570,7 +1570,7 @@ async function renderTrendChart(selectedYear, selectedMonth) {
 
     // A line chart needs a single numeric series, so pick ONE real currency (never a
     // converted/blended total) — weekly figures below only include that currency's own transactions.
-    const trendCurrency = primaryCurrencyOf(Object.assign({}, monthlyLimitByCurrency, monthlyIncomeByCurrency));
+    const trendCurrency = primaryCurrencyOf(mergeCurrencyMaps(monthlyLimitByCurrency, monthlyIncomeByCurrency));
     const totalMonthlyLimit = valueIn(monthlyLimitByCurrency, trendCurrency);
 
     const labels = ["1"];
