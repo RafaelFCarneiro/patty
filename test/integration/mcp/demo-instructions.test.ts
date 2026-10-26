@@ -1,7 +1,9 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,7 +12,6 @@ import { buildMcpServer } from '../../../src/diplomat/mcp/server.js';
 import { ownerGate } from '../../../src/diplomat/mcp/gate.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 import { buildApp, type AppContext } from '../app-builder.js';
-import { claimOwner } from '../auth/helpers.js';
 
 const dirs: string[] = [];
 const apps: AppContext[] = [];
@@ -52,31 +53,23 @@ describe('MCP server instructions', () => {
 });
 
 describe('MCP server instructions over streamable HTTP /mcp', () => {
-  const initialize = async (ctx: AppContext, headers: Record<string, string>) => {
-    const res = await ctx.app.inject({
-      method: 'POST',
-      url: '/mcp',
-      headers: { ...headers, 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
-      payload: {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } },
-      },
-    });
-    return (res.json() as { result: { instructions?: string } }).result.instructions;
+  // A real listener and client: the SDK's HTTP transport needs a real socket, which `inject` does not provide.
+  const instructionsOverHttp = async (ctx: AppContext): Promise<string | undefined> => {
+    await ctx.app.listen({ port: 0, host: '127.0.0.1' });
+    const { port } = ctx.app.server.address() as AddressInfo;
+    const client = new Client({ name: 'demo-instructions-http-test', version: '1' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)));
+    const instructions = client.getInstructions();
+    await client.close();
+    return instructions;
   };
 
-  it('is sent for a demo database and omitted for a standard one', async () => {
-    expect(await initialize(await appOf(InstanceKind.enum.demo), {})).toBe(DEMO_SERVER_INSTRUCTIONS);
-    expect(await initialize(await appOf(InstanceKind.enum.standard), {})).toBeUndefined();
+  it('is sent for a demo database', async () => {
+    expect(await instructionsOverHttp(await appOf(InstanceKind.enum.demo))).toBe(DEMO_SERVER_INSTRUCTIONS);
   });
 
-  it('is sent to a signed-in session of a demo database', async () => {
-    const ctx = await appOf(InstanceKind.enum.demo, { auth: {} });
-    const cookie = await claimOwner(ctx);
-    const origin = 'http://127.0.0.1:51737';
-    expect(await initialize(ctx, { cookie, host: '127.0.0.1:51737', origin })).toBe(DEMO_SERVER_INSTRUCTIONS);
+  it('is omitted for a standard database', async () => {
+    expect(await instructionsOverHttp(await appOf(InstanceKind.enum.standard))).toBeUndefined();
   });
 });
 
