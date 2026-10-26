@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, isNotNull } from 'drizzle-orm';
 import { INSTANCE_SETTINGS_ID } from '../../../models/auth/users.js';
 import { OWNER_USER_ID } from '../../../models/auth/owner.js';
 import { InstanceKind } from '../../../models/instance.js';
@@ -8,7 +8,9 @@ import {
   accounts,
   bills,
   budgets,
+  categories,
   creditCards,
+  dashboards,
   recurringRules,
   settings,
   tags,
@@ -26,6 +28,8 @@ export type InstanceRepo = {
 };
 
 const USER_DATA_TABLES = [accounts, creditCards, bills, transactions, tags, budgets, recurringRules] as const;
+/** Tables whose rows are shared defaults (no owner) or a user's own: only the owned ones are user data. */
+const SHARED_OR_OWNED_TABLES = [categories, dashboards] as const;
 
 export const instanceRepo = (db: Db): InstanceRepo => ({
   kind: async () => {
@@ -45,7 +49,12 @@ export const instanceRepo = (db: Db): InstanceRepo => ({
     return Locale.catch(Locale.enum.en).parse(row?.locale);
   },
   hasUserData: async () => {
-    const found = await Promise.all(USER_DATA_TABLES.map((table) => db.select({ id: table.id }).from(table).limit(1)));
+    const found = await Promise.all([
+      ...USER_DATA_TABLES.map((table) => db.select({ id: table.id }).from(table).limit(1)),
+      ...SHARED_OR_OWNED_TABLES.map((table) =>
+        db.select({ id: table.id }).from(table).where(isNotNull(table.userId)).limit(1),
+      ),
+    ]);
     return found.some((rows) => rows.length > 0);
   },
 });

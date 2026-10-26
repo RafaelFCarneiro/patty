@@ -109,6 +109,27 @@ describe('seedDemo — marking and idempotency', () => {
     expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
   });
 
+  it.each([
+    [
+      'a user-created category',
+      "INSERT INTO categories (id, name, kind, user_id, version) VALUES ('c9','Pets','expense','user-owner',0)",
+    ],
+    [
+      'an inline dashboard',
+      'INSERT INTO dashboards (id, name, html, source, updated_at, user_id, version) ' +
+        "VALUES ('d9','Mine','<p>x</p>','inline','2026-01-01T00:00:00.000Z','user-owner',0)",
+    ],
+  ])('refuses an unmarked database holding %s', async (_label, insert) => {
+    await db.run(sql.raw(insert));
+    expect((await seed(DemoCountry.enum.us)).isErr()).toBe(true);
+    expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
+  });
+
+  it('seeds a database holding only the shared defaults', async () => {
+    expect(await count('categories', 'user_id IS NULL')).toBeGreaterThan(0);
+    expect((await seed(DemoCountry.enum.us))._unsafeUnwrap().seeded).toBe(true);
+  });
+
   it('refuses an unmarked database holding another user’s accounts', async () => {
     await db.run(
       sql`INSERT INTO users (id, username, role, created_at) VALUES ('user-2', 'other', 'member', '2026-01-01T00:00:00.000Z')`,

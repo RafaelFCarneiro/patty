@@ -44,6 +44,21 @@ describe('planDemo — determinism', () => {
   });
 });
 
+describe('planDemo — budgets in the pack’s currency', () => {
+  it('Brazil sizes the shopping budget without the Conta Global’s dollar purchases', () => {
+    const plan = planFor(DemoCountry.enum.br);
+    const global = DEMO_PACKS[DemoCountry.enum.br].global!.name;
+    const shopping = (include: boolean) =>
+      [...ofKind(plan, K.purchase), ...ofKind(plan, K.expense)]
+        .filter((step) => step.input.category === 'Shopping' && step.date.startsWith('2026-09'))
+        .filter((step) => include || !('account' in step.input && step.input.account === global))
+        .reduce((total, step) => total + step.input.amount, 0);
+    const limit = ofKind(plan, K.budget).find((step) => step.input.category === 'Shopping')!.input.limit;
+    expect(shopping(true)).toBeGreaterThan(shopping(false));
+    expect(limit).toBeCloseTo(shopping(false) * 1.35, 1);
+  });
+});
+
 describe('planDemo — exchange rates', () => {
   it('are observed at the instant given, not at a fixed hour of the day', () => {
     const rates = ofKind(planFor(DemoCountry.enum.br), K.rate);

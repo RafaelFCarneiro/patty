@@ -265,12 +265,17 @@ const billStepsOf = (pack: DemoPack, purchases: readonly DemoStep[], today: stri
 const isSpend = (step: DemoStep): step is Extract<DemoStep, { kind: typeof STEP.expense | typeof STEP.purchase }> =>
   step.kind === STEP.expense || step.kind === STEP.purchase;
 
+/** A purchase on the pack's foreign-currency account: it never counts against a budget in the pack's currency. */
+const isForeignFunded = (pack: DemoPack, step: DemoStep): boolean =>
+  step.kind === STEP.expense && pack.global !== undefined && step.input.account === pack.global.name;
+
 /** Budgets are sized against the last full month's spend: a factor under 1 is a budget that month already blew. */
 const budgetStepsOf = (pack: DemoPack, spending: readonly DemoStep[], today: string, start: string): DemoStep[] => {
   const lastMonth = monthContext(today, -1);
   const prefix = `${lastMonth.year}-${pad(lastMonth.month)}-`;
   const spentByCategory = R.pipe(
     spending.filter(isSpend),
+    R.filter((step) => !isForeignFunded(pack, step)),
     R.filter((step) => step.date.startsWith(prefix)),
     R.groupBy((step) => step.input.category ?? ''),
     R.mapValues(R.sumBy((step) => step.input.amount)),
