@@ -212,9 +212,10 @@ const transferStepsOf = (pack: DemoPack, months: readonly MonthContext[]): DemoS
     { to: pack.accounts.wallet.name, day: WALLET_TRANSFER_DAY, line: pack.transfers.wallet },
   ];
   return R.flatMap(months, (month) =>
-    transfers
-      .filter(({ day }) => day <= month.lastDay)
-      .map(({ to, day, line }): DemoStep => {
+    R.pipe(
+      transfers,
+      R.filter(({ day }) => day <= month.lastDay),
+      R.map(({ to, day, line }): DemoStep => {
         const date = dateIn(month, day);
         const { description, amount } = line;
         return {
@@ -223,6 +224,7 @@ const transferStepsOf = (pack: DemoPack, months: readonly MonthContext[]): DemoS
           input: { from: pack.accounts.checking.name, to, amount, date, description },
         };
       }),
+    ),
   );
 };
 
@@ -251,7 +253,8 @@ const billStepsOf = (pack: DemoPack, purchases: readonly DemoStep[], today: stri
   ];
   return R.flatMap(cards, ({ card, closesLast }) => {
     const periods = R.pipe(
-      purchases.filter(isCardPurchase),
+      purchases,
+      R.filter(isCardPurchase),
       R.filter((step) => step.input.card === card.name),
       R.map((step) => billPeriodFor(step.date, card.closingDay, card.dueDay)),
       R.uniqueBy((period) => `${period.month}-${period.year}`),
@@ -274,7 +277,8 @@ const budgetStepsOf = (pack: DemoPack, spending: readonly DemoStep[], today: str
   const lastMonth = monthContext(today, -1);
   const prefix = `${lastMonth.year}-${pad(lastMonth.month)}-`;
   const spentByCategory = R.pipe(
-    spending.filter(isSpend),
+    spending,
+    R.filter(isSpend),
     R.filter((step) => !isForeignFunded(pack, step)),
     R.filter((step) => step.date.startsWith(prefix)),
     R.groupBy((step) => step.input.category ?? ''),
@@ -304,13 +308,15 @@ const ratesStepsOf = (pack: DemoPack, ratesAsOf: string, start: string): DemoSte
     { from: CurrencyCode.enum.BTC, rate: btc },
     ...(pack.global ? [{ from: CurrencyCode.enum.USD, rate: pack.usdRate }] : []),
   ];
-  return quoted
-    .filter(({ from }) => from !== pack.currency)
-    .map(({ from, rate }) => ({
+  return R.pipe(
+    quoted,
+    R.filter(({ from }) => from !== pack.currency),
+    R.map(({ from, rate }) => ({
       kind: STEP.rate,
       date: start,
       input: { from, to: pack.currency, rate, asOf: ratesAsOf, source: DEMO_RATE_SOURCE },
-    }));
+    })),
+  );
 };
 
 const accountStepOf =
