@@ -706,7 +706,7 @@ file-system or environment call of its own. *Look*: `diplomat/db/database-files.
 resolving the nearest existing ancestor of a file that does not exist yet; one dangling link is followed; a link loop or a
 chain of dangling links is `null`, treated as the real database since it cannot be shown to be anything else),
 `isSymlink` (a symlink at the demo path is refused outright: probing, opening and deleting must all act on the same
-file) and `probeDatabase` (a private copy of the database and its write-ahead log opened with the demo key, never the original —
+file) and `probeDatabase` (a private copy of the database, its write-ahead log and its hot rollback journal opened with the demo key, never the original —
 libSQL has no read-only open, and closing a connection can checkpoint a log — reading `instance_kind` and whether it
 holds user data; missing / unreadable / its kind). *Decide*: the pure `logic/demo-database.ts`'s `planDemoDatabase`
 (`real_database` and `not_demo` refusals — the latter also for an alias, and for a `standard` database that holds data, before anything is migrated; delete first only for a `--reset` on a database that says `demo`; `createdHere`,

@@ -249,6 +249,43 @@ describe('demo — safety: it never touches what is not a demo database', () => 
     expect(readFileSync(`${demoPath}-wal`).equals(before.wal)).toBe(true);
   });
 
+  it.each([false, true])(
+    'classifies by what was committed, not by a crashed transaction’s pages (reset=%s)',
+    async (reset) => {
+      const url = pathToFileURL(join(dir, 'live.db')).href;
+      const setup = createClient({ url, encryptionKey: DEMO_DB_KEY });
+      await setup.execute('PRAGMA journal_mode = DELETE');
+      const db = drizzle(setup, { schema });
+      await bootstrap(db);
+      await seedDemo(db, { country: DemoCountry.enum.us, today: TODAY, config: CONFIG });
+      await db.run(sql`UPDATE settings SET instance_kind = 'standard' WHERE id = 'singleton'`);
+      setup.close();
+      const raw = createClient({ url, encryptionKey: DEMO_DB_KEY });
+      // A transaction that marks the database a demo and spills its pages to the file, then "crashes": the file says demo,
+      // the hot rollback journal beside it says what is really committed.
+      const crashed = await raw.transaction('write');
+      await crashed.execute('PRAGMA cache_size = 1');
+      await crashed.execute("UPDATE settings SET instance_kind = 'demo' WHERE id = 'singleton'");
+      await crashed.execute('CREATE TABLE junk (x BLOB)');
+      for (let batch = 0; batch < 30; batch += 1) {
+        await crashed.execute(
+          'INSERT INTO junk SELECT randomblob(2000) FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3)',
+        );
+      }
+      copyFileSync(join(dir, 'live.db'), demoPath);
+      copyFileSync(join(dir, 'live.db-journal'), `${demoPath}-journal`);
+      await crashed.rollback();
+      raw.close();
+
+      const before = { db: readFileSync(demoPath), journal: readFileSync(`${demoPath}-journal`) };
+      expect((await shellWith().prepare({ country: DemoCountry.enum.us, reset }))._unsafeUnwrapErr().code).toBe(
+        not_demo,
+      );
+      expect(readFileSync(demoPath).equals(before.db)).toBe(true);
+      expect(readFileSync(`${demoPath}-journal`).equals(before.journal)).toBe(true);
+    },
+  );
+
   it.each([false, true])('does not change the journal mode of a database it refuses (reset=%s)', async (reset) => {
     const setup = createClient({ url: pathToFileURL(demoPath).href, encryptionKey: DEMO_DB_KEY });
     await setup.execute('PRAGMA journal_mode = DELETE');

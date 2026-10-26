@@ -62,8 +62,9 @@ export type DatabaseLook = { probe: DemoProbe; holdsData: boolean };
 const MISSING: DatabaseLook = { probe: DemoProbeAbsence.enum.missing, holdsData: false };
 const UNREADABLE: DatabaseLook = { probe: DemoProbeAbsence.enum.unreadable, holdsData: false };
 
-/** The database and its write-ahead log: what a reader needs to see everything that was committed. */
-const PROBE_FILE_SUFFIXES = ['', '-wal'] as const;
+/** The database, its write-ahead log and its rollback journal: what a reader needs to see exactly what was committed —
+ *  without a hot journal, pages of a transaction that never committed would read as if they had. */
+const PROBE_FILE_SUFFIXES = ['', '-wal', '-journal'] as const;
 
 /** Runs `look` on a private copy of the database files, which are removed afterwards. Opening the original would let
  *  SQLite recover or checkpoint a write-ahead log left by an unclean shutdown on close — a write to a file the probe
