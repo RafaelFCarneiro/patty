@@ -261,8 +261,8 @@ describe('demo — safety: it never touches what is not a demo database', () => 
       await db.run(sql`UPDATE settings SET instance_kind = 'standard' WHERE id = 'singleton'`);
       setup.close();
       const raw = createClient({ url, encryptionKey: DEMO_DB_KEY });
-      // A transaction that marks the database a demo and spills its pages to the file, then "crashes": the file says demo,
-      // the hot rollback journal beside it says what is really committed.
+      // A transaction that marks the database a demo and spills its pages to the file, then "crashes": the file says
+      // demo, the hot rollback journal beside it says what is really committed.
       const crashed = await raw.transaction('write');
       await crashed.execute('PRAGMA cache_size = 1');
       await crashed.execute("UPDATE settings SET instance_kind = 'demo' WHERE id = 'singleton'");
