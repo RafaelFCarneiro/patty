@@ -279,6 +279,9 @@ describe('clockDateOf', () => {
 describe('resolveDemoCountry — the OS locale picks the demo', () => {
   it.each([
     ['es-CO', 'co'],
+    ['es-Latn-CO', 'co'],
+    ['pt-Latn-BR', 'br'],
+    ['es-Latn', 'mx'],
     ['es_CO.UTF-8', 'co'],
     ['es-MX', 'mx'],
     ['es', 'mx'],
