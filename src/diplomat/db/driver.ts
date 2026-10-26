@@ -150,7 +150,6 @@ export const openDatabaseWithKey = async (
   // keep their current permissions (Node does not retroactively tighten them).
   mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 });
   const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey });
-  // A look at a database that may not be ours (the demo probe) must not change its persistent journal mode.
   if (initializeJournal) await enableWal(client);
   // busy_timeout is per-connection (ADR-024), so it is asserted unconditionally on every open.
   await assertBusyTimeout(client);

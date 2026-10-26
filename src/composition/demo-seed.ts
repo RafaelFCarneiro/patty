@@ -107,12 +107,6 @@ const runPlan = async (
   return ok(undefined);
 };
 
-/**
- * Seeds `db` as a demo for `country`, relative to `today`. A fresh database is marked `demo` first (the marker, not a
- * path, says it is one), filled, and — as the very last step, through a flow like the marker — marked complete. A
- * database that already holds data is left alone when it is a seeded demo (so running the demo again does not duplicate
- * anything), and reported rather than touched when it is not a demo or its seed never finished.
- */
 export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result<DemoSeedReport, AppError>> => {
   const clock = { now: options.today };
   const runtime = createRuntime(db, { ...options.config, FINTRACK_LOCALE: undefined }, { clock: () => clock.now });

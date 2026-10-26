@@ -28,7 +28,6 @@ export const withProfile = <E extends Record<string, unknown>>(
 ): E | (E & { env: Record<string, string> }) =>
   profile === DEFAULT_PROFILE ? entry : { ...entry, env: { [PROFILE_ENV_VAR]: profile } };
 
-/** The demo entry for a client: its normal entry, run against the demo database, port and key (`FINTRACK_DEMO`). */
 export const withDemo = <E extends Record<string, unknown>>(
   entry: E,
   databasePath: string,
@@ -41,7 +40,6 @@ export const withDemo = <E extends Record<string, unknown>>(
 // Pure config merge helpers (testable without FS)
 // ---------------------------------------------------------------------------
 
-/** The key a client keeps its MCP servers under: `mcpServers` for most, `servers` for VS Code. */
 export type ServersKey = 'mcpServers' | 'servers';
 
 export const SERVER_NAME = 'fintrack';
@@ -56,21 +54,18 @@ const mergeServer = (
   return { ...existing, [key]: { ...servers, [name]: entry } };
 };
 
-/** Merges `{ mcpServers: { <name>: entry } }` into an existing config object. */
 export const mergeMcpServersKey = (
   existing: Record<string, unknown>,
   entry: Record<string, unknown>,
   name: string = SERVER_NAME,
 ): Record<string, unknown> => mergeServer('mcpServers', existing, entry, name);
 
-/** Merges `{ servers: { <name>: entry } }` into an existing config object (VS Code shape). */
 export const mergeServersKey = (
   existing: Record<string, unknown>,
   entry: Record<string, unknown>,
   name: string = SERVER_NAME,
 ): Record<string, unknown> => mergeServer('servers', existing, entry, name);
 
-/** The config without the `name` server — every other server and key untouched — or null when it has no such entry. */
 export const withoutServer = (
   existing: Record<string, unknown>,
   key: ServersKey,

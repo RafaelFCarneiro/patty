@@ -16,8 +16,6 @@ afterEach(() => {
   vi.resetModules();
 });
 
-/** `setup` bound to the real client config files under a temporary home, and an io that fails on any database or
- *  terminal use: the demo entry never claims an owner, signs in or opens a database. */
 const loadSetup = async () => {
   homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-demo-'));
   originalCwd = process.cwd();

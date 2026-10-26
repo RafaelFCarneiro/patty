@@ -52,22 +52,14 @@ export type Exporter = {
   writeSnapshot: (destination: string) => Promise<Result<ExportedRowCounts, string>>;
 };
 
-/** `country` unset: the demo picks the one that fits the OS locale. */
 export type DemoRequest = { country?: DemoCountry; reset: boolean };
 
 export type DemoPrepared = { status: DemoSeedStatus; databasePath: string; country: DemoCountry };
 
-/**
- * What `demo` needs: the demo database prepared (reset if asked and allowed, created and seeded if need be) and then
- * served on the demo's own port. The safety rules live behind it — only a database that says it is a demo is ever
- * deleted, never the real one — and every refusal comes back as a `DemoFailure`, not an exception.
- */
 export type DemoShell = {
   databasePath: string;
-  /** Whether the demo database file exists yet (it is created by `demo`). */
   hasDatabase: () => boolean;
   prepare: (request: DemoRequest) => Promise<Result<DemoPrepared, DemoFailure>>;
-  /** Starts the demo's dashboards, REST and MCP on `DEMO_PORT`; the process then stays up until interrupted. */
   serve: () => Promise<Result<void, DemoFailure>>;
 };
 
@@ -88,7 +80,6 @@ export type CliIo = {
   clients: ClientConfigs;
   /** The database and its key, for the export commands. */
   exporter: Exporter;
-  /** The throwaway demo database, for `demo`. */
   demo: DemoShell;
 };
 

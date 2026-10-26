@@ -16,24 +16,16 @@ export const DemoCountry = z.enum(['br', 'us', 'mx', 'co']);
 export type DemoCountry = z.infer<typeof DemoCountry>;
 export const DEFAULT_DEMO_COUNTRY = DemoCountry.enum.us;
 
-/** The demo's fixed, published encryption key. The data is fake and public, so the key protects nothing — and saying so
- *  beats a keychain entry that implies otherwise. A real database never opens with it (it has its own key), and the
- *  demo never prompts for keychain access. */
+/** Public on purpose: the data is fake, so the key protects nothing. */
 export const DEMO_DB_KEY = '0123456789abcdef'.repeat(4);
 
-/** The demo's sidecar port. Next to the real install's `51737`, so both can run at once. */
 export const DEMO_PORT = 51738;
 
-/** The MCP entry `setup <client> --demo` adds, beside (never instead of) `fintrack`. */
 export const DEMO_SERVER_NAME = 'fintrack-demo';
 
-/** The environment switch that makes a process use the demo key with auth off. The database's own marker is still
- *  what says "this is a demo" — this only selects how to open it. */
 export const DEMO_ENV_VAR = 'FINTRACK_DEMO';
 export const DEMO_ENV_ON = '1';
 
-/** A process told to open the demo (`FINTRACK_DEMO`) that finds a database that is not one: an expected refusal, never
- *  served (same shape as `DatabaseAhead`). */
 export const DemoNotReadyCode = z.enum(['demo_not_ready']);
 export type DemoNotReady = { code: typeof DemoNotReadyCode.enum.demo_not_ready; databasePath: string };
 
@@ -161,8 +153,7 @@ export type DemoStep =
   | StepOf<'payBill', { input: PayBill }>
   | StepOf<'revertBill', { input: BillQuery }>;
 
-/** How a seed run ended. `present` is a demo seeded in full earlier; `interrupted` one whose seed never finished (the
- *  completion marker is missing); `not_demo` a database that holds data and is not marked a demo. */
+/** `interrupted`: the database holds data but no completion marker. */
 export const DemoSeedStatus = z.enum(['seeded', 'present', 'interrupted', 'not_demo']);
 export type DemoSeedStatus = z.infer<typeof DemoSeedStatus>;
 
@@ -174,10 +165,6 @@ export const demoErrors = {
     validation([`demo seed failed at ${kind} (${date}): ${reason}`]),
 };
 
-/** Why `demo` did not start. `real_database`: the demo path is the real `DB_PATH`. `not_demo`: a file there that is
- *  not a demo database (or does not open with the demo key) — never deleted, never seeded. `interrupted`: a demo whose
- *  seed never finished. `seed_failed`: a seed that stopped on a step. `start_failed`: the server would not
- *  start. `port_in_use`: the demo's port is taken. `busy`: another run is preparing the same database. */
 export const DemoFailureCode = z.enum([
   'real_database',
   'not_demo',
@@ -194,32 +181,23 @@ export const demoFailures = {
   of: (code: DemoFailureCode, reason = ''): DemoFailure => ({ code, reason }),
 };
 
-/** What a look at the demo path found, before anything is migrated, seeded or deleted: no file, a file that does not
- *  open with the demo key (or is not a FinTrack database), or a database and what it says it is. */
 export const DemoProbeAbsence = z.enum(['missing', 'unreadable']);
 export const DemoProbe = DemoProbeAbsence.or(InstanceKind);
 export type DemoProbe = z.infer<typeof DemoProbe>;
 
-/** Where a seed run starts when there is nothing to report: the database holds no data yet. */
 export const DEMO_SEED_FRESH = 'fresh';
 
-/** What `demo` found at the demo path. `isRealDatabase` also holds when the path cannot be resolved (a symlink loop, a
- *  chain of dangling links): it cannot be shown to be anything else. */
+/** `isRealDatabase` is also true for an unresolvable path (a link loop): it cannot be shown to be anything else. */
 export type DemoDatabaseFacts = {
   isRealDatabase: boolean;
-  /** The demo path is a symlink: the file it names is not the one the demo would open, probe and delete. */
   isAlias: boolean;
   reset: boolean;
   probe: DemoProbe;
-  /** A readable database already holds finances (read without touching it, before any migration). */
   holdsData: boolean;
 };
 
 export type DemoRefusal = typeof DemoFailureCode.enum.real_database | typeof DemoFailureCode.enum.not_demo;
 
-/** What `demo` may do with that file: delete it first (`--reset` on a demo database), and whether this run owns the
- *  file once it is seeded (it did not exist, or was just deleted) — so a failed seed may remove it. */
 export type DemoDatabasePlan = { deleteFirst: boolean; createdHere: boolean };
 
-/** What a database says about its seed. */
 export type DemoSeedFacts = { hasUserData: boolean; kind: InstanceKind; seededAt: string | null };

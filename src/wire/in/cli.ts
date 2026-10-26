@@ -49,8 +49,6 @@ export type DemoEntryChange = z.infer<typeof DemoEntryChange>;
 
 const DEMO_EXCLUSIVE_MESSAGE = `--${DEMO_FLAG} and --${REMOVE_DEMO_FLAG} only edit the client's demo entry: use them alone`;
 
-/** `setup <client>`: the owner claim's options plus the profile the client's config and sign-in belong to — or, with
- *  `--demo` / `--remove-demo`, only the client's `fintrack-demo` entry, which claims nobody and signs nothing in. */
 export const SetupOptionsSchema = z
   .object({
     [PASSWORD_STDIN_FLAG]: z.boolean().default(false),
@@ -77,7 +75,6 @@ export const SetupOptionsSchema = z
   }));
 export type SetupOptions = z.infer<typeof SetupOptionsSchema>;
 
-/** `demo`: no positionals; `--country` unset means the one that fits the OS locale (the shell decides). */
 export const DEMO_POSITIONALS = 0;
 export const DemoOptionsSchema = z.object({
   country: z

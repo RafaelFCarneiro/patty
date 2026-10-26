@@ -1,7 +1,6 @@
 import { databaseAheadMessage, DatabaseAheadCode, type DatabaseAhead } from './database.js';
 import { demoNotReadyMessage, DemoNotReadyCode, type DemoNotReady } from './demo.js';
 
-/** Why a server start is refused: expected failures, each with a complete message of its own (no stack trace). */
 export type StartupRefusal = DatabaseAhead | DemoNotReady;
 
 type Messages = { [C in StartupRefusal['code']]: (refusal: Extract<StartupRefusal, { code: C }>) => string };

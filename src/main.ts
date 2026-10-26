@@ -13,8 +13,6 @@ const loadStdioModule = () => import('./composition/stdio.js');
 /** The exit status of a process that could not start. */
 const EXIT_FAILURE = 1;
 
-/** A refused start (a database a newer build migrated, a demo that is not one): the complete diagnosis, no stack
- *  trace, exit 1. */
 const refuseIfNotStarted = (started: Result<void, StartupRefusal>): void => {
   if (started.isOk()) return;
   console.error(startupRefusalMessage(started.error));

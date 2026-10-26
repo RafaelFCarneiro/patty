@@ -436,8 +436,6 @@ export const resolveDemoCountry = (osLocale: string | undefined): DemoCountry =>
   return REGION_COUNTRY[region.toUpperCase()] ?? LANGUAGE_COUNTRY[language.toLowerCase()] ?? DEFAULT_DEMO_COUNTRY;
 };
 
-/** Where a seed run starts from what the database already says: nothing to do (`present`), a refusal (`not_demo`,
- *  `interrupted`), or `fresh` — which also covers a demo marked before any data landed, whose seed starts over. */
 export const demoSeedStart = ({
   hasUserData,
   kind,

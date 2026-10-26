@@ -33,7 +33,6 @@ const runWorker = (): Promise<Tally> =>
 const contend = (): Promise<Tally[]> => Promise.all(Array.from({ length: WORKERS }, runWorker));
 const total = (tallies: Tally[], field: keyof Tally): number => tallies.reduce((sum, tally) => sum + tally[field], 0);
 
-// The lock is held by the operating system (an exclusive SQLite transaction): nothing to go stale or reclaim.
 describe('the demo database lock across processes', () => {
   it(
     'never admits two holders at once while processes race for it',

@@ -29,20 +29,10 @@ import {
 import { seedDemo } from './demo-seed.js';
 import { loadHttpModule } from './lazy-modules.js';
 
-/**
- * Composition root of `fintrack demo`, as a sequence: look at the file at the demo path, decide (pure,
- * `logic/demo-database.ts`) what may be done with it, delete / seed / clean up, and map the outcome to what the CLI
- * reports. The demo never reads or writes the real `DB_PATH`, and the only file it ever deletes is a database that
- * says, inside itself, that it is a demo.
- */
-
 export type DemoShellOptions = {
-  /** The demo database; the real `DB_PATH` by default is never this. Overridable for tests. */
   databasePath?: string;
-  /** The real install's database, which the demo must never touch. */
   realDatabasePath?: () => string;
   today?: () => Date;
-  /** The seeder, `seedDemo` unless a test needs a seed that fails. */
   seed?: typeof seedDemo;
 };
 
@@ -50,14 +40,12 @@ const seedFailure = (reason: string): DemoFailure => demoFailures.of(DemoFailure
 
 type Location = Pick<DemoDatabaseFacts, 'isRealDatabase' | 'isAlias'>;
 
-/** Look, part one: where the demo path leads. Nothing is opened and nothing is created. */
 const locateDatabase = (databasePath: string, realDatabasePath: string): Location => {
   const demo = canonicalPath(databasePath);
   const real = canonicalPath(realDatabasePath);
   return { isRealDatabase: demo === null || real === null || demo === real, isAlias: isSymlink(databasePath) };
 };
 
-/** Look, part two: what the file at the demo path is. The real database is never opened, not even to look at it. */
 const lookAtDatabase = async (databasePath: string, location: Location, reset: boolean): Promise<DemoDatabaseFacts> => {
   const { probe, holdsData } =
     location.isRealDatabase || location.isAlias
@@ -80,8 +68,7 @@ const seedDatabase = async ({ seed, databasePath, country, today }: SeedRun) => 
   }
 };
 
-/** A seed that fails or throws on a database created by this very run leaves nothing behind: half a demo is worse than
- *  none. A database that was already there is not ours to delete. */
+/** A database this run created is removed if its seed fails; one that was already there is not ours to delete. */
 const seedOrClean = async (run: SeedRun, createdHere: boolean): Promise<Result<DemoSeedStatus, DemoFailure>> => {
   try {
     const seeded = await seedDatabase(run);
@@ -100,8 +87,6 @@ type ShellContext = {
   seed: typeof seedDemo;
 };
 
-// The file's whole preparation — look, decide, delete, seed, clean up — runs under the lock: `createdHere` only means
-// "ours" if no other run can be doing the same.
 const prepareLocked = async (
   context: ShellContext,
   request: DemoRequest,
@@ -123,7 +108,6 @@ const prepareLocked = async (
 const prepareDemo = async (context: ShellContext, request: DemoRequest): Promise<Result<DemoPrepared, DemoFailure>> => {
   const { databasePath } = context;
   const location = locateDatabase(databasePath, context.realDatabasePath());
-  // A refusal that needs no file is answered before anything is created, the lock file included.
   if (location.isRealDatabase || location.isAlias) {
     const early = planDemoDatabase(await lookAtDatabase(databasePath, location, request.reset));
     if (early.isErr()) return err(demoFailures.of(early.error));

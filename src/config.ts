@@ -16,11 +16,9 @@ const DEFAULT_DB_PATH = join(DATA_DIRECTORY, 'fintrack.db');
 
 const OS_LOCALE_VARIABLES = ['LC_ALL', 'LC_MESSAGES', 'LANG'] as const;
 
-/** The OS locale tag (`es_CO.UTF-8`, `pt-BR`): the first of the locale variables that is set, else the runtime's. */
 export const osLocale = (env: NodeJS.ProcessEnv = process.env): string | undefined =>
   OS_LOCALE_VARIABLES.map((name) => env[name]).find((value) => value) ?? Intl.DateTimeFormat().resolvedOptions().locale;
 
-/** The demo's throwaway database, beside the real one and never the same file (Feature Design 022 §1). */
 export const DEMO_DB_PATH = join(DATA_DIRECTORY, 'demo.db');
 
 // Deliberately NOT 3000/3001/8000/8080/etc — those are the most commonly used ports across
@@ -78,7 +76,7 @@ const TrustProxy = z
 
 const Env = z
   .object({
-    // Unset: the real database — or, under FINTRACK_DEMO, the demo's, so an omitted path never reaches the real one.
+    // Unset: the demo's under FINTRACK_DEMO, so the demo never defaults to the real database.
     DB_PATH: z
       .string()
       .refine(isAbsolute, {
@@ -107,8 +105,6 @@ const Env = z
     PUBLIC_URL: optionalEnv(PublicUrl),
     // Passed to Fastify so rate limiting sees the real client IP behind a reverse proxy.
     TRUST_PROXY: optionalEnv(TrustProxy),
-    // Opens the demo: the fixed published key and no login (loopback only). The database's own marker, not this
-    // variable, is what says it is a demo (Feature Design 022 §2-3).
     [DEMO_ENV_VAR]: z
       .string()
       .optional()
@@ -154,8 +150,7 @@ export type Config = z.infer<typeof Env>;
 
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => Env.parse(env);
 
-/** The demo server's configuration: the demo database, its own port, the demo key, no login — whatever the process
- *  environment says about the real install (the demo never reads or writes the real `DB_PATH`). */
+/** Built from scratch, never from the process environment. */
 export const demoConfig = (dbPath: string): Config =>
   loadConfig({
     DB_PATH: dbPath,

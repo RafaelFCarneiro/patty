@@ -15,12 +15,11 @@ import { createRuntime } from './runtime.js';
  */
 export const boot = (config: Config) =>
   safeTry(async function* () {
-    // A demo process opens an existing demo database; it never creates a file (least of all at the real path) to look.
+    // Never create a file (least of all the real database's) just to look.
     if (config.FINTRACK_DEMO && !databaseExists(config.DB_PATH)) return err(demoNotReady(config.DB_PATH));
     const db = await openDatabase(config);
     yield* bootstrap(db);
     const runtime = createRuntime(db, config);
-    // The demo key and no login are only for a database that says it is a demo: anything else is never served this way.
     if (config.FINTRACK_DEMO && !isDemoInstance(await runtime.instanceKind())) {
       closeDatabase(db);
       return err(demoNotReady(config.DB_PATH));

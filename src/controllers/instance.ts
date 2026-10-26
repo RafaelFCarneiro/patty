@@ -30,8 +30,6 @@ export const markDemoInstance = (
     return ok({ persist: [write], response: InstanceKind.enum.demo });
   });
 
-/** Writes the completion marker, the demo seeder's last step: a demo that has it was seeded in full, one that does not
- *  was interrupted. Recording it again keeps the first time. */
 export const completeDemoSeed = (
   deps: Pick<AuthDeps, 'instanceSettings'>,
   seededAt: string,
@@ -46,7 +44,6 @@ export const completeDemoSeed = (
     return ok({ persist: [write], response: seededAt });
   });
 
-/** Where a seed run starts, from what the database already says: gather the three facts, let the pure rule decide. */
 export const demoSeedStatus = async (
   deps: Pick<Deps, 'instance'> & Pick<AuthDeps, 'instanceSettings'>,
 ): Promise<DemoSeedStatus | typeof DEMO_SEED_FRESH> =>

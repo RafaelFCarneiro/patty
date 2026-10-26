@@ -44,12 +44,10 @@ type WhenUnusable = (path: string) => Result<ConfigRead, ClientConfigFailure>;
 
 const replaceUnusable: WhenUnusable = (path) => ok({ config: {}, warnings: [invalidConfigWarning(path)] });
 
-/** A file that is not a JSON object (a VS Code file with comments or trailing commas, say) is not ours to rewrite. */
 const refuseUnusable: WhenUnusable = (path) =>
   err(clientConfigFailures.readFailed(path, `${INVALID_ROOT_MESSAGE}, or is not plain JSON — left unchanged`));
 
-/** The config object in the file — `{}` for a missing or empty one. An unusable one is replaced, with a warning, unless
- *  the caller refuses it (the demo entry never rewrites a file it could not read). */
+/** The demo entry refuses an unusable file instead of replacing it. */
 export const readJsonOrEmpty = (
   path: string,
   whenUnusable: WhenUnusable = replaceUnusable,
@@ -110,7 +108,6 @@ const writeEntry = (
 
 const nothingToRemove = (reason: string): ConfigReport => ok({ warnings: [], lines: [`  ${reason}`] });
 
-/** Removes only the `fintrack-demo` entry. A file that is missing, or holds no such entry, is left exactly as it is. */
 const removeDemoEntry = (configPath: string, key: ServersKey, next: string): ConfigReport => {
   if (!existsSync(configPath)) return nothingToRemove(`No demo entry to remove: ${configPath} does not exist`);
   return readJsonOrEmpty(configPath, refuseUnusable).andThen(({ config, warnings }) => {
@@ -135,7 +132,6 @@ const MERGE_BY_KEY = {
   servers: mergeServersKey,
 } as const satisfies Record<ServersKey, typeof mergeMcpServersKey>;
 
-/** A client with a JSON config file: `fintrack` for the real install, `fintrack-demo` beside it for the demo. */
 const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig => ({
   label,
   run: (profile) => writeEntry(path(), MERGE_BY_KEY[key], withProfile(entry, profile), next),
@@ -151,8 +147,7 @@ const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig
 });
 
 // Codex CLI MCP configuration path and format is not yet stable: describe the snippet and let the user place it.
-/** `{ "A": "1", "B": "2" }` — one line, as the snippet has always shown the env; names and values are escaped as
- *  JSON (a Windows path or a quote in a path must still paste as valid JSON). */
+/** JSON-escaped: a path may hold backslashes or quotes. */
 const inlineObject = (env: Record<string, string>): string =>
   `{ ${Object.entries(env)
     .map(([name, value]) => `${JSON.stringify(name)}: ${JSON.stringify(value)}`)

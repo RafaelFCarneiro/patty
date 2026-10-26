@@ -86,10 +86,7 @@ export type ClientSetupReport = {
 export type ClientConfig = {
   label: string;
   run: (profile: string) => Result<ClientSetupReport, ClientConfigFailure>;
-  /** Adds the client's `fintrack-demo` entry, running against the demo database at `databasePath`, beside the
-   *  `fintrack` one, which it never touches. */
   addDemo: (databasePath: string) => Result<ClientSetupReport, ClientConfigFailure>;
-  /** Removes only the `fintrack-demo` entry. */
   removeDemo: () => Result<ClientSetupReport, ClientConfigFailure>;
 };
 

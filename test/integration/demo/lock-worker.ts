@@ -1,10 +1,7 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { acquireDatabaseLock } from '../../../src/diplomat/db/database-files.js';
 
-/**
- * One contender for the demo database lock, run as its own process by `lock.test.ts`: it takes the lock many times,
- * and inside each hold claims an exclusive marker file — which fails (and is reported) if another holder is inside too.
- */
+// One contender: inside each hold it claims an exclusive marker file, which fails if another holder is inside.
 const [databasePath = '', inside = '', rounds = '0'] = process.argv.slice(2);
 const HOLD_MS = 2;
 

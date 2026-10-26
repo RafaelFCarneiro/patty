@@ -65,7 +65,6 @@ const kindOf = () => scalar(demoPath, 'SELECT instance_kind AS v FROM settings')
 const seededAtOf = () => scalar(demoPath, 'SELECT demo_seeded_at AS v FROM settings');
 const accountsOf = () => scalar(demoPath, 'SELECT COUNT(*) AS v FROM accounts');
 
-/** A database at `path`, bootstrapped (so it has the schema) and optionally seeded as a demo. */
 const createDatabase = (path: string, key: string, work?: (db: Db) => Promise<unknown>) =>
   withDb(path, key, async (db) => {
     await bootstrap(db);

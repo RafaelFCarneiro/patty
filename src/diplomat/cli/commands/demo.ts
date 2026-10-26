@@ -25,7 +25,6 @@ Options:
 To use it from an AI client: ${NPX_COMMAND} setup <client> --${DEMO_FLAG}
 `.trimStart();
 
-/** The words of each refusal. Exhaustive: a failure code without wording fails to compile. */
 const FAILURE_MESSAGES = {
   [DemoFailureCode.enum.real_database]: () =>
     'the demo database path is the real database (DB_PATH), or cannot be resolved to a file — the demo never touches it',

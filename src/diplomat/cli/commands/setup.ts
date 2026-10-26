@@ -74,7 +74,6 @@ Examples:
 /** What `setup` needs of the I/O: where to print, and the client config files. */
 type SetupIo = Pick<CliIo, 'out' | 'err' | 'clients'>;
 
-/** What the demo entry needs besides the client files: where the demo database is, and whether it exists yet. */
 type DemoSetupIo = SetupIo & { demo: Pick<CliIo['demo'], 'databasePath' | 'hasDatabase'> };
 
 /** Writes the client's configuration and answers the exit code: help is `EXIT_OK`, an unknown tool or a configuration
@@ -125,8 +124,6 @@ export const runGuidedSetup = async (
   return (await signIn(profile)) ?? EXIT_OK;
 };
 
-/** `--demo` / `--remove-demo`: edits only the client's `fintrack-demo` entry. It claims no owner and signs nothing in —
- *  the demo has no login — and never opens a database. */
 export const runDemoEntry = (io: DemoSetupIo, tool: string | undefined, change: DemoEntryChange): number => {
   if (!tool) {
     io.out(SETUP_MESSAGES.help);
