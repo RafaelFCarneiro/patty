@@ -86,7 +86,8 @@ describe('fintrack demo', () => {
   });
 
   it.each([
-    [DemoFailureCode.enum.real_database, /real database \(DB_PATH\)/],
+    [DemoFailureCode.enum.real_database, /real database \(DB_PATH\), or cannot be resolved/],
+    [DemoFailureCode.enum.start_failed, /could not start: boom/],
     [DemoFailureCode.enum.not_demo, /not a demo database.*left alone/],
     [DemoFailureCode.enum.interrupted, /not fully seeded.*demo --reset/],
     [DemoFailureCode.enum.seed_failed, /seeding the demo failed: boom/],

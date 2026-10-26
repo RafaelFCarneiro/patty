@@ -28,7 +28,7 @@ To use it from an AI client: ${NPX_COMMAND} setup <client> --${DEMO_FLAG}
 /** The words of each refusal. Exhaustive: a failure code without wording fails to compile. */
 const FAILURE_MESSAGES = {
   [DemoFailureCode.enum.real_database]: () =>
-    'the demo database path is the real database (DB_PATH) — the demo never touches it',
+    'the demo database path is the real database (DB_PATH), or cannot be resolved to a file — the demo never touches it',
   [DemoFailureCode.enum.not_demo]: () =>
     'the file at the demo database path is not a demo database (or does not open with the demo key), so it is left ' +
     'alone. Move it away if it is yours to remove',
@@ -36,6 +36,7 @@ const FAILURE_MESSAGES = {
     `the demo was not fully seeded (an earlier run stopped partway). Start it over with: ${RESET_HINT}`,
   [DemoFailureCode.enum.seed_failed]: ({ reason }: DemoFailure) =>
     `seeding the demo failed: ${reason}. A demo created by this run was removed; try again, or use --${RESET_FLAG}`,
+  [DemoFailureCode.enum.start_failed]: ({ reason }: DemoFailure) => `the demo could not start: ${reason}`,
   [DemoFailureCode.enum.port_in_use]: () =>
     `port ${DEMO_PORT} is already in use. If the demo is already running (an AI client's fintrack-demo server, or ` +
     `another "demo"), open ${dashboardUrl()}`,

@@ -31,7 +31,8 @@ import {
   type DemoStep,
 } from '../models/demo.js';
 import { TransactionSource } from '../models/transaction.js';
-import { bindAuthRunEffects, createAuthDeps } from './auth.js';
+import { instanceSettingsRepo } from '../diplomat/db/repos/instance-settings.js';
+import { bindAuthRunEffects } from './auth.js';
 import { createRuntime, type Runtime, type RuntimeConfig } from './runtime.js';
 
 /**
@@ -116,7 +117,7 @@ export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result
   const clock = { now: options.today };
   const runtime = createRuntime(db, { ...options.config, FINTRACK_LOCALE: undefined }, { clock: () => clock.now });
   const scoped = scopedFor(runtime, OWNER_PRINCIPAL);
-  const { instanceSettings } = await createAuthDeps(db);
+  const instanceSettings = instanceSettingsRepo(db);
 
   const start = await demoSeedStatus({ instance: scoped.deps.instance, instanceSettings });
   if (start !== DEMO_SEED_FRESH) return ok({ status: start, steps: {} });

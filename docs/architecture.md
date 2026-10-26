@@ -699,7 +699,7 @@ schema: it sets `FINTRACK_DB_KEY` to the demo key and `FINTRACK_AUTH` to `disabl
 loopback only" refusal still applies), and setting it with a key source is a startup error. It only selects how to open the
 database: `composition/boot.ts` refuses to serve a database that does not say it is a demo, on the Result track beside
 `DatabaseAhead` (`DemoNotReady`; `models/startup.ts`'s `StartupRefusal` union and `startupRefusalMessage` — `main.ts`
-prints the message and exits non-zero, no exception involved). `demoConfig` is built from scratch, never from the process environment, so the real install's
+prints the message and exits non-zero). `demoConfig` is built from scratch, never from the process environment, so the real install's
 `DB_PATH`, key and port cannot leak into the demo. `DemoShell.prepare` is gather → decide → execute in the shell:
 `createDemoShell` (`composition/demo.ts`) is only that sequence — look, decide, delete/seed/clean up, map — and holds no
 file-system or environment call of its own. *Look*: `diplomat/db/database-files.ts` resolves `canonicalPath` (real path;

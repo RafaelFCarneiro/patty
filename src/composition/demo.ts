@@ -108,7 +108,9 @@ export const createDemoShell = (options: DemoShellOptions = {}): DemoShell => {
       try {
         const { runHttp } = await loadHttpModule();
         const started = await runHttp(demoConfig(databasePath));
-        return started.mapErr((refusal) => seedFailure(startupRefusalMessage(refusal)));
+        return started.mapErr((refusal) =>
+          demoFailures.of(DemoFailureCode.enum.start_failed, startupRefusalMessage(refusal)),
+        );
       } catch (cause) {
         if (isPortInUse(cause)) return err(demoFailures.of(DemoFailureCode.enum.port_in_use));
         throw cause;

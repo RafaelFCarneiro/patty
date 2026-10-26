@@ -176,8 +176,16 @@ export const demoErrors = {
 
 /** Why `demo` did not start. `real_database`: the demo path is the real `DB_PATH`. `not_demo`: a file there that is
  *  not a demo database (or does not open with the demo key) — never deleted, never seeded. `interrupted`: a demo whose
- *  seed never finished. `seed_failed`: a seed that stopped on a step. `port_in_use`: the demo's port is taken. */
-export const DemoFailureCode = z.enum(['real_database', 'not_demo', 'interrupted', 'seed_failed', 'port_in_use']);
+ *  seed never finished. `seed_failed`: a seed that stopped on a step. `start_failed`: the server would not
+ *  start. `port_in_use`: the demo's port is taken. */
+export const DemoFailureCode = z.enum([
+  'real_database',
+  'not_demo',
+  'interrupted',
+  'seed_failed',
+  'start_failed',
+  'port_in_use',
+]);
 export type DemoFailureCode = z.infer<typeof DemoFailureCode>;
 export type DemoFailure = { code: DemoFailureCode; reason: string };
 
