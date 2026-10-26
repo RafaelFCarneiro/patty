@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
+import { DEMO_BANNER_COPY } from '../../../src/diplomat/http/hooks/demo-marker.js';
 import { InstanceKind } from '../../../src/models/instance.js';
+import { Locale } from '../../../src/models/locale.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 import { claimOwner } from '../auth/helpers.js';
 
@@ -89,5 +91,39 @@ describe('demo marker — every page with auth required', () => {
       const res = await ctx.app.inject({ method: 'GET', url, headers: { cookie } });
       expect(res.body, url).not.toContain('demo-banner');
     }
+  });
+});
+
+describe('demo marker — the demo’s language', () => {
+  const LOCALES = Object.values(Locale.enum);
+
+  it('is English when the demo owner has no stored language', async () => {
+    const ctx = await appOf(InstanceKind.enum.demo);
+    expect(await ctx.runtime.instanceLocale()).toBe(Locale.enum.en);
+    expect((await ctx.app.inject({ method: 'GET', url: '/ui' })).body).toContain(DEMO_BANNER_COPY.en.message);
+  });
+
+  it.each(LOCALES)(
+    'follows the owner’s user_settings.locale (%s), on the shell and the sign-in pages',
+    async (locale) => {
+      const ctx = await appOf(InstanceKind.enum.demo, { auth: {} });
+      await ctx.db.run(
+        sql`INSERT INTO user_settings (user_id, locale, locale_source) VALUES ('user-owner', ${locale}, 'explicit')`,
+      );
+      expect(await ctx.runtime.instanceLocale()).toBe(locale);
+      const { message } = DEMO_BANNER_COPY[locale];
+      expect((await ctx.app.inject({ method: 'GET', url: '/ui/setup' })).body).toContain(message);
+      const cookie = await claimOwner(ctx);
+      expect((await ctx.app.inject({ method: 'GET', url: '/ui', headers: { cookie } })).body).toContain(message);
+    },
+  );
+
+  it('never shows a banner in any language on a standard database', async () => {
+    const ctx = await appOf(InstanceKind.enum.standard);
+    await ctx.db.run(
+      sql`INSERT INTO user_settings (user_id, locale, locale_source) VALUES ('user-owner', 'pt', 'explicit')`,
+    );
+    const body = (await ctx.app.inject({ method: 'GET', url: '/ui' })).body;
+    LOCALES.forEach((locale) => expect(body).not.toContain(DEMO_BANNER_COPY[locale].message));
   });
 });

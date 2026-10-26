@@ -6,6 +6,7 @@ import { DEMO_SERVER_INSTRUCTIONS } from '../../../../src/diplomat/mcp/instructi
 import { connectStdio } from '../../../../src/diplomat/mcp/stdio.js';
 import { AuthMode } from '../../../../src/models/auth/mode.js';
 import { InstanceKind } from '../../../../src/models/instance.js';
+import { Locale } from '../../../../src/models/locale.js';
 
 const mocks = vi.hoisted(() => ({ serverSide: undefined as unknown }));
 vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
@@ -16,10 +17,10 @@ vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
   },
 }));
 
-const instructionsOver = async (kind: InstanceKind): Promise<string | undefined> => {
+const instructionsOver = async (kind: InstanceKind, locale: Locale = Locale.enum.en): Promise<string | undefined> => {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   mocks.serverSide = serverSide;
-  const tenancy = { instanceKind: async () => kind } as unknown as Tenancy;
+  const tenancy = { instanceKind: async () => kind, instanceLocale: async () => locale } as unknown as Tenancy;
   const client = new Client({ name: 'stdio-instructions-test', version: '1' });
   const [{ server }] = await Promise.all([
     connectStdio(tenancy, '0.0.0', { mode: AuthMode.enum.disabled }),
@@ -32,8 +33,8 @@ const instructionsOver = async (kind: InstanceKind): Promise<string | undefined>
 };
 
 describe('connectStdio — server instructions', () => {
-  it('sends the demo instructions when the database is a demo', async () => {
-    expect(await instructionsOver(InstanceKind.enum.demo)).toBe(DEMO_SERVER_INSTRUCTIONS);
+  it.each(Object.values(Locale.enum))('sends the demo instructions in the demo’s language (%s)', async (locale) => {
+    expect(await instructionsOver(InstanceKind.enum.demo, locale)).toBe(DEMO_SERVER_INSTRUCTIONS[locale]);
   });
 
   it('sends none for a standard database', async () => {

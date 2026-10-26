@@ -4,7 +4,8 @@ import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { FastifyInstance } from 'fastify';
 import type { Tenancy } from '../../controllers/deps.js';
-import type { InstanceKind } from '../../models/instance.js';
+import { instanceFactsOf } from '../../controllers/instance.js';
+import type { InstanceFacts } from '../../models/instance.js';
 import { hasScope, requiredMcpScope } from '../../logic/auth/scope.js';
 import { MCP_PATH } from '../../models/auth/bearer.js';
 import { authErrors } from '../../models/auth/errors.js';
@@ -28,8 +29,8 @@ import { toolScopesOf } from './scopes.js';
  */
 // Only `initialize` carries the server instructions, so only it reads the marker: a ping or a tool call must not
 // fail because that read did.
-const kindForInitialize = async (tenancy: Tenancy, body: unknown): Promise<InstanceKind | undefined> =>
-  [body].flat().some(isInitializeRequest) ? tenancy.instanceKind() : undefined;
+const instanceForInitialize = async (tenancy: Tenancy, body: unknown): Promise<InstanceFacts | undefined> =>
+  [body].flat().some(isInitializeRequest) ? instanceFactsOf(tenancy) : undefined;
 
 export const registerMcpRoute = (app: FastifyInstance, tenancy: Tenancy, version: string, publicUrl?: string): void => {
   const scopeGuard = { gate: authInfoGate };
@@ -50,7 +51,7 @@ export const registerMcpRoute = (app: FastifyInstance, tenancy: Tenancy, version
       },
     },
     async (req, reply) => {
-      const server = buildMcpServer(tenancy, version, scopeGuard, await kindForInitialize(tenancy, req.body));
+      const server = buildMcpServer(tenancy, version, scopeGuard, await instanceForInitialize(tenancy, req.body));
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

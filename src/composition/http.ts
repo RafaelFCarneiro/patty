@@ -78,7 +78,7 @@ export const registerHttpApp = (
   // Ordering is wiring: the auth hook goes on first, so it runs ahead of every route registered below and
   // also guards a request no route matches.
   registerAuthHook(app, auth);
-  registerDemoMarkerHook(app, surface.instanceKind);
+  registerDemoMarkerHook(app, surface);
   registerRoutes(app, { ...surface, version }, surface.changeBus.subscribe, auth);
   registerMcpRoute(app, surface, version, auth.mode === AuthMode.enum.required ? auth.publicUrl : undefined);
 };

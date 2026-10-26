@@ -139,6 +139,7 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
   return {
     publicDeps: { health },
     instanceKind: instance.kind,
+    instanceLocale: instance.locale,
     depsFor,
     ...runnersOn(createEngineContext(db, onChangeError), changeBus),
     resetLocaleFor: ({ userId }) => localeResolver.resetLocale(userId),

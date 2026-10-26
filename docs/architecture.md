@@ -654,6 +654,36 @@ the shell and the auth pages alike, read from the database on each page — and 
 it sets later; `buildMcpServer` sends `diplomat/mcp/instructions.ts`'s demo `instructions` at `initialize` (stdio reads the
 kind when it connects, `/mcp` per request). A standard database gets none of the three.
 
+**A demo speaks its owner's language.** The banner text (`DEMO_BANNER_COPY`, `diplomat/http/hooks/demo-marker.ts`) and the MCP
+`instructions` (`DEMO_SERVER_INSTRUCTIONS`, `diplomat/mcp/instructions.ts`) exist in `en`/`pt`/`es`, each a
+`Record<Locale, …>` so a missing translation fails typecheck. The language is the owner's `user_settings.locale`
+(`Tenancy.instanceLocale`, `InstanceRepo.locale`, `en` when none is stored) — a demo has one user, and the seeder sets it
+from the country pack. `controllers/instance.ts`'s `instanceFactsOf` reads it only for a demo (a standard database never
+asks), and both edges go through it. The `[Demo]` title prefix is the same word in all three languages and stays literal.
+
+**The demo seed** (Feature Design 022 §4). `logic/demo.ts`'s `planDemo(pack, today)` is a pure function of a fixed seed, a
+`DemoPack` (`models/demo.ts`: everything country-specific as data — account and card names, merchants, amounts in local
+terms, the trip) and today's date; it returns the whole demo as an ordered list of `DemoStep`s, one per write, dated
+within the last four full months plus the current one. The four packs live in `diplomat/db/seed/demo/{br,us,mx,co}.ts`
+(`DEMO_PACKS`, a `Record<DemoCountry, DemoPack>`): `br` pt/BRL (with a USD Conta Global), `us` en/USD, `mx` es/MXN, `co`
+es/COP. `composition/demo-seed.ts`'s `seedDemo(db, { country, today, config })` runs the plan through the same write flows
+the MCP tools run (`createAccount`, `createCreditCard`, `addAccountExpense`/`Income`, `addCardPurchase`, `createTransfer`,
+`payBill`/`revertBillPayment`, `createRecurring`/`applyDueRecurring`, `createBudget`, `createTag`, `setExchangeRate`,
+`setLocale`/`setBaseCurrency`) with one runner and the clock set to each step's date (`min(date, today)`); a handler table
+`satisfies` a mapped type over `DemoStepKind`, so a new kind without a handler fails typecheck. There is no demo-only
+write path and no raw SQL: bills, idempotency keys, classification and merchant learning behave as in real use. Rules the
+plan encodes: budgets are sized against the last full month's spend (some blown, some comfortable); every bill whose due
+date has passed is paid, the secondary card's latest is paid and then reverted (so it ends `closed`), the rest stay
+`open`; the trip is untagged, spans five categories and four funding sources, and names its destination in each
+description; salary, rent and subscriptions are recurring rules materialized last; items dated after today are
+`pending`. `seedDemo` marks the database first (`controllers/instance.ts`'s `markDemoInstance`, an `instance_settings`
+update run through the auth runner), then fills it; a database that already holds data is left alone when it is a demo
+(running the demo again adds nothing) and refused (`demoErrors.notDemoDatabase`) when it is not. A crash mid-seed leaves a
+demo with partial data: delete the file and seed again. `adapters/demo.ts` composes every entity's `outcomeToDb`, applied
+once per flow, as `adapters/auth.ts` does for the identity flows. `logic/demo.ts` also holds `resolveDemoCountry`, the
+OS-locale → country default (`es-CO` → `co`, `es` → `mx`, `pt` → `br`, else `us`). The `demo` command that calls the seeder
+is a later phase.
+
 ## Tool surface
 
 55 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — `list_budgets`/`get_budget_status` (Feature Design 015) now have REST parity (`GET /api/budgets`, `GET /api/budgets/status`); `create_budget`/`update_budget`/`delete_budget` and `find_correlations` (Feature Design 016) are MCP-only for now, no REST mirror yet. `set/list_exchange_rates` and `set_base_currency` (ADR-026 Phase 2) have full REST parity (`GET`/`POST /api/exchange-rates`, `POST /api/exchange-rates/bulk`, `GET /api/preferences`, `POST /api/settings/base-currency`). Client connections: `docs/mcp-clients.md`.

@@ -637,7 +637,7 @@ No input. Returns `{ name: "fintrack", version, db, locale, demo }`:
 - `version` — the package version from `package.json` (same value as the `serverInfo.version` reported in the MCP `initialize` handshake). In dev: `0.0.0-development`; in published releases: the semantic-release version.
 - `db` — `"ok"` if the database is reachable, `"error"` otherwise.
 - `locale` — the effective active locale (`en`, `es`, or `pt`).
-- `demo` — `true` when the database is marked a demo (`settings.instance_kind = demo`): sample data, not the person's finances. A demo database also sends MCP server `instructions` at `initialize` saying so (say it once, never use it for real finances, use the `fintrack` server for those); a standard database sends none.
+- `demo` — `true` when the database is marked a demo (`settings.instance_kind = demo`): sample data, not the person's finances. A demo database also sends MCP server `instructions` at `initialize` saying so (say it once, never use it for real finances, use the `fintrack` server for those), in the demo's language (`en`/`pt`/`es`, its owner's `user_settings.locale`); a standard database sends none.
 
 A convenience for tool-only callers (AI agent / chat user). The MCP protocol already exposes version via the `initialize` handshake `serverInfo` and liveness via `ping` — this tool complements those for callers that can only invoke tools.
 
