@@ -402,8 +402,9 @@ export const planDemo = (pack: DemoPack, today: string, ratesAsOf: string): read
 /** The clock a step runs at: its own date, except a step dated ahead of today (a pending item), which runs at today. */
 export const clockDateOf = (step: DemoStep, today: string): string => (step.date > today ? today : step.date);
 
-/** A region subtag is two letters; the optional script between language and region (`Latn`) is four, and skipped. */
-const REGION_SUBTAG = /^[A-Za-z]{2}$/;
+/** The optional script between language and region (`Latn`) is four letters, and skipped. The region is the subtag
+ *  right after it; anything later (a `-u-co-…` extension) is never a region. */
+const SCRIPT_SUBTAG = /^[A-Za-z]{4}$/;
 const REGION_COUNTRY: Readonly<Record<string, DemoCountry>> = {
   BR: DemoCountry.enum.br,
   US: DemoCountry.enum.us,
@@ -420,6 +421,7 @@ const LANGUAGE_COUNTRY: Readonly<Record<string, DemoCountry>> = {
  *  else its language, else the default. */
 export const resolveDemoCountry = (osLocale: string | undefined): DemoCountry => {
   const [language = '', ...subtags] = (osLocale ?? '').replace(/[.@].*$/, '').split(/[-_]/);
-  const region = subtags.find((subtag) => REGION_SUBTAG.test(subtag)) ?? '';
+  const [next, afterScript] = subtags;
+  const region = (next !== undefined && SCRIPT_SUBTAG.test(next) ? afterScript : next) ?? '';
   return REGION_COUNTRY[region.toUpperCase()] ?? LANGUAGE_COUNTRY[language.toLowerCase()] ?? DEFAULT_DEMO_COUNTRY;
 };

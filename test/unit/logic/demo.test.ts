@@ -280,6 +280,9 @@ describe('resolveDemoCountry — the OS locale picks the demo', () => {
   it.each([
     ['es-CO', 'co'],
     ['es-Latn-CO', 'co'],
+    ['en-u-co-phonebk', 'us'],
+    ['es-u-co-trad', 'mx'],
+    ['es-CO-u-ca-gregory', 'co'],
     ['pt-Latn-BR', 'br'],
     ['es-Latn', 'mx'],
     ['es_CO.UTF-8', 'co'],
