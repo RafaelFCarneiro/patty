@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { canonicalPath, removeDatabaseFiles } from '../../../../src/diplomat/db/database-files.js';
+import { acquireDatabaseLock, canonicalPath, removeDatabaseFiles } from '../../../../src/diplomat/db/database-files.js';
 
 let dir: string;
 
@@ -61,5 +61,25 @@ describe('removeDatabaseFiles', () => {
 
   it('is not an error when there is nothing to remove', () => {
     expect(() => removeDatabaseFiles(join(dir, 'missing.db'))).not.toThrow();
+  });
+});
+
+describe('acquireDatabaseLock', () => {
+  it('is exclusive until released, and creates the directory it needs', () => {
+    const path = join(dir, 'nested', 'd.db');
+    const first = acquireDatabaseLock(path);
+    expect(first).not.toBeNull();
+    expect(acquireDatabaseLock(path)).toBeNull();
+    first?.release();
+    expect(existsSync(`${path}.lock`)).toBe(false);
+    expect(acquireDatabaseLock(path)).not.toBeNull();
+  });
+
+  it('takes over a lock whose owner is gone, and respects one whose owner is alive', () => {
+    const path = join(dir, 'd.db');
+    writeFileSync(`${path}.lock`, 'not-a-pid');
+    expect(acquireDatabaseLock(path)).not.toBeNull();
+    writeFileSync(`${path}.lock`, String(process.pid));
+    expect(acquireDatabaseLock(path)).toBeNull();
   });
 });

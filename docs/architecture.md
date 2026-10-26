@@ -710,7 +710,10 @@ file) and `probeDatabase` (the file opened with the demo key without initializin
 write — reading `instance_kind` and whether it holds user data; missing / unreadable / its kind). *Decide*: the pure `logic/demo-database.ts`'s `planDemoDatabase`
 (`real_database` and `not_demo` refusals — the latter also for an alias, and for a `standard` database that holds data, before anything is migrated; delete first only for a `--reset` on a database that says `demo`; `createdHere`,
 whether this run owns the file) and `failureOfSeedStatus` (the seed status → the failure it is reported as). *Execute*:
-the shell deletes (`removeDatabaseFiles`), bootstraps and seeds. The OS language comes from `config.ts`'s `osLocale`.
+the shell deletes (`removeDatabaseFiles`), bootstraps and seeds. The whole preparation — from the first probe through
+seeding and cleanup — runs under a cross-process lock (`acquireDatabaseLock`: a `<db>.lock` file created exclusively and
+holding the owner's pid; a lock whose process is gone is taken over; a live holder is `busy`), so `createdHere` really
+means "ours"; refusals that need no file (the real database, an alias) are answered before any lock file is created. The OS language comes from `config.ts`'s `osLocale`.
 The seeder reads where it starts through `controllers/instance.ts`'s `demoSeedStatus` (the three facts → the pure
 `demoSeedStart`). The real database is never opened to
 look at it. A seed that returns `Err` or throws on a database this run created (the file did not exist, or `--reset` just
@@ -720,7 +723,7 @@ exhaustive table). `DemoShell.serve` then runs `runHttp(demoConfig(path))` (load
 process stays up on `DEMO_PORT`; a taken port is `port_in_use`. `setup <client> --demo` / `--remove-demo`
 (`commands/setup.ts`, `ClientConfig.addDemo`/`removeDemo`) edit only the client's `fintrack-demo` entry — `withDemo`
 (`client-config/merge.ts`) adds `DB_PATH`, `PORT` and `FINTRACK_DEMO` to the client's normal entry — and never read or
-write the `fintrack` entry, claim an owner, sign in or open a database; the flags exclude every other `setup` option.
+write the `fintrack` entry, claim an owner, sign in or open a database; the flags exclude every other `setup` option. A client file that is not plain JSON (VS Code's comments and trailing commas) is refused and left unchanged by `--demo` / `--remove-demo`, never replaced the way a plain `setup` replaces an unusable file.
 
 ## Tool surface
 

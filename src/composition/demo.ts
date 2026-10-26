@@ -2,9 +2,10 @@ import { err, ok, type Result } from 'neverthrow';
 import { demoConfig, DEMO_DB_PATH, loadConfig, osLocale } from '../config.js';
 import { formatAppError } from '../common/errors.js';
 import { isPortInUse } from '../common/net.js';
-import type { DemoShell } from '../diplomat/cli/io.js';
+import type { DemoPrepared, DemoRequest, DemoShell } from '../diplomat/cli/io.js';
 import { bootstrap } from '../diplomat/db/bootstrap.js';
 import {
+  acquireDatabaseLock,
   canonicalPath,
   databaseExists,
   isSymlink,
@@ -49,21 +50,22 @@ export type DemoShellOptions = {
 
 const seedFailure = (reason: string): DemoFailure => demoFailures.of(DemoFailureCode.enum.seed_failed, reason);
 
-/** Look: what the demo path is. The real database is never opened, not even to look at it. */
-const lookAtDatabase = async (
-  databasePath: string,
-  realDatabasePath: string,
-  reset: boolean,
-): Promise<DemoDatabaseFacts> => {
+type Location = Pick<DemoDatabaseFacts, 'isRealDatabase' | 'isAlias'>;
+
+/** Look, part one: where the demo path leads. Nothing is opened and nothing is created. */
+const locateDatabase = (databasePath: string, realDatabasePath: string): Location => {
   const demo = canonicalPath(databasePath);
   const real = canonicalPath(realDatabasePath);
-  const isRealDatabase = demo === null || real === null || demo === real;
-  const isAlias = isSymlink(databasePath);
+  return { isRealDatabase: demo === null || real === null || demo === real, isAlias: isSymlink(databasePath) };
+};
+
+/** Look, part two: what the file at the demo path is. The real database is never opened, not even to look at it. */
+const lookAtDatabase = async (databasePath: string, location: Location, reset: boolean): Promise<DemoDatabaseFacts> => {
   const { probe, holdsData } =
-    isRealDatabase || isAlias
+    location.isRealDatabase || location.isAlias
       ? { probe: DemoProbeAbsence.enum.missing, holdsData: false }
       : await probeDatabase(databasePath);
-  return { isRealDatabase, isAlias, reset, probe, holdsData };
+  return { ...location, reset, probe, holdsData };
 };
 
 type SeedRun = { seed: typeof seedDemo; databasePath: string; country: DemoCountry; today: Date };
@@ -93,38 +95,74 @@ const seedOrClean = async (run: SeedRun, createdHere: boolean): Promise<Result<D
   }
 };
 
+type ShellContext = {
+  databasePath: string;
+  realDatabasePath: () => string;
+  today: () => Date;
+  seed: typeof seedDemo;
+};
+
+// The file's whole preparation — look, decide, delete, seed, clean up — runs under the lock: `createdHere` only means
+// "ours" if no other run can be doing the same.
+const prepareLocked = async (
+  context: ShellContext,
+  request: DemoRequest,
+): Promise<Result<DemoPrepared, DemoFailure>> => {
+  const { databasePath, seed } = context;
+  const location = locateDatabase(databasePath, context.realDatabasePath());
+  const plan = planDemoDatabase(await lookAtDatabase(databasePath, location, request.reset));
+  if (plan.isErr()) return err(demoFailures.of(plan.error));
+  if (plan.value.deleteFirst) removeDatabaseFiles(databasePath);
+
+  const country = request.country ?? resolveDemoCountry(osLocale());
+  const status = await seedOrClean({ seed, databasePath, country, today: context.today() }, plan.value.createdHere);
+  return status.andThen((seeded) => {
+    const failure = failureOfSeedStatus(seeded);
+    return failure === null ? ok({ status: seeded, databasePath, country }) : err(demoFailures.of(failure));
+  });
+};
+
+const prepareDemo = async (context: ShellContext, request: DemoRequest): Promise<Result<DemoPrepared, DemoFailure>> => {
+  const { databasePath } = context;
+  const location = locateDatabase(databasePath, context.realDatabasePath());
+  // A refusal that needs no file is answered before anything is created, the lock file included.
+  if (location.isRealDatabase || location.isAlias) {
+    const early = planDemoDatabase(await lookAtDatabase(databasePath, location, request.reset));
+    if (early.isErr()) return err(demoFailures.of(early.error));
+  }
+  const lock = acquireDatabaseLock(databasePath);
+  if (lock === null) return err(demoFailures.of(DemoFailureCode.enum.busy));
+  try {
+    return await prepareLocked(context, request);
+  } finally {
+    lock.release();
+  }
+};
+
+const serveDemo = async (databasePath: string): Promise<Result<void, DemoFailure>> => {
+  try {
+    const { runHttp } = await loadHttpModule();
+    const started = await runHttp(demoConfig(databasePath));
+    return started.mapErr((refusal) =>
+      demoFailures.of(DemoFailureCode.enum.start_failed, startupRefusalMessage(refusal)),
+    );
+  } catch (cause) {
+    if (isPortInUse(cause)) return err(demoFailures.of(DemoFailureCode.enum.port_in_use));
+    throw cause;
+  }
+};
+
 export const createDemoShell = (options: DemoShellOptions = {}): DemoShell => {
-  const databasePath = options.databasePath ?? DEMO_DB_PATH;
-  const realDatabasePath = options.realDatabasePath ?? (() => loadConfig().DB_PATH);
-  const today = options.today ?? (() => new Date());
-  const seed = options.seed ?? seedDemo;
-
+  const context: ShellContext = {
+    databasePath: options.databasePath ?? DEMO_DB_PATH,
+    realDatabasePath: options.realDatabasePath ?? (() => loadConfig().DB_PATH),
+    today: options.today ?? (() => new Date()),
+    seed: options.seed ?? seedDemo,
+  };
   return {
-    databasePath,
-    hasDatabase: () => databaseExists(databasePath),
-    prepare: async (request) => {
-      const plan = planDemoDatabase(await lookAtDatabase(databasePath, realDatabasePath(), request.reset));
-      if (plan.isErr()) return err(demoFailures.of(plan.error));
-      if (plan.value.deleteFirst) removeDatabaseFiles(databasePath);
-
-      const country = request.country ?? resolveDemoCountry(osLocale());
-      const status = await seedOrClean({ seed, databasePath, country, today: today() }, plan.value.createdHere);
-      return status.andThen((seeded) => {
-        const failure = failureOfSeedStatus(seeded);
-        return failure === null ? ok({ status: seeded, databasePath, country }) : err(demoFailures.of(failure));
-      });
-    },
-    serve: async () => {
-      try {
-        const { runHttp } = await loadHttpModule();
-        const started = await runHttp(demoConfig(databasePath));
-        return started.mapErr((refusal) =>
-          demoFailures.of(DemoFailureCode.enum.start_failed, startupRefusalMessage(refusal)),
-        );
-      } catch (cause) {
-        if (isPortInUse(cause)) return err(demoFailures.of(DemoFailureCode.enum.port_in_use));
-        throw cause;
-      }
-    },
+    databasePath: context.databasePath,
+    hasDatabase: () => databaseExists(context.databasePath),
+    prepare: (request) => prepareDemo(context, request),
+    serve: () => serveDemo(context.databasePath),
   };
 };

@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -29,7 +30,7 @@ import { InstanceKind } from '../../../src/models/instance.js';
 const TODAY = new Date(2026, 9, 26, 9);
 const OTHER_KEY = 'a'.repeat(64);
 const CONFIG = { FIAT_RATE_STALE_HOURS: 24, CRYPTO_RATE_STALE_HOURS: 1 };
-const { real_database, not_demo, interrupted, seed_failed, port_in_use } = DemoFailureCode.enum;
+const { real_database, not_demo, interrupted, seed_failed, port_in_use, busy } = DemoFailureCode.enum;
 
 let dir: string;
 let demoPath: string;
@@ -272,6 +273,53 @@ describe('demo — safety: it never touches what is not a demo database', () => 
       expect((await shellWith().prepare({ reset: true }))._unsafeUnwrapErr().code).toBe(not_demo);
       expect(await accountsOf()).toBe(before);
     });
+  });
+});
+
+describe('demo — two runs at once', () => {
+  const lockOf = () => `${demoPath}.lock`;
+
+  it('lets one first run create the database and tells the other to wait, deleting nothing', async () => {
+    const shell = shellWith();
+    const [first, second] = await Promise.all([
+      shell.prepare({ country: DemoCountry.enum.us, reset: false }),
+      shell.prepare({ country: DemoCountry.enum.us, reset: false }),
+    ]);
+    expect(first._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.seeded);
+    expect(second._unsafeUnwrapErr().code).toBe(busy);
+    expect(await seededAtOf()).toBe(TODAY.toISOString());
+    expect(existsSync(lockOf())).toBe(false);
+  });
+
+  it('is busy while a live process holds the lock, and creates nothing', async () => {
+    writeFileSync(lockOf(), String(process.pid));
+    expect((await shellWith().prepare({ country: DemoCountry.enum.us, reset: false }))._unsafeUnwrapErr().code).toBe(
+      busy,
+    );
+    expect(existsSync(demoPath)).toBe(false);
+    expect(existsSync(lockOf())).toBe(true);
+  });
+
+  it('takes over a lock left by a process that is gone', async () => {
+    const gone = spawnSync(process.execPath, ['-e', '']).pid;
+    writeFileSync(lockOf(), String(gone));
+    const prepared = await shellWith().prepare({ country: DemoCountry.enum.us, reset: false });
+    expect(prepared._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.seeded);
+    expect(existsSync(lockOf())).toBe(false);
+  });
+
+  it('releases the lock after a failed seed and after a refusal', async () => {
+    await shellWith({ seed: failingFirstStep }).prepare({ country: DemoCountry.enum.us, reset: false });
+    expect(existsSync(lockOf())).toBe(false);
+    writeFileSync(demoPath, 'not a database');
+    await shellWith().prepare({ country: DemoCountry.enum.us, reset: true });
+    expect(existsSync(lockOf())).toBe(false);
+  });
+
+  it('refuses the real database before creating any lock file', async () => {
+    await createDatabase(realPath, OTHER_KEY);
+    await shellWith({ databasePath: realPath }).prepare({ country: DemoCountry.enum.us, reset: false });
+    expect(existsSync(`${realPath}.lock`)).toBe(false);
   });
 });
 

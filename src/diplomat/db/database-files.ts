@@ -1,4 +1,13 @@
-import { existsSync, lstatSync, readlinkSync, realpathSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { DEMO_DB_KEY, DemoProbeAbsence, type DemoProbe } from '../../models/demo.js';
 import { closeDatabase, openDatabaseWithKey } from './driver.js';
@@ -66,4 +75,52 @@ export const probeDatabase = async (databasePath: string): Promise<DatabaseLook>
   } catch {
     return UNREADABLE;
   }
+};
+
+const LOCK_SUFFIX = '.lock';
+const FILE_EXISTS = 'EEXIST';
+const NO_SUCH_PROCESS = 'ESRCH';
+
+const isProcessAlive = (pid: number): boolean => {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (cause) {
+    return (cause as NodeJS.ErrnoException).code !== NO_SUCH_PROCESS;
+  }
+};
+
+const tryCreateLock = (lockPath: string): boolean => {
+  try {
+    writeFileSync(lockPath, String(process.pid), { flag: 'wx', mode: 0o600 });
+    return true;
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === FILE_EXISTS) return false;
+    throw cause;
+  }
+};
+
+const isHeldByLiveProcess = (lockPath: string): boolean => {
+  try {
+    return isProcessAlive(Number(readFileSync(lockPath, 'utf8')));
+  } catch {
+    return false;
+  }
+};
+
+export type DatabaseLock = { release: () => void };
+
+/**
+ * Exclusive ownership of a database's preparation across processes: a `<db>.lock` file created exclusively and holding
+ * the owner's pid. Null when another live process holds it; a lock left by a process that is gone is taken over. Held
+ * from the first look at the file through seeding and cleanup, so two first runs cannot both believe they created it.
+ */
+export const acquireDatabaseLock = (databasePath: string): DatabaseLock | null => {
+  const lockPath = `${databasePath}${LOCK_SUFFIX}`;
+  mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
+  const owned =
+    tryCreateLock(lockPath) ||
+    (!isHeldByLiveProcess(lockPath) && (rmSync(lockPath, { force: true }), tryCreateLock(lockPath)));
+  return owned ? { release: () => rmSync(lockPath, { force: true }) } : null;
 };

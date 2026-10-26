@@ -37,6 +37,9 @@ const FAILURE_MESSAGES = {
   [DemoFailureCode.enum.seed_failed]: ({ reason }: DemoFailure) =>
     `seeding the demo failed: ${reason}. A demo created by this run was removed; try again, or use --${RESET_FLAG}`,
   [DemoFailureCode.enum.start_failed]: ({ reason }: DemoFailure) => `the demo could not start: ${reason}`,
+  [DemoFailureCode.enum.busy]: () =>
+    'another demo run is preparing the same database right now (or died holding its lock file, which is cleared once ' +
+    'that process is gone). Wait for it, then run this again',
   [DemoFailureCode.enum.port_in_use]: () =>
     `port ${DEMO_PORT} is already in use. If the demo is already running (an AI client's fintrack-demo server, or ` +
     `another "demo"), open ${dashboardUrl()}`,

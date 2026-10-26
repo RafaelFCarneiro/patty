@@ -139,6 +139,21 @@ describe('setup <client> --demo', () => {
   });
 });
 
+describe('a client file that is not plain JSON (VS Code allows comments and trailing commas)', () => {
+  const JSONC =
+    '{\n  // my servers\n  "servers": { "fintrack": { "command": "x" }, "other": { "command": "y" },\n  }\n}\n';
+  const vscodeFile = () => join(homeDir, '.vscode', 'mcp.json');
+
+  it.each(['--demo', '--remove-demo'])('%s refuses it and leaves every entry in it as it was', async (flag) => {
+    const { run, err } = await loadSetup();
+    mkdirSync(join(homeDir, '.vscode'), { recursive: true });
+    writeFileSync(vscodeFile(), JSONC);
+    expect(await run('vscode', flag)).toBe(1);
+    expect(readFileSync(vscodeFile(), 'utf8')).toBe(JSONC);
+    expect(err.join('\n')).toContain('left unchanged');
+  });
+});
+
 describe('setup <client> --remove-demo', () => {
   it('removes only the fintrack-demo entry', async () => {
     const { run } = await loadSetup();

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { ok, Result } from 'neverthrow';
+import { err, ok, Result } from 'neverthrow';
 import * as R from 'remeda';
 import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/sign-in.js';
@@ -40,16 +40,28 @@ const parseJson = Result.fromThrowable((text: string): unknown => JSON.parse(tex
 
 type ConfigRead = { config: Record<string, unknown>; warnings: string[] };
 
-/** The config object in the file — `{}` for a missing, empty or unusable one, the last with a warning. */
-export const readJsonOrEmpty = (path: string): Result<ConfigRead, ClientConfigFailure> => {
+type WhenUnusable = (path: string) => Result<ConfigRead, ClientConfigFailure>;
+
+const replaceUnusable: WhenUnusable = (path) => ok({ config: {}, warnings: [invalidConfigWarning(path)] });
+
+/** A file that is not a JSON object (a VS Code file with comments or trailing commas, say) is not ours to rewrite. */
+const refuseUnusable: WhenUnusable = (path) =>
+  err(clientConfigFailures.readFailed(path, `${INVALID_ROOT_MESSAGE}, or is not plain JSON — left unchanged`));
+
+/** The config object in the file — `{}` for a missing or empty one. An unusable one is replaced, with a warning, unless
+ *  the caller refuses it (the demo entry never rewrites a file it could not read). */
+export const readJsonOrEmpty = (
+  path: string,
+  whenUnusable: WhenUnusable = replaceUnusable,
+): Result<ConfigRead, ClientConfigFailure> => {
   if (!existsSync(path)) return ok({ config: {}, warnings: [] });
   return readText(path)
     .mapErr((cause) => clientConfigFailures.readFailed(path, cause))
-    .map((content): ConfigRead => {
+    .andThen((content): Result<ConfigRead, ClientConfigFailure> => {
       const trimmed = content.trim();
-      if (!trimmed) return { config: {}, warnings: [] };
+      if (!trimmed) return ok({ config: {}, warnings: [] });
       const config = parseJson(trimmed).map(resolveConfigObject).unwrapOr(null);
-      return config ? { config, warnings: [] } : { config: {}, warnings: [invalidConfigWarning(path)] };
+      return config ? ok({ config, warnings: [] }) : whenUnusable(path);
     });
 };
 
@@ -87,8 +99,9 @@ const writeEntry = (
   merge: (existing: Record<string, unknown>, entry: Record<string, unknown>) => Record<string, unknown>,
   entry: Record<string, unknown>,
   next: string,
+  whenUnusable: WhenUnusable = replaceUnusable,
 ): ConfigReport =>
-  readJsonOrEmpty(configPath).andThen(({ config, warnings }) =>
+  readJsonOrEmpty(configPath, whenUnusable).andThen(({ config, warnings }) =>
     writeJson(configPath, merge(config, entry))
       .map((): ClientSetupReport => ({ warnings, lines: [`  Updated: ${configPath}`, next] }))
       // What was raised while reading is still owed to the person, ahead of the failure.
@@ -100,7 +113,7 @@ const nothingToRemove = (reason: string): ConfigReport => ok({ warnings: [], lin
 /** Removes only the `fintrack-demo` entry. A file that is missing, or holds no such entry, is left exactly as it is. */
 const removeDemoEntry = (configPath: string, key: ServersKey, next: string): ConfigReport => {
   if (!existsSync(configPath)) return nothingToRemove(`No demo entry to remove: ${configPath} does not exist`);
-  return readJsonOrEmpty(configPath).andThen(({ config, warnings }) => {
+  return readJsonOrEmpty(configPath, refuseUnusable).andThen(({ config, warnings }) => {
     const without = withoutServer(config, key, DEMO_SERVER_NAME);
     if (without === null) return nothingToRemove(`No ${DEMO_SERVER_NAME} entry in ${configPath}`);
     return writeJson(configPath, without)
@@ -132,6 +145,7 @@ const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig
       (existing, demoEntry) => MERGE_BY_KEY[key](existing, demoEntry, DEMO_SERVER_NAME),
       withDemo(entry, databasePath),
       next,
+      refuseUnusable,
     ),
   removeDemo: () => removeDemoEntry(path(), key, next),
 });
