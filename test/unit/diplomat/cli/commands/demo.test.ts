@@ -105,6 +105,18 @@ describe('fintrack demo', () => {
     expect(errors.join('\n')).toContain(`http://127.0.0.1:${DEMO_PORT}/ui/overview`);
   });
 
+  it.each([['--help'], ['-h'], ['--reset', '--help']])(
+    'demo %s prints its help and prepares nothing',
+    async (...flags) => {
+      const { io, out, prepare, serve } = rig(ok(PREPARED));
+      expect(await runCli(['demo', ...flags], io)).toBe(0);
+      expect(out.join('\n')).toContain('Usage: ');
+      expect(out.join('\n')).toContain('--country');
+      expect(prepare).not.toHaveBeenCalled();
+      expect(serve).not.toHaveBeenCalled();
+    },
+  );
+
   it('is in the usage listing', async () => {
     const { io, out } = rig(ok(PREPARED));
     await runCli(['--help'], io);

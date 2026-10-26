@@ -64,7 +64,13 @@ export const DEMO_MESSAGES = {
     ].join('\n'),
 } as const;
 
+const HELP_FLAGS: readonly string[] = ['--help', '-h'];
+
 export const runDemoCommand = async (args: readonly string[], io: CliIo): Promise<number> => {
+  if (args.some((argument) => HELP_FLAGS.includes(argument))) {
+    io.out(DEMO_HELP);
+    return EXIT_OK;
+  }
   const parsed = parseFlags(args, DEMO_FLAGS, DemoOptionsSchema, DEMO_POSITIONALS);
   if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
 
