@@ -12,8 +12,7 @@ import type { PreparedAuth } from './auth.js';
 import { boot } from './boot.js';
 import type { HttpSidecar } from './http.js';
 import type { Runtime } from './runtime.js';
-
-const loadHttpModule = () => import('./http.js');
+import { loadHttpModule } from './lazy-modules.js';
 
 const maybeStartSidecar = async (config: Config, runtime: Runtime, auth: HttpAuth): Promise<HttpSidecar | null> => {
   if (!config.FINTRACK_HTTP) return null;

@@ -27,6 +27,7 @@ import {
   type DemoSeedStatus,
 } from '../models/demo.js';
 import { seedDemo } from './demo-seed.js';
+import { loadHttpModule } from './lazy-modules.js';
 
 /**
  * Composition root of `fintrack demo`, as a sequence: look at the file at the demo path, decide (pure,
@@ -34,9 +35,6 @@ import { seedDemo } from './demo-seed.js';
  * reports. The demo never reads or writes the real `DB_PATH`, and the only file it ever deletes is a database that
  * says, inside itself, that it is a demo.
  */
-
-// Fastify loads only for the one command that serves: the CLI's other commands never pay for it.
-const loadHttpModule = () => import('./http.js');
 
 export type DemoShellOptions = {
   /** The demo database; the real `DB_PATH` by default is never this. Overridable for tests. */
