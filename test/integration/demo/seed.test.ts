@@ -41,6 +41,11 @@ const count = async (table: string, where = '1 = 1'): Promise<number> => {
   return row?.n ?? 0;
 };
 
+const existingData = async () => ({
+  rates: await count('currency_rates'),
+  history: await count('merchant_category', 'user_id IS NOT NULL'),
+});
+
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'fintrack-demo-seed-'));
   db = await openDatabase({ DB_PATH: join(dir, 'demo.db'), FINTRACK_DB_KEY: TEST_KEY });
@@ -64,10 +69,11 @@ describe('seedDemo — marking and idempotency', () => {
 
   it('does not duplicate anything when run again on a seeded demo', async () => {
     await seed(DemoCountry.enum.us);
-    const before = { transactions: await count('transactions'), accounts: await count('accounts') };
+    const totals = async () => ({ transactions: await count('transactions'), accounts: await count('accounts') });
+    const before = await totals();
     const again = (await seed(DemoCountry.enum.us))._unsafeUnwrap();
     expect(again).toEqual({ seeded: false, steps: {} });
-    expect({ transactions: await count('transactions'), accounts: await count('accounts') }).toEqual(before);
+    expect(await totals()).toEqual(before);
   });
 
   it('refuses a database that holds data and is not a demo', async () => {
@@ -123,6 +129,30 @@ describe('seedDemo — marking and idempotency', () => {
     await db.run(sql.raw(insert));
     expect((await seed(DemoCountry.enum.us)).isErr()).toBe(true);
     expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
+  });
+
+  it.each([
+    [
+      'a saved exchange rate',
+      'INSERT INTO currency_rates (id, from_code, to_code, rate, as_of, version) ' +
+        "VALUES ('r1','USDC','USD',1,'2026-01-01T00:00:00.000Z',0)",
+    ],
+    [
+      'retained merchant history',
+      'INSERT INTO merchant_category (merchant_key, category_id, weight, origin, user_id) ' +
+        "VALUES ('amazon','cat-shopping',1,'history','user-owner')",
+    ],
+  ])('refuses an unmarked database holding %s, leaving it as it was', async (_label, insert) => {
+    await db.run(sql`INSERT OR IGNORE INTO merchants (key) VALUES ('amazon')`);
+    await db.run(sql.raw(insert));
+    const before = {
+      rates: await count('currency_rates'),
+      history: await count('merchant_category', 'user_id IS NOT NULL'),
+    };
+    expect((await seed(DemoCountry.enum.us)).isErr()).toBe(true);
+    expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
+    expect(await existingData()).toEqual(before);
+    expect(await count('accounts')).toBe(0);
   });
 
   it('seeds a database holding only the shared defaults', async () => {

@@ -10,7 +10,9 @@ import {
   budgets,
   categories,
   creditCards,
+  currencyRates,
   dashboards,
+  merchantCategory,
   recurringRules,
   settings,
   tags,
@@ -27,7 +29,16 @@ export type InstanceRepo = {
   hasUserData: () => Promise<boolean>;
 };
 
-const USER_DATA_TABLES = [accounts, creditCards, bills, transactions, tags, budgets, recurringRules] as const;
+const USER_DATA_TABLES = [
+  accounts,
+  creditCards,
+  bills,
+  transactions,
+  tags,
+  budgets,
+  recurringRules,
+  currencyRates,
+] as const;
 /** Tables whose rows are shared defaults (no owner) or a user's own: only the owned ones are user data. */
 const SHARED_OR_OWNED_TABLES = [categories, dashboards] as const;
 
@@ -54,6 +65,12 @@ export const instanceRepo = (db: Db): InstanceRepo => ({
       ...SHARED_OR_OWNED_TABLES.map((table) =>
         db.select({ id: table.id }).from(table).where(isNotNull(table.userId)).limit(1),
       ),
+      // Merchant history has no `id`: its own projection; shared rules (no owner) are not user data.
+      db
+        .select({ key: merchantCategory.merchantKey })
+        .from(merchantCategory)
+        .where(isNotNull(merchantCategory.userId))
+        .limit(1),
     ]);
     return found.some((rows) => rows.length > 0);
   },
