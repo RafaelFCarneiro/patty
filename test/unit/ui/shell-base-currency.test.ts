@@ -11,7 +11,7 @@ const read = (file: string) => readFileSync(fileURLToPath(new URL(UI_DIR + file,
 
 type Routes = Record<string, () => unknown>;
 
-const bootShell = async (routes: Routes) => {
+const bootShell = async (routes: Routes, { demo = false }: { demo?: boolean } = {}) => {
   let onReady: (() => void) | undefined;
   const loaded: string[] = [];
   const stream: { onmessage?: (event: { data: string }) => void } = {};
@@ -27,7 +27,10 @@ const bootShell = async (routes: Routes) => {
       return Promise.resolve({ ok: false, statusText: 'boom', json: () => Promise.reject(new Error('no body')) });
     }
   };
+  const markedDemo = (name: string) => (demo && name === 'data-instance-kind' ? 'demo' : null);
+  const body = { ...makeStubElement(), getAttribute: markedDemo };
   const document = {
+    title: '',
     getElementById: () => makeStubElement(),
     querySelector: () => makeStubElement(),
     querySelectorAll: () => [],
@@ -35,7 +38,7 @@ const bootShell = async (routes: Routes) => {
     addEventListener: (type: string, handler: () => void) => {
       if (type === 'DOMContentLoaded') onReady = handler;
     },
-    body: makeStubElement(),
+    body,
   };
   const sandbox: Record<string, unknown> = {
     document, console: { ...console, error() {} }, fetch: respond, Intl, Number, Object, Math, Array, Promise,
@@ -55,7 +58,7 @@ const bootShell = async (routes: Routes) => {
   vm.runInContext(read('app.js'), sandbox);
   onReady?.();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  return { sandbox, loaded, stream };
+  return { sandbox, loaded, stream, document };
 };
 
 const currencies = Object.values(currencyMetadata);
@@ -102,5 +105,19 @@ describe('shell boot (ui/app.js)', () => {
     stream.onmessage?.({ data: JSON.stringify({ entities: ['userSettings'] }) });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(seen).toEqual(['MXN']);
+  });
+
+  describe('document title', () => {
+    const overview = { '/api/dashboards/overview': () => ({ name: 'Overview', html: '<p>ok</p>' }) };
+
+    it('is "FinTrack — <dashboard>" once the dashboard has rendered', async () => {
+      const { document } = await bootShell(overview);
+      expect(document.title).toBe('FinTrack — Overview');
+    });
+
+    it('starts with [Demo] when the server marked the page as a demo', async () => {
+      const { document } = await bootShell(overview, { demo: true });
+      expect(document.title).toBe('[Demo] FinTrack — Overview');
+    });
   });
 });

@@ -35,7 +35,7 @@ export const connectStdio = async (tenancy: Tenancy, version: string, auth: Stdi
         })
       : undefined;
   const gate: PrincipalGate = session ? () => session.resolve() : ownerGate;
-  const server = buildMcpServer(tenancy, version, { gate });
+  const server = buildMcpServer(tenancy, version, { gate }, await tenancy.instanceKind());
   await server.connect(new StdioServerTransport());
   return { server, session };
 };

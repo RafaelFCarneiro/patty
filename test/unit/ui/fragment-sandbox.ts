@@ -29,6 +29,7 @@ export type StubElement = {
   closest: () => StubElement;
   getContext: () => Record<string, unknown>;
   setAttribute: () => void;
+  getAttribute: () => string | null;
   reset: () => void;
   [key: string]: unknown;
 };
@@ -59,6 +60,7 @@ export const makeStubElement = (): StubElement => {
     closest: () => makeStubElement(),
     getContext: () => ({}),
     setAttribute() {},
+    getAttribute: () => null,
     reset() {},
   };
   return el;

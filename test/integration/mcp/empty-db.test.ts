@@ -17,6 +17,7 @@ import { currenciesRepo } from '../../../src/diplomat/db/repos/currencies.js';
 import { currencyRatesRepo } from '../../../src/diplomat/db/repos/currency-rates.js';
 import { dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { healthRepo } from '../../../src/diplomat/db/repos/health.js';
+import { instanceRepo } from '../../../src/diplomat/db/repos/instance.js';
 import { merchantsRepo } from '../../../src/diplomat/db/repos/merchants.js';
 import { recurringRepo } from '../../../src/diplomat/db/repos/recurring.js';
 import { settingsRepo, userSettingsApplier } from '../../../src/diplomat/db/repos/settings.js';
@@ -65,6 +66,7 @@ describe('empty DB (ADR-008)', () => {
       currencyRates: currencyRatesRepo(db),
       dashboards: dashboardsRepo(db, OWNER_USER_ID),
       health: healthRepo(db),
+      instance: instanceRepo(db),
       merchants: merchantsRepo(db, OWNER_USER_ID),
       recurring: recurringRepo(db, OWNER_USER_ID),
       settings: settingsR,

@@ -50,6 +50,7 @@ const makeDeps = (opts: { rows?: SummaryRow[]; rates?: CurrencyRateEntity[] } = 
     currencyRates: { list: async () => opts.rates ?? [] } as unknown as Deps['currencyRates'],
     dashboards: {} as Deps['dashboards'],
     health: {} as Deps['health'],
+    instance: {} as Deps['instance'],
     merchants: {} as Deps['merchants'],
     recurring: {} as Deps['recurring'],
     settings: {} as Deps['settings'],

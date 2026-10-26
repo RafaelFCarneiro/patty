@@ -176,6 +176,13 @@
       "when": 1792368264690,
       "tag": "0024_credentials_changed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1793019256222,
+      "tag": "0025_instance_kind",
+      "breakpoints": true
     }
   ]
 }

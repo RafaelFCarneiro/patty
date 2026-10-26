@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InstanceKind } from '../../../../src/models/instance.js';
 import {
   approvedGrant,
   clampToCap,
@@ -389,7 +390,12 @@ describe('sessionOnlyLabel', () => {
 });
 
 describe('the instance cap on sign-in durations', () => {
-  const settings = (maxSignInDuration: SignInCap) => ({ id: 'singleton', maxSignInDuration, version: 0 });
+  const settings = (maxSignInDuration: SignInCap) => ({
+    id: 'singleton',
+    maxSignInDuration,
+    instanceKind: InstanceKind.enum.standard,
+    version: 0,
+  });
 
   it('is today’s maximum, 30 days, until an admin lowers it', () => {
     expect(DEFAULT_SIGN_IN_CAP).toBe('30d');

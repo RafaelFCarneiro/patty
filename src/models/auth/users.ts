@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import { Id } from '../id.js';
+import { InstanceKind } from '../instance.js';
 import { LoginDuration, type ClientGrantEntity } from './grant.js';
 import type { UserRole, UserEntity } from './owner.js';
 import type { Principal } from './principal.js';
@@ -23,7 +24,9 @@ export const DEFAULT_SIGN_IN_CAP = SignInCap.enum['30d'];
 /** The `settings` table holds one instance-wide row. */
 export const INSTANCE_SETTINGS_ID = 'singleton';
 
-export const InstanceSettingsEntitySchema = withPersistenceMeta(z.object({ id: Id, maxSignInDuration: SignInCap }));
+export const InstanceSettingsEntitySchema = withPersistenceMeta(
+  z.object({ id: Id, maxSignInDuration: SignInCap, instanceKind: InstanceKind }),
+);
 export type InstanceSettingsEntity = z.infer<typeof InstanceSettingsEntitySchema>;
 
 /** An invitation to claim one unclaimed user row. Only the code's sha256 is stored. */

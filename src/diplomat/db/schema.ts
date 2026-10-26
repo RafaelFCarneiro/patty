@@ -18,6 +18,7 @@ import { DEFAULT_SIGN_IN_CAP, SignInCap } from '../../models/auth/users.js';
 import { AccessTokenKind, type TokenAccess } from '../../models/auth/token.js';
 import { BudgetPeriod } from '../../models/budget.js';
 import { DashboardSource } from '../../models/dashboard.js';
+import { DEFAULT_INSTANCE_KIND, InstanceKind } from '../../models/instance.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
 import { RecurringPeriod } from '../../models/recurring.js';
 import { ClassificationMethod, TransactionStatus } from '../../models/transaction.js';
@@ -270,12 +271,12 @@ export const budgets = sqliteTable(
   (t) => [uniqueIndex('budgets_user_category_currency_period').on(t.userId, t.categoryId, t.currency, t.period)],
 );
 
-// Instance-wide settings (one row). Empty today; preferences live in user_settings.
-// The instance-wide singleton. `max_sign_in_duration` is the longest a stdio sign-in may last; no row
-// means the default (30d, today's maximum).
+// The instance-wide singleton; preferences live in user_settings. `max_sign_in_duration` is the longest a stdio
+// sign-in may last; `instance_kind` is what this database says it is (`demo` only when the demo seeder made it).
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
   maxSignInDuration: text('max_sign_in_duration', { enum: SignInCap.options }).notNull().default(DEFAULT_SIGN_IN_CAP),
+  instanceKind: text('instance_kind', { enum: InstanceKind.options }).notNull().default(DEFAULT_INSTANCE_KIND),
   version: integer('version').notNull().default(0),
 });
 

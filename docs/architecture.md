@@ -200,7 +200,8 @@ recurring_rules     (id PK, description, amount, type, period, next_due, currenc
                      null on rules created before the migration, no backfill)
 
 settings            (id PK DEFAULT 'singleton', max_sign_in_duration: 24h|7d|30d DEFAULT 30d — the longest a
-                     stdio sign-in may last on this instance, set by an admin; the row is
+                     stdio sign-in may last on this instance, set by an admin; instance_kind: standard|demo DEFAULT
+                     standard — what this database says it is, written only by the demo seeder; the row is
                      inserted by migration —, version — instance-wide settings; a person's preferences live in user_settings)
 user_settings       (user_id PK FK→users, locale: en|es|pt DEFAULT en,
                      locale_source: default|inferred|explicit DEFAULT default,
@@ -260,7 +261,7 @@ can read every user's data. **user_id** is on every user-owned row; the map says
 | --- | --- | --- |
 | **Owned** | `accounts`, `credit_cards`, `bills`, `transactions`, `tags`, `budgets`, `recurring_rules` (`user_id` NOT NULL, FK RESTRICT); `user_settings` (PK, FK CASCADE); `transaction_tags` (via its parents) | Reads see only the user's rows; writes are stamped with and confined to the user. |
 | **Shared default** | `categories` (the seeded `cat-*`), `merchant_category` `origin = rule`, `dashboards` `source = file` (`user_id` NULL) | Every read returns *shared + own*; nobody can rename or delete one (`SHARED_DEFAULT_READ_ONLY_MESSAGE`, `models/tenancy.ts`, one validation error from every tool and route). A dashboard saved under a default's name is the user's own copy and replaces the default for them alone. |
-| **Shared dictionary / reference** | `merchants`, `currencies`, `currency_rates`, `settings` (singleton: the sign-in cap) | No owner. Any signed-in user with write scope refreshes exchange rates (market data); the merchant dictionary is never listed across users. |
+| **Shared dictionary / reference** | `merchants`, `currencies`, `currency_rates`, `settings` (singleton: the sign-in cap and the instance kind) | No owner. Any signed-in user with write scope refreshes exchange rates (market data); the merchant dictionary is never listed across users. |
 
 **`depsFor(principal)` / `runEffectsFor(principal)`.** The composition root (`composition/runtime.ts`) builds, per request and
 by partial application, a `Deps` whose repos are already bound to `principal.userId` (`accountsRepo(db, userId)` …),
@@ -630,7 +631,7 @@ There is no self-registration and an admin never learns a password:
   routed like the auth commands (`Shell.deps`/`run`, `failed`/exit codes), printing the link built from `Shell.inviteOrigin` (`PUBLIC_URL`, else the sidecar's default origin).
 - *Errors.* `admin_required` (answered 404), `username_taken`, `cannot_change_self`, `last_admin`, `user_disabled`, `invalid_invite`, `unknown_user`. The messages are neutral (`AUTH_MESSAGES`); no `Remedy` is used, since the operation that fixes a refusal (enabling a user) is a button on the users page and a terminal command, never a tool or a route — each of those two edges words the next step itself (`REFUSAL_MESSAGE` in `routes/users.ts`, `REFUSAL_HINT` in `commands/users.ts`).
 - *The cap.* `settings.max_sign_in_duration` (`24h | 7d | 30d`, default 30 d; `SignInCap`) limits what a person may choose when approving a stdio sign-in: `findConsent` offers nothing above it and `approveGrant` clamps whatever a hand-made form posts. It never shortens a sign-in already granted.
-- *Migration `0022_user_management`* only adds structure (`invites`, `users.last_login_at`, `settings.max_sign_in_duration`): it is not data-rewriting, so no safety copy is taken. *Migrations `0023_instance_settings_row` and `0024_credentials_changed_at`* insert the default settings row and add `users.credentials_changed_at`: neither rewrites data.
+- *Migration `0022_user_management`* only adds structure (`invites`, `users.last_login_at`, `settings.max_sign_in_duration`): it is not data-rewriting, so no safety copy is taken. *Migrations `0023_instance_settings_row` and `0024_credentials_changed_at`* insert the default settings row and add `users.credentials_changed_at`: neither rewrites data. *Migration `0025_instance_kind`* adds `settings.instance_kind` (default `standard`): not data-rewriting.
 
 **Startup order** (`composition/boot.ts`, and every command that opens the database): `openDatabase` → `bootstrap` = **version guard** (`diplomat/db/version-guard.ts`'s `checkDatabaseNotAhead`:
 the database's newest applied migration, `migration-journal.ts`'s `lastAppliedMillis`, against the newest this build's journal ships — `logic/migration.ts`'s `isDatabaseAhead`; a database that is ahead makes `bootstrap` return an error `DatabaseAhead` (`models/database.ts`), which `main.ts` and the CLI print with `databaseAheadMessage` and exit 1; nothing has been written) → safety copy (if a data-rewriting migration is pending) → migrate → seed → `prepareAuth` (identity deps; prune expired sessions and grants) → connect stdio → sidecar → announce the setup code.
@@ -643,6 +644,15 @@ startup. Cookie: `HttpOnly; SameSite=Lax; Path=/; Max-Age`, `Secure` iff `PUBLIC
 **Public surface and health.** `GET /api/health` returns `{ status: 'ok', db: 'ok' | 'error' }` through
 `controllers/status.ts`'s `getHealth`, which shares `databaseState` with `getStatus` (one DB check). `/api/status`
 requires a session. The container `HEALTHCHECK` is `/api/health`.
+
+**The database marks the demo.** `settings.instance_kind` (`standard | demo`, `models/instance.ts`'s `InstanceKind`) is the
+only source of "this is a demo" — never a file name, a path or an env var. `Tenancy.instanceKind` (instance-wide, so no
+principal) and `Deps.instance` both read it through `diplomat/db/repos/instance.ts`. Three things follow from it, each at
+its own edge: `/api/status` and `get_status` report `demo: true`; `diplomat/http/hooks/demo-marker.ts` (an `onSend` hook)
+puts a banner first in `<body>`, `[Demo]` first in `<title>` and `data-instance-kind="demo"` on every HTML document —
+the shell and the auth pages alike, read from the database on each page — and `ui/app.js` keeps the prefix on the titles
+it sets later; `buildMcpServer` sends `diplomat/mcp/instructions.ts`'s demo `instructions` at `initialize` (stdio reads the
+kind when it connects, `/mcp` per request). A standard database gets none of the three.
 
 ## Tool surface
 

@@ -1,4 +1,5 @@
 import { DEFAULT_SIGN_IN_CAP, INSTANCE_SETTINGS_ID } from '../../../src/models/auth/users.js';
+import { InstanceKind } from '../../../src/models/instance.js';
 import { PersistOp, type FlowOutcome, type Persistable } from '@rfc0/effect-runner';
 import type { ResultAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
@@ -124,7 +125,12 @@ const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW
       listExpiredUnclaimed: async () => [],
     },
     instanceSettings: {
-      get: async () => ({ id: INSTANCE_SETTINGS_ID, maxSignInDuration: DEFAULT_SIGN_IN_CAP, version: 0 }),
+      get: async () => ({
+        id: INSTANCE_SETTINGS_ID,
+        maxSignInDuration: DEFAULT_SIGN_IN_CAP,
+        instanceKind: InstanceKind.enum.standard,
+        version: 0,
+      }),
     },
     setupCodes: {
       findByHash: async (hash) => codes.find((code) => code.codeHash === hash) ?? null,

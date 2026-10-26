@@ -22,6 +22,7 @@ const makeDeps = (stored?: UserSettingsEntity, envLocale?: Locale): Deps => ({
   currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
+  instance: {} as Deps['instance'],
   merchants: {} as Deps['merchants'],
   recurring: {} as Deps['recurring'],
   tags: {} as Deps['tags'],

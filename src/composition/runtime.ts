@@ -17,6 +17,7 @@ import { currenciesRepo } from '../diplomat/db/repos/currencies.js';
 import { currencyRateApplier, currencyRatesRepo } from '../diplomat/db/repos/currency-rates.js';
 import { dashboardApplier, dashboardsRepo } from '../diplomat/db/repos/dashboards.js';
 import { healthRepo } from '../diplomat/db/repos/health.js';
+import { instanceRepo } from '../diplomat/db/repos/instance.js';
 import { merchantApplier, merchantCategoryApplier, merchantsRepo } from '../diplomat/db/repos/merchants.js';
 import { recurringRepo, recurringRuleApplier } from '../diplomat/db/repos/recurring.js';
 import { settingsRepo, userSettingsApplier } from '../diplomat/db/repos/settings.js';
@@ -117,6 +118,7 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
   const localeResolver = createLocaleResolver(config.FINTRACK_LOCALE);
   const changeBus = createChangeBus<ChangeEvent>({ onError: onChangeError });
   const health = healthRepo(db);
+  const instance = instanceRepo(db);
 
   const depsFor: Tenancy['depsFor'] = ({ userId }) => {
     const settings = settingsRepo(db, userId);
@@ -125,6 +127,7 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
       currencies: currenciesRepo(db),
       currencyRates: currencyRatesRepo(db),
       health,
+      instance,
       settings,
       clock: options.clock ?? (() => new Date()),
       newId: () => randomUUID(),
@@ -135,6 +138,7 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
 
   return {
     publicDeps: { health },
+    instanceKind: instance.kind,
     depsFor,
     ...runnersOn(createEngineContext(db, onChangeError), changeBus),
     resetLocaleFor: ({ userId }) => localeResolver.resetLocale(userId),

@@ -19,5 +19,6 @@ describe('GET /api/status', () => {
     expect(body).toHaveProperty('version');
     expect(body).toHaveProperty('db', 'ok');
     expect(body).toHaveProperty('locale');
+    expect(body).toHaveProperty('demo', false);
   });
 });
