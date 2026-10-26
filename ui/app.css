@@ -737,7 +737,8 @@ header, .dashboard-header {
 .demo-banner {
     position: fixed;
     top: 0; left: 0; right: 0;
-    z-index: 1000;
+    /* Above every modal overlay in the dashboards (up to 10000), so entering data never hides the warning. */
+    z-index: 2147483647;
     padding: 0.5rem 1rem;
     text-align: center;
     font-size: 0.85rem;
