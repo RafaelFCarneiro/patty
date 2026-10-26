@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -79,7 +88,22 @@ describe('acquireDatabaseLock', () => {
     const path = join(dir, 'd.db');
     writeFileSync(`${path}.lock`, 'not-a-pid');
     expect(acquireDatabaseLock(path)).not.toBeNull();
-    writeFileSync(`${path}.lock`, String(process.pid));
+    writeFileSync(`${path}.lock`, `${process.pid}:token`);
     expect(acquireDatabaseLock(path)).toBeNull();
+  });
+
+  it('releases only its own lock: after a takeover the file is someone else’s', () => {
+    const path = join(dir, 'd.db');
+    const first = acquireDatabaseLock(path);
+    writeFileSync(`${path}.lock`, `${process.pid}:someone-else`);
+    first?.release();
+    expect(existsSync(`${path}.lock`)).toBe(true);
+  });
+
+  it('leaves no staging or tombstone file behind, taking over or not', () => {
+    const path = join(dir, 'd.db');
+    writeFileSync(`${path}.lock`, '1999999999:dead');
+    acquireDatabaseLock(path)?.release();
+    expect(readdirSync(dir).filter((name) => /\.(tmp|stale)$/.test(name))).toEqual([]);
   });
 });

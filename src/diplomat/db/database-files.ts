@@ -1,10 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import {
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   readFileSync,
   readlinkSync,
   realpathSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -80,6 +83,7 @@ export const probeDatabase = async (databasePath: string): Promise<DatabaseLook>
 const LOCK_SUFFIX = '.lock';
 const FILE_EXISTS = 'EEXIST';
 const NO_SUCH_PROCESS = 'ESRCH';
+const TOKEN_SEPARATOR = ':';
 
 const isProcessAlive = (pid: number): boolean => {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -91,36 +95,77 @@ const isProcessAlive = (pid: number): boolean => {
   }
 };
 
-const tryCreateLock = (lockPath: string): boolean => {
+const readLock = (lockPath: string): string | null => {
   try {
-    writeFileSync(lockPath, String(process.pid), { flag: 'wx', mode: 0o600 });
+    return readFileSync(lockPath, 'utf8');
+  } catch {
+    return null;
+  }
+};
+
+/** Publishes `token` as the lock, all at once: the content is written to a private file that is then hard-linked to the
+ *  lock path, so the lock either does not exist or already names its owner — never an empty file in between — and the
+ *  link fails if another run got there first. */
+const publishLock = (lockPath: string, token: string): boolean => {
+  const staging = `${lockPath}.${randomUUID()}.tmp`;
+  writeFileSync(staging, token, { mode: 0o600 });
+  try {
+    linkSync(staging, lockPath);
     return true;
   } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code === FILE_EXISTS) return false;
     throw cause;
+  } finally {
+    rmSync(staging, { force: true });
   }
 };
 
-const isHeldByLiveProcess = (lockPath: string): boolean => {
+/** Clears a lock seen to belong to a dead process, by renaming it to a name only this run knows — atomic, so
+ *  exactly one reclaimer gets the file — and checking it is still the one that was seen. If a fresh lock was swapped
+ *  in meanwhile, it is put back and the reclaim is abandoned. */
+const reclaimStaleLock = (lockPath: string, observed: string): boolean => {
+  const tombstone = `${lockPath}.${randomUUID()}.stale`;
   try {
-    return isProcessAlive(Number(readFileSync(lockPath, 'utf8')));
+    renameSync(lockPath, tombstone);
+  } catch {
+    return true; // already gone: someone else reclaimed it; the caller publishes again
+  }
+  const taken = readLock(tombstone);
+  try {
+    if (taken === observed) return true;
+    linkSync(tombstone, lockPath);
+    return false;
   } catch {
     return false;
+  } finally {
+    rmSync(tombstone, { force: true });
   }
 };
 
 export type DatabaseLock = { release: () => void };
 
+const lockOf = (lockPath: string, token: string): DatabaseLock => ({
+  // Only the owner's own lock is removed: after a takeover the file may be someone else's.
+  release: () => {
+    if (readLock(lockPath) === token) rmSync(lockPath, { force: true });
+  },
+});
+
 /**
- * Exclusive ownership of a database's preparation across processes: a `<db>.lock` file created exclusively and holding
- * the owner's pid. Null when another live process holds it; a lock left by a process that is gone is taken over. Held
- * from the first look at the file through seeding and cleanup, so two first runs cannot both believe they created it.
+ * Exclusive ownership of a database's preparation across processes: a `<db>.lock` file holding `pid:token`, published
+ * atomically (`publishLock`). Null when another live process holds it. A lock whose process is gone is reclaimed
+ * (`reclaimStaleLock`) and published again; release removes only a lock that still carries this run's token. Held from
+ * the first look at the file through seeding and cleanup, so two first runs cannot both believe they created it.
+ * A file system with no hard links cannot be locked this way: the demo fails there rather than run unlocked.
  */
 export const acquireDatabaseLock = (databasePath: string): DatabaseLock | null => {
   const lockPath = `${databasePath}${LOCK_SUFFIX}`;
   mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
-  const owned =
-    tryCreateLock(lockPath) ||
-    (!isHeldByLiveProcess(lockPath) && (rmSync(lockPath, { force: true }), tryCreateLock(lockPath)));
-  return owned ? { release: () => rmSync(lockPath, { force: true }) } : null;
+  const token = `${process.pid}${TOKEN_SEPARATOR}${randomUUID()}`;
+  if (publishLock(lockPath, token)) return lockOf(lockPath, token);
+
+  const observed = readLock(lockPath);
+  if (observed !== null && isProcessAlive(Number(observed.split(TOKEN_SEPARATOR)[0]))) return null;
+  if (observed !== null && !reclaimStaleLock(lockPath, observed)) return null;
+  return publishLock(lockPath, token) ? lockOf(lockPath, token) : null;
 };

@@ -711,8 +711,10 @@ write — reading `instance_kind` and whether it holds user data; missing / unre
 (`real_database` and `not_demo` refusals — the latter also for an alias, and for a `standard` database that holds data, before anything is migrated; delete first only for a `--reset` on a database that says `demo`; `createdHere`,
 whether this run owns the file) and `failureOfSeedStatus` (the seed status → the failure it is reported as). *Execute*:
 the shell deletes (`removeDatabaseFiles`), bootstraps and seeds. The whole preparation — from the first probe through
-seeding and cleanup — runs under a cross-process lock (`acquireDatabaseLock`: a `<db>.lock` file created exclusively and
-holding the owner's pid; a lock whose process is gone is taken over; a live holder is `busy`), so `createdHere` really
+seeding and cleanup — runs under a cross-process lock (`acquireDatabaseLock`: a `<db>.lock` file holding `pid:token`, published
+atomically by hard-linking a staged file so it never exists half-written; a lock whose process is gone is reclaimed by an
+atomic rename to a private tombstone and a check it is still the stale one seen; release removes only a lock still
+carrying the run's own token; a live holder is `busy`; stress-tested across processes in `test/integration/demo/lock.test.ts`), so `createdHere` really
 means "ours"; refusals that need no file (the real database, an alias) are answered before any lock file is created. The OS language comes from `config.ts`'s `osLocale`.
 The seeder reads where it starts through `controllers/instance.ts`'s `demoSeedStatus` (the three facts → the pure
 `demoSeedStart`). The real database is never opened to
