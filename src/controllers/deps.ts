@@ -86,6 +86,8 @@ export type ClientSetupReport = {
 export type ClientConfig = {
   label: string;
   run: (profile: string) => Result<ClientSetupReport, ClientConfigFailure>;
+  addDemo: (databasePath: string) => Result<ClientSetupReport, ClientConfigFailure>;
+  removeDemo: () => Result<ClientSetupReport, ClientConfigFailure>;
 };
 
 export type ClientConfigs = {

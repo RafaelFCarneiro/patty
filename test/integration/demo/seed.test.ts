@@ -17,7 +17,7 @@ import { DEMO_PACKS } from '../../../src/diplomat/db/seed/demo/index.js';
 import { planDemo } from '../../../src/logic/demo.js';
 import { OWNER_PRINCIPAL } from '../../../src/models/auth/principal.js';
 import { BillStatus } from '../../../src/models/bill.js';
-import { DemoCountry } from '../../../src/models/demo.js';
+import { DemoCountry, DemoSeedStatus } from '../../../src/models/demo.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { TransactionStatus } from '../../../src/models/transaction.js';
@@ -60,7 +60,7 @@ afterEach(() => {
 describe('seedDemo — marking and idempotency', () => {
   it('marks a fresh database as a demo, in the pack’s language', async () => {
     const report = (await seed(DemoCountry.enum.mx))._unsafeUnwrap();
-    expect(report.seeded).toBe(true);
+    expect(report.status).toBe(DemoSeedStatus.enum.seeded);
     const { deps } = owner();
     expect(await deps.instance.kind()).toBe(InstanceKind.enum.demo);
     expect(await deps.instance.locale()).toBe('es');
@@ -72,7 +72,7 @@ describe('seedDemo — marking and idempotency', () => {
     const totals = async () => ({ transactions: await count('transactions'), accounts: await count('accounts') });
     const before = await totals();
     const again = (await seed(DemoCountry.enum.us))._unsafeUnwrap();
-    expect(again).toEqual({ seeded: false, steps: {} });
+    expect(again).toEqual({ status: DemoSeedStatus.enum.present, steps: {} });
     expect(await totals()).toEqual(before);
   });
 
@@ -80,7 +80,7 @@ describe('seedDemo — marking and idempotency', () => {
     await seed(DemoCountry.enum.br);
     await db.run(sql`UPDATE settings SET instance_kind = 'standard' WHERE id = 'singleton'`);
     const refused = await seed(DemoCountry.enum.br);
-    expect(refused._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
+    expect(refused._unsafeUnwrap()).toEqual({ status: DemoSeedStatus.enum.not_demo, steps: {} });
     expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
   });
 
@@ -111,7 +111,7 @@ describe('seedDemo — marking and idempotency', () => {
     ['a tag', "INSERT INTO tags (id, user_id, name, version) VALUES ('g1','user-owner','solo',0)"],
   ])('refuses an unmarked database holding %s', async (_label, insert) => {
     await db.run(sql.raw(insert));
-    expect((await seed(DemoCountry.enum.us)).isErr()).toBe(true);
+    expect((await seed(DemoCountry.enum.us))._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.not_demo);
     expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
   });
 
@@ -127,7 +127,7 @@ describe('seedDemo — marking and idempotency', () => {
     ],
   ])('refuses an unmarked database holding %s', async (_label, insert) => {
     await db.run(sql.raw(insert));
-    expect((await seed(DemoCountry.enum.us)).isErr()).toBe(true);
+    expect((await seed(DemoCountry.enum.us))._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.not_demo);
     expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
   });
 
@@ -149,7 +149,7 @@ describe('seedDemo — marking and idempotency', () => {
       rates: await count('currency_rates'),
       history: await count('merchant_category', 'user_id IS NOT NULL'),
     };
-    expect((await seed(DemoCountry.enum.us)).isErr()).toBe(true);
+    expect((await seed(DemoCountry.enum.us))._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.not_demo);
     expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
     expect(await existingData()).toEqual(before);
     expect(await count('accounts')).toBe(0);
@@ -157,7 +157,7 @@ describe('seedDemo — marking and idempotency', () => {
 
   it('seeds a database holding only the shared defaults', async () => {
     expect(await count('categories', 'user_id IS NULL')).toBeGreaterThan(0);
-    expect((await seed(DemoCountry.enum.us))._unsafeUnwrap().seeded).toBe(true);
+    expect((await seed(DemoCountry.enum.us))._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.seeded);
   });
 
   it('refuses an unmarked database holding another user’s accounts', async () => {
@@ -167,7 +167,7 @@ describe('seedDemo — marking and idempotency', () => {
     await db.run(
       sql`INSERT INTO accounts (id, user_id, name, type, currency, initial_balance, version) VALUES ('a2','user-2','Theirs','checking','USD',0,0)`,
     );
-    expect((await seed(DemoCountry.enum.us)).isErr()).toBe(true);
+    expect((await seed(DemoCountry.enum.us))._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.not_demo);
     expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
   });
 
@@ -179,8 +179,54 @@ describe('seedDemo — marking and idempotency', () => {
 
   it('seeds an empty database that is not yet marked, and marks it', async () => {
     expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.standard);
-    expect((await seed(DemoCountry.enum.co))._unsafeUnwrap().seeded).toBe(true);
+    expect((await seed(DemoCountry.enum.co))._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.seeded);
     expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.demo);
+  });
+});
+
+const seededAt = async (): Promise<string | null> => {
+  const [row] = await db.all<{ at: string | null }>(sql`SELECT demo_seeded_at AS at FROM settings`);
+  return row?.at ?? null;
+};
+
+describe('seedDemo — the completion marker', () => {
+  it('is written as the last step, with the instant the seed ran', async () => {
+    expect(await seededAt()).toBeNull();
+    expect((await seed(DemoCountry.enum.us))._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.seeded);
+    expect(await seededAt()).toBe(TODAY.toISOString());
+  });
+
+  it('is not written when a step fails, which leaves a demo that says it is one but was never finished', async () => {
+    await db.run(sql`DELETE FROM categories`);
+    expect((await seed(DemoCountry.enum.us)).isErr()).toBe(true);
+    expect(await seededAt()).toBeNull();
+    expect(await owner().deps.instance.kind()).toBe(InstanceKind.enum.demo);
+  });
+
+  it('reports an interrupted seed instead of calling it already seeded, and writes nothing more', async () => {
+    await db.run(sql`DELETE FROM categories`);
+    await seed(DemoCountry.enum.us);
+    const before = { transactions: await count('transactions'), accounts: await count('accounts') };
+    expect(before.accounts).toBeGreaterThan(0);
+
+    const again = (await seed(DemoCountry.enum.us))._unsafeUnwrap();
+
+    expect(again).toEqual({ status: DemoSeedStatus.enum.interrupted, steps: {} });
+    expect({ transactions: await count('transactions'), accounts: await count('accounts') }).toEqual(before);
+    expect(await seededAt()).toBeNull();
+  });
+
+  it('keeps the first instant when a seeded demo is run again', async () => {
+    await seed(DemoCountry.enum.br);
+    const later = { country: DemoCountry.enum.br, today: new Date(2026, 10, 2, 9), config: CONFIG };
+    expect((await seedDemo(db, later))._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.present);
+    expect(await seededAt()).toBe(TODAY.toISOString());
+  });
+
+  it('starts over on a demo that was marked but never got any data (a stop right after the marker)', async () => {
+    await db.run(sql`UPDATE settings SET instance_kind = 'demo' WHERE id = 'singleton'`);
+    expect((await seed(DemoCountry.enum.mx))._unsafeUnwrap().status).toBe(DemoSeedStatus.enum.seeded);
+    expect(await seededAt()).toBe(TODAY.toISOString());
   });
 });
 

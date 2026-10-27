@@ -4,6 +4,7 @@ import { UserRole } from '../../models/auth/owner.js';
 import { UsernameSchema, normalizeUsername } from '../../models/auth/password.js';
 import { DEFAULT_PROFILE, ProfileSchema } from '../../models/auth/sign-in.js';
 import { TokenAccess } from '../../models/auth/token.js';
+import { DemoCountry } from '../../models/demo.js';
 
 /** The CLI's argv grammar: the commands, their subcommands, their flags and how many positionals each takes. */
 export const PASSWORD_STDIN_FLAG = 'password-stdin';
@@ -14,7 +15,7 @@ export const AUTH_POSITIONALS = 0;
 /** `login` and `logout` take flags only. */
 export const SIGN_IN_POSITIONALS = 0;
 
-export const CliCommand = z.enum(['setup', 'auth', 'login', 'logout', 'users', 'key', 'db']);
+export const CliCommand = z.enum(['setup', 'auth', 'login', 'logout', 'users', 'key', 'db', 'demo']);
 export type CliCommand = z.infer<typeof CliCommand>;
 
 export const AuthSubcommand = z.enum(['setup', 'reset-password']);
@@ -40,19 +41,52 @@ export const ResetOptionsSchema = z
   .transform((flags) => ({ passwordStdin: flags[PASSWORD_STDIN_FLAG], user: flags.user }));
 export type ResetOptions = z.infer<typeof ResetOptionsSchema>;
 
-/** `setup <client>`: the owner claim's options plus the profile the client's config and sign-in belong to. */
+export const DEMO_FLAG = 'demo';
+export const REMOVE_DEMO_FLAG = 'remove-demo';
+
+export const DemoEntryChange = z.enum(['add', 'remove']);
+export type DemoEntryChange = z.infer<typeof DemoEntryChange>;
+
+const DEMO_EXCLUSIVE_MESSAGE = `--${DEMO_FLAG} and --${REMOVE_DEMO_FLAG} only edit the client's demo entry: use them alone`;
+
 export const SetupOptionsSchema = z
   .object({
     [PASSWORD_STDIN_FLAG]: z.boolean().default(false),
     username: UsernameSchema.optional(),
-    profile: ProfileSchema.default(DEFAULT_PROFILE),
+    profile: ProfileSchema.optional(),
+    [DEMO_FLAG]: z.boolean().default(false),
+    [REMOVE_DEMO_FLAG]: z.boolean().default(false),
   })
+  .refine(
+    (flags) =>
+      !(flags[DEMO_FLAG] || flags[REMOVE_DEMO_FLAG]) ||
+      (flags[DEMO_FLAG] !== flags[REMOVE_DEMO_FLAG] &&
+        !flags[PASSWORD_STDIN_FLAG] &&
+        flags.username === undefined &&
+        flags.profile === undefined),
+    { message: DEMO_EXCLUSIVE_MESSAGE },
+  )
   .transform((flags) => ({
     passwordStdin: flags[PASSWORD_STDIN_FLAG],
     username: flags.username,
-    profile: flags.profile,
+    profile: flags.profile ?? DEFAULT_PROFILE,
+    demo: flags[DEMO_FLAG],
+    removeDemo: flags[REMOVE_DEMO_FLAG],
   }));
 export type SetupOptions = z.infer<typeof SetupOptionsSchema>;
+
+export const DEMO_POSITIONALS = 0;
+export const DemoOptionsSchema = z.object({
+  country: z
+    .string()
+    .refine((value) => DemoCountry.safeParse(value).success, {
+      message: `--country must be one of: ${DemoCountry.options.join(', ')}`,
+    })
+    .pipe(DemoCountry)
+    .optional(),
+  reset: z.boolean().default(false),
+});
+export type DemoOptions = z.infer<typeof DemoOptionsSchema>;
 
 /** `login`: `profile` falls back to `FINTRACK_PROFILE` (the shell decides); `duration`/`scope` only pre-select the
  *  consent page — the person approving still chooses. */

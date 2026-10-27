@@ -5,6 +5,8 @@ import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter } from '../
 import { reasonOf } from '../../models/error.js';
 import type { ExportedRowCounts } from '../../models/export.js';
 import { databaseAheadMessage, type DatabaseAhead } from '../../models/database.js';
+import type { DemoFailure, DemoPrepared } from '../../models/demo.js';
+import type { DemoOptions } from '../../wire/in/cli.js';
 import { CLI_MESSAGES } from './messages.js';
 import { isPromptEnded, PROMPT_MESSAGES, type PromptFailure } from './prompt.js';
 import { PROMPT_ABORTED_MESSAGE, PromptEnd, type Terminal } from './terminal.js';
@@ -51,6 +53,13 @@ export type Exporter = {
   writeSnapshot: (destination: string) => Promise<Result<ExportedRowCounts, string>>;
 };
 
+export type DemoShell = {
+  databasePath: string;
+  hasDatabase: () => boolean;
+  prepare: (request: DemoOptions) => Promise<Result<DemoPrepared, DemoFailure>>;
+  serve: () => Promise<Result<void, DemoFailure>>;
+};
+
 export type CliIo = {
   /** The database, opened and migrated — or why it cannot be used (a build older than the database). */
   openShell: () => ResultAsync<Shell, DatabaseAhead>;
@@ -68,6 +77,7 @@ export type CliIo = {
   clients: ClientConfigs;
   /** The database and its key, for the export commands. */
   exporter: Exporter;
+  demo: DemoShell;
 };
 
 /** Runs `work` on the opened shell and closes it. When the database is newer than this build, says so on stderr

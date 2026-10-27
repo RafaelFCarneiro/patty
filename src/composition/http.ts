@@ -4,12 +4,12 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { version } from '../common/build-version.js';
 import type { Config } from '../config.js';
 import { boot } from './boot.js';
-import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';
+import { DASHBOARD_PATH, httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';
 import type { Tenancy } from '../controllers/deps.js';
 import { DISABLED_AUTH, type HttpAuth, type HttpContext } from '../diplomat/http/context.js';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import type { ChangeEvent } from '../models/tenancy.js';
-import type { DatabaseAhead } from '../models/database.js';
+import type { StartupRefusal } from '../models/startup.js';
 import { redactSecretQuery } from '../logic/auth/redact.js';
 import { AuthMode } from '../models/auth/mode.js';
 import { registerAuthHook } from '../diplomat/http/hooks/auth.js';
@@ -106,7 +106,7 @@ export const startHttpSidecar = async (
     const boundPort = (app.server.address() as AddressInfo).port;
     const origin = httpOrigin(host, boundPort);
     console.error(
-      `fintrack: HTTP sidecar up — REST ${origin}/api · MCP ${origin}/mcp · dashboard ${origin}/ui/overview`,
+      `fintrack: HTTP sidecar up — REST ${origin}/api · MCP ${origin}/mcp · dashboard ${origin}${DASHBOARD_PATH}`,
     );
     return { app, listening: true };
   } catch (e) {
@@ -124,7 +124,7 @@ export const startHttpSidecar = async (
  * only surface running — a bind failure here is fatal by design (there is no stdio fallback to keep the process alive),
  * handled by the entrypoint.
  */
-export const runHttp = (config: Config): ResultAsync<void, DatabaseAhead> =>
+export const runHttp = (config: Config): ResultAsync<void, StartupRefusal> =>
   safeTry(async function* () {
     const { runtime, prepared } = yield* boot(config);
     const app = buildHttpApp(runtime, version, { auth: prepared.auth, trustProxy: config.TRUST_PROXY });

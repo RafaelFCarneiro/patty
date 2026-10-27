@@ -2,6 +2,7 @@ import { CliCommand } from '../../wire/in/cli.js';
 import { NPX_COMMAND } from '../../models/package.js';
 import { runAuthCommand } from './commands/auth.js';
 import { runDbCommand } from './commands/db.js';
+import { runDemoCommand } from './commands/demo.js';
 import { runKeyCommand } from './commands/key.js';
 import { runLogin, runLogout } from './commands/login.js';
 import { runSetupCommand } from './commands/setup.js';
@@ -23,6 +24,7 @@ Commands:
   users <command>  Manage who can sign in: list, invite, reissue, disable, enable, role
   key <command>    Export the database key (export --to <file>) to move an npm install to Docker
   db <command>     Export an encrypted snapshot of the database (export --to <file>)
+  demo             Try FinTrack on throwaway sample data, on its own port (--country, --reset)
 
 The setup, auth, users, key and db commands print their own help when run with no arguments. With no command at all, FinTrack runs as an MCP server (stdio).
 `.trimStart();
@@ -38,6 +40,7 @@ const RUNNERS = {
   users: runUsersCommand,
   key: runKeyCommand,
   db: runDbCommand,
+  demo: runDemoCommand,
 } as const satisfies Record<CliCommand, CommandRunner>;
 
 /** Every argument is a command: an unknown one prints the usage and fails — it never falls through to starting a

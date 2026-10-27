@@ -272,11 +272,13 @@ export const budgets = sqliteTable(
 );
 
 // The instance-wide singleton; preferences live in user_settings. `max_sign_in_duration` is the longest a stdio
-// sign-in may last; `instance_kind` is what this database says it is (`demo` only when the demo seeder made it).
+// sign-in may last; `instance_kind` is what this database says it is (`demo` only when the demo seeder made it);
+// `demo_seeded_at` is when that seeder finished (null on a standard database, and on an interrupted demo).
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
   maxSignInDuration: text('max_sign_in_duration', { enum: SignInCap.options }).notNull().default(DEFAULT_SIGN_IN_CAP),
   instanceKind: text('instance_kind', { enum: InstanceKind.options }).notNull().default(DEFAULT_INSTANCE_KIND),
+  demoSeededAt: text('demo_seeded_at'),
   version: integer('version').notNull().default(0),
 });
 

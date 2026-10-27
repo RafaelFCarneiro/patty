@@ -4,13 +4,22 @@ import { z } from 'zod';
 import { isLoopbackHost, LOOPBACK_HOST } from './common/net.js';
 import { AuthMode, DEFAULT_AUTH_MODE } from './models/auth/mode.js';
 import { DEFAULT_PROFILE, ProfileSchema } from './models/auth/sign-in.js';
+import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from './models/demo.js';
 import { Locale } from './models/locale.js';
 
 export const McpTransport = z.enum(['stdio', 'http']);
 
 // Absolute default so the DB is always created in a stable, writable location
 // regardless of the cwd when spawned by an MCP client (e.g. Claude Desktop).
-const DEFAULT_DB_PATH = join(homedir(), '.fintrack', 'fintrack.db');
+const DATA_DIRECTORY = join(homedir(), '.fintrack');
+const DEFAULT_DB_PATH = join(DATA_DIRECTORY, 'fintrack.db');
+
+const OS_LOCALE_VARIABLES = ['LC_ALL', 'LC_MESSAGES', 'LANG'] as const;
+
+export const osLocale = (env: NodeJS.ProcessEnv = process.env): string | undefined =>
+  OS_LOCALE_VARIABLES.map((name) => env[name]).find((value) => value) ?? Intl.DateTimeFormat().resolvedOptions().locale;
+
+export const DEMO_DB_PATH = join(DATA_DIRECTORY, 'demo.db');
 
 // Deliberately NOT 3000/3001/8000/8080/etc — those are the most commonly used ports across
 // Node/Fastify/React dev-server defaults, so picking one of them maximizes collision risk with
@@ -67,12 +76,13 @@ const TrustProxy = z
 
 const Env = z
   .object({
+    // Unset: the demo's under FINTRACK_DEMO, so the demo never defaults to the real database.
     DB_PATH: z
       .string()
-      .default(DEFAULT_DB_PATH)
       .refine(isAbsolute, {
         message: `DB_PATH must be an absolute path — "~" is not expanded by Node. Use a full path, e.g. ${DEFAULT_DB_PATH}`,
-      }),
+      })
+      .optional(),
     FINTRACK_DB_KEY: EncryptionKey.optional(),
     // File holding the key (e.g. a Docker secret at /run/secrets/fintrack_db_key) — keeps it out of
     // `docker inspect`, unlike the env var (ADR-032).
@@ -95,6 +105,10 @@ const Env = z
     PUBLIC_URL: optionalEnv(PublicUrl),
     // Passed to Fastify so rate limiting sees the real client IP behind a reverse proxy.
     TRUST_PROXY: optionalEnv(TrustProxy),
+    [DEMO_ENV_VAR]: z
+      .string()
+      .optional()
+      .transform((v) => v === DEMO_ENV_ON),
     MCP_TRANSPORT: McpTransport.default(McpTransport.enum.stdio),
     // HTTP sidecar alongside stdio MCP (ADR-013 Decision 7) — on by default: the dashboard/REST
     // surface is a core feature, not an add-on. A bind failure is caught and non-fatal (stdio
@@ -113,6 +127,17 @@ const Env = z
     path: ['FINTRACK_DB_KEY_FILE'],
     message: 'FINTRACK_DB_KEY and FINTRACK_DB_KEY_FILE are both set — the key source is ambiguous; set only one',
   })
+  .refine((env) => !(env.FINTRACK_DEMO && (env.FINTRACK_DB_KEY || env.FINTRACK_DB_KEY_FILE)), {
+    path: [DEMO_ENV_VAR],
+    message: `${DEMO_ENV_VAR} fixes the database key — do not also set FINTRACK_DB_KEY or FINTRACK_DB_KEY_FILE`,
+  })
+  .transform((env) => ({
+    ...env,
+    DB_PATH: env.DB_PATH ?? (env.FINTRACK_DEMO ? DEMO_DB_PATH : DEFAULT_DB_PATH),
+  }))
+  .transform((env) =>
+    env.FINTRACK_DEMO ? { ...env, FINTRACK_DB_KEY: DEMO_DB_KEY, FINTRACK_AUTH: AuthMode.enum.disabled } : env,
+  )
   .refine((env) => !(env.FINTRACK_AUTH === AuthMode.enum.disabled && isExposed(env)), {
     path: ['FINTRACK_AUTH'],
     message:
@@ -124,3 +149,12 @@ const Env = z
 export type Config = z.infer<typeof Env>;
 
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => Env.parse(env);
+
+/** Built from scratch, never from the process environment. */
+export const demoConfig = (dbPath: string): Config =>
+  loadConfig({
+    DB_PATH: dbPath,
+    PORT: String(DEMO_PORT),
+    MCP_TRANSPORT: McpTransport.enum.http,
+    [DEMO_ENV_VAR]: DEMO_ENV_ON,
+  });

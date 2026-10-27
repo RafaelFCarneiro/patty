@@ -22,6 +22,7 @@ import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migration-barrier.js'
 import { accounts, transactions } from '../../../src/diplomat/db/schema.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { PRIVATE_FILE_MODE } from '../../../src/models/export.js';
+import { unusedDemo } from '../../unit/fixtures/demo.js';
 
 /**
  * `key export` and `db export` against a real encrypted database, in process: the exporter is the production one
@@ -52,6 +53,7 @@ const io = (): CliIo =>
     interruptSignal: () => new AbortController().signal,
     clients: { find: () => undefined },
     exporter: createExporter(),
+    demo: unusedDemo,
   }) satisfies CliIo;
 
 const run = (...args: string[]) => runCli(args, io());

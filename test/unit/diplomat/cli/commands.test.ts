@@ -4,7 +4,10 @@ import { runCli } from '../../../../src/diplomat/cli/commands.js';
 import { EXIT_FAILURE, EXIT_INTERRUPTED, type CliIo, type Shell } from '../../../../src/diplomat/cli/io.js';
 import { promptEnded, type PromptEnd, type Terminal } from '../../../../src/diplomat/cli/terminal.js';
 import { databaseAheadMessage, databaseErrors } from '../../../../src/models/database.js';
+import { unusedDemo } from '../../fixtures/demo.js';
 import { unusedExporter } from '../../fixtures/exporter.js';
+
+const NO_CHANGES = { warnings: [], lines: [] };
 
 const endedTerminal = (how: PromptEnd): Terminal => ({
   ask: () => errAsync(promptEnded(how)),
@@ -31,8 +34,16 @@ const rig = (terminal: Terminal) => {
     version: '0.0.0-test',
     wait: async () => undefined,
     interruptSignal: () => new AbortController().signal,
-    clients: { find: () => ({ label: 'Stub', run: () => ok({ warnings: [], lines: [] }) }) },
+    clients: {
+      find: () => ({
+        label: 'Stub',
+        run: () => ok(NO_CHANGES),
+        addDemo: () => ok(NO_CHANGES),
+        removeDemo: () => ok(NO_CHANGES),
+      }),
+    },
     exporter: unusedExporter,
+    demo: unusedDemo,
   };
   return { io, out, err, shellClosed: () => shellClosed };
 };

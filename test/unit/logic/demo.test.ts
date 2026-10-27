@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { CATEGORIES } from '../../../src/diplomat/db/seed/categories.js';
 import { DEMO_PACKS } from '../../../src/diplomat/db/seed/demo/index.js';
 import { billPeriodFor } from '../../../src/logic/bill.js';
-import { clockDateOf, DEMO_MONTHS_BACK, planDemo, resolveDemoCountry } from '../../../src/logic/demo.js';
+import { clockDateOf, DEMO_MONTHS_BACK, demoSeedStart, planDemo, resolveDemoCountry } from '../../../src/logic/demo.js';
 import { AccountType } from '../../../src/models/account.js';
-import { DemoCountry, DemoFunding, DemoStepKind, type DemoStep } from '../../../src/models/demo.js';
+import { DemoCountry, DemoFunding, DemoSeedStatus, DemoStepKind, type DemoStep } from '../../../src/models/demo.js';
+import { InstanceKind } from '../../../src/models/instance.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 
@@ -302,5 +303,33 @@ describe('resolveDemoCountry — the OS locale picks the demo', () => {
     [undefined, 'us'],
   ])('%s → %s', (osLocale, expected) => {
     expect(resolveDemoCountry(osLocale)).toBe(expected);
+  });
+});
+
+describe('demoSeedStart', () => {
+  const SEEDED_AT = '2026-10-26T12:00:00.000Z';
+  const { standard, demo } = InstanceKind.enum;
+
+  it.each([
+    ['an empty standard database', { hasUserData: false, kind: standard, seededAt: null }, 'fresh'],
+    ['a demo marked before any data landed', { hasUserData: false, kind: demo, seededAt: null }, 'fresh'],
+    ['a seeded demo', { hasUserData: true, kind: demo, seededAt: SEEDED_AT }, DemoSeedStatus.enum.present],
+    [
+      'a demo whose seed never finished',
+      { hasUserData: true, kind: demo, seededAt: null },
+      DemoSeedStatus.enum.interrupted,
+    ],
+    [
+      'a standard database holding data',
+      { hasUserData: true, kind: standard, seededAt: null },
+      DemoSeedStatus.enum.not_demo,
+    ],
+    [
+      'a standard database holding data and a stray marker',
+      { hasUserData: true, kind: standard, seededAt: SEEDED_AT },
+      DemoSeedStatus.enum.not_demo,
+    ],
+  ])('%s → %s', (_label, facts, expected) => {
+    expect(demoSeedStart(facts)).toBe(expected);
   });
 });

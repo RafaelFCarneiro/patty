@@ -1,22 +1,21 @@
 #!/usr/bin/env node
 import type { Result } from 'neverthrow';
 import { isPortInUse, portInUseMessage } from './common/net.js';
+import { loadHttpModule } from './composition/lazy-modules.js';
 import { loadConfig, McpTransport } from './config.js';
-import { databaseAheadMessage, type DatabaseAhead } from './models/database.js';
+import { startupRefusalMessage, type StartupRefusal } from './models/startup.js';
 
 // Each flow is a composition module, loaded only when it runs: the CLI never pays for a server, a stdio start never
 // loads Fastify (the stdio module loads it itself only when the sidecar is on), and an HTTP start never loads the CLI.
 const loadCliModule = () => import('./composition/cli.js');
 const loadStdioModule = () => import('./composition/stdio.js');
-const loadHttpModule = () => import('./composition/http.js');
 
 /** The exit status of a process that could not start. */
 const EXIT_FAILURE = 1;
 
-/** A database a newer build has migrated: the complete diagnosis, no stack trace, exit 1. */
-const refuseIfAhead = (started: Result<void, DatabaseAhead>): void => {
+const refuseIfNotStarted = (started: Result<void, StartupRefusal>): void => {
   if (started.isOk()) return;
-  console.error(databaseAheadMessage(started.error.version));
+  console.error(startupRefusalMessage(started.error));
   process.exit(EXIT_FAILURE);
 };
 
@@ -32,10 +31,10 @@ const main = async (): Promise<void> => {
   const config = loadConfig();
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
     const { runStdio } = await loadStdioModule();
-    return refuseIfAhead(await runStdio(config));
+    return refuseIfNotStarted(await runStdio(config));
   }
   const { runHttp } = await loadHttpModule();
-  return refuseIfAhead(await runHttp(config));
+  return refuseIfNotStarted(await runHttp(config));
 };
 
 main().catch((e: unknown) => {

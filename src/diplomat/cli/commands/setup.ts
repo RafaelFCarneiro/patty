@@ -1,7 +1,15 @@
 import { ClientConfigFailureCode, type ClientConfigFailure } from '../../../models/client-config.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/sign-in.js';
+import { DEMO_SERVER_NAME } from '../../../models/demo.js';
 import { NPX_COMMAND } from '../../../models/package.js';
-import { PASSWORD_STDIN_FLAG, SETUP_POSITIONALS, SetupOptionsSchema } from '../../../wire/in/cli.js';
+import {
+  DEMO_FLAG,
+  DemoEntryChange,
+  PASSWORD_STDIN_FLAG,
+  REMOVE_DEMO_FLAG,
+  SETUP_POSITIONALS,
+  SetupOptionsSchema,
+} from '../../../wire/in/cli.js';
 import { EXIT_FAILURE, EXIT_OK, exitCodeOf, fail, parseFlags, type CliIo } from '../io.js';
 import { ensureOwnerClaimed } from './auth.js';
 import { offerSignIn } from './login.js';
@@ -10,6 +18,8 @@ const SETUP_FLAGS = {
   [PASSWORD_STDIN_FLAG]: { type: 'boolean' },
   username: { type: 'string' },
   profile: { type: 'string' },
+  [DEMO_FLAG]: { type: 'boolean' },
+  [REMOVE_DEMO_FLAG]: { type: 'boolean' },
 } as const;
 
 const CONFIG_FAILURE_VERB: Readonly<Record<ClientConfigFailureCode, string>> = {
@@ -21,6 +31,7 @@ const CONFIG_FAILURE_VERB: Readonly<Record<ClientConfigFailureCode, string>> = {
 export const SETUP_MESSAGES = {
   help: `
 Usage: ${NPX_COMMAND} setup <tool> [--username <name>] [--${PASSWORD_STDIN_FLAG}] [--profile <name>]
+       ${NPX_COMMAND} setup <tool> --${DEMO_FLAG} | --${REMOVE_DEMO_FLAG}
 
 Available tools:
   claude-code      Claude Code CLI      (~/.claude/mcp.json)
@@ -38,6 +49,9 @@ Options:
   --username <name>  the owner's username (required with --${PASSWORD_STDIN_FLAG})
   --${PASSWORD_STDIN_FLAG}   read the password from stdin instead of asking — for scripted installs
   --profile <name>   sign this client in as a separate profile (adds ${PROFILE_ENV_VAR} to its config); default: ${DEFAULT_PROFILE}
+  --${DEMO_FLAG}           add a second MCP entry, ${DEMO_SERVER_NAME}, that runs on the demo database (see: ${NPX_COMMAND} demo);
+                     the fintrack entry is never touched, and no login is needed
+  --${REMOVE_DEMO_FLAG}    remove only the ${DEMO_SERVER_NAME} entry
 
 Examples:
   ${NPX_COMMAND} setup claude-code
@@ -48,6 +62,9 @@ Examples:
   unknownTool: (tool: string) =>
     `fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`,
   settingUp: (label: string) => `Setting up FinTrack MCP for ${label}...`,
+  settingUpDemo: (change: DemoEntryChange, label: string) =>
+    `${change === DemoEntryChange.enum.add ? 'Adding' : 'Removing'} the ${DEMO_SERVER_NAME} MCP entry for ${label}...`,
+  demoNotCreated: `  Run \`${NPX_COMMAND} demo\` once to create the demo data.`,
   done: 'Done.',
   /** Said when a client's configuration file could not be used: the same words whichever file it was. */
   configFailure: (failure: ClientConfigFailure) =>
@@ -56,6 +73,8 @@ Examples:
 
 /** What `setup` needs of the I/O: where to print, and the client config files. */
 type SetupIo = Pick<CliIo, 'out' | 'err' | 'clients'>;
+
+type DemoSetupIo = SetupIo & { demo: Pick<CliIo['demo'], 'databasePath' | 'hasDatabase'> };
 
 /** Writes the client's configuration and answers the exit code: help is `EXIT_OK`, an unknown tool or a configuration
  *  file that cannot be read or written is reported on stderr and is `EXIT_FAILURE`. */
@@ -105,10 +124,39 @@ export const runGuidedSetup = async (
   return (await signIn(profile)) ?? EXIT_OK;
 };
 
+export const runDemoEntry = (io: DemoSetupIo, tool: string | undefined, change: DemoEntryChange): number => {
+  if (!tool) {
+    io.out(SETUP_MESSAGES.help);
+    return EXIT_OK;
+  }
+  const client = io.clients.find(tool);
+  if (!client) {
+    io.err(SETUP_MESSAGES.unknownTool(tool));
+    return EXIT_FAILURE;
+  }
+  io.out(SETUP_MESSAGES.settingUpDemo(change, client.label));
+  return (change === DemoEntryChange.enum.add ? client.addDemo(io.demo.databasePath) : client.removeDemo()).match(
+    (report) => {
+      report.warnings.forEach((warning) => io.err(warning));
+      report.lines.forEach((line) => io.out(line));
+      if (change === DemoEntryChange.enum.add && !io.demo.hasDatabase()) io.out(SETUP_MESSAGES.demoNotCreated);
+      io.out(SETUP_MESSAGES.done);
+      return EXIT_OK;
+    },
+    (failure) => {
+      failure.warnings.forEach((warning) => io.err(warning));
+      io.err(SETUP_MESSAGES.configFailure(failure));
+      return EXIT_FAILURE;
+    },
+  );
+};
+
 export const runSetupCommand = async (args: readonly string[], io: CliIo): Promise<number> => {
   const parsed = parseFlags(args, SETUP_FLAGS, SetupOptionsSchema, SETUP_POSITIONALS);
   if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
   const [client] = parsed.positionals;
+  if (parsed.options.demo) return runDemoEntry(io, client, DemoEntryChange.enum.add);
+  if (parsed.options.removeDemo) return runDemoEntry(io, client, DemoEntryChange.enum.remove);
   return runGuidedSetup(
     io,
     client,

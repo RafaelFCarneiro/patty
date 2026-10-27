@@ -25,7 +25,7 @@ export const DEFAULT_SIGN_IN_CAP = SignInCap.enum['30d'];
 export const INSTANCE_SETTINGS_ID = 'singleton';
 
 export const InstanceSettingsEntitySchema = withPersistenceMeta(
-  z.object({ id: Id, maxSignInDuration: SignInCap, instanceKind: InstanceKind }),
+  z.object({ id: Id, maxSignInDuration: SignInCap, instanceKind: InstanceKind, demoSeededAt: z.string().nullable() }),
 );
 export type InstanceSettingsEntity = z.infer<typeof InstanceSettingsEntitySchema>;
 

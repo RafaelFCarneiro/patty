@@ -44,6 +44,8 @@ export const httpOrigin = (host: string, port: number): string => {
   return `${HTTP_SCHEME_PREFIX}${reachableHost.includes(':') ? `[${reachableHost}]` : reachableHost}:${port}`;
 };
 
+export const DASHBOARD_PATH = '/ui/overview';
+
 export const isPortInUse = (e: unknown): e is { code: string; port: number; address?: string } =>
   typeof e === 'object' &&
   e !== null &&

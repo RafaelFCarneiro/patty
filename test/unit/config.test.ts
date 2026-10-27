@@ -2,7 +2,9 @@ import { homedir } from 'node:os';
 import { isAbsolute } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { IPV4_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
-import { loadConfig } from '../../src/config.js';
+import { demoConfig, DEMO_DB_PATH, EncryptionKey, loadConfig, osLocale } from '../../src/config.js';
+import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from '../../src/models/demo.js';
+import { AuthMode } from '../../src/models/auth/mode.js';
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -176,5 +178,97 @@ describe('loadConfig', () => {
     process.env['FINTRACK_DB_KEY'] = 'a'.repeat(64);
     process.env['FINTRACK_DB_KEY_FILE'] = '/run/secrets/fintrack_db_key';
     expect(() => loadConfig()).toThrow(/ambiguous/);
+  });
+});
+
+describe('the demo (FINTRACK_DEMO)', () => {
+  it('the published demo key is a valid database key', () => {
+    expect(EncryptionKey.safeParse(DEMO_DB_KEY).success).toBe(true);
+  });
+
+  it('fixes the key and turns the login off, whatever FINTRACK_AUTH says', () => {
+    process.env[DEMO_ENV_VAR] = DEMO_ENV_ON;
+    process.env['FINTRACK_AUTH'] = AuthMode.enum.required;
+    expect(loadConfig()).toMatchObject({
+      FINTRACK_DEMO: true,
+      FINTRACK_DB_KEY: DEMO_DB_KEY,
+      FINTRACK_AUTH: AuthMode.enum.disabled,
+    });
+  });
+
+  it('is off unless it is exactly 1, and then changes nothing about the real install', () => {
+    process.env[DEMO_ENV_VAR] = 'true';
+    delete process.env['FINTRACK_AUTH'];
+    const config = loadConfig();
+    expect(config.FINTRACK_DEMO).toBe(false);
+    expect(config.FINTRACK_DB_KEY).toBeUndefined();
+    expect(config.FINTRACK_AUTH).toBe(AuthMode.enum.required);
+  });
+
+  it.each([
+    ['FINTRACK_DB_KEY', 'a'.repeat(64)],
+    ['FINTRACK_DB_KEY_FILE', '/run/secrets/key'],
+  ])('refuses to be combined with %s: the demo key is not a choice', (name, value) => {
+    process.env[DEMO_ENV_VAR] = DEMO_ENV_ON;
+    process.env[name] = value;
+    expect(() => loadConfig()).toThrow(/fixes the database key/);
+  });
+
+  it('is loopback only: a wildcard HOST or a proxy origin is refused, as with any disabled login', () => {
+    process.env[DEMO_ENV_VAR] = DEMO_ENV_ON;
+    process.env['HOST'] = IPV4_WILDCARD_HOST;
+    expect(() => loadConfig()).toThrow(/loopback/);
+    delete process.env['HOST'];
+    process.env['PUBLIC_URL'] = 'https://demo.example.com';
+    expect(() => loadConfig()).toThrow(/loopback/);
+  });
+
+  it('demoConfig is the demo database on the demo port, and ignores the real install’s environment', () => {
+    process.env['DB_PATH'] = '/real/fintrack.db';
+    process.env['PORT'] = '3001';
+    process.env['FINTRACK_DB_KEY'] = 'b'.repeat(64);
+    process.env['FINTRACK_AUTH'] = AuthMode.enum.required;
+    expect(demoConfig(DEMO_DB_PATH)).toMatchObject({
+      DB_PATH: DEMO_DB_PATH,
+      PORT: DEMO_PORT,
+      HOST: LOOPBACK_HOST,
+      MCP_TRANSPORT: 'http',
+      FINTRACK_DB_KEY: DEMO_DB_KEY,
+      FINTRACK_AUTH: AuthMode.enum.disabled,
+    });
+  });
+
+  it('the demo database lives beside the real one, never as the same file', () => {
+    delete process.env['DB_PATH'];
+    expect(DEMO_DB_PATH).not.toBe(loadConfig().DB_PATH);
+    expect(DEMO_DB_PATH.startsWith(homedir())).toBe(true);
+  });
+});
+
+describe('DB_PATH under the demo', () => {
+  it('defaults to the demo database, never the real one, when it is omitted', () => {
+    delete process.env['DB_PATH'];
+    process.env[DEMO_ENV_VAR] = DEMO_ENV_ON;
+    expect(loadConfig().DB_PATH).toBe(DEMO_DB_PATH);
+    delete process.env[DEMO_ENV_VAR];
+    expect(loadConfig().DB_PATH).not.toBe(DEMO_DB_PATH);
+  });
+
+  it('is respected when set', () => {
+    process.env['DB_PATH'] = '/custom/demo.db';
+    process.env[DEMO_ENV_VAR] = DEMO_ENV_ON;
+    expect(loadConfig().DB_PATH).toBe('/custom/demo.db');
+  });
+});
+
+describe('osLocale', () => {
+  it('takes the first locale variable that is set, in LC_ALL, LC_MESSAGES, LANG order', () => {
+    expect(osLocale({ LC_ALL: 'es_CO.UTF-8', LANG: 'en_US.UTF-8' })).toBe('es_CO.UTF-8');
+    expect(osLocale({ LC_ALL: '', LC_MESSAGES: 'pt_BR.UTF-8', LANG: 'en_US.UTF-8' })).toBe('pt_BR.UTF-8');
+    expect(osLocale({ LANG: 'en_US.UTF-8' })).toBe('en_US.UTF-8');
+  });
+
+  it('falls back to the runtime’s locale when none is set', () => {
+    expect(osLocale({})).toBe(Intl.DateTimeFormat().resolvedOptions().locale);
   });
 });

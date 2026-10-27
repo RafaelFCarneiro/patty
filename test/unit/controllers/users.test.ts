@@ -132,6 +132,7 @@ const depsFor = ({
     id: INSTANCE_SETTINGS_ID,
     maxSignInDuration: DEFAULT_SIGN_IN_CAP,
     instanceKind: InstanceKind.enum.standard,
+    demoSeededAt: null,
     version: 0,
   },
   now = NOW,
@@ -668,6 +669,7 @@ describe('setSignInCap', () => {
       id: INSTANCE_SETTINGS_ID,
       maxSignInDuration: '7d' as const,
       instanceKind: InstanceKind.enum.standard,
+      demoSeededAt: null,
       version: 3,
     };
     const changed = await outcomeOf(
@@ -678,6 +680,7 @@ describe('setSignInCap', () => {
       id: INSTANCE_SETTINGS_ID,
       maxSignInDuration: '24h',
       instanceKind: InstanceKind.enum.standard,
+      demoSeededAt: null,
       version: 3,
     });
   });
@@ -696,6 +699,7 @@ describe('setSignInCap', () => {
             id: INSTANCE_SETTINGS_ID,
             maxSignInDuration: '24h',
             instanceKind: InstanceKind.enum.standard,
+            demoSeededAt: null,
             version: 0,
           },
         }),
