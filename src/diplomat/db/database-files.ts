@@ -10,8 +10,7 @@ import {
   rmSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { DEMO_DB_KEY, DemoProbeAbsence } from '../../models/demo.js';
-import type { DatabaseLook } from '../../wire/db/demo-database.js';
+import { DEMO_DB_KEY, DemoProbeAbsence, type DemoDatabaseLook } from '../../models/demo.js';
 import { closeDatabase, openDatabaseWithKey } from './driver.js';
 import { tryExclusiveLock, type ExclusiveLock } from './file-lock.js';
 import { instanceRepo } from './repos/instance.js';
@@ -50,8 +49,8 @@ export const canonicalPath = (path: string): string | null => {
   return isSymlink(target) ? null : realPathOfMissing(target);
 };
 
-const MISSING: DatabaseLook = { probe: DemoProbeAbsence.enum.missing, holdsData: false };
-const UNREADABLE: DatabaseLook = { probe: DemoProbeAbsence.enum.unreadable, holdsData: false };
+const MISSING: DemoDatabaseLook = { probe: DemoProbeAbsence.enum.missing, holdsData: false };
+const UNREADABLE: DemoDatabaseLook = { probe: DemoProbeAbsence.enum.unreadable, holdsData: false };
 
 /** Includes the hot rollback journal: without it, a crashed transaction's pages would read as committed. */
 const PROBE_FILE_SUFFIXES = ['', '-wal', '-journal'] as const;
@@ -71,7 +70,7 @@ const onCopyOf = async <T>(databasePath: string, look: (copyPath: string) => Pro
   }
 };
 
-const lookAtOpenable = async (path: string): Promise<DatabaseLook> => {
+const lookAtOpenable = async (path: string): Promise<DemoDatabaseLook> => {
   const db = await openDatabaseWithKey({ DB_PATH: path }, DEMO_DB_KEY, { initializeJournal: false });
   try {
     const repo = instanceRepo(db);
@@ -81,7 +80,7 @@ const lookAtOpenable = async (path: string): Promise<DatabaseLook> => {
   }
 };
 
-export const probeDatabase = async (databasePath: string): Promise<DatabaseLook> => {
+export const probeDatabase = async (databasePath: string): Promise<DemoDatabaseLook> => {
   if (!existsSync(databasePath)) return MISSING;
   try {
     return await onCopyOf(databasePath, lookAtOpenable);

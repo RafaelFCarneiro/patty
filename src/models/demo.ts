@@ -177,6 +177,8 @@ export const DemoFailureCode = z.enum([
 export type DemoFailureCode = z.infer<typeof DemoFailureCode>;
 export type DemoFailure = { code: DemoFailureCode; reason: string };
 
+export type DemoPrepared = { status: DemoSeedStatus; databasePath: string; country: DemoCountry };
+
 export const demoFailures = {
   of: (code: DemoFailureCode, reason = ''): DemoFailure => ({ code, reason }),
 };
@@ -187,14 +189,10 @@ export type DemoProbe = z.infer<typeof DemoProbe>;
 
 export const DEMO_SEED_FRESH = 'fresh';
 
+export type DemoDatabaseLook = { probe: DemoProbe; holdsData: boolean };
+
 /** `isRealDatabase` is also true for an unresolvable path (a link loop): it cannot be shown to be anything else. */
-export type DemoDatabaseFacts = {
-  isRealDatabase: boolean;
-  isAlias: boolean;
-  reset: boolean;
-  probe: DemoProbe;
-  holdsData: boolean;
-};
+export type DemoDatabaseFacts = DemoDatabaseLook & { isRealDatabase: boolean; isAlias: boolean; reset: boolean };
 
 export type DemoRefusal = typeof DemoFailureCode.enum.real_database | typeof DemoFailureCode.enum.not_demo;
 

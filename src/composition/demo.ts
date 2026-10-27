@@ -4,7 +4,6 @@ import { formatAppError } from '../common/errors.js';
 import { isPortInUse } from '../common/net.js';
 import type { DemoShell } from '../diplomat/cli/io.js';
 import type { DemoOptions } from '../wire/in/cli.js';
-import type { DemoPrepared } from '../wire/out/cli.js';
 import { bootstrap } from '../diplomat/db/bootstrap.js';
 import {
   acquireDatabaseLock,
@@ -25,6 +24,7 @@ import {
   type DemoCountry,
   type DemoDatabaseFacts,
   type DemoFailure,
+  type DemoPrepared,
   type DemoSeedStatus,
 } from '../models/demo.js';
 import { seedDemo } from './demo-seed.js';

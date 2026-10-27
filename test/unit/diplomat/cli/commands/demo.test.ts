@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { runCli } from '../../../../../src/diplomat/cli/commands.js';
 import type { CliIo, DemoShell } from '../../../../../src/diplomat/cli/io.js';
 import type { DemoOptions } from '../../../../../src/wire/in/cli.js';
-import type { DemoPrepared } from '../../../../../src/wire/out/cli.js';
 import {
   DEMO_PORT,
   DemoCountry,
@@ -11,6 +10,7 @@ import {
   DemoFailureCode,
   DemoSeedStatus,
   type DemoFailure,
+  type DemoPrepared,
 } from '../../../../../src/models/demo.js';
 import { unusedExporter } from '../../../fixtures/exporter.js';
 
