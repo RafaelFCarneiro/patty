@@ -14,12 +14,11 @@ import {
 } from '../diplomat/db/database-files.js';
 import { closeDatabase, openDatabaseWithKey } from '../diplomat/db/driver.js';
 import { resolveDemoCountry } from '../logic/demo.js';
-import { failureOfSeedStatus, planDemoDatabase } from '../logic/demo-database.js';
+import { failureOfSeedStatus, planDemoDatabase, refusalWithoutProbe } from '../logic/demo-database.js';
 import { startupRefusalMessage } from '../models/startup.js';
 import {
   DEMO_DB_KEY,
   DemoFailureCode,
-  DemoProbeAbsence,
   demoFailures,
   type DemoCountry,
   type DemoDatabaseFacts,
@@ -46,13 +45,15 @@ const locateDatabase = (databasePath: string, realDatabasePath: string): Locatio
   return { isRealDatabase: demo === null || real === null || demo === real, isAlias: isSymlink(databasePath) };
 };
 
-const lookAtDatabase = async (databasePath: string, location: Location, reset: boolean): Promise<DemoDatabaseFacts> => {
-  const { probe, holdsData } =
-    location.isRealDatabase || location.isAlias
-      ? { probe: DemoProbeAbsence.enum.missing, holdsData: false }
-      : await probeDatabase(databasePath);
-  return { ...location, reset, probe, holdsData };
-};
+const lookAtDatabase = async (
+  databasePath: string,
+  location: Location,
+  reset: boolean,
+): Promise<DemoDatabaseFacts> => ({
+  ...location,
+  reset,
+  ...(await probeDatabase(databasePath)),
+});
 
 type SeedRun = { seed: typeof seedDemo; databasePath: string; country: DemoCountry; today: Date };
 
@@ -89,10 +90,10 @@ type ShellContext = {
 
 const prepareLocked = async (
   context: ShellContext,
+  location: Location,
   request: DemoRequest,
 ): Promise<Result<DemoPrepared, DemoFailure>> => {
   const { databasePath, seed } = context;
-  const location = locateDatabase(databasePath, context.realDatabasePath());
   const plan = planDemoDatabase(await lookAtDatabase(databasePath, location, request.reset));
   if (plan.isErr()) return err(demoFailures.of(plan.error));
   if (plan.value.deleteFirst) removeDatabaseFiles(databasePath);
@@ -108,14 +109,12 @@ const prepareLocked = async (
 const prepareDemo = async (context: ShellContext, request: DemoRequest): Promise<Result<DemoPrepared, DemoFailure>> => {
   const { databasePath } = context;
   const location = locateDatabase(databasePath, context.realDatabasePath());
-  if (location.isRealDatabase || location.isAlias) {
-    const early = planDemoDatabase(await lookAtDatabase(databasePath, location, request.reset));
-    if (early.isErr()) return err(demoFailures.of(early.error));
-  }
+  const early = refusalWithoutProbe(location);
+  if (early !== null) return err(demoFailures.of(early));
   const lock = await acquireDatabaseLock(databasePath);
   if (lock === null) return err(demoFailures.of(DemoFailureCode.enum.busy));
   try {
-    return await prepareLocked(context, request);
+    return await prepareLocked(context, location, request);
   } finally {
     await lock.release();
   }

@@ -30,7 +30,8 @@ const FAILURE_MESSAGES = {
     'the demo database path is the real database (DB_PATH), or cannot be resolved to a file — the demo never touches it',
   [DemoFailureCode.enum.not_demo]: () =>
     'the file at the demo database path is not a demo database (or does not open with the demo key), so it is left ' +
-    'alone. Move it away if it is yours to remove',
+    "alone. If a FinTrack demo is running (an AI client's fintrack-demo server), stop it and retry. " +
+    'Move the file away if it is yours to remove',
   [DemoFailureCode.enum.interrupted]: () =>
     `the demo was not fully seeded (an earlier run stopped partway). Start it over with: ${RESET_HINT}`,
   [DemoFailureCode.enum.seed_failed]: ({ reason }: DemoFailure) =>

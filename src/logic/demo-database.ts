@@ -10,15 +10,21 @@ import {
 import { InstanceKind } from '../models/instance.js';
 
 /** `createdHere`: this run owns the file, so a failed seed may remove it. */
-export const planDemoDatabase = ({
+/** The refusals that need no look at the file — and must come before anything is created beside it, a lock file
+ *  included: the real database, and a symlink. */
+export const refusalWithoutProbe = ({
   isRealDatabase,
   isAlias,
-  reset,
-  probe,
-  holdsData,
-}: DemoDatabaseFacts): Result<DemoDatabasePlan, DemoRefusal> => {
-  if (isRealDatabase) return err(DemoFailureCode.enum.real_database);
-  if (isAlias || probe === DemoProbeAbsence.enum.unreadable) return err(DemoFailureCode.enum.not_demo);
+}: Pick<DemoDatabaseFacts, 'isRealDatabase' | 'isAlias'>): DemoRefusal | null => {
+  if (isRealDatabase) return DemoFailureCode.enum.real_database;
+  return isAlias ? DemoFailureCode.enum.not_demo : null;
+};
+
+export const planDemoDatabase = (facts: DemoDatabaseFacts): Result<DemoDatabasePlan, DemoRefusal> => {
+  const { reset, probe, holdsData } = facts;
+  const early = refusalWithoutProbe(facts);
+  if (early !== null) return err(early);
+  if (probe === DemoProbeAbsence.enum.unreadable) return err(DemoFailureCode.enum.not_demo);
   if (probe === InstanceKind.enum.standard && (reset || holdsData)) return err(DemoFailureCode.enum.not_demo);
   const deleteFirst = reset && probe === InstanceKind.enum.demo;
   return ok({ deleteFirst, createdHere: deleteFirst || probe === DemoProbeAbsence.enum.missing });

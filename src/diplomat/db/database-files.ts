@@ -1,6 +1,4 @@
 import { tmpdir } from 'node:os';
-import { pathToFileURL } from 'node:url';
-import { createClient } from '@libsql/client';
 import {
   copyFileSync,
   existsSync,
@@ -14,6 +12,7 @@ import {
 import { basename, dirname, join, resolve } from 'node:path';
 import { DEMO_DB_KEY, DemoProbeAbsence, type DemoProbe } from '../../models/demo.js';
 import { closeDatabase, openDatabaseWithKey } from './driver.js';
+import { tryExclusiveLock, type ExclusiveLock } from './file-lock.js';
 import { instanceRepo } from './repos/instance.js';
 
 const DATABASE_FILE_SUFFIXES = ['', '-wal', '-shm', '-journal'] as const;
@@ -93,32 +92,12 @@ export const probeDatabase = async (databasePath: string): Promise<DatabaseLook>
 };
 
 const LOCK_SUFFIX = '.lock';
-const SQLITE_BUSY_CODES = ['SQLITE_BUSY', 'SQLITE_LOCKED'];
 
-const isBusy = (cause: unknown): boolean => {
-  const code = (cause as { code?: string }).code ?? '';
-  return SQLITE_BUSY_CODES.some((busy) => code.startsWith(busy));
-};
-
-export type DatabaseLock = { release: () => Promise<void> };
+export type DatabaseLock = ExclusiveLock;
 
 /** Held by the OS, so a dead process releases it; the lock file is never deleted, or waiters would lock another. */
-export const acquireDatabaseLock = async (databasePath: string): Promise<DatabaseLock | null> => {
+export const acquireDatabaseLock = (databasePath: string): Promise<DatabaseLock | null> => {
   const lockPath = `${databasePath}${LOCK_SUFFIX}`;
   mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
-  const client = createClient({ url: pathToFileURL(lockPath).href });
-  try {
-    await client.execute('PRAGMA busy_timeout = 0');
-    await client.execute('BEGIN EXCLUSIVE');
-    return {
-      release: async () => {
-        await client.execute('ROLLBACK');
-        client.close();
-      },
-    };
-  } catch (cause) {
-    client.close();
-    if (isBusy(cause)) return null;
-    throw cause;
-  }
+  return tryExclusiveLock(lockPath);
 };

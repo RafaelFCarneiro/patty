@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { failureOfSeedStatus, planDemoDatabase as planFor } from '../../../src/logic/demo-database.js';
+import {
+  failureOfSeedStatus,
+  planDemoDatabase as planFor,
+  refusalWithoutProbe,
+} from '../../../src/logic/demo-database.js';
 import { DemoFailureCode, DemoSeedStatus, type DemoProbe } from '../../../src/models/demo.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 
@@ -80,5 +84,16 @@ describe('failureOfSeedStatus', () => {
     [DemoSeedStatus.enum.not_demo, DemoFailureCode.enum.not_demo],
   ])('%s → %s', (status, failure) => {
     expect(failureOfSeedStatus(status)).toBe(failure);
+  });
+});
+
+describe('refusalWithoutProbe', () => {
+  it.each([
+    [{ isRealDatabase: true, isAlias: false }, DemoFailureCode.enum.real_database],
+    [{ isRealDatabase: true, isAlias: true }, DemoFailureCode.enum.real_database],
+    [{ isRealDatabase: false, isAlias: true }, DemoFailureCode.enum.not_demo],
+    [{ isRealDatabase: false, isAlias: false }, null],
+  ])('%j → %s', (location, refusal) => {
+    expect(refusalWithoutProbe(location)).toBe(refusal);
   });
 });
