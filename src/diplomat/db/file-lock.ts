@@ -17,14 +17,16 @@ export const openLockFile = async (lockPath: string): Promise<Client> => {
   }
 };
 
-/** Takes the exclusive transaction once: null when taken, the busy error when another holder has it. Any other
- *  failure is thrown. */
-export const tryBeginExclusive = async (client: Client): Promise<{ busy: unknown } | null> => {
+export type ExclusiveAttempt = { acquired: true } | { acquired: false; cause: unknown };
+
+/** One attempt at the exclusive transaction: `cause` is the busy error when another holder has it; any other failure
+ *  is thrown. */
+export const tryBeginExclusive = async (client: Client): Promise<ExclusiveAttempt> => {
   try {
     await client.execute('BEGIN EXCLUSIVE');
-    return null;
+    return { acquired: true };
   } catch (cause) {
-    if (isSqliteBusy(cause)) return { busy: cause };
+    if (isSqliteBusy(cause)) return { acquired: false, cause };
     throw cause;
   }
 };
@@ -41,7 +43,7 @@ export const rollbackQuietly = async (client: Client): Promise<void> => {
 export const tryExclusiveLock = async (lockPath: string): Promise<ExclusiveLock | null> => {
   const client = await openLockFile(lockPath);
   try {
-    if ((await tryBeginExclusive(client)) !== null) {
+    if (!(await tryBeginExclusive(client)).acquired) {
       client.close();
       return null;
     }

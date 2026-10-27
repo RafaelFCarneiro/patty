@@ -11,13 +11,13 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 const acquireExclusive = async (client: Client, path: string, deadline: number): Promise<void> => {
   for (;;) {
-    const busy = await tryBeginExclusive(client);
-    if (busy === null) return;
+    const attempt = await tryBeginExclusive(client);
+    if (attempt.acquired) return;
     if (Date.now() >= deadline) {
       throw new Error(
         `fintrack: another FinTrack process has held the migration lock (${path}) for over ` +
           `${WAIT_LIMIT_MS / 1000}s. Stop it and retry.`,
-        { cause: busy.busy },
+        { cause: attempt.cause },
       );
     }
     await sleep(POLL_INTERVAL_MS);
