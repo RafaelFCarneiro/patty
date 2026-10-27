@@ -31,7 +31,7 @@ npx @rafaelfcarneiro/fintrack@latest demo [--country br|us|mx|co] [--reset]
   delete is a demo database (§3); it refuses to delete anything else. After seeding, `demo` serves the dashboards,
   REST and MCP on the demo port until interrupted (no login, §2) and says so; run again it reuses a seeded demo.
 - A seed that stops partway never leaves a half-seeded demo that reads as finished: the seeder records completion as
-  its last step (`settings.demo_seeded_at`, written through a flow like the marker). `demo` deletes a database it just
+  its last step (`settings.demo_seeded_at`, written through a flow like the marker, together with `settings.demo_country`, the data set it seeded, which the `tour` prompt reads). `demo` deletes a database it just
   created when its first seed fails; a demo found later without that marker is reported as interrupted, with the
   `--reset` command, instead of "already seeded".
 - `--country` picks the demo's data set, and with it the language and currency (§4): `br` (pt, BRL), `us`

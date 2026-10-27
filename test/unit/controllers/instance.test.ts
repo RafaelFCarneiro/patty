@@ -10,7 +10,7 @@ import { PersistOp } from '@rfc0/effect-runner';
 import { INSTANCE_SETTINGS_ENTITY_TAG } from '../../../src/models/auth/entity.js';
 import { SignInCap } from '../../../src/models/auth/users.js';
 import { InstanceKind } from '../../../src/models/instance.js';
-import { DemoSeedStatus } from '../../../src/models/demo.js';
+import { DemoCountry, DemoSeedStatus } from '../../../src/models/demo.js';
 import { Locale } from '../../../src/models/locale.js';
 
 const tenancyOf = (kind: InstanceKind, locale: Locale = Locale.enum.pt) => ({
@@ -34,6 +34,7 @@ describe('instanceFactsOf', () => {
 const settingsWith = (
   instanceKind: InstanceKind,
   demoSeededAt: string | null = null,
+  demoCountry: DemoCountry | null = null,
 ): Pick<AuthDeps, 'instanceSettings'> => ({
   instanceSettings: {
     get: async () => ({
@@ -41,6 +42,7 @@ const settingsWith = (
       maxSignInDuration: SignInCap.enum['30d'],
       instanceKind,
       demoSeededAt,
+      demoCountry,
       version: 3,
     }),
   },
@@ -69,7 +71,8 @@ describe('completeDemoSeed', () => {
   const SEEDED_AT = '2026-10-26T12:00:00.000Z';
 
   it('records when the seed finished, at the version it read, keeping the kind', async () => {
-    const outcome = (await completeDemoSeed(settingsWith(InstanceKind.enum.demo), SEEDED_AT))._unsafeUnwrap();
+    const settings = settingsWith(InstanceKind.enum.demo);
+    const outcome = (await completeDemoSeed(settings, SEEDED_AT, DemoCountry.enum.mx))._unsafeUnwrap();
     expect(outcome.response).toBe(SEEDED_AT);
     expect(outcome.persist).toEqual([
       {
@@ -78,6 +81,7 @@ describe('completeDemoSeed', () => {
         model: expect.objectContaining({
           instanceKind: InstanceKind.enum.demo,
           demoSeededAt: SEEDED_AT,
+          demoCountry: DemoCountry.enum.mx,
           version: 3,
         }),
       },
@@ -86,7 +90,8 @@ describe('completeDemoSeed', () => {
 
   it('writes nothing, and keeps the first time, when the marker is already there', async () => {
     const earlier = '2026-10-01T08:00:00.000Z';
-    const outcome = (await completeDemoSeed(settingsWith(InstanceKind.enum.demo, earlier), SEEDED_AT))._unsafeUnwrap();
+    const settings = settingsWith(InstanceKind.enum.demo, earlier);
+    const outcome = (await completeDemoSeed(settings, SEEDED_AT, DemoCountry.enum.mx))._unsafeUnwrap();
     expect(outcome).toEqual({ persist: [], response: earlier });
   });
 });

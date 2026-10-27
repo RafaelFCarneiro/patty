@@ -27,7 +27,7 @@ write sample rows into it. Tell the person to start the demo with
    classified and the line flagged `needs_review`. The `tour` prompt carries a ready sample per country.
 5. **"Tag everything from my trip as travel, then build me a travel dashboard."** — the demo has one trip, seeded
    untagged across several categories and accounts over about six days. Find it with `search_transactions` by dates
-   and descriptions (its destination: Florianópolis, Denver, Oaxaca or Cartagena, by country), create the tag with
+   and descriptions (the destination the `tour` prompt names), create the tag with
    `create_tag`, tag the purchases, then build the dashboard (see the `dashboard-building` skill) and save it with
    `save_dashboard`.
 6. **"Ready for your own data?"** — explain how to install FinTrack for real, that the demo is sample data, and how

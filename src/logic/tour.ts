@@ -1,22 +1,14 @@
 import * as R from 'remeda';
-import { DemoCountry } from '../models/demo.js';
+import type { DemoCountry } from '../models/demo.js';
 import { InstanceKind } from '../models/instance.js';
 import type { Locale } from '../models/locale.js';
-import { CurrencyCode } from '../models/money.js';
 import { TOUR_FACTS, type TourContext } from '../models/tour.js';
-import { addDays, resolveDemoCountry } from './demo.js';
+import { resolveDemoCountry } from './demo.js';
+import { addDays } from './period.js';
 
-/** Each country pack has a currency of its own, so the base currency the seeder sets names the country. */
-const CURRENCY_COUNTRY: Readonly<Partial<Record<CurrencyCode, DemoCountry>>> = {
-  [CurrencyCode.enum.BRL]: DemoCountry.enum.br,
-  [CurrencyCode.enum.USD]: DemoCountry.enum.us,
-  [CurrencyCode.enum.MXN]: DemoCountry.enum.mx,
-  [CurrencyCode.enum.COP]: DemoCountry.enum.co,
-};
-
-/** The demo's country: its base currency, else (the person switched it) the language's default country. */
-export const tourCountryOf = (baseCurrency: CurrencyCode, locale: Locale): DemoCountry =>
-  CURRENCY_COUNTRY[baseCurrency] ?? resolveDemoCountry(locale);
+/** The demo's country: the one the seeder recorded, else (a demo seeded before that) the language's default. */
+export const tourCountryOf = (recorded: DemoCountry | null, locale: Locale): DemoCountry =>
+  recorded ?? resolveDemoCountry(locale);
 
 export const standardTourContext = (locale: Locale): TourContext => ({ kind: InstanceKind.enum.standard, locale });
 
@@ -27,11 +19,11 @@ export const demoTourContext = (locale: Locale, country: DemoCountry, today: str
     kind: InstanceKind.enum.demo,
     locale,
     destination,
-    statement: R.map(statement, ({ daysAgo, description, amount, ...rest }) => ({
-      date: addDays(today, -daysAgo),
-      description,
-      amount,
-      income: 'income' in rest && rest.income === true,
+    statement: R.map(statement, (line) => ({
+      date: addDays(today, -line.daysAgo),
+      description: line.description,
+      amount: line.amount,
+      income: line.income ?? false,
     })),
   };
 };

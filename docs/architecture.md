@@ -205,7 +205,9 @@ settings            (id PK DEFAULT 'singleton', max_sign_in_duration: 24h|7d|30d
                      stdio sign-in may last on this instance, set by an admin; instance_kind: standard|demo DEFAULT
                      standard — what this database says it is, written only by the demo seeder;
                      demo_seeded_at: text NULL — when that seeder finished (its last step), null on a standard
-                     database and on a demo whose seed was interrupted; the row is inserted by migration —, version — instance-wide settings; a person's preferences live in user_settings)
+                     database and on a demo whose seed was interrupted;
+                     demo_country: br|us|mx|co NULL — the data set it seeded, written with demo_seeded_at (null off
+                     the demo, and on a demo seeded before it was recorded); the row is inserted by migration —, version — instance-wide settings; a person's preferences live in user_settings)
 user_settings       (user_id PK FK→users, locale: en|es|pt DEFAULT en,
                      locale_source: default|inferred|explicit DEFAULT default,
                      base_currency FK→currencies? — nullable, unset means "derive from locale"
@@ -682,7 +684,7 @@ date has passed is paid, the secondary card's latest is paid and then reverted (
 description; salary, rent and subscriptions are recurring rules materialized last; items dated after today are
 `pending`. `seedDemo` marks the database first (`controllers/instance.ts`'s `markDemoInstance`, an `instance_settings`
 update run through the auth runner), fills it, and as its very last step records completion (`completeDemoSeed`, the same
-kind of update, writing `demo_seeded_at`). It returns a `DemoSeedReport` whose `status` (`DemoSeedStatus`) comes from the
+kind of update, writing `demo_seeded_at` and `demo_country`). It returns a `DemoSeedReport` whose `status` (`DemoSeedStatus`) comes from the
 pure `logic/demo.ts`'s `demoSeedStart(facts)`: `seeded` (it ran), `present` (a demo with the completion marker: running it
 again adds nothing), `interrupted` (a demo with data but no marker — a seed that stopped partway; nothing is written) or
 `not_demo` (a database that holds data and is not marked a demo; nothing is written). An empty database, marked or not,
@@ -838,7 +840,7 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 ## Guided-workflow prompts (Feature Design 019)
 
-The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement`, `tour` — definitions in `diplomat/mcp/prompts.ts`'s `promptDefinitions`, registered by `registerDefinitions` from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome. The first three touch no database. `tour` takes no arguments (a definition without `argsSchema` registers so the client sends no `arguments` object) and reads the instance marker, the owner's language and base currency through `controllers/tour.ts`'s `getTourContext`; `logic/tour.ts` decides the context (the demo's country from its base currency, the sample statement dated before today) from `models/tour.ts`'s `TOUR_FACTS` — which the country packs also take their trip destination from, so the prompt and the seeded trip cannot disagree — and `diplomat/mcp/tour.ts` renders the six steps in `en`/`pt`/`es` (`Record<Locale, …>`). A standard database gets only a pointer to the demo.
+The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement`, `tour` — definitions in `diplomat/mcp/prompts.ts`'s `promptDefinitions`, registered by `registerDefinitions` from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome. The first three touch no database. `tour` takes no arguments (a definition without `argsSchema` registers so the client sends no `arguments` object) and reads the instance marker, the owner's language and base currency through `controllers/tour.ts`'s `getTourContext`; `logic/tour.ts` decides the context (the demo's country as the seeder recorded it in `settings.demo_country`, else the language's default; the sample statement dated before today) from `models/tour.ts`'s `TOUR_FACTS` — which the country packs also take their trip destination from, so the prompt and the seeded trip cannot disagree — and `diplomat/mcp/tour.ts` renders the six steps in `en`/`pt`/`es` (`Record<Locale, …>`). A standard database gets only a pointer to the demo.
 
 ## Dashboards / `/ui` surface (ADR-013, ADR-027)
 

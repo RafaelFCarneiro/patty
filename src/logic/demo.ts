@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import * as R from 'remeda';
 import { billPeriodFor } from './bill.js';
 import { roundToDecimals } from './money.js';
+import { addDays } from './period.js';
 import { MovementType, TransactionStatus } from '../models/transaction.js';
 import { AccountType } from '../models/account.js';
 import type { BillPeriod } from '../models/bill.js';
@@ -62,12 +63,6 @@ const shiftMonth = ({ year, month }: Month, delta: number): Month => {
   const index = year * 12 + (month - 1) + delta;
   const shiftedYear = Math.floor(index / 12);
   return { year: shiftedYear, month: index - shiftedYear * 12 + 1 };
-};
-
-export const addDays = (date: string, days: number): string => {
-  const { year, month, day } = parseDate(date);
-  const moved = new Date(Date.UTC(year, month - 1, day + days));
-  return isoDate(moved.getUTCFullYear(), moved.getUTCMonth() + 1, moved.getUTCDate());
 };
 
 const monthContext = (today: string, offset: number): MonthContext => {

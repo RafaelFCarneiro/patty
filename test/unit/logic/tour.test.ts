@@ -4,21 +4,20 @@ import { demoTourContext, standardTourContext, tourCountryOf } from '../../../sr
 import { DemoCountry } from '../../../src/models/demo.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 import { Locale } from '../../../src/models/locale.js';
-import { CurrencyCode } from '../../../src/models/money.js';
 import { TOUR_FACTS } from '../../../src/models/tour.js';
 
 const TODAY = '2026-10-26';
 const COUNTRIES = Object.values(DemoCountry.enum);
 
 describe('tourCountryOf', () => {
-  it.each(COUNTRIES)('the country pack’s own currency names its country (%s)', (country) => {
-    const pack = DEMO_PACKS[country];
-    expect(tourCountryOf(pack.currency, pack.locale)).toBe(country);
+  it.each(COUNTRIES)('uses the country the seeder recorded, whatever the language (%s)', (country) => {
+    expect(tourCountryOf(country, Locale.enum.en)).toBe(country);
   });
 
-  it('falls back to the language’s default country when the base currency is not a pack’s', () => {
-    expect(tourCountryOf(CurrencyCode.enum.BTC, Locale.enum.pt)).toBe(DemoCountry.enum.br);
-    expect(tourCountryOf(CurrencyCode.enum.USDC, Locale.enum.es)).toBe(DemoCountry.enum.mx);
+  it('falls back to the language’s default country for a demo with none recorded', () => {
+    expect(tourCountryOf(null, Locale.enum.pt)).toBe(DemoCountry.enum.br);
+    expect(tourCountryOf(null, Locale.enum.es)).toBe(DemoCountry.enum.mx);
+    expect(tourCountryOf(null, Locale.enum.en)).toBe(DemoCountry.enum.us);
   });
 });
 

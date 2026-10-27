@@ -11,6 +11,13 @@ export const periodRange = ({ month, year }: Period): DateRange => {
 
 export const toIsoDate = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
+/** `date` (`YYYY-MM-DD`) moved by `days`, calendar arithmetic with no time zone in it. */
+export const addDays = (date: string, days: number): string => {
+  const [year = 0, month = 0, day = 0] = date.split('-').map(Number);
+  const moved = new Date(Date.UTC(year, month - 1, day + days));
+  return `${moved.getUTCFullYear()}-${pad(moved.getUTCMonth() + 1)}-${pad(moved.getUTCDate())}`;
+};
+
 export const hasPeriod = (input: PeriodInput): boolean => isNonNullish(input.month) && isNonNullish(input.year);
 
 export const hasDateRange = (input: PeriodInput): boolean => isNonNullish(input.from) || isNonNullish(input.to);

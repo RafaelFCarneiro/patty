@@ -260,14 +260,15 @@ describe('migration 0021 — tenancy data', () => {
     expect(await db.all(sql`SELECT user_id, locale, locale_source, base_currency, version FROM user_settings`)).toEqual(
       [{ user_id: OWNER_USER_ID, locale: 'pt', locale_source: 'explicit', base_currency: 'BRL', version: 2 }],
     );
-    // The sign-in cap (0022), instance kind (0025) and demo completion (0026) are the singleton's only settings;
-    // its old preferences are gone.
+    // The sign-in cap (0022), instance kind (0025), demo completion (0026) and demo country (0027) are the
+    // singleton's only settings; its old preferences are gone.
     expect(await db.all(sql`SELECT name FROM pragma_table_info('settings') ORDER BY cid`)).toEqual([
       { name: 'id' },
       { name: 'version' },
       { name: 'max_sign_in_duration' },
       { name: 'instance_kind' },
       { name: 'demo_seeded_at' },
+      { name: 'demo_country' },
     ]);
     expect(await countOf(db, 'settings')).toBe(1);
   });

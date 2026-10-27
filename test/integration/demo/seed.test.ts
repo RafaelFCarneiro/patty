@@ -58,6 +58,12 @@ afterEach(() => {
 });
 
 describe('seedDemo — marking and idempotency', () => {
+  it.each(COUNTRIES)('records the country it seeded (%s) with the completion marker', async (country) => {
+    await seed(country);
+    const [row] = await db.all<{ demo_country: string | null }>(sql`SELECT demo_country FROM settings`);
+    expect(row?.demo_country).toBe(country);
+  });
+
   it('marks a fresh database as a demo, in the pack’s language', async () => {
     const report = (await seed(DemoCountry.enum.mx))._unsafeUnwrap();
     expect(report.status).toBe(DemoSeedStatus.enum.seeded);

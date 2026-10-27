@@ -125,7 +125,7 @@ export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result
   if (ran.isErr()) return err(ran.error);
 
   const completed = await runAuthFlow(runtime, () =>
-    completeDemoSeed({ instanceSettings }, options.today.toISOString()),
+    completeDemoSeed({ instanceSettings }, options.today.toISOString(), options.country),
   );
   if (completed.isErr()) return err(completed.error);
   return ok({ status: DemoSeedStatus.enum.seeded, steps: R.countBy(plan, (step) => step.kind) });

@@ -1,6 +1,7 @@
 import { eq, isNotNull } from 'drizzle-orm';
 import { INSTANCE_SETTINGS_ID } from '../../../models/auth/users.js';
 import { OWNER_USER_ID } from '../../../models/auth/owner.js';
+import { DemoCountry } from '../../../models/demo.js';
 import { InstanceKind } from '../../../models/instance.js';
 import { Locale } from '../../../models/locale.js';
 import type { Db } from '../driver.js';
@@ -23,6 +24,8 @@ import {
 export type InstanceRepo = {
   /** What this database says it is, read from the singleton row (not from a path or an env var). */
   kind: () => Promise<InstanceKind>;
+  /** The data set a demo was seeded with; null when none was recorded (a demo seeded before it was). */
+  country: () => Promise<DemoCountry | null>;
   /** The language a demo speaks: the owner's `user_settings.locale`, which the demo seeder sets. */
   locale: () => Promise<Locale>;
   /** Whether any user has any finances here, instance-wide (reference rows — categories, currencies — don't count). */
@@ -50,6 +53,14 @@ export const instanceRepo = (db: Db): InstanceRepo => ({
       .where(eq(settings.id, INSTANCE_SETTINGS_ID))
       .limit(1);
     return InstanceKind.parse(row?.kind);
+  },
+  country: async () => {
+    const [row] = await db
+      .select({ country: settings.demoCountry })
+      .from(settings)
+      .where(eq(settings.id, INSTANCE_SETTINGS_ID))
+      .limit(1);
+    return DemoCountry.nullable().parse(row?.country ?? null);
   },
   locale: async () => {
     const [row] = await db

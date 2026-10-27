@@ -90,6 +90,7 @@ const depsFor = (users: UserEntity[] = [claimedOwner()]): AuthDeps =>
         maxSignInDuration: DEFAULT_SIGN_IN_CAP,
         instanceKind: InstanceKind.enum.standard,
         demoSeededAt: null,
+        demoCountry: null,
         version: 0,
       }),
     },
