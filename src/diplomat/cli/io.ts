@@ -5,7 +5,9 @@ import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter } from '../
 import { reasonOf } from '../../models/error.js';
 import type { ExportedRowCounts } from '../../models/export.js';
 import { databaseAheadMessage, type DatabaseAhead } from '../../models/database.js';
-import type { DemoCountry, DemoFailure, DemoSeedStatus } from '../../models/demo.js';
+import type { DemoFailure } from '../../models/demo.js';
+import type { DemoOptions } from '../../wire/in/cli.js';
+import type { DemoPrepared } from '../../wire/out/cli.js';
 import { CLI_MESSAGES } from './messages.js';
 import { isPromptEnded, PROMPT_MESSAGES, type PromptFailure } from './prompt.js';
 import { PROMPT_ABORTED_MESSAGE, PromptEnd, type Terminal } from './terminal.js';
@@ -52,14 +54,10 @@ export type Exporter = {
   writeSnapshot: (destination: string) => Promise<Result<ExportedRowCounts, string>>;
 };
 
-export type DemoRequest = { country?: DemoCountry; reset: boolean };
-
-export type DemoPrepared = { status: DemoSeedStatus; databasePath: string; country: DemoCountry };
-
 export type DemoShell = {
   databasePath: string;
   hasDatabase: () => boolean;
-  prepare: (request: DemoRequest) => Promise<Result<DemoPrepared, DemoFailure>>;
+  prepare: (request: DemoOptions) => Promise<Result<DemoPrepared, DemoFailure>>;
   serve: () => Promise<Result<void, DemoFailure>>;
 };
 

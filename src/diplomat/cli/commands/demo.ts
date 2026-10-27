@@ -2,7 +2,8 @@ import { DASHBOARD_PATH, httpOrigin, LOOPBACK_HOST } from '../../../common/net.j
 import { DEMO_PORT, DemoCountry, DemoFailureCode, DemoSeedStatus, type DemoFailure } from '../../../models/demo.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import { DEMO_FLAG, DEMO_POSITIONALS, DemoOptionsSchema } from '../../../wire/in/cli.js';
-import { EXIT_OK, exitCodeOf, fail, parseFlags, type CliIo, type DemoPrepared } from '../io.js';
+import type { DemoPrepared } from '../../../wire/out/cli.js';
+import { EXIT_OK, exitCodeOf, fail, parseFlags, type CliIo } from '../io.js';
 
 const RESET_FLAG = 'reset';
 const COUNTRY_FLAG = 'country';

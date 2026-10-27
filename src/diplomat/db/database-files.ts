@@ -10,7 +10,8 @@ import {
   rmSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { DEMO_DB_KEY, DemoProbeAbsence, type DemoProbe } from '../../models/demo.js';
+import { DEMO_DB_KEY, DemoProbeAbsence } from '../../models/demo.js';
+import type { DatabaseLook } from '../../wire/db/demo-database.js';
 import { closeDatabase, openDatabaseWithKey } from './driver.js';
 import { tryExclusiveLock, type ExclusiveLock } from './file-lock.js';
 import { instanceRepo } from './repos/instance.js';
@@ -48,8 +49,6 @@ export const canonicalPath = (path: string): string | null => {
   if (existsSync(target)) return realpathSync(target);
   return isSymlink(target) ? null : realPathOfMissing(target);
 };
-
-export type DatabaseLook = { probe: DemoProbe; holdsData: boolean };
 
 const MISSING: DatabaseLook = { probe: DemoProbeAbsence.enum.missing, holdsData: false };
 const UNREADABLE: DatabaseLook = { probe: DemoProbeAbsence.enum.unreadable, holdsData: false };
@@ -93,10 +92,8 @@ export const probeDatabase = async (databasePath: string): Promise<DatabaseLook>
 
 const LOCK_SUFFIX = '.lock';
 
-export type DatabaseLock = ExclusiveLock;
-
 /** Held by the OS, so a dead process releases it; the lock file is never deleted, or waiters would lock another. */
-export const acquireDatabaseLock = (databasePath: string): Promise<DatabaseLock | null> => {
+export const acquireDatabaseLock = (databasePath: string): Promise<ExclusiveLock | null> => {
   const lockPath = `${databasePath}${LOCK_SUFFIX}`;
   mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
   return tryExclusiveLock(lockPath);

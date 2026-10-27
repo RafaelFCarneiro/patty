@@ -8,6 +8,7 @@ import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/sign-in.js';
 import { clientConfigFailures, type ClientConfigFailure } from '../../models/client-config.js';
 import { DEMO_SERVER_NAME } from '../../models/demo.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
+import { ServersKey } from '../../wire/out/client-config.js';
 import {
   mergeMcpServersKey,
   mergeServersKey,
@@ -18,7 +19,6 @@ import {
   withDemo,
   withoutServer,
   withProfile,
-  type ServersKey,
 } from './merge.js';
 
 // ---------------------------------------------------------------------------
@@ -128,8 +128,8 @@ type FileClient = {
 };
 
 const MERGE_BY_KEY = {
-  mcpServers: mergeMcpServersKey,
-  servers: mergeServersKey,
+  [ServersKey.enum.mcpServers]: mergeMcpServersKey,
+  [ServersKey.enum.servers]: mergeServersKey,
 } as const satisfies Record<ServersKey, typeof mergeMcpServersKey>;
 
 const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig => ({
@@ -191,28 +191,28 @@ const codex: ClientConfig = {
 const claudeCode = fileClient({
   label: 'Claude Code (CLI)',
   path: () => join(home, '.claude', 'mcp.json'),
-  key: 'mcpServers',
+  key: ServersKey.enum.mcpServers,
   entry: STDIO_ENTRY,
   next: '  Verify with: claude mcp list',
 });
 const claudeDesktop = fileClient({
   label: 'Claude Desktop',
   path: claudeDesktopConfigPath,
-  key: 'mcpServers',
+  key: ServersKey.enum.mcpServers,
   entry: STDIO_ENTRY,
   next: '  Fully quit and reopen Claude Desktop to apply.',
 });
 const copilot = fileClient({
   label: 'VS Code / GitHub Copilot',
   path: () => join(process.cwd(), '.vscode', 'mcp.json'),
-  key: 'servers',
+  key: ServersKey.enum.servers,
   entry: VSCODE_ENTRY,
   next: '  Reload VS Code window (Cmd/Ctrl+Shift+P → "Developer: Reload Window") to apply.',
 });
 const antigravity = fileClient({
   label: 'Google Antigravity',
   path: () => join(home, '.gemini', 'config', 'mcp_config.json'),
-  key: 'mcpServers',
+  key: ServersKey.enum.mcpServers,
   entry: STDIO_ENTRY,
   next: '  Reopen Antigravity or type /mcp in the CLI to refresh.',
 });

@@ -2,7 +2,9 @@ import { err, ok, type Result } from 'neverthrow';
 import { demoConfig, DEMO_DB_PATH, loadConfig, osLocale } from '../config.js';
 import { formatAppError } from '../common/errors.js';
 import { isPortInUse } from '../common/net.js';
-import type { DemoPrepared, DemoRequest, DemoShell } from '../diplomat/cli/io.js';
+import type { DemoShell } from '../diplomat/cli/io.js';
+import type { DemoOptions } from '../wire/in/cli.js';
+import type { DemoPrepared } from '../wire/out/cli.js';
 import { bootstrap } from '../diplomat/db/bootstrap.js';
 import {
   acquireDatabaseLock,
@@ -91,7 +93,7 @@ type ShellContext = {
 const prepareLocked = async (
   context: ShellContext,
   location: Location,
-  request: DemoRequest,
+  request: DemoOptions,
 ): Promise<Result<DemoPrepared, DemoFailure>> => {
   const { databasePath, seed } = context;
   const plan = planDemoDatabase(await lookAtDatabase(databasePath, location, request.reset));
@@ -106,7 +108,7 @@ const prepareLocked = async (
   });
 };
 
-const prepareDemo = async (context: ShellContext, request: DemoRequest): Promise<Result<DemoPrepared, DemoFailure>> => {
+const prepareDemo = async (context: ShellContext, request: DemoOptions): Promise<Result<DemoPrepared, DemoFailure>> => {
   const { databasePath } = context;
   const location = locateDatabase(databasePath, context.realDatabasePath());
   const early = refusalWithoutProbe(location);

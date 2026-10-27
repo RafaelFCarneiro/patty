@@ -1,7 +1,9 @@
 import { err, ok, type Result } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import { runCli } from '../../../../../src/diplomat/cli/commands.js';
-import type { CliIo, DemoPrepared, DemoRequest, DemoShell } from '../../../../../src/diplomat/cli/io.js';
+import type { CliIo, DemoShell } from '../../../../../src/diplomat/cli/io.js';
+import type { DemoOptions } from '../../../../../src/wire/in/cli.js';
+import type { DemoPrepared } from '../../../../../src/wire/out/cli.js';
 import {
   DEMO_PORT,
   DemoCountry,
@@ -22,7 +24,7 @@ const PREPARED: DemoPrepared = {
 const rig = (prepared: Result<DemoPrepared, DemoFailure>, served: Result<void, DemoFailure> = ok(undefined)) => {
   const out: string[] = [];
   const err: string[] = [];
-  const prepare = vi.fn(async (_request: DemoRequest) => prepared);
+  const prepare = vi.fn(async (_request: DemoOptions) => prepared);
   const serve = vi.fn(async () => served);
   const demo: DemoShell = { databasePath: DATABASE_PATH, hasDatabase: () => true, prepare, serve };
   const io = {

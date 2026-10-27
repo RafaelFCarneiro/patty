@@ -1,6 +1,7 @@
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/sign-in.js';
 import { DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from '../../models/demo.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
+import { ServersKey } from '../../wire/out/client-config.js';
 
 // ---------------------------------------------------------------------------
 // Shared MCP entry shapes
@@ -40,8 +41,6 @@ export const withDemo = <E extends Record<string, unknown>>(
 // Pure config merge helpers (testable without FS)
 // ---------------------------------------------------------------------------
 
-export type ServersKey = 'mcpServers' | 'servers';
-
 export const SERVER_NAME = 'fintrack';
 
 const mergeServer = (
@@ -58,13 +57,13 @@ export const mergeMcpServersKey = (
   existing: Record<string, unknown>,
   entry: Record<string, unknown>,
   name: string = SERVER_NAME,
-): Record<string, unknown> => mergeServer('mcpServers', existing, entry, name);
+): Record<string, unknown> => mergeServer(ServersKey.enum.mcpServers, existing, entry, name);
 
 export const mergeServersKey = (
   existing: Record<string, unknown>,
   entry: Record<string, unknown>,
   name: string = SERVER_NAME,
-): Record<string, unknown> => mergeServer('servers', existing, entry, name);
+): Record<string, unknown> => mergeServer(ServersKey.enum.servers, existing, entry, name);
 
 export const withoutServer = (
   existing: Record<string, unknown>,
