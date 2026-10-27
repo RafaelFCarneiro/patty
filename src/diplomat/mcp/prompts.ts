@@ -1,13 +1,14 @@
 import { z } from 'zod';
 import { type Period, PeriodSchema } from '../../models/date.js';
 import type { Scoped } from '../../controllers/deps.js';
+import { getTourContext } from '../../controllers/tour.js';
 import { ImportStatementSource, PromptName } from '../../models/prompts.js';
 import { definePrompt, type PromptDefinition } from './definition.js';
+import { tourPromptText } from './tour.js';
 
-/** Guided-workflow MCP prompts (Feature Design 019) — orchestration text only, no DB access, no
- *  controller. The *model* executes the tools the text instructs it to call. `diplomat/*` may not
- *  depend on `logic/` (`docs/architecture.md` § Dependency direction), so the trivial date
- *  formatting below stays local rather than reusing `logic/period.ts`'s private `pad`. */
+/** Guided-workflow MCP prompts (Feature Design 019) — orchestration text; the *model* executes the tools the text
+ *  instructs it to call. Only `tour` reads the database (through `controllers/tour.ts`). The trivial date formatting
+ *  below stays local rather than reusing `logic/period.ts`'s private `pad`. */
 const pad = (n: number): string => String(n).padStart(2, '0');
 
 /** Shared by monthly_review/budget_checkup: both are scoped to one calendar month. The MCP prompt
@@ -131,5 +132,24 @@ const importStatementPrompt = definePrompt({
   }),
 });
 
-/** Guided-workflow prompts (Feature Design 019) — few and cross-domain, one module (ADR-025). */
-export const promptDefinitions: PromptDefinition[] = [monthlyReviewPrompt, budgetCheckupPrompt, importStatementPrompt];
+/** Takes no arguments: the demo's language, country and trip come from the database (Feature Design 022 §6). */
+const tourPrompt = definePrompt({
+  name: PromptName.enum.tour,
+  config: {
+    title: 'Tour of the FinTrack demo',
+    description:
+      'A six-step guided tour of the demo (balances, last month, budgets, a statement import, tagging the seeded ' +
+      'trip and building a dashboard, then installing for real). On a real database it only says how to start the demo.',
+  },
+  handle: async (_args, { deps }) => ({
+    messages: [{ role: 'user', content: { type: 'text', text: tourPromptText(await getTourContext(deps)) } }],
+  }),
+});
+
+/** Guided-workflow prompts (Feature Design 019, 022) — few and cross-domain, one module (ADR-025). */
+export const promptDefinitions: PromptDefinition[] = [
+  monthlyReviewPrompt,
+  budgetCheckupPrompt,
+  importStatementPrompt,
+  tourPrompt,
+];

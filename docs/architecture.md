@@ -838,7 +838,7 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 ## Guided-workflow prompts (Feature Design 019)
 
-The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement` — text and definitions in `diplomat/mcp/prompts.ts`'s `promptDefinitions`, registered by `registerDefinitions` from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome; no DB access, no controller.
+The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement`, `tour` — definitions in `diplomat/mcp/prompts.ts`'s `promptDefinitions`, registered by `registerDefinitions` from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome. The first three touch no database. `tour` takes no arguments (a definition without `argsSchema` registers so the client sends no `arguments` object) and reads the instance marker, the owner's language and base currency through `controllers/tour.ts`'s `getTourContext`; `logic/tour.ts` decides the context (the demo's country from its base currency, the sample statement dated before today) from `models/tour.ts`'s `TOUR_FACTS` — which the country packs also take their trip destination from, so the prompt and the seeded trip cannot disagree — and `diplomat/mcp/tour.ts` renders the six steps in `en`/`pt`/`es` (`Record<Locale, …>`). A standard database gets only a pointer to the demo.
 
 ## Dashboards / `/ui` surface (ADR-013, ADR-027)
 

@@ -1,4 +1,5 @@
 import { DemoCountry, DemoFunding, type DemoPack } from '../../../../models/demo.js';
+import { TOUR_FACTS } from '../../../../models/tour.js';
 import { Locale } from '../../../../models/locale.js';
 import { CurrencyCode } from '../../../../models/money.js';
 import { DefaultCategoryId } from '../categories.js';
@@ -74,7 +75,7 @@ export const MX_PACK: DemoPack = {
   ],
   budgets: BUDGET_SHAPES,
   trip: {
-    destination: 'Oaxaca',
+    destination: TOUR_FACTS[DemoCountry.enum.mx].destination,
     items: [
       tripItem(0, F.primaryCard, C['cat-travel'], 'Vuelo Viva Aerobus a Oaxaca', 2450),
       tripItem(0, F.primaryCard, C['cat-travel'], 'Hotel Casa Oaxaca', 5200),

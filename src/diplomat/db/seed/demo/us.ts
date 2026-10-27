@@ -1,4 +1,5 @@
 import { DemoCountry, DemoFunding, type DemoPack } from '../../../../models/demo.js';
+import { TOUR_FACTS } from '../../../../models/tour.js';
 import { Locale } from '../../../../models/locale.js';
 import { CurrencyCode } from '../../../../models/money.js';
 import { DefaultCategoryId } from '../categories.js';
@@ -74,7 +75,7 @@ export const US_PACK: DemoPack = {
   ],
   budgets: BUDGET_SHAPES,
   trip: {
-    destination: 'Denver',
+    destination: TOUR_FACTS[DemoCountry.enum.us].destination,
     items: [
       tripItem(0, F.primaryCard, C['cat-travel'], 'United Airlines flight to Denver', 412),
       tripItem(0, F.primaryCard, C['cat-travel'], 'Hotel Monaco Denver', 890),

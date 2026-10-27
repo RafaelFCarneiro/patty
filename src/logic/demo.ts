@@ -64,7 +64,7 @@ const shiftMonth = ({ year, month }: Month, delta: number): Month => {
   return { year: shiftedYear, month: index - shiftedYear * 12 + 1 };
 };
 
-const addDays = (date: string, days: number): string => {
+export const addDays = (date: string, days: number): string => {
   const { year, month, day } = parseDate(date);
   const moved = new Date(Date.UTC(year, month - 1, day + days));
   return isoDate(moved.getUTCFullYear(), moved.getUTCMonth() + 1, moved.getUTCDate());

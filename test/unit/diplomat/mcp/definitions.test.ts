@@ -110,4 +110,19 @@ describe('registerDefinitions', () => {
     expect(handle).toHaveBeenCalledWith({}, scoped, ctx);
     expect(read).toHaveBeenCalledWith(new URL('fintrack://r'), scoped, ctx);
   });
+
+  it('registers a prompt without argsSchema so its callback receives only the request extra', async () => {
+    const handle = vi.fn(async () => ({ messages: [] }));
+    const prompt = definePrompt({
+      name: PromptName.enum.tour,
+      config: { title: 't', description: 'd' },
+      handle,
+    });
+    const server = guardedServer();
+    registerDefinitions(server, ctx, { prompts: [prompt], resources: [], tools: [] });
+
+    await registry(server)._registeredPrompts.tour!.callback(extra);
+
+    expect(handle).toHaveBeenCalledWith({}, scoped, ctx);
+  });
 });

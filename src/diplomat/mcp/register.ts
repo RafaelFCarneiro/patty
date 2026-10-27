@@ -15,7 +15,11 @@ export type EdgeDefinitions = {
  */
 export const registerDefinitions = (server: McpServer, ctx: McpContext, definitions: EdgeDefinitions): void => {
   definitions.prompts.forEach(({ name, config, handle }) =>
-    server.registerPrompt(name, config, (args, extra) => handle(args, ctx.as(extra), ctx)),
+    config.argsSchema
+      ? server.registerPrompt(name, { ...config, argsSchema: config.argsSchema }, (args, extra) =>
+          handle(args, ctx.as(extra), ctx),
+        )
+      : server.registerPrompt(name, config, (extra) => handle({}, ctx.as(extra), ctx)),
   );
   definitions.resources.forEach(({ name, uri, config, read }) =>
     server.registerResource(name, uri, config, (resourceUri, extra) => read(resourceUri, ctx.as(extra), ctx)),
