@@ -1,9 +1,9 @@
-import { DEFAULT_SIGN_IN_CAP, INSTANCE_SETTINGS_ID } from '../../../../src/models/auth/users.js';
-import { InstanceKind } from '../../../../src/models/instance.js';
+import { DEFAULT_SIGN_IN_CAP, INSTANCE_SETTINGS_ID } from '../../../src/models/auth/users.js';
+import { InstanceKind } from '../../../src/models/instance.js';
 import { type FlowOutcome, type Persistable } from '@rfc0/effect-runner';
 import type { ResultAsync } from 'neverthrow';
-import type { AppError } from '../../../../src/common/errors.js';
-import type { AuthDeps, AuthSecrets } from '../../../../src/controllers/deps.js';
+import type { AppError } from '../../../src/common/errors.js';
+import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
 import {
   OWNER_USER_ID,
   SETUP_CODE_ID,
@@ -11,9 +11,9 @@ import {
   type SetupCodeEntity,
   type UserEntity,
   UserRole,
-} from '../../../../src/models/auth/owner.js';
-import { SESSION_IDLE_TTL_MS, type SessionEntity } from '../../../../src/models/auth/session.js';
-import { type AccessTokenEntity, AccessTokenKind } from '../../../../src/models/auth/token.js';
+} from '../../../src/models/auth/owner.js';
+import { SESSION_IDLE_TTL_MS, type SessionEntity } from '../../../src/models/auth/session.js';
+import { type AccessTokenEntity, AccessTokenKind } from '../../../src/models/auth/token.js';
 
 export const NOW = new Date('2026-10-07T12:00:00.000Z');
 export const PASSWORD = 'correct horse battery staple';

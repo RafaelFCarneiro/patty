@@ -105,7 +105,7 @@ const submitLogout = (ctx: AuthRoutesContext) => async (req: FastifyRequest, rep
 /**
  * `/ui/login`, `/ui/setup`, `/ui/logout` (ADR-033 §2). Browser-facing HTML, not part of the `/api` JSON
  * contract, so — like `routes/ui.ts` — these are not `RouteDefinition`s. Thin: parse the form, throttle,
- * run the `controllers/auth.ts` flow, translate to a cookie + redirect or a page.
+ * run the `controllers/auth/{owner,session}.ts` flow, translate to a cookie + redirect or a page.
  */
 export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {
   const loginLimiter = createAttemptLimiter();

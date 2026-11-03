@@ -19,7 +19,7 @@ import {
   errorOf,
   opsOf,
   sessionRow,
-} from './world.js';
+} from '../../fixtures/auth-world.js';
 
 describe('login', () => {
   const credentials = { username: 'rafael', password: PASSWORD };

@@ -205,8 +205,8 @@ const userRoutes = (pages: UserPages) => {
  * `/ui/access/users`: user management. Browser HTML behind the session cookie, the hook's CSRF check
  * AND an admin: a member's request to any of these routes — page or form post — is answered as if the route did not
  * exist. Never an `/api` route or an MCP tool, and a bearer token is never accepted on `/ui`. Thin: parse the form,
- * throttle the step-up password, run the `controllers/users.ts` flow, render a page or redirect. An invite's code and
- * link are rendered once, by the response to the POST that issued them.
+ * throttle the step-up password, run the `controllers/auth/users.ts` flow, render a page or redirect. An invite's code
+ * and link are rendered once, by the response to the POST that issued them.
  */
 export const registerUserRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {
   const pages: UserPages = { ctx, passwords: createAttemptLimiter() };

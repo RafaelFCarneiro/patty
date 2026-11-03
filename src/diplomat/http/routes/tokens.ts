@@ -82,7 +82,7 @@ const revokePage = (ctx: AuthRoutesContext) => async (req: FastifyRequest, reply
 /**
  * `/ui/access/tokens` (ADR-033 §3): the personal-access-token pages. Browser HTML behind the session cookie and the
  * hook's CSRF check — a bearer token is never accepted on `/ui`, so a token can never mint, widen or revoke
- * another. Thin: parse the form, run the `controllers/access-tokens.ts` flow, render a page. The plaintext token
+ * another. Thin: parse the form, run the `controllers/auth/access-tokens.ts` flow, render a page. The plaintext token
  * is rendered once, by the response to the create POST, and nowhere else.
  */
 export const registerTokenRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {

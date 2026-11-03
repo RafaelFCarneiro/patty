@@ -33,7 +33,7 @@ import {
   errorOf,
   opsOf,
   codeRow,
-} from './world.js';
+} from '../../fixtures/auth-world.js';
 
 describe('issueSetupCode', () => {
   it('mints a code for an unclaimed owner under required auth, storing only its hash', async () => {

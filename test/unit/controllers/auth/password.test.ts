@@ -18,7 +18,7 @@ import {
   OTHER_USER_ID,
   otherUser,
   tokenRow,
-} from './world.js';
+} from '../../fixtures/auth-world.js';
 
 describe('resetPassword (ADR-034 §5)', () => {
   const NEW_PASSWORD = 'a brand new passphrase';
