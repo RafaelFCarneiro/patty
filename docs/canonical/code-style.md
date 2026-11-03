@@ -20,17 +20,17 @@ generator-based result-composition helper. Each `yield*` short-circuits on the e
 
 ```ts
 // ✅ DO
-export const cancelOrder = (deps: Deps, input: CancelOrder): AsyncResult<Order, AppError> =>
+export const getOrderSummary = (deps: Deps, input: GetOrderSummary): AsyncResult<OrderSummary, AppError> =>
   resultFlow(async function* () {
     const customer = yield* resolveCustomerRef(deps, input.customer)
     const order = yield* okOr(await deps.orders.get(customer.id, input.reference), {
       code: 'unknown_order', customer: customer.name, reference: input.reference,
     })
-    return ok(await deps.orders.setStatus(order.id, OrderStatus.enum.cancelled))
+    return ok(summarizeOrder(order))
   })
 
 // ❌ DON'T
-export const cancelOrder = async (deps, input) => {
+export const getOrderSummary = async (deps, input) => {
   let customerId: string | null = null        // let + mutation
   const res = resolveByName(...)              // duplicated resolution boilerplate
   if (res.kind === 'none') return err(...)    // early-return chains

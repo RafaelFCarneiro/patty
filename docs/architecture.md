@@ -379,7 +379,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     go negative / exceed 1 — over-budget is reported, never an error; effective headroom is
     trivially `limit − effective.amount` for a caller that wants it. The response groups every
     budget by its top-level category name (per-currency and per-sub-category lines read as one
-    coherent unit; still no cross-currency total — that needs FX, deferred until FX lands).
+    coherent unit; the lines are never combined across currencies — a converted total is only the opt-in top-level `converted` block).
     **The read surface (`list_budgets`,
     `get_budget_status`) honors invariant 13's locale resolution**: the repo
     (`diplomat/db/repos/budgets.ts`) selects the budgeted node's (and, for a sub-category target,
@@ -885,7 +885,7 @@ Preferred remeda helpers (canonical `code-quality.md` § Declarative over impera
 
 - Result combinators `guard`/`okOr`: `common/result.ts`. Name resolution (`resolveAccountRef`, `resolveCategoryRef`,
   `resolveCardRef`): `controllers/resolve.ts`. Controller ports (`Deps`, read-only): `controllers/deps.ts`.
-- `Persistable` builders (`insert`/`update`/`remove`) and the `PersistOp` enum: `logic/persistence.ts`.
+- `Persistable` builders (`insert`/`update`/`remove`): `logic/persistence.ts`; the `PersistOp` enum they set is owned by `@rfc0/effect-runner`.
 - Entity tags (`ACCOUNT_ENTITY_TAG`, …): each entity's own `models/` file. Appliers: beside the entity's repo in
   `diplomat/db/repos/`, registered once at the composition root; `versionedTableApplier(table)` is the default
   (`docs/write-path.md`). Model → row adaptation (`outcomeToDb`) happens once, in the edge handler.
