@@ -887,8 +887,15 @@ Preferred remeda helpers (canonical `code-quality.md` § Declarative over impera
   `resolveCardRef`): `controllers/resolve.ts`. Controller ports (`Deps`, read-only): `controllers/deps.ts`.
 - `Persistable` builders (`insert`/`update`/`remove`): `logic/persistence.ts`; the `PersistOp` enum they set is owned by `@rfc0/effect-runner`.
 - Entity tags (`ACCOUNT_ENTITY_TAG`, …): each entity's own `models/` file. Appliers: beside the entity's repo in
-  `diplomat/db/repos/`, registered once at the composition root; `versionedTableApplier(table)` is the default
-  (`docs/write-path.md`). Model → row adaptation (`outcomeToDb`) happens once, in the edge handler.
+  `diplomat/db/repos/`, registered once at the composition root (`docs/write-path.md`). Model → row adaptation
+  (`outcomeToDb`) happens once, in the edge handler.
+- Applier choice: **owned tables** (every table with `user_id NOT NULL`: accounts, credit_cards, bills, transactions,
+  tags, budgets, recurring_rules, and the user-owned rows of categories and dashboards) use
+  `ownedTableApplier(table, userId)`, built per user by `runEffectsFor(principal)` — inserts stamp the user; updates,
+  deletes and checks add `AND user_id = :me`. `versionedTableApplier(table)` is only for tables with no owner to scope
+  by: identity and instance tables (users, invites, setup_codes, client_grants, settings) and shared data
+  (currency_rates). A new owned table needs `user_id`, a scoped repo, `ownedTableApplier`, a row in the isolation suite
+  (`test/integration/tenancy/`) and a line in the tenancy map — see § Tenancy.
 - Error payloads: `<entity>Errors` colocated on the entity model, typed against `models/error.ts` (ADR-012); models never
   import the composed `AppError`.
 - Schema naming: `XSchema` for the zod value, bare `X` for the inferred type. Core schemas compose up with `.extend`;

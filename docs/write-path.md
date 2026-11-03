@@ -179,7 +179,8 @@ the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
   exactly one table** (the proxy is not the rule — a single-table applier could still smuggle in a decision or a
   read). All registered appliers satisfy it.
 - **`versionedTableApplier(table, { readBack? })`** (`diplomat/db/effects.ts`) builds a complete `EntityApplier`
-  from a drizzle table for any `id`+`version` table (one `TableContext` — table, key column, owner scope, `readBack` —
+  from a drizzle table for any `id`+`version` table **with no owner to scope by** (identity and instance tables, shared
+  data); every owned table uses `ownedTableApplier(table, userId)` instead (§ Scoped appliers) (one `TableContext` — table, key column, owner scope, `readBack` —
   built once, and four named operations over it: `insertRow`, `updateRow`, `deleteRow`, `checkRow`; `insertRow` is
   `assertKeyMatchesTable`, `rowToInsert`, `conflictTarget` and `persistedIdAfter`) — `accountApplier` is `versionedTableApplier(accounts)`;
   `transactionApplier` adds a `readBack`. It writes the next version computed in application code (never a
