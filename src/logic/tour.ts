@@ -16,9 +16,12 @@ const CURRENCY_COUNTRY: Readonly<Partial<Record<CurrencyCode, DemoCountry>>> = {
 };
 
 /** The demo's country: the one the seeder recorded. A demo seeded before that was recorded is resolved from the
- *  base currency its seed set (Spanish alone cannot tell Mexico from Colombia), then from the language. */
-export const tourCountryOf = (recorded: DemoCountry | null, baseCurrency: CurrencyCode, locale: Locale): DemoCountry =>
-  recorded ?? CURRENCY_COUNTRY[baseCurrency] ?? resolveDemoCountry(locale);
+ *  base currency its seed stored (Spanish alone cannot tell Mexico from Colombia), then from the language. */
+export const tourCountryOf = (
+  recorded: DemoCountry | null,
+  baseCurrency: CurrencyCode | null,
+  locale: Locale,
+): DemoCountry => recorded ?? (baseCurrency && CURRENCY_COUNTRY[baseCurrency]) ?? resolveDemoCountry(locale);
 
 export const standardTourContext = (locale: Locale): TourContext => ({ kind: InstanceKind.enum.standard, locale });
 

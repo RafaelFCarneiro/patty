@@ -28,6 +28,10 @@ describe('tourCountryOf', () => {
     expect(tourCountryOf(null, CurrencyCode.enum.BTC, Locale.enum.pt)).toBe(DemoCountry.enum.br);
     expect(tourCountryOf(null, CurrencyCode.enum.USDC, Locale.enum.es)).toBe(DemoCountry.enum.mx);
   });
+
+  it('falls back to the language’s default when no base currency is stored', () => {
+    expect(tourCountryOf(null, null, Locale.enum.es)).toBe(DemoCountry.enum.mx);
+  });
 });
 
 describe('demoTourContext', () => {

@@ -103,6 +103,11 @@ describe('tour prompt', () => {
     expect(text).toContain(TOUR_FACTS[DemoCountry.enum.mx].destination);
   });
 
+  it('a Spanish demo with neither country nor base currency recorded gets the language’s default', async () => {
+    const text = await tourOver(await appOf({ kind: InstanceKind.enum.demo, locale: Locale.enum.es }));
+    expect(text).toContain(TOUR_FACTS[DemoCountry.enum.mx].destination);
+  });
+
   it('on a demo with no saved language falls back to English and the US data set', async () => {
     const text = await tourOver(await appOf({ kind: InstanceKind.enum.demo }));
     expect(text).toContain('Step 1');
