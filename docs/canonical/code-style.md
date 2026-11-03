@@ -23,9 +23,7 @@ generator-based result-composition helper. Each `yield*` short-circuits on the e
 export const getOrderSummary = (deps: Deps, input: GetOrderSummary): AsyncResult<OrderSummary, AppError> =>
   resultFlow(async function* () {
     const customer = yield* resolveCustomerRef(deps, input.customer)
-    const order = yield* okOr(await deps.orders.get(customer.id, input.reference), {
-      code: 'unknown_order', customer: customer.name, reference: input.reference,
-    })
+    const order = yield* resolveOrderRef(deps, customer, input.reference)
     return ok(summarizeOrder(order))
   })
 

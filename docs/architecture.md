@@ -891,8 +891,9 @@ Preferred remeda helpers (canonical `code-quality.md` § Declarative over impera
   (`docs/write-path.md`). Model → row adaptation (`outcomeToDb`) happens once, in the edge handler.
 - Error payloads: `<entity>Errors` colocated on the entity model, typed against `models/error.ts` (ADR-012); models never
   import the composed `AppError`.
-- Schema naming: `XSchema` for the zod value, bare `X` for the inferred type. Core schemas compose up with `.extend`,
-  never `.omit` (ADR-019). Domain integrity defaults live on the model; convenience defaults on `wire/in` via `.extend`.
+- Schema naming: `XSchema` for the zod value, bare `X` for the inferred type. Core schemas compose up with `.extend`;
+  never put an aggregate-specific field on the shared core for other aggregates to `.omit` away (ADR-019) — omitting a
+  create-only discriminator or statement-level field from a derived input schema is fine. Domain integrity defaults live on the model; convenience defaults on `wire/in` via `.extend`.
 - Edge definitions: one named `RouteDefinition` / `defineTool(…)` per route / tool in
   `diplomat/http/routes/<domain>.ts` / `diplomat/mcp/tools/<domain>.ts`; `ToolName` (`diplomat/mcp/tool-name.ts`) is
   lint-restricted to the MCP edge (ADR-025; § Diplomat edge organization).

@@ -81,14 +81,14 @@ export default tseslint.config(
       // A type is imported as a type, and one module is imported once — `import { a, type B } from 'm'`.
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports', fixStyle: 'inline-type-imports' }],
       'no-duplicate-imports': 'error',
-      // Declarative over imperative (docs/canonical/code-quality.md, remeda table): the `xs.filter(...)[0]`
+      // Declarative over imperative (docs/architecture.md § Conventions in this repo, remeda table): the `xs.filter(...)[0]`
       // smell — taking the first match by index instead of R.find / R.firstBy.
       'no-restricted-syntax': [
         'error',
         {
           selector:
             "MemberExpression[computed=true][property.type='Literal'][property.value=0] > CallExpression[callee.property.name='filter']",
-          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/canonical/code-quality.md remeda table).',
+          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/architecture.md § Conventions in this repo, remeda table).',
         },
         SWITCH_TOO_LARGE,
       ],
@@ -112,7 +112,7 @@ export default tseslint.config(
     },
   },
   {
-    // Declarative layers: no loops, `let` or `.push(` (docs/canonical/code-quality.md remeda table). Restates the base filter()[0] and switch-size selectors because a later no-restricted-syntax replaces, not merges.
+    // Declarative layers: no loops, `let` or `.push(` (docs/architecture.md § Conventions in this repo, remeda table). Restates the base filter()[0] and switch-size selectors because a later no-restricted-syntax replaces, not merges.
     files: ['src/logic/**/*.ts', 'src/controllers/**/*.ts', 'src/adapters/**/*.ts'],
     rules: {
       'no-restricted-syntax': [
@@ -120,7 +120,7 @@ export default tseslint.config(
         {
           selector:
             "MemberExpression[computed=true][property.type='Literal'][property.value=0] > CallExpression[callee.property.name='filter']",
-          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/canonical/code-quality.md remeda table).',
+          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/architecture.md § Conventions in this repo, remeda table).',
         },
         SWITCH_TOO_LARGE,
         ...[
@@ -131,17 +131,17 @@ export default tseslint.config(
           ['DoWhileStatement', 'a `do…while` loop'],
         ].map(([selector, what]) => ({
           selector,
-          message: `Avoid ${what} here — use R.map / R.filter / R.reduce / R.pipe or a pure helper (docs/canonical/code-quality.md remeda table).`,
+          message: `Avoid ${what} here — use R.map / R.filter / R.reduce / R.pipe or a pure helper (docs/architecture.md § Conventions in this repo, remeda table).`,
         })),
         {
           selector: 'VariableDeclaration[kind="let"]',
           message:
-            'Avoid `let` here — use `const` and expressions (R.pipe, R.reduce, a scan; docs/canonical/code-quality.md remeda table).',
+            'Avoid `let` here — use `const` and expressions (R.pipe, R.reduce, a scan; docs/architecture.md § Conventions in this repo, remeda table).',
         },
         {
           selector: 'CallExpression[callee.property.name="push"]',
           message:
-            'Avoid `.push(` here — build the array as one expression (spread, R.map, R.flatMap; docs/canonical/code-quality.md remeda table).',
+            'Avoid `.push(` here — build the array as one expression (spread, R.map, R.flatMap; docs/architecture.md § Conventions in this repo, remeda table).',
         },
       ],
     },
