@@ -1,6 +1,6 @@
 import { DemoCountry } from './demo.js';
-import type { InstanceKind } from './instance.js';
-import type { Locale } from './locale.js';
+import type { InstanceKind } from '../instance.js';
+import type { Locale } from '../locale.js';
 
 /** One line of the tour's sample statement, `daysAgo` before today so it is always recent. */
 export type TourStatementLine = { daysAgo: number; description: string; amount: number; income?: boolean };

@@ -5,7 +5,7 @@ import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter } from '../
 import { reasonOf } from '../../models/error.js';
 import type { ExportedRowCounts } from '../../models/export.js';
 import { databaseAheadMessage, type DatabaseAhead } from '../../models/database.js';
-import type { DemoFailure, DemoPrepared } from '../../models/demo.js';
+import type { DemoFailure, DemoPrepared } from '../../models/demo/demo.js';
 import type { DemoOptions } from '../../wire/in/cli.js';
 import { CLI_MESSAGES } from './messages.js';
 import { isPromptEnded, PROMPT_MESSAGES, type PromptFailure } from './prompt.js';

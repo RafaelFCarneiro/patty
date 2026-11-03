@@ -98,7 +98,7 @@ npx @rafaelfcarneiro/fintrack@latest demo [--country br|us|mx|co] [--reset]
   The `br` pack also has a USD **Conta Global** (Nubank's dollar account for Brazilians): a second-currency
   account with a few dollar purchases, so the converted totals (BRL ↔ USD) show on real-looking data.
   MXN and COP are new currencies (§4.2). Country packs live in `diplomat/db/seed/demo/<country>.ts`; the
-  generator's rules (cadence, amounts, distribution) are pure, in `logic/demo.ts`, and shared by all four.
+  generator's rules (cadence, amounts, distribution) are pure, in `logic/demo/plan.ts`, and shared by all four.
   Amounts are expressed per pack in local terms (a COP rent is in the millions, an MXN one in the thousands), so
   the dashboards look plausible in each country.
 
@@ -211,7 +211,7 @@ Implement this design in phases, one branch each, behind the full gate.
    merge before the rest.
 1. **`feat/demo-marker`** — migration `settings.instance_kind`; `get_status.demo`; the UI banner and `[Demo]`
    titles; MCP `instructions` for a demo database. Tests for each. No seeder yet (mark a test database by hand).
-2. **`feat/demo-seed`** — `logic/demo.ts` (pure generator) + the four country packs in `diplomat/db/seed/demo/` + the
+2. **`feat/demo-seed`** — `logic/demo/plan.ts` (pure generator) + the four country packs in `diplomat/db/seed/demo/` + the
    seeder that runs the generated plan through the write flows with a per-item clock. Tests per §Testing.
 3. **`feat/demo-command`** — `fintrack demo [--country] [--reset]`, `DEMO_DB_PATH`, `DEMO_PORT`, `DEMO_DB_KEY`,
    auth disabled; `setup <client> --demo` / `--remove-demo`. Safety tests.

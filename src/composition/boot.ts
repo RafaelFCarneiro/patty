@@ -3,7 +3,7 @@ import type { Config } from '../config.js';
 import { bootstrap } from '../diplomat/db/bootstrap.js';
 import { databaseExists } from '../diplomat/db/database-files.js';
 import { closeDatabase, openDatabase } from '../diplomat/db/driver.js';
-import { demoNotReady } from '../models/demo.js';
+import { demoNotReady } from '../models/demo/demo.js';
 import { isDemoInstance } from '../models/instance.js';
 import { prepareAuth } from './auth.js';
 import { createRuntime } from './runtime.js';

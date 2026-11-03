@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CliIo } from '../../../../../src/diplomat/cli/io.js';
-import { DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT, DEMO_SERVER_NAME } from '../../../../../src/models/demo.js';
+import { DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT, DEMO_SERVER_NAME } from '../../../../../src/models/demo/demo.js';
 
 let homeDir = '';
 let originalCwd = '';

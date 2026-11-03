@@ -3,9 +3,9 @@ import {
   failureOfSeedStatus,
   planDemoDatabase as planFor,
   refusalWithoutProbe,
-} from '../../../src/logic/demo-database.js';
-import { DemoFailureCode, DemoSeedStatus, type DemoProbe } from '../../../src/models/demo.js';
-import { InstanceKind } from '../../../src/models/instance.js';
+} from '../../../../src/logic/demo/database.js';
+import { DemoFailureCode, DemoSeedStatus, type DemoProbe } from '../../../../src/models/demo/demo.js';
+import { InstanceKind } from '../../../../src/models/instance.js';
 
 const { real_database, not_demo } = DemoFailureCode.enum;
 const PROBES: readonly DemoProbe[] = ['missing', 'unreadable', InstanceKind.enum.standard, InstanceKind.enum.demo];

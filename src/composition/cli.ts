@@ -12,7 +12,7 @@ import { closeDatabase, openDatabase, type Db } from '../diplomat/db/driver.js';
 import { createEngineContext } from '../diplomat/db/engine.js';
 import type { DatabaseAhead } from '../models/database.js';
 import { AuthMode } from '../models/auth/mode.js';
-import { createDemoShell } from './demo.js';
+import { createDemoShell } from './demo/shell.js';
 import { createExporter } from './export.js';
 import { createSignInFor } from './sign-in/wiring.js';
 

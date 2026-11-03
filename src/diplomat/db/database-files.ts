@@ -10,7 +10,7 @@ import {
   rmSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { DEMO_DB_KEY, DemoProbeAbsence, type DemoDatabaseLook } from '../../models/demo.js';
+import { DEMO_DB_KEY, DemoProbeAbsence, type DemoDatabaseLook } from '../../models/demo/demo.js';
 import { closeDatabase, openDatabaseWithKey } from './driver.js';
 import { tryExclusiveLock, type ExclusiveLock } from './file-lock.js';
 import { instanceRepo } from './repos/instance.js';

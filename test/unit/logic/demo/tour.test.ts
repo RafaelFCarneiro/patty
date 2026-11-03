@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DEMO_PACKS } from '../../../src/diplomat/db/seed/demo/index.js';
-import { demoTourContext, standardTourContext, tourCountryOf } from '../../../src/logic/tour.js';
-import { DemoCountry } from '../../../src/models/demo.js';
-import { InstanceKind } from '../../../src/models/instance.js';
-import { Locale } from '../../../src/models/locale.js';
-import { CurrencyCode } from '../../../src/models/money.js';
-import { TOUR_FACTS } from '../../../src/models/tour.js';
+import { DEMO_PACKS } from '../../../../src/diplomat/db/seed/demo/index.js';
+import { demoTourContext, standardTourContext, tourCountryOf } from '../../../../src/logic/demo/tour.js';
+import { DemoCountry } from '../../../../src/models/demo/demo.js';
+import { InstanceKind } from '../../../../src/models/instance.js';
+import { Locale } from '../../../../src/models/locale.js';
+import { CurrencyCode } from '../../../../src/models/money.js';
+import { TOUR_FACTS } from '../../../../src/models/demo/tour.js';
 
 const TODAY = '2026-10-26';
 const COUNTRIES = Object.values(DemoCountry.enum);

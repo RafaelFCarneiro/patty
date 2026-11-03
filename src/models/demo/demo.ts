@@ -1,15 +1,15 @@
 import { z } from 'zod';
-import { InstanceKind } from './instance.js';
-import type { AddAccountMovement, CreateAccount, CreateTransfer } from './account.js';
-import type { BillQuery, PayBill } from './bill.js';
-import type { CreateBudget } from './budget.js';
-import type { CreateCreditCard, AddCardPurchase } from './credit-card.js';
-import type { SetExchangeRateInput } from './currency-rate.js';
-import type { Locale, SetBaseCurrencyInput, SetLocaleInput } from './locale.js';
-import type { CurrencyCode } from './money.js';
-import type { CreateRecurring } from './recurring.js';
-import { validation, type ValidationError } from './error.js';
-import { NPX_COMMAND } from './package.js';
+import { InstanceKind } from '../instance.js';
+import type { AddAccountMovement, CreateAccount, CreateTransfer } from '../account.js';
+import type { BillQuery, PayBill } from '../bill.js';
+import type { CreateBudget } from '../budget.js';
+import type { CreateCreditCard, AddCardPurchase } from '../credit-card.js';
+import type { SetExchangeRateInput } from '../currency-rate.js';
+import type { Locale, SetBaseCurrencyInput, SetLocaleInput } from '../locale.js';
+import type { CurrencyCode } from '../money.js';
+import type { CreateRecurring } from '../recurring.js';
+import { validation, type ValidationError } from '../error.js';
+import { NPX_COMMAND } from '../package.js';
 
 /** The four data sets a demo can be generated for. A language alone cannot choose: Spanish has two. */
 export const DemoCountry = z.enum(['br', 'us', 'mx', 'co']);

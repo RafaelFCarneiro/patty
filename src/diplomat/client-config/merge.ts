@@ -1,5 +1,5 @@
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/sign-in.js';
-import { DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from '../../models/demo.js';
+import { DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from '../../models/demo/demo.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
 import { ServersKey } from '../../wire/out/client-config.js';
 

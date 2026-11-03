@@ -1,6 +1,6 @@
 import { ClientConfigFailureCode, type ClientConfigFailure } from '../../../models/client-config.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/sign-in.js';
-import { DEMO_SERVER_NAME } from '../../../models/demo.js';
+import { DEMO_SERVER_NAME } from '../../../models/demo/demo.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import {
   DEMO_FLAG,

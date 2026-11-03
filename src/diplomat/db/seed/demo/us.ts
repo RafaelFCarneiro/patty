@@ -1,5 +1,5 @@
-import { DemoCountry, DemoFunding, type DemoPack } from '../../../../models/demo.js';
-import { TOUR_FACTS } from '../../../../models/tour.js';
+import { DemoCountry, DemoFunding, type DemoPack } from '../../../../models/demo/demo.js';
+import { TOUR_FACTS } from '../../../../models/demo/tour.js';
 import { Locale } from '../../../../models/locale.js';
 import { CurrencyCode } from '../../../../models/money.js';
 import { DefaultCategoryId } from '../categories.js';
