@@ -889,13 +889,20 @@ Preferred remeda helpers (canonical `code-quality.md` § Declarative over impera
 - Entity tags (`ACCOUNT_ENTITY_TAG`, …): each entity's own `models/` file. Appliers: beside the entity's repo in
   `diplomat/db/repos/`, registered once at the composition root (`docs/write-path.md`). Model → row adaptation
   (`outcomeToDb`) happens once, in the edge handler.
-- Applier choice: **owned tables** (every table with `user_id NOT NULL`: accounts, credit_cards, bills, transactions,
-  tags, budgets, recurring_rules, and the user-owned rows of categories and dashboards) use
-  `ownedTableApplier(table, userId)`, built per user by `runEffectsFor(principal)` — inserts stamp the user; updates,
-  deletes and checks add `AND user_id = :me`. `versionedTableApplier(table)` is only for tables with no owner to scope
-  by: identity and instance tables (users, invites, setup_codes, client_grants, settings) and shared data
-  (currency_rates). A new owned table needs `user_id`, a scoped repo, `ownedTableApplier`, a row in the isolation suite
-  (`test/integration/tenancy/`) and a line in the tenancy map — see § Tenancy.
+- Applier choice (decided by who the table belongs to, not by a `user_id` column alone):
+  - **Tenant-owned domain tables with the `id`/`version` shape** (accounts, credit_cards, bills, transactions, tags,
+    budgets, recurring_rules, and the user-owned rows of categories and dashboards) use `ownedTableApplier(table, userId)`,
+    built per user by `runEffectsFor(principal)` — inserts stamp the user; updates, deletes and checks add
+    `AND user_id = :me`.
+  - **Tenant-owned tables that don't fit that shape** (`user_settings`, `merchant_category`, the transaction↔tag link
+    table) keep a hand-written scoped applier (`docs/write-path.md` § Scoped appliers).
+  - **Identity tables** (users, sessions, access_tokens, invites, client_grants, setup_codes, instance settings) and
+    shared reference data (merchants, currency_rates) use `versionedTableApplier(table)`: some carry a `user_id`, but
+    the auth flows act on another user's credentials (an admin reissuing an invite, revoking a token), so a per-user
+    scope would stamp or block the wrong owner; authorization is enforced by those flows (`AUTH_APPLIERS`,
+    `src/composition/auth.ts`).
+  - A new tenant-owned table needs `user_id`, a scoped repo, a scoped applier, a row in the isolation suite
+    (`test/integration/tenancy/`) and a line in the tenancy map — see § Tenancy.
 - Error payloads: `<entity>Errors` colocated on the entity model, typed against `models/error.ts` (ADR-012); models never
   import the composed `AppError`.
 - Schema naming: `XSchema` for the zod value, bare `X` for the inferred type. Core schemas compose up with `.extend`;
