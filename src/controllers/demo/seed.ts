@@ -5,7 +5,7 @@ import { demoSeedStart } from '../../logic/demo/plan.js';
 import * as persistence from '../../logic/persistence.js';
 import { INSTANCE_SETTINGS_ENTITY_TAG } from '../../models/auth/entity.js';
 import { InstanceKind, isDemoInstance } from '../../models/instance.js';
-import type { DEMO_SEED_FRESH, DemoCountry, DemoSeedStatus } from '../../models/demo/demo.js';
+import type { DEMO_SEED_FRESH, DemoCountry, DemoSeedStatus } from '../../models/demo/core.js';
 import type { AuthDeps, Deps } from '../deps.js';
 
 /** Writes the marker: only the demo seeder calls this. Marking a database that already says `demo` writes nothing. */

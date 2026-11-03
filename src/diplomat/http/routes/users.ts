@@ -12,7 +12,7 @@ import {
   reissueInvite,
   setRole,
   setSignInCap,
-} from '../../../controllers/users.js';
+} from '../../../controllers/auth/users.js';
 import { inviteLink } from '../../../logic/auth/users.js';
 import { resourceOrigin } from '../../../logic/auth/origin.js';
 import { authErrors } from '../../../models/auth/errors.js';

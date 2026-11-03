@@ -17,7 +17,7 @@ import type { Scope } from '../../models/auth/scope.js';
 import { DEFAULT_SIGN_IN_CAP, SignInCap } from '../../models/auth/users.js';
 import { AccessTokenKind, type TokenAccess } from '../../models/auth/token.js';
 import { BudgetPeriod } from '../../models/budget.js';
-import { DemoCountry } from '../../models/demo/demo.js';
+import { DemoCountry } from '../../models/demo/core.js';
 import { DashboardSource } from '../../models/dashboard.js';
 import { DEFAULT_INSTANCE_KIND, InstanceKind } from '../../models/instance.js';
 import { Locale, LocaleSource } from '../../models/locale.js';

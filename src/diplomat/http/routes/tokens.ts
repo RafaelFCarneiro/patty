@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
-import { createToken, listTokens, revokeToken } from '../../../controllers/access-tokens.js';
+import { createToken, listTokens, revokeToken } from '../../../controllers/auth/access-tokens.js';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import { UserRole } from '../../../models/auth/owner.js';

@@ -1,4 +1,4 @@
-import { DemoCountry } from './demo.js';
+import { DemoCountry } from './core.js';
 import type { InstanceKind } from '../instance.js';
 import type { Locale } from '../locale.js';
 

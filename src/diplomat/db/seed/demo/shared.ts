@@ -6,7 +6,7 @@ import {
   type DemoPendingLine,
   type DemoSpendLine,
   type DemoTripItem,
-} from '../../../../models/demo/demo.js';
+} from '../../../../models/demo/core.js';
 import { CATEGORIES, DefaultCategoryId } from '../categories.js';
 
 /** A seeded category's canonical (English) name — the one every locale's category lookup resolves. */

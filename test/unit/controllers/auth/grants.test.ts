@@ -1,19 +1,24 @@
 import { PersistOp, type FlowOutcome } from '@rfc0/effect-runner';
-import { InstanceKind } from '../../../src/models/instance.js';
+import { InstanceKind } from '../../../../src/models/instance.js';
 import type { ResultAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
-import type { AppError } from '../../../src/common/errors.js';
-import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
-import { approveGrant } from '../../../src/controllers/grants.js';
-import { CLIENT_GRANT_ENTITY_TAG, SESSION_ENTITY_TAG, USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
-import { authErrors } from '../../../src/models/auth/errors.js';
-import { type ClientGrantEntity, GrantChannel, GrantStatus, SignInDuration } from '../../../src/models/auth/grant.js';
-import { OWNER_USER_ID, type UserEntity, UserRole } from '../../../src/models/auth/owner.js';
-import { type Principal, PrincipalVia } from '../../../src/models/auth/principal.js';
-import { Scope } from '../../../src/models/auth/scope.js';
-import type { SessionEntity } from '../../../src/models/auth/session.js';
-import { TokenAccess } from '../../../src/models/auth/token.js';
-import { DEFAULT_SIGN_IN_CAP } from '../../../src/models/auth/users.js';
+import type { AppError } from '../../../../src/common/errors.js';
+import type { AuthDeps, AuthSecrets } from '../../../../src/controllers/deps.js';
+import { approveGrant } from '../../../../src/controllers/auth/grants.js';
+import { CLIENT_GRANT_ENTITY_TAG, SESSION_ENTITY_TAG, USER_ENTITY_TAG } from '../../../../src/models/auth/entity.js';
+import { authErrors } from '../../../../src/models/auth/errors.js';
+import {
+  type ClientGrantEntity,
+  GrantChannel,
+  GrantStatus,
+  SignInDuration,
+} from '../../../../src/models/auth/grant.js';
+import { OWNER_USER_ID, type UserEntity, UserRole } from '../../../../src/models/auth/owner.js';
+import { type Principal, PrincipalVia } from '../../../../src/models/auth/principal.js';
+import { Scope } from '../../../../src/models/auth/scope.js';
+import type { SessionEntity } from '../../../../src/models/auth/session.js';
+import { TokenAccess } from '../../../../src/models/auth/token.js';
+import { DEFAULT_SIGN_IN_CAP } from '../../../../src/models/auth/users.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 const PASSWORD = 'correct horse battery staple';

@@ -1,7 +1,7 @@
 import { err } from 'neverthrow';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
-import { approveGrant, denyGrant, findConsent } from '../../../controllers/grants.js';
+import { approveGrant, denyGrant, findConsent } from '../../../controllers/auth/grants.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import type { ApproveGrantInput, Consent } from '../../../models/auth/grant.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';

@@ -1,4 +1,4 @@
-import { DEMO_SERVER_NAME } from '../../models/demo/demo.js';
+import { DEMO_SERVER_NAME } from '../../models/demo/core.js';
 import { InstanceKind } from '../../models/instance.js';
 import { Locale } from '../../models/locale.js';
 import { NPX_COMMAND } from '../../models/package.js';

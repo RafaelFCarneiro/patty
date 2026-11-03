@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import { Id } from '../id.js';
-import { DemoCountry } from '../demo/demo.js';
+import { DemoCountry } from '../demo/core.js';
 import { InstanceKind } from '../instance.js';
 import { LoginDuration, type ClientGrantEntity } from './grant.js';
 import type { UserRole, UserEntity } from './owner.js';

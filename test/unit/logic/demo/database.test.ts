@@ -4,7 +4,7 @@ import {
   planDemoDatabase as planFor,
   refusalWithoutProbe,
 } from '../../../../src/logic/demo/database.js';
-import { DemoFailureCode, DemoSeedStatus, type DemoProbe } from '../../../../src/models/demo/demo.js';
+import { DemoFailureCode, DemoSeedStatus, type DemoProbe } from '../../../../src/models/demo/core.js';
 import { InstanceKind } from '../../../../src/models/instance.js';
 
 const { real_database, not_demo } = DemoFailureCode.enum;

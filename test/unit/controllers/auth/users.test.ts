@@ -1,8 +1,8 @@
 import { PersistOp, type FlowOutcome, type Persistable } from '@rfc0/effect-runner';
-import { InstanceKind } from '../../../src/models/instance.js';
+import { InstanceKind } from '../../../../src/models/instance.js';
 import type { ResultAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
-import type { AppError } from '../../../src/common/errors.js';
+import type { AppError } from '../../../../src/common/errors.js';
 import {
   claimInvite,
   currentSignInCap,
@@ -15,21 +15,21 @@ import {
   resolveUserId,
   setRole,
   setSignInCap,
-} from '../../../src/controllers/users.js';
-import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
+} from '../../../../src/controllers/auth/users.js';
+import type { AuthDeps, AuthSecrets } from '../../../../src/controllers/deps.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
   INSTANCE_SETTINGS_ENTITY_TAG,
   INVITE_ENTITY_TAG,
   SESSION_ENTITY_TAG,
   USER_ENTITY_TAG,
-} from '../../../src/models/auth/entity.js';
-import { authErrors } from '../../../src/models/auth/errors.js';
-import { type UserEntity, UserRole } from '../../../src/models/auth/owner.js';
-import { PrincipalVia } from '../../../src/models/auth/principal.js';
-import { ALL_SCOPES } from '../../../src/models/auth/scope.js';
-import type { SessionEntity } from '../../../src/models/auth/session.js';
-import { type AccessTokenEntity, AccessTokenKind } from '../../../src/models/auth/token.js';
+} from '../../../../src/models/auth/entity.js';
+import { authErrors } from '../../../../src/models/auth/errors.js';
+import { type UserEntity, UserRole } from '../../../../src/models/auth/owner.js';
+import { PrincipalVia } from '../../../../src/models/auth/principal.js';
+import { ALL_SCOPES } from '../../../../src/models/auth/scope.js';
+import type { SessionEntity } from '../../../../src/models/auth/session.js';
+import { type AccessTokenEntity, AccessTokenKind } from '../../../../src/models/auth/token.js';
 import {
   INVITE_TTL_MS,
   type Actor,
@@ -37,7 +37,7 @@ import {
   type InviteEntity,
   DEFAULT_SIGN_IN_CAP,
   INSTANCE_SETTINGS_ID,
-} from '../../../src/models/auth/users.js';
+} from '../../../../src/models/auth/users.js';
 
 const NOW = new Date('2026-10-14T12:00:00.000Z');
 const PASSWORD = 'correct horse battery staple';

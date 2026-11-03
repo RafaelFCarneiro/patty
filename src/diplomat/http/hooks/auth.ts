@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { startsAtSetup } from '../../../controllers/auth.js';
+import { startsAtSetup } from '../../../controllers/auth/owner.js';
 import { acceptsBearer, credentialOf } from '../../../logic/auth/bearer.js';
 import { csrfVerdict, isLoopbackRequest, preSessionCsrfVerdict } from '../../../logic/auth/origin.js';
 import { defaultScopeForMethod, hasScope } from '../../../logic/auth/scope.js';

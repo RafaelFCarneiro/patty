@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEMO_PACKS } from '../../../../src/diplomat/db/seed/demo/index.js';
 import { demoTourContext, standardTourContext, tourCountryOf } from '../../../../src/logic/demo/tour.js';
-import { DemoCountry } from '../../../../src/models/demo/demo.js';
+import { DemoCountry } from '../../../../src/models/demo/core.js';
 import { InstanceKind } from '../../../../src/models/instance.js';
 import { Locale } from '../../../../src/models/locale.js';
 import { CurrencyCode } from '../../../../src/models/money.js';

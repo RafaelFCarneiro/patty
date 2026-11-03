@@ -17,7 +17,7 @@ import { DEMO_PACKS } from '../../../src/diplomat/db/seed/demo/index.js';
 import { planDemo } from '../../../src/logic/demo/plan.js';
 import { OWNER_PRINCIPAL } from '../../../src/models/auth/principal.js';
 import { BillStatus } from '../../../src/models/bill.js';
-import { DemoCountry, DemoSeedStatus } from '../../../src/models/demo/demo.js';
+import { DemoCountry, DemoSeedStatus } from '../../../src/models/demo/core.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { TransactionStatus } from '../../../src/models/transaction.js';

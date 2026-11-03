@@ -7,7 +7,7 @@ import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ownerGate } from '../../../src/diplomat/mcp/gate.js';
 import { buildMcpServer } from '../../../src/diplomat/mcp/server.js';
-import { DemoCountry } from '../../../src/models/demo/demo.js';
+import { DemoCountry } from '../../../src/models/demo/core.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';

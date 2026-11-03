@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
-import { claimInvite } from '../../../controllers/users.js';
+import { claimInvite } from '../../../controllers/auth/users.js';
 import { normalizeInviteCode } from '../../../logic/auth/users.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';

@@ -1,8 +1,8 @@
 import { ok, type Result } from 'neverthrow';
 import type { KeychainFailure } from '../../models/auth/sign-in.js';
 import { formatAppError } from '../../common/errors.js';
-import { authenticateToken, revokeSignInByHash } from '../../controllers/access-tokens.js';
-import { ownerNeedsSetup } from '../../controllers/auth.js';
+import { authenticateToken, revokeSignInByHash } from '../../controllers/auth/access-tokens.js';
+import { ownerNeedsSetup } from '../../controllers/auth/owner.js';
 import type {
   AuthDeps,
   RunEffects,
@@ -11,7 +11,7 @@ import type {
   SignInServer,
   SignInStore,
 } from '../../controllers/deps.js';
-import { redeemGrant, startGrant } from '../../controllers/grants.js';
+import { redeemGrant, startGrant } from '../../controllers/auth/grants.js';
 import {
   CheckKind,
   EffectKind,

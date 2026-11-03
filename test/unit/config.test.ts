@@ -3,7 +3,7 @@ import { isAbsolute } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { IPV4_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
 import { demoConfig, DEMO_DB_PATH, EncryptionKey, loadConfig, osLocale } from '../../src/config.js';
-import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from '../../src/models/demo/demo.js';
+import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from '../../src/models/demo/core.js';
 import { AuthMode } from '../../src/models/auth/mode.js';
 
 const ORIGINAL_ENV = { ...process.env };

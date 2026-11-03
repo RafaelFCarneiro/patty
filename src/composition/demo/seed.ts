@@ -29,7 +29,7 @@ import {
   type DemoCountry,
   type DemoSeedReport,
   type DemoStep,
-} from '../../models/demo/demo.js';
+} from '../../models/demo/core.js';
 import { TransactionSource } from '../../models/transaction.js';
 import { instanceSettingsRepo } from '../../diplomat/db/repos/instance-settings.js';
 import { bindAuthRunEffects } from '../auth.js';

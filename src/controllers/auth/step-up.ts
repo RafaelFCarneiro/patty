@@ -1,6 +1,6 @@
-import { canLogin } from '../logic/auth/password.js';
-import type { UserEntity } from '../models/auth/owner.js';
-import type { AuthDeps } from './deps.js';
+import { canLogin } from '../../logic/auth/password.js';
+import type { UserEntity } from '../../models/auth/owner.js';
+import type { AuthDeps } from '../deps.js';
 
 /**
  * Step-up: the user, when `password` is theirs and they can sign in, else null. An absent or unclaimed user is verified

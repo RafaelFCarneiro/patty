@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppError } from '../../common/errors.js';
-import { authenticate } from '../../controllers/auth.js';
-import { authenticateToken } from '../../controllers/access-tokens.js';
+import { authenticate } from '../../controllers/auth/session.js';
+import { authenticateToken } from '../../controllers/auth/access-tokens.js';
 import { authErrors } from '../../models/auth/errors.js';
 import { UserRole } from '../../models/auth/owner.js';
 import { type Principal, PrincipalVia } from '../../models/auth/principal.js';

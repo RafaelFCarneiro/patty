@@ -15,7 +15,7 @@ import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migration-barrier.js'
 import { LOGIN_MESSAGES } from '../../../src/diplomat/cli/commands/login.js';
 import { USAGE } from '../../../src/diplomat/cli/commands.js';
 import { databaseAheadMessage } from '../../../src/models/database.js';
-import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, demoNotReady } from '../../../src/models/demo/demo.js';
+import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, demoNotReady } from '../../../src/models/demo/core.js';
 import { startupRefusalMessage } from '../../../src/models/startup.js';
 
 /**

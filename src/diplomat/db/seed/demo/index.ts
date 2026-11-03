@@ -1,4 +1,4 @@
-import { DemoCountry, type DemoPack } from '../../../../models/demo/demo.js';
+import { DemoCountry, type DemoPack } from '../../../../models/demo/core.js';
 import { BR_PACK } from './br.js';
 import { CO_PACK } from './co.js';
 import { MX_PACK } from './mx.js';

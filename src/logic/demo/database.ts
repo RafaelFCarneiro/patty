@@ -6,7 +6,7 @@ import {
   type DemoDatabasePlan,
   type DemoRefusal,
   type DemoSeedStatus,
-} from '../../models/demo/demo.js';
+} from '../../models/demo/core.js';
 import { InstanceKind } from '../../models/instance.js';
 
 /** `createdHere`: this run owns the file, so a failed seed may remove it. */
