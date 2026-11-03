@@ -188,7 +188,7 @@ Run `npx ntl` for an interactive, described list of all scripts. On first run (a
 Once connected, talk to Claude naturally:
 
 - **Log a transaction** — "Paguei 32,50 de Uber ontem"
-- **Bulk import a statement** — "Here's my Nubank statement for May: [paste]"
+- **Bulk import a statement** — "Here's my bank statement for May: [paste]"
 - **Monthly summary** — "What did I spend in June? Break it down by category."
 - **Tag and search** — "Tag last week's restaurant transactions as 'work-dinner', then show me everything tagged work-dinner this month."
 - **Credit card bill** — "What's on my Itaú card bill for June? Mark it as paid."

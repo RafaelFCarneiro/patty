@@ -15,7 +15,7 @@
 | Decision | Choice |
 |---|---|
 | Codebase | Greenfield rewrite (v1 is functional reference only) |
-| Architecture | Diplomat architecture (Nubank-style), functional programming approach |
+| Architecture | Diplomat architecture (inspired by Nubank's public pattern), functional programming approach |
 | Stack | TypeScript, Fastify, zod, libSQL (encrypted local SQLite) + Drizzle ORM (ADR-004/006) |
 | MCP server | Inside the backend — MCP tools are diplomats over the same controllers as REST |
 | Users | Single-user first; schema carries owner columns for future multi-user |
@@ -264,7 +264,7 @@ local-first first release.
 
 ## Open questions
 
-- ~~Credit card invoices~~ **Decided**: faturas are `bills` rows (`bills.credit_card_id`, `transactions.bill_id`). "Bill" over "Invoice" — invoice is B2B; "bill" matches everyday usage and Nubank's own API naming. Bills carry `close_date`/`due_date`/`status`; card transactions attach to the open bill at write time.
+- ~~Credit card invoices~~ **Decided**: faturas are `bills` rows (`bills.credit_card_id`, `transactions.bill_id`). "Bill" over "Invoice" — invoice is B2B; "bill" matches everyday usage. Bills carry `close_date`/`due_date`/`status`; card transactions attach to the open bill at write time.
 - ~~`Result` library~~ **Decided** (ADR-001): neverthrow.
 - ~~Database~~ **Decided** (ADR-004/005/006): local-first encrypted libSQL + Drizzle, key in OS keychain.
 - ~~Cross-currency conversion~~ **Decided (ADR-026, accepted, complete):** crypto (USDC/BTC) first-class, an
