@@ -1,14 +1,24 @@
 import * as R from 'remeda';
-import type { DemoCountry } from '../models/demo.js';
+import { DemoCountry } from '../models/demo.js';
 import { InstanceKind } from '../models/instance.js';
 import type { Locale } from '../models/locale.js';
+import { CurrencyCode } from '../models/money.js';
 import { TOUR_FACTS, type TourContext } from '../models/tour.js';
 import { resolveDemoCountry } from './demo.js';
 import { addDays } from './period.js';
 
-/** The demo's country: the one the seeder recorded, else (a demo seeded before that) the language's default. */
-export const tourCountryOf = (recorded: DemoCountry | null, locale: Locale): DemoCountry =>
-  recorded ?? resolveDemoCountry(locale);
+/** Each country pack has a currency of its own, so the base currency the seeder set names the country. */
+const CURRENCY_COUNTRY: Readonly<Partial<Record<CurrencyCode, DemoCountry>>> = {
+  [CurrencyCode.enum.BRL]: DemoCountry.enum.br,
+  [CurrencyCode.enum.USD]: DemoCountry.enum.us,
+  [CurrencyCode.enum.MXN]: DemoCountry.enum.mx,
+  [CurrencyCode.enum.COP]: DemoCountry.enum.co,
+};
+
+/** The demo's country: the one the seeder recorded. A demo seeded before that was recorded is resolved from the
+ *  base currency its seed set (Spanish alone cannot tell Mexico from Colombia), then from the language. */
+export const tourCountryOf = (recorded: DemoCountry | null, baseCurrency: CurrencyCode, locale: Locale): DemoCountry =>
+  recorded ?? CURRENCY_COUNTRY[baseCurrency] ?? resolveDemoCountry(locale);
 
 export const standardTourContext = (locale: Locale): TourContext => ({ kind: InstanceKind.enum.standard, locale });
 

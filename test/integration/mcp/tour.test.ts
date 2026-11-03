@@ -85,8 +85,21 @@ describe('tour prompt', () => {
     expect(await tourOver(ctx)).toContain(TOUR_FACTS[DemoCountry.enum.br].destination);
   });
 
-  it('a demo with no recorded country (seeded before it was) gets the language’s default', async () => {
-    const text = await tourOver(await appOf({ kind: InstanceKind.enum.demo, locale: Locale.enum.es }));
+  it('a legacy Spanish demo in COP with no recorded country gets Cartagena, not Oaxaca', async () => {
+    const ctx = await appOf({
+      kind: InstanceKind.enum.demo,
+      locale: Locale.enum.es,
+      baseCurrency: CurrencyCode.enum.COP,
+    });
+    const text = await tourOver(ctx);
+    expect(text).toContain(TOUR_FACTS[DemoCountry.enum.co].destination);
+    expect(text).not.toContain(TOUR_FACTS[DemoCountry.enum.mx].destination);
+  });
+
+  it('a demo with no recorded country and no pack currency gets the language’s default', async () => {
+    const text = await tourOver(
+      await appOf({ kind: InstanceKind.enum.demo, locale: Locale.enum.es, baseCurrency: CurrencyCode.enum.BTC }),
+    );
     expect(text).toContain(TOUR_FACTS[DemoCountry.enum.mx].destination);
   });
 

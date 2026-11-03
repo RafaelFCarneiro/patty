@@ -4,20 +4,29 @@ import { demoTourContext, standardTourContext, tourCountryOf } from '../../../sr
 import { DemoCountry } from '../../../src/models/demo.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 import { Locale } from '../../../src/models/locale.js';
+import { CurrencyCode } from '../../../src/models/money.js';
 import { TOUR_FACTS } from '../../../src/models/tour.js';
 
 const TODAY = '2026-10-26';
 const COUNTRIES = Object.values(DemoCountry.enum);
 
 describe('tourCountryOf', () => {
-  it.each(COUNTRIES)('uses the country the seeder recorded, whatever the language (%s)', (country) => {
-    expect(tourCountryOf(country, Locale.enum.en)).toBe(country);
+  it.each(COUNTRIES)('keeps the recorded country authoritative, whatever the currency or language (%s)', (country) => {
+    expect(tourCountryOf(country, CurrencyCode.enum.BTC, Locale.enum.en)).toBe(country);
   });
 
-  it('falls back to the language’s default country for a demo with none recorded', () => {
-    expect(tourCountryOf(null, Locale.enum.pt)).toBe(DemoCountry.enum.br);
-    expect(tourCountryOf(null, Locale.enum.es)).toBe(DemoCountry.enum.mx);
-    expect(tourCountryOf(null, Locale.enum.en)).toBe(DemoCountry.enum.us);
+  it.each(COUNTRIES)('resolves a legacy demo from its pack’s base currency (%s)', (country) => {
+    const pack = DEMO_PACKS[country];
+    expect(tourCountryOf(null, pack.currency, pack.locale)).toBe(country);
+  });
+
+  it('a legacy Spanish demo in COP is Colombia, not Mexico', () => {
+    expect(tourCountryOf(null, CurrencyCode.enum.COP, Locale.enum.es)).toBe(DemoCountry.enum.co);
+  });
+
+  it('falls back to the language’s default when the base currency is no pack’s', () => {
+    expect(tourCountryOf(null, CurrencyCode.enum.BTC, Locale.enum.pt)).toBe(DemoCountry.enum.br);
+    expect(tourCountryOf(null, CurrencyCode.enum.USDC, Locale.enum.es)).toBe(DemoCountry.enum.mx);
   });
 });
 
