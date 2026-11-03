@@ -18,8 +18,8 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { boot } from '../../../src/composition/boot.js';
-import { createDemoShell } from '../../../src/composition/demo.js';
-import { seedDemo } from '../../../src/composition/demo-seed.js';
+import { createDemoShell } from '../../../src/composition/demo/shell.js';
+import { seedDemo } from '../../../src/composition/demo/seed.js';
 import { demoConfig } from '../../../src/config.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { acquireDatabaseLock } from '../../../src/diplomat/db/database-files.js';
@@ -34,7 +34,7 @@ import {
   DemoNotReadyCode,
   DemoFailureCode,
   DemoSeedStatus,
-} from '../../../src/models/demo.js';
+} from '../../../src/models/demo/demo.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 
 const TODAY = new Date(2026, 9, 26, 9);

@@ -1,7 +1,7 @@
 import { eq, isNotNull } from 'drizzle-orm';
 import { INSTANCE_SETTINGS_ID } from '../../../models/auth/users.js';
 import { OWNER_USER_ID } from '../../../models/auth/owner.js';
-import { DemoCountry } from '../../../models/demo.js';
+import { DemoCountry } from '../../../models/demo/demo.js';
 import { InstanceKind } from '../../../models/instance.js';
 import { Locale } from '../../../models/locale.js';
 import type { Db } from '../driver.js';

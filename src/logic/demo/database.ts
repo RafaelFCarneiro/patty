@@ -6,8 +6,8 @@ import {
   type DemoDatabasePlan,
   type DemoRefusal,
   type DemoSeedStatus,
-} from '../models/demo.js';
-import { InstanceKind } from '../models/instance.js';
+} from '../../models/demo/demo.js';
+import { InstanceKind } from '../../models/instance.js';
 
 /** `createdHere`: this run owns the file, so a failed seed may remove it. */
 /** The refusals that need no look at the file — and must come before anything is created beside it, a lock file

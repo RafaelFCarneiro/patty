@@ -1,14 +1,26 @@
 import * as R from 'remeda';
 import { describe, expect, it } from 'vitest';
-import { CATEGORIES } from '../../../src/diplomat/db/seed/categories.js';
-import { DEMO_PACKS } from '../../../src/diplomat/db/seed/demo/index.js';
-import { billPeriodFor } from '../../../src/logic/bill.js';
-import { clockDateOf, DEMO_MONTHS_BACK, demoSeedStart, planDemo, resolveDemoCountry } from '../../../src/logic/demo.js';
-import { AccountType } from '../../../src/models/account.js';
-import { DemoCountry, DemoFunding, DemoSeedStatus, DemoStepKind, type DemoStep } from '../../../src/models/demo.js';
-import { InstanceKind } from '../../../src/models/instance.js';
-import { Locale } from '../../../src/models/locale.js';
-import { CurrencyCode } from '../../../src/models/money.js';
+import { CATEGORIES } from '../../../../src/diplomat/db/seed/categories.js';
+import { DEMO_PACKS } from '../../../../src/diplomat/db/seed/demo/index.js';
+import { billPeriodFor } from '../../../../src/logic/bill.js';
+import {
+  clockDateOf,
+  DEMO_MONTHS_BACK,
+  demoSeedStart,
+  planDemo,
+  resolveDemoCountry,
+} from '../../../../src/logic/demo/plan.js';
+import { AccountType } from '../../../../src/models/account.js';
+import {
+  DemoCountry,
+  DemoFunding,
+  DemoSeedStatus,
+  DemoStepKind,
+  type DemoStep,
+} from '../../../../src/models/demo/demo.js';
+import { InstanceKind } from '../../../../src/models/instance.js';
+import { Locale } from '../../../../src/models/locale.js';
+import { CurrencyCode } from '../../../../src/models/money.js';
 
 const TODAY = '2026-10-26';
 const RATES_AS_OF = '2026-10-26T18:42:07.000Z';

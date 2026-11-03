@@ -1,8 +1,8 @@
-import { DEMO_SERVER_NAME } from '../../models/demo.js';
+import { DEMO_SERVER_NAME } from '../../models/demo/demo.js';
 import { InstanceKind } from '../../models/instance.js';
 import { Locale } from '../../models/locale.js';
 import { NPX_COMMAND } from '../../models/package.js';
-import type { TourContext, TourStatementDated } from '../../models/tour.js';
+import type { TourContext, TourStatementDated } from '../../models/demo/tour.js';
 import { ToolName } from './tool-name.js';
 
 const T = ToolName.enum;

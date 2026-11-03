@@ -53,6 +53,7 @@ const checkTransfer = ...
 - Booleans: `is*`, `has*`, `can*`, `needs*` (`isUserCorrection`, `needsReview`).
 - Variables: name the domain concept, not the type (`account`, not `accountResult`).
 - Files and folders under `src/`, `test/`, `ui/` and `scripts/` are kebab-case (`credit-card.ts`, `sign-in/`), enforced by lint (`eslint-plugin-check-file`).
+- A domain with more than one file in a layer gets a folder in that layer, and its files drop the folder's name (`logic/demo/plan.ts`, `logic/demo/database.ts`, not `logic/demo.ts`, `logic/demo-database.ts`).
 
 ### Names carry the context of their module — don't repeat it
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { databaseAheadMessage, databaseErrors } from '../../../src/models/database.js';
-import { demoNotReady } from '../../../src/models/demo.js';
+import { demoNotReady } from '../../../src/models/demo/demo.js';
 import { startupRefusalMessage } from '../../../src/models/startup.js';
 
 describe('startupRefusalMessage', () => {

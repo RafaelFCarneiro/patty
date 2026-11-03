@@ -1,5 +1,5 @@
 import { databaseAheadMessage, DatabaseAheadCode, type DatabaseAhead } from './database.js';
-import { demoNotReadyMessage, DemoNotReadyCode, type DemoNotReady } from './demo.js';
+import { demoNotReadyMessage, DemoNotReadyCode, type DemoNotReady } from './demo/demo.js';
 
 export type StartupRefusal = DatabaseAhead | DemoNotReady;
 

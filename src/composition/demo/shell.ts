@@ -1,10 +1,10 @@
 import { err, ok, type Result } from 'neverthrow';
-import { demoConfig, DEMO_DB_PATH, loadConfig, osLocale } from '../config.js';
-import { formatAppError } from '../common/errors.js';
-import { isPortInUse } from '../common/net.js';
-import type { DemoShell } from '../diplomat/cli/io.js';
-import type { DemoOptions } from '../wire/in/cli.js';
-import { bootstrap } from '../diplomat/db/bootstrap.js';
+import { demoConfig, DEMO_DB_PATH, loadConfig, osLocale } from '../../config.js';
+import { formatAppError } from '../../common/errors.js';
+import { isPortInUse } from '../../common/net.js';
+import type { DemoShell } from '../../diplomat/cli/io.js';
+import type { DemoOptions } from '../../wire/in/cli.js';
+import { bootstrap } from '../../diplomat/db/bootstrap.js';
 import {
   acquireDatabaseLock,
   canonicalPath,
@@ -12,11 +12,11 @@ import {
   isSymlink,
   probeDatabase,
   removeDatabaseFiles,
-} from '../diplomat/db/database-files.js';
-import { closeDatabase, openDatabaseWithKey } from '../diplomat/db/driver.js';
-import { resolveDemoCountry } from '../logic/demo.js';
-import { failureOfSeedStatus, planDemoDatabase, refusalWithoutProbe } from '../logic/demo-database.js';
-import { startupRefusalMessage } from '../models/startup.js';
+} from '../../diplomat/db/database-files.js';
+import { closeDatabase, openDatabaseWithKey } from '../../diplomat/db/driver.js';
+import { resolveDemoCountry } from '../../logic/demo/plan.js';
+import { failureOfSeedStatus, planDemoDatabase, refusalWithoutProbe } from '../../logic/demo/database.js';
+import { startupRefusalMessage } from '../../models/startup.js';
 import {
   DEMO_DB_KEY,
   DemoFailureCode,
@@ -26,9 +26,9 @@ import {
   type DemoFailure,
   type DemoPrepared,
   type DemoSeedStatus,
-} from '../models/demo.js';
-import { seedDemo } from './demo-seed.js';
-import { loadHttpModule } from './lazy-modules.js';
+} from '../../models/demo/demo.js';
+import { seedDemo } from './seed.js';
+import { loadHttpModule } from '../lazy-modules.js';
 
 export type DemoShellOptions = {
   databasePath?: string;

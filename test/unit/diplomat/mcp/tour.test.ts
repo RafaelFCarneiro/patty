@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { tourPromptText } from '../../../../src/diplomat/mcp/tour.js';
 import { ToolName } from '../../../../src/diplomat/mcp/tool-name.js';
-import { demoTourContext, standardTourContext } from '../../../../src/logic/tour.js';
-import { DemoCountry, DEMO_SERVER_NAME } from '../../../../src/models/demo.js';
+import { demoTourContext, standardTourContext } from '../../../../src/logic/demo/tour.js';
+import { DemoCountry, DEMO_SERVER_NAME } from '../../../../src/models/demo/demo.js';
 import { Locale } from '../../../../src/models/locale.js';
 import { NPX_COMMAND } from '../../../../src/models/package.js';
-import { TOUR_FACTS } from '../../../../src/models/tour.js';
+import { TOUR_FACTS } from '../../../../src/models/demo/tour.js';
 
 const TODAY = '2026-10-26';
 const LOCALES = Object.values(Locale.enum);

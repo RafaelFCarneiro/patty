@@ -91,7 +91,7 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   its row 1:1 (`tags`) supplies the identity `modelToDb`. Exception: `adapters/bills.ts` hand-writes its own,
   because a bill `update` needs `paymentTransactionId: undefined` (leave the column unchanged) to differ from
   `null` (clear it) — an asymmetry the uniform factory can't express.
-- **Exception — the demo seeder is adapted once at the composition root too.** `composition/demo-seed.ts` runs one flow after
+- **Exception — the demo seeder is adapted once at the composition root too.** `composition/demo/seed.ts` runs one flow after
   another through one runner, so `adapters/demo.ts`'s `outcomeToDb` (every entity's `entityDbAdapter` pair applied in turn —
   each rewrites only its own tag) is applied to each flow's outcome there, exactly as for the auth flows below; the
   controllers are unchanged. The seeder holds no write method of its own: it only calls the flows and sets the clock

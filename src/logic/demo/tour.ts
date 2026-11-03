@@ -1,11 +1,11 @@
 import * as R from 'remeda';
-import { DemoCountry } from '../models/demo.js';
-import { InstanceKind } from '../models/instance.js';
-import type { Locale } from '../models/locale.js';
-import { CurrencyCode } from '../models/money.js';
-import { TOUR_FACTS, type TourContext } from '../models/tour.js';
-import { resolveDemoCountry } from './demo.js';
-import { addDays } from './period.js';
+import { DemoCountry } from '../../models/demo/demo.js';
+import { InstanceKind } from '../../models/instance.js';
+import type { Locale } from '../../models/locale.js';
+import { CurrencyCode } from '../../models/money.js';
+import { TOUR_FACTS, type TourContext } from '../../models/demo/tour.js';
+import { resolveDemoCountry } from './plan.js';
+import { addDays } from '../period.js';
 
 /** Each country pack has a currency of its own, so the base currency the seeder set names the country. */
 const CURRENCY_COUNTRY: Readonly<Partial<Record<CurrencyCode, DemoCountry>>> = {

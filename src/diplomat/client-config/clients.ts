@@ -6,7 +6,7 @@ import * as R from 'remeda';
 import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/sign-in.js';
 import { clientConfigFailures, type ClientConfigFailure } from '../../models/client-config.js';
-import { DEMO_SERVER_NAME } from '../../models/demo.js';
+import { DEMO_SERVER_NAME } from '../../models/demo/demo.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
 import { ServersKey } from '../../wire/out/client-config.js';
 import {

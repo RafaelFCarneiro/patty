@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import * as R from 'remeda';
-import { billPeriodFor } from './bill.js';
-import { roundToDecimals } from './money.js';
-import { addDays } from './period.js';
-import { MovementType, TransactionStatus } from '../models/transaction.js';
-import { AccountType } from '../models/account.js';
-import type { BillPeriod } from '../models/bill.js';
+import { billPeriodFor } from '../bill.js';
+import { roundToDecimals } from '../money.js';
+import { addDays } from '../period.js';
+import { MovementType, TransactionStatus } from '../../models/transaction.js';
+import { AccountType } from '../../models/account.js';
+import type { BillPeriod } from '../../models/bill.js';
 import {
   DEFAULT_DEMO_COUNTRY,
   DEMO_SEED_FRESH,
@@ -21,12 +21,12 @@ import {
   type DemoSpendLine,
   type DemoStep,
   type DemoTripItem,
-} from '../models/demo.js';
-import { BudgetPeriod } from '../models/budget.js';
-import { isDemoInstance } from '../models/instance.js';
-import { Locale, LocaleSource } from '../models/locale.js';
-import { CurrencyCode, FIAT_DECIMALS } from '../models/money.js';
-import { RecurringPeriod } from '../models/recurring.js';
+} from '../../models/demo/demo.js';
+import { BudgetPeriod } from '../../models/budget.js';
+import { isDemoInstance } from '../../models/instance.js';
+import { Locale, LocaleSource } from '../../models/locale.js';
+import { CurrencyCode, FIAT_DECIMALS } from '../../models/money.js';
+import { RecurringPeriod } from '../../models/recurring.js';
 
 /** The generator is a pure function of this seed, the country pack and today's date. */
 export const DEMO_SEED = 'fintrack-demo';

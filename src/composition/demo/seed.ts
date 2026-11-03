@@ -1,26 +1,26 @@
 import * as R from 'remeda';
 import { err, ok, type Result, type ResultAsync } from 'neverthrow';
 import type { FlowOutcome } from '@rfc0/effect-runner';
-import * as demoAdapters from '../adapters/demo.js';
-import { formatAppError, type AppError } from '../common/errors.js';
-import { addAccountExpense, addAccountIncome } from '../controllers/account/transaction.js';
-import { createAccount } from '../controllers/account/account.js';
-import { createTransfer } from '../controllers/account/transfer.js';
-import { createBudget } from '../controllers/budgets.js';
-import { payBill, revertBillPayment } from '../controllers/credit-card/bill.js';
-import { createCreditCard } from '../controllers/credit-card/credit-card.js';
-import { addCardPurchase } from '../controllers/credit-card/transaction.js';
-import { setExchangeRate } from '../controllers/currency-rates.js';
-import { scopedFor, type Deps, type Scoped } from '../controllers/deps.js';
-import { completeDemoSeed, demoSeedStatus, markDemoInstance } from '../controllers/instance.js';
-import { applyDueRecurring, createRecurring } from '../controllers/recurring.js';
-import { setBaseCurrency, setLocale } from '../controllers/settings.js';
-import { createTag } from '../controllers/tags.js';
-import type { Db } from '../diplomat/db/driver.js';
-import { DEMO_PACKS } from '../diplomat/db/seed/demo/index.js';
-import { clockDateOf, planDemo } from '../logic/demo.js';
-import { toIsoDate } from '../logic/period.js';
-import { OWNER_PRINCIPAL } from '../models/auth/principal.js';
+import * as demoAdapters from '../../adapters/demo.js';
+import { formatAppError, type AppError } from '../../common/errors.js';
+import { addAccountExpense, addAccountIncome } from '../../controllers/account/transaction.js';
+import { createAccount } from '../../controllers/account/account.js';
+import { createTransfer } from '../../controllers/account/transfer.js';
+import { createBudget } from '../../controllers/budgets.js';
+import { payBill, revertBillPayment } from '../../controllers/credit-card/bill.js';
+import { createCreditCard } from '../../controllers/credit-card/credit-card.js';
+import { addCardPurchase } from '../../controllers/credit-card/transaction.js';
+import { setExchangeRate } from '../../controllers/currency-rates.js';
+import { scopedFor, type Deps, type Scoped } from '../../controllers/deps.js';
+import { completeDemoSeed, demoSeedStatus, markDemoInstance } from '../../controllers/demo/seed.js';
+import { applyDueRecurring, createRecurring } from '../../controllers/recurring.js';
+import { setBaseCurrency, setLocale } from '../../controllers/settings.js';
+import { createTag } from '../../controllers/tags.js';
+import type { Db } from '../../diplomat/db/driver.js';
+import { DEMO_PACKS } from '../../diplomat/db/seed/demo/index.js';
+import { clockDateOf, planDemo } from '../../logic/demo/plan.js';
+import { toIsoDate } from '../../logic/period.js';
+import { OWNER_PRINCIPAL } from '../../models/auth/principal.js';
 import {
   DEMO_SEED_FRESH,
   demoErrors,
@@ -29,15 +29,15 @@ import {
   type DemoCountry,
   type DemoSeedReport,
   type DemoStep,
-} from '../models/demo.js';
-import { TransactionSource } from '../models/transaction.js';
-import { instanceSettingsRepo } from '../diplomat/db/repos/instance-settings.js';
-import { bindAuthRunEffects } from './auth.js';
-import { createRuntime, type Runtime, type RuntimeConfig } from './runtime.js';
+} from '../../models/demo/demo.js';
+import { TransactionSource } from '../../models/transaction.js';
+import { instanceSettingsRepo } from '../../diplomat/db/repos/instance-settings.js';
+import { bindAuthRunEffects } from '../auth.js';
+import { createRuntime, type Runtime, type RuntimeConfig } from '../runtime.js';
 
 /**
- * Composition root of the demo seed: runs the generator's plan (`logic/demo.ts`) through the same write flows the MCP
- * tools and REST routes run — one runner, the clock set to each item's date — so bills, idempotency keys,
+ * Composition root of the demo seed: runs the generator's plan (`logic/demo/plan.ts`) through the same write flows the
+ * MCP tools and REST routes run — one runner, the clock set to each item's date — so bills, idempotency keys,
  * classification and merchant learning behave exactly as in real use. No demo-only write path, no raw SQL.
  */
 

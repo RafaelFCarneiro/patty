@@ -4,7 +4,7 @@ import { UserRole } from '../../models/auth/owner.js';
 import { UsernameSchema, normalizeUsername } from '../../models/auth/password.js';
 import { DEFAULT_PROFILE, ProfileSchema } from '../../models/auth/sign-in.js';
 import { TokenAccess } from '../../models/auth/token.js';
-import { DemoCountry } from '../../models/demo.js';
+import { DemoCountry } from '../../models/demo/demo.js';
 
 /** The CLI's argv grammar: the commands, their subcommands, their flags and how many positionals each takes. */
 export const PASSWORD_STDIN_FLAG = 'password-stdin';

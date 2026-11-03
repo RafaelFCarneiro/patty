@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { type Period, PeriodSchema } from '../../models/date.js';
 import type { Scoped } from '../../controllers/deps.js';
-import { getTourContext } from '../../controllers/tour.js';
+import { getTourContext } from '../../controllers/demo/tour.js';
 import { ImportStatementSource, PromptName } from '../../models/prompts.js';
 import { definePrompt, type PromptDefinition } from './definition.js';
 import { tourPromptText } from './tour.js';
@@ -10,8 +10,8 @@ import { ToolName } from './tool-name.js';
 const T = ToolName.enum;
 
 /** Guided-workflow MCP prompts (Feature Design 019) — orchestration text; the *model* executes the tools the text
- *  instructs it to call. Only `tour` reads the database (through `controllers/tour.ts`). The trivial date formatting
- *  below stays local rather than reusing `logic/period.ts`'s private `pad`. */
+ *  instructs it to call. Only `tour` reads the database (through `controllers/demo/tour.ts`). The trivial date
+ *  formatting below stays local rather than reusing `logic/period.ts`'s private `pad`. */
 const pad = (n: number): string => String(n).padStart(2, '0');
 
 /** Shared by monthly_review/budget_checkup: both are scoped to one calendar month. The MCP prompt
