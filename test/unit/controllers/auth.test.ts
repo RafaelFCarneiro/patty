@@ -130,6 +130,7 @@ const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW
         maxSignInDuration: DEFAULT_SIGN_IN_CAP,
         instanceKind: InstanceKind.enum.standard,
         demoSeededAt: null,
+        demoCountry: null,
         version: 0,
       }),
     },

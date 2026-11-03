@@ -395,6 +395,7 @@ describe('the instance cap on sign-in durations', () => {
     maxSignInDuration,
     instanceKind: InstanceKind.enum.standard,
     demoSeededAt: null,
+    demoCountry: null,
     version: 0,
   });
 

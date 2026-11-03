@@ -1,4 +1,5 @@
 import { DemoCountry, DemoFunding, type DemoPack } from '../../../../models/demo.js';
+import { TOUR_FACTS } from '../../../../models/tour.js';
 import { Locale } from '../../../../models/locale.js';
 import { CurrencyCode } from '../../../../models/money.js';
 import { DefaultCategoryId } from '../categories.js';
@@ -73,7 +74,7 @@ export const CO_PACK: DemoPack = {
   ],
   budgets: BUDGET_SHAPES,
   trip: {
-    destination: 'Cartagena',
+    destination: TOUR_FACTS[DemoCountry.enum.co].destination,
     items: [
       tripItem(0, F.primaryCard, C['cat-travel'], 'Vuelo Avianca a Cartagena', 620000),
       tripItem(0, F.primaryCard, C['cat-travel'], 'Hotel Casa San Agustín Cartagena', 1850000),

@@ -2748,6 +2748,11 @@
           "required": false
         }
       ]
+    },
+    {
+      "name": "tour",
+      "title": "Tour of the FinTrack demo",
+      "description": "A six-step guided tour of the demo (balances, last month, budgets, a statement import, tagging the seeded trip and building a dashboard, then installing for real). On a real database it only says how to start the demo."
     }
   ]
 }

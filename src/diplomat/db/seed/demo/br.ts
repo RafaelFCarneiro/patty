@@ -1,4 +1,5 @@
 import { DemoCountry, DemoFunding, type DemoPack } from '../../../../models/demo.js';
+import { TOUR_FACTS } from '../../../../models/tour.js';
 import { Locale } from '../../../../models/locale.js';
 import { CurrencyCode } from '../../../../models/money.js';
 import { DefaultCategoryId } from '../categories.js';
@@ -82,7 +83,7 @@ export const BR_PACK: DemoPack = {
   ],
   budgets: BUDGET_SHAPES,
   trip: {
-    destination: 'Florianópolis',
+    destination: TOUR_FACTS[DemoCountry.enum.br].destination,
     items: [
       tripItem(0, F.primaryCard, C['cat-travel'], 'Passagem aérea LATAM para Florianópolis', 1380),
       tripItem(0, F.primaryCard, C['cat-travel'], 'Pousada Ilha Azul Florianópolis', 2150),

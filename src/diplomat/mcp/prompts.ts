@@ -1,13 +1,17 @@
 import { z } from 'zod';
 import { type Period, PeriodSchema } from '../../models/date.js';
 import type { Scoped } from '../../controllers/deps.js';
+import { getTourContext } from '../../controllers/tour.js';
 import { ImportStatementSource, PromptName } from '../../models/prompts.js';
 import { definePrompt, type PromptDefinition } from './definition.js';
+import { tourPromptText } from './tour.js';
+import { ToolName } from './tool-name.js';
 
-/** Guided-workflow MCP prompts (Feature Design 019) — orchestration text only, no DB access, no
- *  controller. The *model* executes the tools the text instructs it to call. `diplomat/*` may not
- *  depend on `logic/` (`docs/architecture.md` § Dependency direction), so the trivial date
- *  formatting below stays local rather than reusing `logic/period.ts`'s private `pad`. */
+const T = ToolName.enum;
+
+/** Guided-workflow MCP prompts (Feature Design 019) — orchestration text; the *model* executes the tools the text
+ *  instructs it to call. Only `tour` reads the database (through `controllers/tour.ts`). The trivial date formatting
+ *  below stays local rather than reusing `logic/period.ts`'s private `pad`. */
 const pad = (n: number): string => String(n).padStart(2, '0');
 
 /** Shared by monthly_review/budget_checkup: both are scoped to one calendar month. The MCP prompt
@@ -48,31 +52,31 @@ const CURRENCY_RULE =
   'Group every figure by currency and never sum across currencies — BRL and USD are always reported separately.';
 
 export const monthlyReviewPromptText = (period: Period): string =>
-  `You are reviewing the user's finances for ${formatPeriod(period)}. Call get_spending_summary, ` +
-  `find_correlations with analysis "spending_shifts", then "budget_fit", then "recurring_candidates" ` +
-  `(all scoped to month ${period.month} year ${period.year}), and get_budget_status for the same period. ` +
+  `You are reviewing the user's finances for ${formatPeriod(period)}. Call ${T.get_spending_summary}, ` +
+  `${T.find_correlations} with analysis "spending_shifts", then "budget_fit", then "recurring_candidates" ` +
+  `(all scoped to month ${period.month} year ${period.year}), and ${T.get_budget_status} for the same period. ` +
   'Then write a brief, prose review — no raw table dumps: per-currency income/expenses/balance; the 2-3 ' +
   'biggest category shifts vs the baseline and a plausible driver for each; which budgets are over or have ' +
-  `slack; and any recurring-payment candidates worth turning into a rule via create_recurring. ${CURRENCY_RULE}`;
+  `slack; and any recurring-payment candidates worth turning into a rule via ${T.create_recurring}. ${CURRENCY_RULE}`;
 
 export const budgetCheckupPromptText = (period: Period): string =>
-  `You are checking the user's budgets for ${formatPeriod(period)}. Call get_budget_status and ` +
-  `find_correlations with analysis "budget_fit" (both scoped to month ${period.month} year ${period.year}). ` +
+  `You are checking the user's budgets for ${formatPeriod(period)}. Call ${T.get_budget_status} and ` +
+  `${T.find_correlations} with analysis "budget_fit" (both scoped to month ${period.month} year ${period.year}). ` +
   'Report which budgets are on track, over, or generous; surface each suggestedLimit; and flag any ' +
   'unbudgeted category with a significant, established spend pattern. Offer to apply a suggestion — with ' +
-  "the user's say-so, call update_budget (existing budget) or create_budget (unbudgeted category) with the " +
+  `the user's say-so, call ${T.update_budget} (existing budget) or ${T.create_budget} (unbudgeted category) with the ` +
   `suggested limit. ${CURRENCY_RULE}`;
 
 const describeStatementSource = (source: ImportStatementSource | undefined): string => {
   if (source === ImportStatementSource.enum.card) {
-    return 'The statement is a credit-card statement — use import_card_statement.';
+    return `The statement is a credit-card statement — use ${T.import_card_statement}.`;
   }
   if (source === ImportStatementSource.enum.account) {
-    return 'The statement is a bank/wallet account statement — use import_account_statement.';
+    return `The statement is a bank/wallet account statement — use ${T.import_account_statement}.`;
   }
   return (
-    'Ask the user whether this is a credit-card statement (import_card_statement) or a bank/wallet ' +
-    'account statement (import_account_statement) before importing.'
+    `Ask the user whether this is a credit-card statement (${T.import_card_statement}) or a bank/wallet ` +
+    `account statement (${T.import_account_statement}) before importing.`
   );
 };
 
@@ -131,5 +135,24 @@ const importStatementPrompt = definePrompt({
   }),
 });
 
-/** Guided-workflow prompts (Feature Design 019) — few and cross-domain, one module (ADR-025). */
-export const promptDefinitions: PromptDefinition[] = [monthlyReviewPrompt, budgetCheckupPrompt, importStatementPrompt];
+/** Takes no arguments: the demo's language, country and trip come from the database (Feature Design 022 §6). */
+const tourPrompt = definePrompt({
+  name: PromptName.enum.tour,
+  config: {
+    title: 'Tour of the FinTrack demo',
+    description:
+      'A six-step guided tour of the demo (balances, last month, budgets, a statement import, tagging the seeded ' +
+      'trip and building a dashboard, then installing for real). On a real database it only says how to start the demo.',
+  },
+  handle: async (_args, { deps }) => ({
+    messages: [{ role: 'user', content: { type: 'text', text: tourPromptText(await getTourContext(deps)) } }],
+  }),
+});
+
+/** Guided-workflow prompts (Feature Design 019, 022) — few and cross-domain, one module (ADR-025). */
+export const promptDefinitions: PromptDefinition[] = [
+  monthlyReviewPrompt,
+  budgetCheckupPrompt,
+  importStatementPrompt,
+  tourPrompt,
+];

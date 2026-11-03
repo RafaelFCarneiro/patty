@@ -35,7 +35,8 @@ export type ResourceDefinition = {
 
 export type PromptDefinition<Shape extends ZodRawShape = ZodRawShape> = {
   name: PromptName;
-  config: { title: string; description: string; argsSchema: Shape };
+  /** Omit `argsSchema` for a prompt that takes no arguments: the client then needs no `arguments` object at all. */
+  config: { title: string; description: string; argsSchema?: Shape };
   handle: (args: Args<Shape>, scoped: Scoped, ctx: McpContext) => Promise<GetPromptResult>;
 };
 

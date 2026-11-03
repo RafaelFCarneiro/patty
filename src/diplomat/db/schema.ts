@@ -17,6 +17,7 @@ import type { Scope } from '../../models/auth/scope.js';
 import { DEFAULT_SIGN_IN_CAP, SignInCap } from '../../models/auth/users.js';
 import { AccessTokenKind, type TokenAccess } from '../../models/auth/token.js';
 import { BudgetPeriod } from '../../models/budget.js';
+import { DemoCountry } from '../../models/demo.js';
 import { DashboardSource } from '../../models/dashboard.js';
 import { DEFAULT_INSTANCE_KIND, InstanceKind } from '../../models/instance.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
@@ -273,12 +274,14 @@ export const budgets = sqliteTable(
 
 // The instance-wide singleton; preferences live in user_settings. `max_sign_in_duration` is the longest a stdio
 // sign-in may last; `instance_kind` is what this database says it is (`demo` only when the demo seeder made it);
-// `demo_seeded_at` is when that seeder finished (null on a standard database, and on an interrupted demo).
+// `demo_seeded_at` is when that seeder finished (null on a standard database, and on an interrupted demo);
+// `demo_country` is the data set it seeded (null off the demo, and on a demo seeded before it was recorded).
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
   maxSignInDuration: text('max_sign_in_duration', { enum: SignInCap.options }).notNull().default(DEFAULT_SIGN_IN_CAP),
   instanceKind: text('instance_kind', { enum: InstanceKind.options }).notNull().default(DEFAULT_INSTANCE_KIND),
   demoSeededAt: text('demo_seeded_at'),
+  demoCountry: text('demo_country', { enum: DemoCountry.options }),
   version: integer('version').notNull().default(0),
 });
 

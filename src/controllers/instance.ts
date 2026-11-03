@@ -5,7 +5,7 @@ import { demoSeedStart } from '../logic/demo.js';
 import * as persistence from '../logic/persistence.js';
 import { INSTANCE_SETTINGS_ENTITY_TAG } from '../models/auth/entity.js';
 import { DEFAULT_INSTANCE, InstanceKind, isDemoInstance, type InstanceFacts } from '../models/instance.js';
-import type { DEMO_SEED_FRESH, DemoSeedStatus } from '../models/demo.js';
+import type { DEMO_SEED_FRESH, DemoCountry, DemoSeedStatus } from '../models/demo.js';
 import type { AuthDeps, Deps, Tenancy } from './deps.js';
 
 /** The marker, and — only for a demo — the language it speaks. A standard database never reads the locale. */
@@ -33,13 +33,14 @@ export const markDemoInstance = (
 export const completeDemoSeed = (
   deps: Pick<AuthDeps, 'instanceSettings'>,
   seededAt: string,
+  country: DemoCountry,
 ): ResultAsync<FlowOutcome<string>, AppError> =>
   safeTry(async function* () {
     const current = await deps.instanceSettings.get();
     if (current.demoSeededAt !== null) return ok({ persist: [], response: current.demoSeededAt });
     const write = persistence.update({
       entity: INSTANCE_SETTINGS_ENTITY_TAG,
-      model: { ...current, demoSeededAt: seededAt },
+      model: { ...current, demoSeededAt: seededAt, demoCountry: country },
     });
     return ok({ persist: [write], response: seededAt });
   });

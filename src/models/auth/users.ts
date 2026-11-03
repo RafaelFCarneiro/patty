@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import { Id } from '../id.js';
+import { DemoCountry } from '../demo.js';
 import { InstanceKind } from '../instance.js';
 import { LoginDuration, type ClientGrantEntity } from './grant.js';
 import type { UserRole, UserEntity } from './owner.js';
@@ -25,7 +26,13 @@ export const DEFAULT_SIGN_IN_CAP = SignInCap.enum['30d'];
 export const INSTANCE_SETTINGS_ID = 'singleton';
 
 export const InstanceSettingsEntitySchema = withPersistenceMeta(
-  z.object({ id: Id, maxSignInDuration: SignInCap, instanceKind: InstanceKind, demoSeededAt: z.string().nullable() }),
+  z.object({
+    id: Id,
+    maxSignInDuration: SignInCap,
+    instanceKind: InstanceKind,
+    demoSeededAt: z.string().nullable(),
+    demoCountry: DemoCountry.nullable(),
+  }),
 );
 export type InstanceSettingsEntity = z.infer<typeof InstanceSettingsEntitySchema>;
 

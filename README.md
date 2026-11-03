@@ -10,6 +10,20 @@ Stack: TypeScript · Fastify · zod · neverthrow · remeda · libSQL + Drizzle 
 
 ---
 
+## Try the demo
+
+See FinTrack on sample data first — no install of your own data, no login, nothing touches your real finances:
+
+```bash
+npx @rafaelfcarneiro/fintrack@latest demo
+```
+
+It seeds four months of sample finances (pick a data set with `--country br|us|mx|co`) and serves the dashboards on
+`http://127.0.0.1:51738`. To talk to it from your AI client, run `npx @rafaelfcarneiro/fintrack@latest setup <client> --demo`
+and ask for the **`tour`** prompt on the `fintrack-demo` server. Details in [`docs/demo.md`](docs/demo.md).
+
+---
+
 ## Getting started
 
 ### 0 — Prerequisites
@@ -199,6 +213,7 @@ Integration tests run against an ephemeral in-process libSQL database, exercise 
 | File | What it covers |
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | System as built — relational schema, layer rules, invariants |
+| [`docs/demo.md`](docs/demo.md) | The demo: what it contains, the `tour` prompt, reset and remove |
 | [`docs/mcp-tools.md`](docs/mcp-tools.md) | Full MCP tool contract: inputs, outputs, error codes, examples |
 | [`docs/mcp-clients.md`](docs/mcp-clients.md) | Connecting to Claude, VS Code, ChatGPT, Ollama |
 | [`docs/releasing.md`](docs/releasing.md) | Publishing, installing the private package, updating, ports |

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addDays,
   assertExclusivePeriodOrRange,
   assertHasPeriodOrRange,
   baselineRange,
@@ -205,5 +206,19 @@ describe('periodBounds', () => {
       from: '2026-01-01',
       to: '2026-02-01',
     });
+  });
+});
+
+describe('addDays', () => {
+  it.each([
+    ['2026-10-26', 1, '2026-10-27'],
+    ['2026-10-31', 1, '2026-11-01'],
+    ['2026-12-31', 1, '2027-01-01'],
+    ['2026-03-01', -1, '2026-02-28'],
+    ['2028-03-01', -1, '2028-02-29'],
+    ['2026-11-02', -4, '2026-10-29'],
+    ['2026-10-26', 0, '2026-10-26'],
+  ])('%s %i days is %s', (date, days, expected) => {
+    expect(addDays(date, days)).toBe(expected);
   });
 });

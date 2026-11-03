@@ -85,6 +85,7 @@ const DEFAULT_SETTINGS_ROW = {
   max_sign_in_duration: DEFAULT_SIGN_IN_CAP,
   instance_kind: 'standard',
   demo_seeded_at: null,
+  demo_country: null,
   version: 0,
 };
 
