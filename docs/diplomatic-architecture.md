@@ -4,7 +4,7 @@ keywords: diplomat, architecture, hexagonal, ports-and-adapters, controller, log
 description: Condensed guidance for applying Diplomat Architecture concepts in functional-programming backend services, based on publicly shared patterns.
 credits:
   - "Inspired by patterns Nubank has publicly shared with the engineering community"
-  - "Nubank Building — Functional Programming with Clojure: https://building.nubank.com/functional-programming-with-clojure/"
+  - "Nubank Building — Functional Programming with Clojure: https://building.nu.com/functional-programming-with-clojure/"
   - "Lucas Cavalcanti — Using Clojure, Microservices, Hexagonal Architecture at Nubank (InfoQ Podcast: https://www.infoq.com/podcasts/lucas-cavalcanti-nubank-fintech-clojure/)"
 globs:
   - "**/*.js"
@@ -14,13 +14,13 @@ alwaysApply: false
 
 # Diplomat Architecture
 
-> 💡 **Attribution:** This document maps the Diplomat Architecture pattern to a TypeScript ecosystem. The pattern is Nubank's functional-paradigm flavor of Alistair Cockburn's *Ports & Adapters (Hexagonal Architecture)*, shared publicly through talks and podcasts. For the engineering background, see Nubank's own writeup, [Functional Programming with Clojure](https://building.nubank.com/functional-programming-with-clojure/), and [Lucas Cavalcanti's InfoQ podcast interview](https://www.infoq.com/podcasts/lucas-cavalcanti-nubank-fintech-clojure/).
+> 💡 **Attribution:** This project's architecture is *inspired by* the Diplomat Architecture, a pattern Nubank engineers have shared publicly through talks and podcasts, built on Alistair Cockburn's *Ports & Adapters (Hexagonal Architecture)*. This document maps it to a TypeScript ecosystem. This project is not affiliated with or endorsed by Nubank. For the engineering background, see Nubank's writeup, [Functional Programming with Clojure](https://building.nu.com/functional-programming-with-clojure/), and [Lucas Cavalcanti's InfoQ podcast interview](https://www.infoq.com/podcasts/lucas-cavalcanti-nubank-fintech-clojure/).
 
 This file condenses the Diplomat Architecture concepts into an AI-loadable rule file shape aligned with the existing AI-rules conventions.
 
 ## Overview
 
-Diplomat Architecture is a Nubank pattern based on Hexagonal Architecture. Its main goal is to isolate the service's domain layer from external concerns such as databases, HTTP, Kafka, files, and other services, reducing coupling and protecting business logic from infrastructure details.
+The Diplomat Architecture, which inspires this project's architecture, is a pattern based on Hexagonal Architecture. Its main goal is to isolate the service's domain layer from external concerns such as databases, HTTP, Kafka, files, and other services, reducing coupling and protecting business logic from infrastructure details.
 
 The architecture is organized around two main zones:
 * Domain Layer: controllers, logic, models.
