@@ -125,8 +125,8 @@ and rules don't carry a per-occurrence cleared/uncleared state. Rejected — the
 > That was wrong. The steps below replace it: a **date-aware default applied everywhere**, and **recurring that
 > provisions forward**. Apply this on top of the current branch state.
 
-**Before coding**, also read: `CLAUDE.md`, `docs/architecture.md`, `docs/diplomatic-architecture.md`,
-`docs/code-style.md`, `docs/code-quality.md`. Skim the current shape of `src/models/transaction.ts`,
+**Before coding**, also read: `CLAUDE.md`, `docs/architecture.md`, `docs/canonical/diplomatic-architecture.md`,
+`docs/canonical/code-style.md`, `docs/canonical/code-quality.md`. Skim the current shape of `src/models/transaction.ts`,
 `src/diplomat/db/schema.ts`, `src/diplomat/db/repos/transactions.ts`, `src/controllers/transactions.ts`,
 `src/controllers/transfers.ts`, `src/controllers/recurring.ts`, `src/controllers/accounts.ts` (balances),
 `src/controllers/summary.ts`, `src/logic/recurring.ts`, `src/diplomat/mcp/server.ts`; mirror how **bills**

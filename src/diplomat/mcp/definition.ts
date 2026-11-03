@@ -8,9 +8,9 @@ import type { McpContext } from './context.js';
 
 /**
  * What every MCP tool, resource and prompt is: one named definition — declarative metadata plus a handler that adapts
- * its arguments, delegates and translates (docs/code-quality.md § One named definition per tool / route). The handler
- * is handed the caller's already-scoped dependencies; the generic registrar (`register.ts`) resolves them from the
- * principal the scope guard put on the callback, so no handler touches `extra`.
+ * its arguments, delegates and translates (docs/canonical/code-quality.md § One named definition per tool / route).
+ * The handler is handed the caller's already-scoped dependencies; the generic registrar (`register.ts`) resolves
+ * them from the principal the scope guard put on the callback, so no handler touches `extra`.
  */
 type Args<Shape extends ZodRawShape> = z.objectOutputType<Shape, ZodTypeAny>;
 

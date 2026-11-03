@@ -103,7 +103,7 @@ Would need an FX source and rewriting denormalized transaction currencies — ou
 
 > Hand this to a coding agent. Source of truth: this design. Work on branch **`feat/account-update-delete`** off
 > `main`; `git fetch && git rebase origin/main` first. Read `CLAUDE.md` (esp. the **Definition of Done**),
-> `docs/architecture.md`, `docs/code-style.md`, `docs/code-quality.md`. Mirror the existing account surface and
+> `docs/architecture.md`, `docs/canonical/code-style.md`, `docs/canonical/code-quality.md`. Mirror the existing account surface and
 > the Design 005 delete: `src/controllers/accounts.ts`, `src/diplomat/db/repos/accounts.ts`,
 > `src/controllers/categories.ts` (`deleteCategory` for the block-if-in-use shape),
 > `src/diplomat/db/repos/categories.ts` (`countReferences`), `src/common/errors.ts` (`in_use`, `duplicate_name`,

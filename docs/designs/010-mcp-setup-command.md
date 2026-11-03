@@ -128,7 +128,7 @@ fallback covers discoverability.
 > Hand this to a coding agent. Source of truth: this design. Work on branch
 > **`feat/mcp-setup-command`** off `main`; `git fetch && git rebase origin/main` first.
 > **Follow the project guidelines — mandatory:** read `CLAUDE.md` (esp. the **Definition of
-> Done**), `docs/architecture.md`, `docs/code-style.md`, `docs/code-quality.md`.
+> Done**), `docs/architecture.md`, `docs/canonical/code-style.md`, `docs/canonical/code-quality.md`.
 > Skim `src/main.ts` (the composition root and the branching point) and
 > `src/config.ts` (to understand what `loadConfig()` does and why setup must branch before it).
 

@@ -123,7 +123,7 @@ validation. Deferred; the chosen transaction model makes it additive.
 > Hand this section to a coding agent. The design above is the source of truth; **read ADR-010 first**
 > (`docs/adr/010-*`) and ADR-002. Work on branch **`feat/bill-payment`**; `git fetch && git rebase origin/main`
 > first. Read: `CLAUDE.md` (esp. the **Definition of Done**), `docs/architecture.md` (invariants + dependency
-> table), `docs/code-style.md`, `docs/code-quality.md`. Skim `src/models/{account,creditCard,bill}.ts`,
+> table), `docs/canonical/code-style.md`, `docs/canonical/code-quality.md`. Skim `src/models/{account,creditCard,bill}.ts`,
 > `src/controllers/{bills,creditCards,transactions,transfers,accounts}.ts`, `src/controllers/resolve.ts`,
 > `src/logic/bill.ts`, `src/diplomat/db/schema.ts`, `src/diplomat/db/repos/{bills,transactions,accounts}.ts`,
 > `src/diplomat/mcp/server.ts`, `src/diplomat/http/routes.ts`.

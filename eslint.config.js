@@ -9,12 +9,12 @@ import tseslint from 'typescript-eslint';
 const SWITCH_TOO_LARGE = {
   selector: 'SwitchStatement > SwitchCase:nth-child(7)',
   message:
-    'More than 6 cases: use an exhaustive `satisfies Record<Kind, …>` table (docs/code-quality.md § Function shape)',
+    'More than 6 cases: use an exhaustive `satisfies Record<Kind, …>` table (docs/canonical/code-quality.md § Function shape)',
 };
 
 /**
  * Lean, high-signal lint config. It machine-enforces the *precisely lintable* slice of
- * `docs/code-quality.md` / `docs/code-style.md`. Judgment-based rules that can't be linted
+ * `docs/canonical/code-quality.md` / `docs/canonical/code-style.md`. Judgment-based rules that can't be linted
  * reliably (constants-over-literals, when a remeda pipeline beats native map/filter, naming,
  * single-responsibility) stay in the CLAUDE.md "Definition of Done" self-review — not here.
  * `ui/` (browser shell code) gets each language's recommended rules (js, html, css) and the kebab-case names.
@@ -81,21 +81,21 @@ export default tseslint.config(
       // A type is imported as a type, and one module is imported once — `import { a, type B } from 'm'`.
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports', fixStyle: 'inline-type-imports' }],
       'no-duplicate-imports': 'error',
-      // Declarative over imperative (docs/code-quality.md, remeda table): the `xs.filter(...)[0]`
+      // Declarative over imperative (docs/canonical/code-quality.md, remeda table): the `xs.filter(...)[0]`
       // smell — taking the first match by index instead of R.find / R.firstBy.
       'no-restricted-syntax': [
         'error',
         {
           selector:
             "MemberExpression[computed=true][property.type='Literal'][property.value=0] > CallExpression[callee.property.name='filter']",
-          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/code-quality.md remeda table).',
+          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/canonical/code-quality.md remeda table).',
         },
         SWITCH_TOO_LARGE,
       ],
       // ADR-007: in stdio mode stdout carries the MCP protocol — human logging must go to stderr.
       // console.error / console.warn (stderr) are allowed; console.log (stdout) is not.
       'no-console': ['error', { allow: ['error', 'warn'] }],
-      // docs/code-style.md: const + expressions over let + mutation.
+      // docs/canonical/code-style.md: const + expressions over let + mutation.
       'prefer-const': 'error',
       // Strict equality, except the idiomatic `== null` / `!= null` null-ish guard.
       eqeqeq: ['error', 'always', { null: 'ignore' }],
@@ -112,7 +112,7 @@ export default tseslint.config(
     },
   },
   {
-    // Declarative layers: no loops, `let` or `.push(` (docs/code-quality.md remeda table). Restates the base filter()[0] and switch-size selectors because a later no-restricted-syntax replaces, not merges.
+    // Declarative layers: no loops, `let` or `.push(` (docs/canonical/code-quality.md remeda table). Restates the base filter()[0] and switch-size selectors because a later no-restricted-syntax replaces, not merges.
     files: ['src/logic/**/*.ts', 'src/controllers/**/*.ts', 'src/adapters/**/*.ts'],
     rules: {
       'no-restricted-syntax': [
@@ -120,7 +120,7 @@ export default tseslint.config(
         {
           selector:
             "MemberExpression[computed=true][property.type='Literal'][property.value=0] > CallExpression[callee.property.name='filter']",
-          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/code-quality.md remeda table).',
+          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/canonical/code-quality.md remeda table).',
         },
         SWITCH_TOO_LARGE,
         ...[
@@ -131,17 +131,17 @@ export default tseslint.config(
           ['DoWhileStatement', 'a `do…while` loop'],
         ].map(([selector, what]) => ({
           selector,
-          message: `Avoid ${what} here — use R.map / R.filter / R.reduce / R.pipe or a pure helper (docs/code-quality.md remeda table).`,
+          message: `Avoid ${what} here — use R.map / R.filter / R.reduce / R.pipe or a pure helper (docs/canonical/code-quality.md remeda table).`,
         })),
         {
           selector: 'VariableDeclaration[kind="let"]',
           message:
-            'Avoid `let` here — use `const` and expressions (R.pipe, R.reduce, a scan; docs/code-quality.md remeda table).',
+            'Avoid `let` here — use `const` and expressions (R.pipe, R.reduce, a scan; docs/canonical/code-quality.md remeda table).',
         },
         {
           selector: 'CallExpression[callee.property.name="push"]',
           message:
-            'Avoid `.push(` here — build the array as one expression (spread, R.map, R.flatMap; docs/code-quality.md remeda table).',
+            'Avoid `.push(` here — build the array as one expression (spread, R.map, R.flatMap; docs/canonical/code-quality.md remeda table).',
         },
       ],
     },
@@ -166,7 +166,7 @@ export default tseslint.config(
     },
   },
   {
-    // Function shape (docs/code-quality.md § Function shape).
+    // Function shape (docs/canonical/code-quality.md § Function shape).
     files: ['src/**/*.ts'],
     rules: {
       'max-lines-per-function': ['error', { max: 40, skipBlankLines: true, skipComments: true }],
@@ -193,7 +193,7 @@ export default tseslint.config(
     files: ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.mjs', 'ui/**/*.{js,html,css}'],
     plugins: { 'check-file': checkFile },
     rules: {
-      // File and folder names are kebab-case (docs/code-quality.md § Naming clarity). `ignoreMiddleExtensions`
+      // File and folder names are kebab-case (docs/canonical/code-quality.md § Naming clarity). `ignoreMiddleExtensions`
       // lets `foo-bar.test.ts` through; the stem is what is checked.
       'check-file/filename-naming-convention': [
         'error',

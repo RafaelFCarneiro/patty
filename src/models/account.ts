@@ -50,7 +50,7 @@ export const AccountSchema = z.object({
 });
 export type Account = z.infer<typeof AccountSchema>;
 
-// The persistence-side entity (docs/functional-core-imperative-shell.md): `Account` plus
+// The persistence-side entity (docs/canonical/functional-core-imperative-shell.md): `Account` plus
 // the optimistic-concurrency `version` token. Never sent over the wire — kept off `AccountSchema`
 // itself so every existing account-returning flow (which reuses `AccountSchema` as its wire/out
 // shape) stays unchanged. Only flows that build `Persistable`s and `adapters/accounts.ts`'s

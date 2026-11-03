@@ -18,7 +18,7 @@ a new name-keyed `dashboardApplier`; `set_locale`, a new `settingsApplier`), clo
 (a controller calling a repo write method) wherever it still existed — implemented 2026-07-18; **migration
 complete: `deps` exposes no write method at all, for any entity in the codebase**) · **Date:** 2026-07-12 ·
 **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill payment) and finally resolves the thread ADR-015
-opened. Adopts the principle documented in `docs/functional-core-imperative-shell.md` for every write flow.
+opened. Adopts the principle documented in `docs/canonical/functional-core-imperative-shell.md` for every write flow.
 
 **Amendment (ADR-022):** the executor this ADR introduced (`withUnitOfWork`, `diplomat/db/unitOfWork.ts`) is
 renamed to `runEffects` (`diplomat/db/effects.ts`) and reframed as a generic effect runner; "unit of work"
@@ -49,7 +49,7 @@ applying writes at all.**
 
 ## Decision (proposed)
 
-**Adopt Functional Core / Imperative Shell for the entire write path (`docs/functional-core-imperative-shell.md`).
+**Adopt Functional Core / Imperative Shell for the entire write path (`docs/canonical/functional-core-imperative-shell.md`).
 Controllers become pure decisions: they read (injected queries), validate, and return
 `ResultAsync<{ persist: Persistable[]; response: T }, AppError>` — a description of the writes plus the response —
 without performing any write. A generic, versioned Unit of Work in the diplomat shell applies the batch in one
@@ -130,8 +130,8 @@ read → decide → write with version guards.
   bill-payment atomicity test ADR-018 would have added); `deps` write methods.
 - **Added**: `version` columns (migration); `Persistable`/`EntityTag`; `withUnitOfWork` + the generic applier; a
   generic `conflict` `AppError`.
-- **Docs**: `docs/functional-core-imperative-shell.md` becomes mandatory reading; `docs/architecture.md` and
-  `CLAUDE.md` reference it as such (like `docs/diplomatic-architecture.md`); `docs/code-style.md` gains the
+- **Docs**: `docs/canonical/functional-core-imperative-shell.md` becomes mandatory reading; `docs/architecture.md` and
+  `CLAUDE.md` reference it as such (like `docs/canonical/diplomatic-architecture.md`); `docs/canonical/code-style.md` gains the
   return-effects-not-perform-them controller pattern.
 
 ## Migration plan (phased — this is large; each phase behind the full gate)
@@ -145,7 +145,7 @@ read → decide → write with version guards.
 3. **Remaining flows**: bulk import (idempotency-aware outcomes), recurring, card/category/tag CRUD; remove write
    methods from `deps`; delete the now-dead transactional repo methods.
 4. Update `docs/architecture.md` (dependency table: domain returns effects; shell applies), the mandatory-doc
-   references, and `docs/code-style.md`.
+   references, and `docs/canonical/code-style.md`.
 
 Each converted flow's test moves from "apply + assert DB state" to "assert the returned `persist` batch"; the UoW
 gets its own generic atomicity/conflict/idempotency suite.
@@ -154,8 +154,8 @@ gets its own generic atomicity/conflict/idempotency suite.
 
 1. [x] Review/accept this ADR (decision review — no implementation in this PR).
 2. [x] On acceptance: add this ADR to the `docs/architecture.md` index; reference
-   `docs/functional-core-imperative-shell.md` as mandatory in `docs/architecture.md` + `CLAUDE.md` (alongside
-   `docs/diplomatic-architecture.md`); flip that doc's status note to adopted.
+   `docs/canonical/functional-core-imperative-shell.md` as mandatory in `docs/architecture.md` + `CLAUDE.md` (alongside
+   `docs/canonical/diplomatic-architecture.md`); flip that doc's status note to adopted.
 3. [x] Do NOT merge `feat/atomic-bill-payment` (ADR-018) — it is superseded by this decision (PR #111 closed).
 4. [x] Implement phases 1–3 (groundwork → transaction/bill flows → remaining), behavior-preserving where the
    surface allows, coverage moved to core-level effect assertions + the generic UoW suite.
@@ -205,13 +205,13 @@ gets its own generic atomicity/conflict/idempotency suite.
      guarantee those flows already had doesn't silently erode. One shared result shape, not a bespoke envelope
      assembled per flow — `add_account_expense` no longer needs to compose `{ transaction, created }` plus its
      own `classification` at the call site at all. Each `logic/transaction.ts` function is `purry`'d data-last
-     on the non-`outcomes` args (the dual-calling convention `docs/code-quality.md` already established for
+     on the non-`outcomes` args (the dual-calling convention `docs/canonical/code-quality.md` already established for
      `addLocalizedLabels`/`withTypeLabel`), so e.g. `buildUpsertResult(classification, locale)` *is* the
      `(outcomes) => T` function `FlowOutcome.response` wants — every converted flow assigns it directly
      (`const response = buildUpsertResult(classification, locale)`), no wrapping arrow at any call site.
      Normalized the merchants repo alongside this: the old `strengthenFromTransaction(transactionId, categoryId)`
      re-queried `transactions` to resolve a merchant key itself — a business-shaped repo method name and behavior
-     (`docs/diplomatic-architecture.md`: repos "should contain no business logic"). Replaced with
+     (`docs/canonical/diplomatic-architecture.md`: repos "should contain no business logic"). Replaced with
      `incrementCategoryWeight(merchantKey, categoryId)`, pure upsert-increment mechanics shared (one function,
      `upsertCategoryWeight`) by both the repo method and `merchantCategoryApplier`; the "is this actually a
      correction worth learning from" decision moved to a named resolver, `logic/merchant.ts`'s
@@ -233,7 +233,7 @@ gets its own generic atomicity/conflict/idempotency suite.
      self-heal (the delete-on-attach-failure branch `addCardPurchase` used to run) are **deleted**, along with
      their three atomicity/self-heal integration tests (`billsEnsureAndAttach`, `addCardPurchaseSelfHeal`,
      `updateCardTransactionReassignAtomicity`) — the conditions they guarded no longer exist, because the flow
-     no longer applies its own writes (`docs/functional-core-imperative-shell.md`'s "testing implications").
+     no longer applies its own writes (`docs/canonical/functional-core-imperative-shell.md`'s "testing implications").
      A bill entity (`models/bill.ts`'s `BILL_ENTITY_TAG`, `BillEntity`, and a `RawBill` — `Bill` extended with
      the internal `version`/`creditCardId` fields a write needs but a read response never exposes, mirroring
      `RawTransactionView`) is registered under `diplomat/db/repos/bills.ts`'s `billApplier`. Bills fit the

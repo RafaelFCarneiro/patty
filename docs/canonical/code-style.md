@@ -79,7 +79,7 @@ export const getStatus = async (deps: Deps, version: string): Promise<StatusOut>
 
 ### Write-path controllers — return effects, don't perform them (ADR-021)
 
-**In progress — not every controller is converted yet.** `docs/functional-core-imperative-shell.md` is the
+**In progress — not every controller is converted yet.** `docs/canonical/functional-core-imperative-shell.md` is the
 canonical doc; read it before touching a write flow. The shape below is the target for the whole write path,
 proven so far on `createAccount` (`controllers/account/account.ts`) as the first mover. An unconverted flow
 still calls its `deps.<x>.create/update/...` write method exactly as documented above — don't convert a flow
@@ -165,7 +165,7 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
 A controller reads in three named steps: **gather** (resolve refs, repo reads through `deps`), **decide** (one
 pure `logic/` call from the gathered values to an entity, guards and data), **persist** (build `{ persist, response }`).
 Rules belong in the decide step, where they are unit-tested without mocks; the function-shape lint limits
-(`docs/code-quality.md` § Function shape) hold the controller to it.
+(`docs/canonical/code-quality.md` § Function shape) hold the controller to it.
 
 ```ts
 // ✅ DO — gather in the controller, the decision is a pure plan call, then persist

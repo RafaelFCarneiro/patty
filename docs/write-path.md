@@ -10,7 +10,7 @@
 Every write flow is converted. `deps` exposes **no write method at all** — controllers only decide and return
 effects; the domain is structurally incapable of writing.
 
-Per `docs/functional-core-imperative-shell.md`: a controller **decides** and returns the write as data; the
+Per `docs/canonical/functional-core-imperative-shell.md`: a controller **decides** and returns the write as data; the
 diplomat shell **applies** it. Organized below by concern — the core's contract, the boundary adaptation, the
 engine wiring, appliers, outcomes, and the per-flow notes.
 
@@ -20,7 +20,7 @@ engine wiring, appliers, outcomes, and the per-flow notes.
 > semantics (one transaction per batch — an empty batch skips the transaction entirely — the version guard, the
 > bounded retry loop, idempotency, `runEffectsSequence`, change publication) are specified in its
 > [architecture doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/architecture.md), with its principle in its
-> [FC/IS doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/functional-core-imperative-shell.md). The package docs are not in the npm tarball — read them
+> [FC/IS doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/canonical/functional-core-imperative-shell.md). The package docs are not in the npm tarball — read them
 > on GitHub. **This file covers FinTrack's side only**: the SQLite adapter, the composition-root wiring, and the
 > per-flow notes. The package's public API (every `src/index.ts` export) is semver-governed
 > ([ADR 0001](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/adr/0001-extracted-from-fintrack.md)); a port change lands there first.

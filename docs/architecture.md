@@ -2,8 +2,8 @@
 
 > **This file describes the system as it IS.** Update it in the same change that alters architecture.
 > Roadmap and vision: `docs/PLAN.md`. Decisions + rationale: `docs/adr/`. Agent instructions: `CLAUDE.md`.
-> Layer concepts: `docs/diplomatic-architecture.md` (where the layers are) and
-> `docs/functional-core-imperative-shell.md` (what crosses the write-path boundary between them — ADR-021,
+> Layer concepts: `docs/canonical/diplomatic-architecture.md` (where the layers are) and
+> `docs/canonical/functional-core-imperative-shell.md` (what crosses the write-path boundary between them — ADR-021,
 > mandatory reading alongside the Diplomat doc for any write-flow change).
 > Write-path mechanics: `docs/write-path.md`. Browser `/ui` surface: `docs/ui.md`. Operator guide to authentication: `docs/auth.md`.
 
@@ -34,7 +34,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 
 1. Schema stack: zod is the schema system used for models and boundary decoding.
 2. Controller dependency style: controllers orchestrate through injected deps interfaces (`controllers/deps.ts`) and must not import `diplomat/` modules directly. **Documented exception**: `import type` of repo contracts from `diplomat/db/repos` is allowed (type-only imports erase at runtime; the contracts live next to their implementations until a dedicated ports module is warranted).
-3. Diplomat role: `diplomat/http` and `diplomat/mcp` remain thin edges (parse/delegate/translate), while side effects are composed in controllers via deps. **FinTrack restriction**: unlike the generic Diplomat pattern, controllers here must NOT import `diplomat/` modules — they interact exclusively through injected deps interfaces (`controllers/deps.ts`). The generic dependency table in `docs/diplomatic-architecture.md` lists `diplomat.*` as a valid controller dependency; that does not apply here.
+3. Diplomat role: `diplomat/http` and `diplomat/mcp` remain thin edges (parse/delegate/translate), while side effects are composed in controllers via deps. **FinTrack restriction**: unlike the generic Diplomat pattern, controllers here must NOT import `diplomat/` modules — they interact exclusively through injected deps interfaces (`controllers/deps.ts`). The generic dependency table in `docs/canonical/diplomatic-architecture.md` lists `diplomat.*` as a valid controller dependency; that does not apply here.
 4. Adaptation boundaries: adapters are pure translators for all boundary crossings, not only db. They convert `wire/in -> model`, `model -> wire/out`, and `model <-> wire/db`.
 5. Persistence adaptation: controllers hand repos **domain drafts** (models — e.g. `TransactionDraft` with nested `classification`); `diplomat/db` may use adapters internally to flatten model→db and decode db→model. Controllers never build db-wire shapes and never call adapters.
 6. Edge flow contract: `diplomat/http`, `diplomat/mcp`, and other diplomats adapt external payloads with wire schemas + adapters before calling controllers, then adapt controller results back to wire/out.
@@ -748,7 +748,7 @@ only adapts args → model, builds the flow, runs it through the scoped runner a
 is orchestration that belongs in a controller. All of `src/**` is held to the
 Function-shape limits (`eslint.config.js`: 40 lines, complexity 10, depth 3, 15 statements per function); a controller
 reads gather → decide → persist, the decide step being a pure `logic/` plan function, and in the shell a factory only
-binds (below, and `docs/code-quality.md` § Function shape).
+binds (below, and `docs/canonical/code-quality.md` § Function shape).
 
 **MCP — `diplomat/mcp`.** `definition.ts` defines `ToolDefinition` (`{ name: ToolName, config: { title, description,
 inputSchema, annotations }, handle(args, scoped, ctx) }`), `ResourceDefinition` and `PromptDefinition`, plus the

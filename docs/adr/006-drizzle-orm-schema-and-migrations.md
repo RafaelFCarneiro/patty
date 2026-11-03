@@ -58,7 +58,7 @@ Mature, widely adopted ORM with its own migration system.
 
 The maintained, documented Drizzle + libSQL integration is the **async `@libsql/client`** via `drizzle-orm/libsql`, which supports encrypted local files (`encryptionKey`) and the Phase 4 Turso embedded-replica sync. This **supersedes ADR-004's original synchronous-`libsql` sub-choice** (see the ADR-004 amendment). We deliberately avoid the `drizzle-orm/better-sqlite3` adapter: with no runtime libsql driver installed it defaults to real `better-sqlite3`, which has no built-in encryption — an easy, silent regression of ADR-004's decisive requirement. The async cost is immaterial: controllers already return `ResultAsync` and diplomats `await`.
 
-Drizzle's query builder does not prevent raw SQL — `db.run(sql`...`)` remains available and is used where needed (FTS5 MATCH, `changes()`). The parameterization invariant from `docs/architecture.md` and `docs/code-quality.md` is upheld: Drizzle's API makes parameterization the path of least resistance, and the raw escape hatch is only used where the builder cannot express the query.
+Drizzle's query builder does not prevent raw SQL — `db.run(sql`...`)` remains available and is used where needed (FTS5 MATCH, `changes()`). The parameterization invariant from `docs/architecture.md` and `docs/canonical/code-quality.md` is upheld: Drizzle's API makes parameterization the path of least resistance, and the raw escape hatch is only used where the builder cannot express the query.
 
 ## Consequences
 

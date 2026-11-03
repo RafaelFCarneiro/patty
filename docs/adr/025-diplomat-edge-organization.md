@@ -2,7 +2,7 @@
 
 **Status:** Accepted · **Date:** 2026-07-26 · **Deciders:** Rafael · A structural/organization decision for the
 composition-root edges (`diplomat/mcp`, `diplomat/http`). Sits alongside **ADR-016** (domain/context boundaries)
-and the diplomat-layering rules in `docs/diplomatic-architecture.md` — the same "where does code live" axis, now
+and the diplomat-layering rules in `docs/canonical/diplomatic-architecture.md` — the same "where does code live" axis, now
 applied to the edges. Supersedes the initial framing of this work as a feature design.
 
 ## Context

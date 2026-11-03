@@ -1,7 +1,7 @@
 # Code quality principles
 
 These principles apply to every line of code written in this repo. They are non-negotiable.
-`docs/code-style.md` covers implementation patterns (safeTry, remeda, zod); this document
+`docs/canonical/code-style.md` covers implementation patterns (safeTry, remeda, zod); this document
 covers the underlying quality rules that govern all choices.
 
 ## Constants over literals
@@ -166,7 +166,7 @@ Remeda functions to prefer over manual imperative equivalents:
 | `switch` over a value to transform it | `R.conditional` |
 | `() => fixedValue` | `R.constant(fixedValue)` |
 
-The rule of thumb from `docs/code-style.md` still applies: native `map`/`filter` is fine for
+The rule of thumb from `docs/canonical/code-style.md` still applies: native `map`/`filter` is fine for
 single-stage transforms. Reach for remeda when there are ≥2 stages, grouping, counting, or
 predicate composition.
 
@@ -395,7 +395,7 @@ Extract by meaning here too: a branchy `insert` becomes `assertKeyMatchesTable`,
 
 ## Fail loudly at boundaries, trust internally
 
-- Validate with zod at every external boundary (HTTP, MCP, DB records). See `docs/code-style.md`.
+- Validate with zod at every external boundary (HTTP, MCP, DB records). See `docs/canonical/code-style.md`.
 - Inside the domain, trust your own types — do not re-validate data you already decoded.
 - Do not add defensive `if (x == null)` checks on values the type system guarantees are non-null.
 

@@ -93,7 +93,7 @@ account) for the bill total and marks the bill `paid`. Three gaps remain from th
 ## Implementation prompt
 
 > Hand this section to a coding agent. The design above is the source of truth; read
-> `docs/diplomatic-architecture.md`, `docs/code-quality.md`, `docs/code-style.md`, `docs/architecture.md`,
+> `docs/canonical/diplomatic-architecture.md`, `docs/canonical/code-quality.md`, `docs/canonical/code-style.md`, `docs/architecture.md`,
 > ADR-010, ADR-012, and Design 003 first. Work on branch `feat/bill-payment-lifecycle`.
 
 ### Steps

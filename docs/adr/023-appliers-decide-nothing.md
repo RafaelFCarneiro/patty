@@ -252,7 +252,7 @@ the data on disk one join away. Named here as the fallback if the hook ever need
   § Write path guardrails; the new entities and the `readBack` deviation from FC/IS rules 3/6 live in
   `docs/write-path.md`. (The full write-path mechanics were later split out of `docs/architecture.md` into
   `docs/write-path.md`; these pointers reflect the current location.)
-  `docs/functional-core-imperative-shell.md` needs no change for the *applier-decides-nothing* half — rule 3
+  `docs/canonical/functional-core-imperative-shell.md` needs no change for the *applier-decides-nothing* half — rule 3
   already says handlers "never encode a business process" and that adding an entity is registration — but it
   does not sanction `readBack`, which is why that lands as a recorded project deviation rather than a claim of
   compliance.

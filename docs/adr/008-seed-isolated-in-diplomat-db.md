@@ -88,7 +88,7 @@ for it with a standing coupling hazard. Option D deliberately constrains who may
 - **Future seed is free:** more locales, larger merchant packs, or new default taxonomies are added under
   `seed/` only — no domain change, no new top-level layer.
 - **Docs:** `docs/architecture.md` gains the `seed/` location, the dependency-table row, and the empty-DB
-  invariant; `docs/code-quality.md`/`code-style.md` reference seed isolation when discussing where data lives.
+  invariant; `docs/canonical/code-quality.md`/`code-style.md` reference seed isolation when discussing where data lives.
 - **Related:** ADR-009 (localized content on the entity) relies on this — seeded translations become seed data
   in `diplomat/db/seed/categories.ts`, not a domain-level catalog.
 
