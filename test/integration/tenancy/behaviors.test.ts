@@ -266,7 +266,7 @@ describe('who hears about a change (the change bus and /ui/events)', () => {
         id: `sess-${label}`,
         userId: world.userId,
         tokenHash: deps.secrets.hashSecret(SESSION_TOKENS[label]),
-        createdAt: '2026-10-01T00:00:00.000Z',
+        createdAt: new Date().toISOString(),
         lastSeenAt: new Date().toISOString(),
         expiresAt: '2099-01-01T00:00:00.000Z',
       });
