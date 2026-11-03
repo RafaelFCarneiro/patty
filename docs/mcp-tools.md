@@ -558,7 +558,7 @@ parent category name is still the raw, unlocalized one (tracked in #169).
   subCategory?, currency, limit, period, effective: { amount, pct }, committed: { amount, pct },
   pending: { amount, pct }, remaining }] }] }` — grouped by top-level category name, so a category's own budget
   and each of its sub-categories' own budgets read as one coherent unit; per-currency lines are never combined
-  (no cross-currency total on the lines themselves — that needs FX, the deferred PLAN open question). `pending`
+  (no cross-currency total on the lines themselves — that needs FX). `pending`
   (committed.amount − effective.amount) is derived for convenience; `remaining` (limit − committed.amount) is
   the single top-level headroom figure, reported against `committed`; each measure's `pct` is `amount / limit`.
   Any of these can go negative / exceed 1 when over budget — over-budget is reported, never an error. A month

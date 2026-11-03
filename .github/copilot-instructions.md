@@ -8,7 +8,7 @@ Guidance for AI agents working in this repository.
 
 ## Project overview
 
-FinTrack v2 is an AI-first personal finance manager. The primary interface is AI chat (Claude clients) talking to the backend's **MCP server**; REST is a secondary surface. Backend: TypeScript, Fastify, zod, libSQL (encrypted local SQLite via `@libsql/client`), Drizzle ORM, diplomat architecture, functional programming style. Full plan: `docs/PLAN.md`. v1 (NestJS/Mongo/React) is archived as functional reference only — never modify it.
+FinTrack v2 is an AI-first personal finance manager. The primary interface is AI chat (Claude clients) talking to the backend's **MCP server**; REST is a secondary surface. Backend: TypeScript, Fastify, zod, libSQL (encrypted local SQLite via `@libsql/client`), Drizzle ORM, diplomat architecture, functional programming style. As-built architecture: `docs/architecture.md`. v1 (NestJS/Mongo/React) is archived as functional reference only — never modify it.
 
 ## Development setup
 
@@ -154,7 +154,6 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 - `docs/functional-core-imperative-shell.md` — Functional Core / Imperative Shell: what the domain declares as effects (as data) and what the shell executes. Mandatory alongside the Diplomatic Architecture doc for write-flow changes; see `docs/architecture.md` for this project's concrete types and current state.
 - `docs/code-style.md` — code style with do/don't examples (safeTry controllers, remeda pipelines, zod-only types). Generated code MUST match these patterns.
 - `docs/code-quality.md` — quality principles: constants over literals, naming, single responsibility, no magic values. Read before generating any code.
-- `docs/PLAN.md` — roadmap/vision; updated at phase boundaries, may lag the as-built state.
 - `docs/adr/` — decisions with rationale; never contradict an accepted ADR without writing a new one.
 - `docs/mcp-tools.md` — MCP tool contract. `docs/mcp-clients.md` — client connection guide.
 

@@ -1,7 +1,7 @@
 # FinTrack v2 — Architecture (as built)
 
 > **This file describes the system as it IS.** Update it in the same change that alters architecture.
-> Roadmap and vision: `docs/PLAN.md`. Decisions + rationale: `docs/adr/`. Agent instructions: `CLAUDE.md`.
+> Decisions + rationale: `docs/adr/`. Agent instructions: `CLAUDE.md`.
 > Layer concepts: `docs/diplomatic-architecture.md` (where the layers are) and
 > `docs/functional-core-imperative-shell.md` (what crosses the write-path boundary between them — ADR-021,
 > mandatory reading alongside the Diplomat doc for any write-flow change).
@@ -379,7 +379,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     go negative / exceed 1 — over-budget is reported, never an error; effective headroom is
     trivially `limit − effective.amount` for a caller that wants it. The response groups every
     budget by its top-level category name (per-currency and per-sub-category lines read as one
-    coherent unit; still no cross-currency total — that needs FX, the deferred PLAN open question).
+    coherent unit; still no cross-currency total — that needs FX).
     **The read surface (`list_budgets`,
     `get_budget_status`) honors invariant 13's locale resolution**: the repo
     (`diplomat/db/repos/budgets.ts`) selects the budgeted node's (and, for a sub-category target,
