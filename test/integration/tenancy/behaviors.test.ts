@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { LOOPBACK_HOST } from '../../../src/common/net.js';
 import { SESSION_COOKIE_NAME } from '../../../src/diplomat/http/cookies.js';
 import { sessions } from '../../../src/diplomat/db/schema.js';
@@ -252,6 +252,14 @@ describe('who hears about a change (the change bus and /ui/events)', () => {
   };
   const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
 
+  // The sessions below are dated in October; the clock every request reads is pinned there too, so they never expire.
+  const PINNED_NOW = new Date('2026-10-16T12:00:00.000Z');
+  let restoreClock: () => void;
+  beforeEach(() => {
+    restoreClock = ctx.setClock(() => PINNED_NOW);
+  });
+  afterEach(() => restoreClock());
+
   it('delivers a change to its own user’s stream only', async () => {
     const baseUrl = await (async () => {
       if (!ctx.app.server.listening) await ctx.app.listen({ port: 0, host: LOOPBACK_HOST });
@@ -266,8 +274,8 @@ describe('who hears about a change (the change bus and /ui/events)', () => {
         id: `sess-${label}`,
         userId: world.userId,
         tokenHash: deps.secrets.hashSecret(SESSION_TOKENS[label]),
-        createdAt: new Date().toISOString(),
-        lastSeenAt: new Date().toISOString(),
+        createdAt: '2026-10-01T00:00:00.000Z',
+        lastSeenAt: PINNED_NOW.toISOString(),
         expiresAt: '2099-01-01T00:00:00.000Z',
       });
     }

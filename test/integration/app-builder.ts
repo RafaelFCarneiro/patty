@@ -107,7 +107,12 @@ export const buildApp = async (opts?: {
   );
   const auth: HttpAuth =
     prepared.auth.mode === AuthMode.enum.required
-      ? { ...prepared.auth, sessionRecheckMs: opts?.sessionRecheckMs }
+      ? {
+          ...prepared.auth,
+          // The sign-in side reads the same pinned clock as the rest of the app, so `setClock` moves sessions too.
+          deps: { ...prepared.auth.deps, clock: () => now() },
+          sessionRecheckMs: opts?.sessionRecheckMs,
+        }
       : prepared.auth;
   const app = buildHttpApp(runtime, version, { logger: false, auth });
   const registerOn = (other: FastifyInstance): void => registerHttpApp(other, runtime, version, auth);
