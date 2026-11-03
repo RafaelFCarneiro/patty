@@ -1,5 +1,5 @@
 import * as R from 'remeda';
-import { DemoCountry } from '../../models/demo/demo.js';
+import { DemoCountry } from '../../models/demo/core.js';
 import { InstanceKind } from '../../models/instance.js';
 import type { Locale } from '../../models/locale.js';
 import { CurrencyCode } from '../../models/money.js';

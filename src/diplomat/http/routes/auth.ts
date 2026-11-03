@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
-import { claimOwner, login, logout, ownerNeedsSetup, startsAtSetup } from '../../../controllers/auth.js';
+import { claimOwner, ownerNeedsSetup, startsAtSetup } from '../../../controllers/auth/owner.js';
+import { login, logout } from '../../../controllers/auth/session.js';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
@@ -104,7 +105,7 @@ const submitLogout = (ctx: AuthRoutesContext) => async (req: FastifyRequest, rep
 /**
  * `/ui/login`, `/ui/setup`, `/ui/logout` (ADR-033 §2). Browser-facing HTML, not part of the `/api` JSON
  * contract, so — like `routes/ui.ts` — these are not `RouteDefinition`s. Thin: parse the form, throttle,
- * run the `controllers/auth.ts` flow, translate to a cookie + redirect or a page.
+ * run the `controllers/auth/{owner,session}.ts` flow, translate to a cookie + redirect or a page.
  */
 export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {
   const loginLimiter = createAttemptLimiter();

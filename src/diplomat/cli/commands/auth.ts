@@ -1,11 +1,6 @@
 import { formatAppError } from '../../../common/errors.js';
-import {
-  claimOwnerLocally,
-  claimRaceWinnerOf,
-  findResetTarget,
-  ownerClaimPlan,
-  resetPassword,
-} from '../../../controllers/auth.js';
+import { claimOwnerLocally, claimRaceWinnerOf, ownerClaimPlan } from '../../../controllers/auth/owner.js';
+import { findResetTarget, resetPassword } from '../../../controllers/auth/password.js';
 import type { PasswordReset } from '../../../models/auth/password.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import {

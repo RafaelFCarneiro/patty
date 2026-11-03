@@ -1,16 +1,21 @@
 import { PersistOp, type FlowOutcome, type Persistable } from '@rfc0/effect-runner';
 import type { ResultAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
-import type { AppError } from '../../../src/common/errors.js';
-import { authenticateToken, createToken, listTokens, revokeToken } from '../../../src/controllers/access-tokens.js';
-import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
-import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG, USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
-import { authErrors } from '../../../src/models/auth/errors.js';
-import { OWNER_USER_ID, type UserEntity, UserRole } from '../../../src/models/auth/owner.js';
-import { type Principal, PrincipalVia } from '../../../src/models/auth/principal.js';
-import { Scope } from '../../../src/models/auth/scope.js';
-import { type SessionEntity, SESSION_TOUCH_INTERVAL_MS } from '../../../src/models/auth/session.js';
-import { type AccessTokenEntity, AccessTokenKind } from '../../../src/models/auth/token.js';
+import type { AppError } from '../../../../src/common/errors.js';
+import {
+  authenticateToken,
+  createToken,
+  listTokens,
+  revokeToken,
+} from '../../../../src/controllers/auth/access-tokens.js';
+import type { AuthDeps, AuthSecrets } from '../../../../src/controllers/deps.js';
+import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG, USER_ENTITY_TAG } from '../../../../src/models/auth/entity.js';
+import { authErrors } from '../../../../src/models/auth/errors.js';
+import { OWNER_USER_ID, type UserEntity, UserRole } from '../../../../src/models/auth/owner.js';
+import { type Principal, PrincipalVia } from '../../../../src/models/auth/principal.js';
+import { Scope } from '../../../../src/models/auth/scope.js';
+import { type SessionEntity, SESSION_TOUCH_INTERVAL_MS } from '../../../../src/models/auth/session.js';
+import { type AccessTokenEntity, AccessTokenKind } from '../../../../src/models/auth/token.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 const READ = Scope.enum['fintrack:read'];

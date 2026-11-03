@@ -1,4 +1,4 @@
-import { DemoCountry, DemoFunding, type DemoPack } from '../../../../models/demo/demo.js';
+import { DemoCountry, DemoFunding, type DemoPack } from '../../../../models/demo/core.js';
 import { TOUR_FACTS } from '../../../../models/demo/tour.js';
 import { Locale } from '../../../../models/locale.js';
 import { CurrencyCode } from '../../../../models/money.js';

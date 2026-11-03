@@ -26,7 +26,7 @@ import {
   type DemoFailure,
   type DemoPrepared,
   type DemoSeedStatus,
-} from '../../models/demo/demo.js';
+} from '../../models/demo/core.js';
 import { seedDemo } from './seed.js';
 import { loadHttpModule } from '../lazy-modules.js';
 

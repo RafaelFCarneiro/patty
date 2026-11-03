@@ -9,7 +9,7 @@ import {
   reissueInvite,
   resolveUserId,
   setRole,
-} from '../../../controllers/users.js';
+} from '../../../controllers/auth/users.js';
 import { inviteLink } from '../../../logic/auth/users.js';
 import { UserRole } from '../../../models/auth/owner.js';
 import { UsernameSchema } from '../../../models/auth/password.js';

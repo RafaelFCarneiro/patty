@@ -1,6 +1,6 @@
 import { err } from 'neverthrow';
 import type { DemoShell } from '../../../src/diplomat/cli/io.js';
-import { demoFailures, DemoFailureCode } from '../../../src/models/demo/demo.js';
+import { demoFailures, DemoFailureCode } from '../../../src/models/demo/core.js';
 
 export const unusedDemo: DemoShell = {
   databasePath: '/unused/demo.db',

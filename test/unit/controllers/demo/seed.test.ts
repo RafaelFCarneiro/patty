@@ -5,7 +5,7 @@ import { PersistOp } from '@rfc0/effect-runner';
 import { INSTANCE_SETTINGS_ENTITY_TAG } from '../../../../src/models/auth/entity.js';
 import { SignInCap } from '../../../../src/models/auth/users.js';
 import { InstanceKind } from '../../../../src/models/instance.js';
-import { DemoCountry, DemoSeedStatus } from '../../../../src/models/demo/demo.js';
+import { DemoCountry, DemoSeedStatus } from '../../../../src/models/demo/core.js';
 
 const settingsWith = (
   instanceKind: InstanceKind,

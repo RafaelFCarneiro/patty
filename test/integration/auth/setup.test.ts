@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
-import { issueSetupCode } from '../../../src/controllers/auth.js';
+import { issueSetupCode } from '../../../src/controllers/auth/owner.js';
 import { prepareAuth, bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { TERMINAL_SETUP_HINT } from '../../../src/models/auth/message.js';
 import { AuthMode } from '../../../src/models/auth/mode.js';

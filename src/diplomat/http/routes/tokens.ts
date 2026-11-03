@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
-import { createToken, listTokens, revokeToken } from '../../../controllers/access-tokens.js';
+import { createToken, listTokens, revokeToken } from '../../../controllers/auth/access-tokens.js';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import { UserRole } from '../../../models/auth/owner.js';
@@ -82,7 +82,7 @@ const revokePage = (ctx: AuthRoutesContext) => async (req: FastifyRequest, reply
 /**
  * `/ui/access/tokens` (ADR-033 §3): the personal-access-token pages. Browser HTML behind the session cookie and the
  * hook's CSRF check — a bearer token is never accepted on `/ui`, so a token can never mint, widen or revoke
- * another. Thin: parse the form, run the `controllers/access-tokens.ts` flow, render a page. The plaintext token
+ * another. Thin: parse the form, run the `controllers/auth/access-tokens.ts` flow, render a page. The plaintext token
  * is rendered once, by the response to the create POST, and nowhere else.
  */
 export const registerTokenRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {

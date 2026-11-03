@@ -6,7 +6,7 @@ import {
   DemoSeedStatus,
   type DemoFailure,
   type DemoPrepared,
-} from '../../../models/demo/demo.js';
+} from '../../../models/demo/core.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import { DEMO_FLAG, DEMO_POSITIONALS, DemoOptionsSchema } from '../../../wire/in/cli.js';
 import { EXIT_OK, exitCodeOf, fail, parseFlags, type CliIo } from '../io.js';

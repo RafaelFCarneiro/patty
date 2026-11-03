@@ -11,7 +11,7 @@ import {
   DemoSeedStatus,
   type DemoFailure,
   type DemoPrepared,
-} from '../../../../../src/models/demo/demo.js';
+} from '../../../../../src/models/demo/core.js';
 import { unusedExporter } from '../../../fixtures/exporter.js';
 
 const DATABASE_PATH = '/home/x/.fintrack/demo.db';

@@ -17,7 +17,7 @@ import {
   DemoSeedStatus,
   DemoStepKind,
   type DemoStep,
-} from '../../../../src/models/demo/demo.js';
+} from '../../../../src/models/demo/core.js';
 import { InstanceKind } from '../../../../src/models/instance.js';
 import { Locale } from '../../../../src/models/locale.js';
 import { CurrencyCode } from '../../../../src/models/money.js';

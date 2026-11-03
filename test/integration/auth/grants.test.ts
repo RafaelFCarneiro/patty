@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { bindAuthRunEffects } from '../../../src/composition/auth.js';
-import { authenticateToken } from '../../../src/controllers/access-tokens.js';
+import { authenticateToken } from '../../../src/controllers/auth/access-tokens.js';
 import type { AuthDeps } from '../../../src/controllers/deps.js';
 import {
   approveGrant,
@@ -11,7 +11,7 @@ import {
   pruneExpiredGrants,
   redeemGrant,
   startGrant,
-} from '../../../src/controllers/grants.js';
+} from '../../../src/controllers/auth/grants.js';
 import { sessionPrincipal } from '../../../src/logic/auth/session.js';
 import { tokenPrincipal } from '../../../src/logic/auth/token.js';
 import { authErrors } from '../../../src/models/auth/errors.js';

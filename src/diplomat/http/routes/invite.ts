@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
-import { claimInvite } from '../../../controllers/users.js';
+import { claimInvite } from '../../../controllers/auth/users.js';
 import { normalizeInviteCode } from '../../../logic/auth/users.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
@@ -63,7 +63,7 @@ const submitClaim =
  * `/ui/access/invite`: where an invited person chooses their password. Public like `/ui/setup` — they have
  * no login yet — so it is rate-limited the same way and its POST is Origin-checked whenever a browser declares one. The
  * code may come in the link or be typed; it is single-use, expires, and is never logged. On success the person lands
- * signed in. Thin: parse the form, throttle, run the `controllers/users.ts` flow, set the cookie.
+ * signed in. Thin: parse the form, throttle, run the `controllers/auth/users.ts` flow, set the cookie.
  */
 export const registerInviteRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {
   const limiter = createAttemptLimiter();

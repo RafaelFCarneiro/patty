@@ -34,7 +34,7 @@ import {
   DemoNotReadyCode,
   DemoFailureCode,
   DemoSeedStatus,
-} from '../../../src/models/demo/demo.js';
+} from '../../../src/models/demo/core.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 
 const TODAY = new Date(2026, 9, 26, 9);

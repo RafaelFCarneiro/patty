@@ -1,12 +1,12 @@
 import { INITIAL_VERSION, type FlowOutcome, type Persistable } from '@rfc0/effect-runner';
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
-import type { AppError } from '../common/errors.js';
-import { guard, okOr, orRefuse } from '../common/result.js';
-import { signInCapOf } from '../logic/auth/grant.js';
-import { hasCredentials } from '../logic/auth/owner.js';
-import { removeSession } from '../logic/auth/revoke.js';
-import { planDisable, planReissue, planRole } from '../logic/auth/user-plans.js';
+import type { AppError } from '../../common/errors.js';
+import { guard, okOr, orRefuse } from '../../common/result.js';
+import { signInCapOf } from '../../logic/auth/grant.js';
+import { hasCredentials } from '../../logic/auth/owner.js';
+import { removeSession } from '../../logic/auth/revoke.js';
+import { planDisable, planReissue, planRole } from '../../logic/auth/user-plans.js';
 import {
   authorizeActor,
   claimedByInvite,
@@ -19,9 +19,9 @@ import {
   spentInvite,
   summarizeUser,
   checkUser,
-} from '../logic/auth/users.js';
-import { liveSessionOf } from '../logic/auth/session.js';
-import * as persistence from '../logic/persistence.js';
+} from '../../logic/auth/users.js';
+import { liveSessionOf } from '../../logic/auth/session.js';
+import * as persistence from '../../logic/persistence.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
   CLIENT_GRANT_ENTITY_TAG,
@@ -29,10 +29,10 @@ import {
   INVITE_ENTITY_TAG,
   SESSION_ENTITY_TAG,
   USER_ENTITY_TAG,
-} from '../models/auth/entity.js';
-import { authErrors } from '../models/auth/errors.js';
-import type { UserEntity } from '../models/auth/owner.js';
-import type { StartedSession } from '../models/auth/session.js';
+} from '../../models/auth/entity.js';
+import { authErrors } from '../../models/auth/errors.js';
+import type { UserEntity } from '../../models/auth/owner.js';
+import type { StartedSession } from '../../models/auth/session.js';
 import {
   ActorKind,
   type Actor,
@@ -49,9 +49,9 @@ import {
   type UserChange,
   type Admitted,
   NO_REVOCATIONS,
-} from '../models/auth/users.js';
-import { startSession } from './auth.js';
-import type { AuthDeps } from './deps.js';
+} from '../../models/auth/users.js';
+import { startSession } from './session.js';
+import type { AuthDeps } from '../deps.js';
 import { confirmedUser } from './step-up.js';
 
 const updateUser = (user: UserEntity): Persistable => persistence.update({ entity: USER_ENTITY_TAG, model: user });

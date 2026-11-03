@@ -21,7 +21,7 @@ import {
   type DemoSpendLine,
   type DemoStep,
   type DemoTripItem,
-} from '../../models/demo/demo.js';
+} from '../../models/demo/core.js';
 import { BudgetPeriod } from '../../models/budget.js';
 import { isDemoInstance } from '../../models/instance.js';
 import { Locale, LocaleSource } from '../../models/locale.js';

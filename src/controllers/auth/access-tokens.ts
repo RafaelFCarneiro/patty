@@ -1,10 +1,10 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
-import type { AppError } from '../common/errors.js';
-import { guard, okOr } from '../common/result.js';
-import { liveSessionOf } from '../logic/auth/session.js';
-import { withCredentialsChanged } from '../logic/auth/users.js';
+import type { AppError } from '../../common/errors.js';
+import { guard, okOr } from '../../common/result.js';
+import { liveSessionOf } from '../../logic/auth/session.js';
+import { withCredentialsChanged } from '../../logic/auth/users.js';
 import {
   evaluateToken,
   newAccessToken,
@@ -13,18 +13,18 @@ import {
   tokenDisplayPrefix,
   tokenPrincipal,
   usedToken,
-} from '../logic/auth/token.js';
-import * as persistence from '../logic/persistence.js';
-import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG, USER_ENTITY_TAG } from '../models/auth/entity.js';
-import { authErrors } from '../models/auth/errors.js';
-import { type Principal, PrincipalVia } from '../models/auth/principal.js';
+} from '../../logic/auth/token.js';
+import * as persistence from '../../logic/persistence.js';
+import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG, USER_ENTITY_TAG } from '../../models/auth/entity.js';
+import { authErrors } from '../../models/auth/errors.js';
+import { type Principal, PrincipalVia } from '../../models/auth/principal.js';
 import {
   AccessTokenKind,
   type AccessTokenSummary,
   type CreateTokenInput,
   type CreatedAccessToken,
-} from '../models/auth/token.js';
-import type { AuthDeps } from './deps.js';
+} from '../../models/auth/token.js';
+import type { AuthDeps } from '../deps.js';
 import { confirmedUser } from './step-up.js';
 
 export const createToken = (
