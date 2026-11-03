@@ -217,7 +217,8 @@ Integration tests run against an ephemeral in-process libSQL database, exercise 
 | [`docs/mcp-tools.md`](docs/mcp-tools.md) | Full MCP tool contract: inputs, outputs, error codes, examples |
 | [`docs/mcp-clients.md`](docs/mcp-clients.md) | Connecting to Claude, VS Code, ChatGPT, Ollama |
 | [`docs/releasing.md`](docs/releasing.md) | Publishing, installing the private package, updating, ports |
-| [`docs/canonical/code-style.md`](docs/canonical/code-style.md) | Code patterns: safeTry controllers, remeda pipelines, zod decoding |
+| [`docs/conventions.md`](docs/conventions.md) | How this repo applies the canonical docs: libraries, helpers, lint, layout, real-file examples |
+| [`docs/canonical/`](docs/canonical/) | Agnostic principles: diplomatic architecture, functional core / imperative shell, code quality, code style |
 | [`docs/PLAN.md`](docs/PLAN.md) | Roadmap and future phases |
 | [`docs/adr/`](docs/adr/) | Architecture Decision Records |
 | [`CLAUDE.md`](CLAUDE.md) | Agent and contributor conventions |

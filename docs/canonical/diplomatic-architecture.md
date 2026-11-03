@@ -1,14 +1,11 @@
 ---
-summary: Diplomat Architecture — a TypeScript/functional-programming implementation of Hexagonal (Ports & Adapters) Architecture, inspired by patterns Nubank has publicly shared.
+summary: Diplomat Architecture — a functional-programming implementation of Hexagonal (Ports & Adapters) Architecture, inspired by patterns Nubank has publicly shared.
 keywords: diplomat, architecture, hexagonal, ports-and-adapters, controller, logic, model, adapters, wire, components, config, kafka, http, datomic, pure-functions, side-effects
 description: Condensed guidance for applying Diplomat Architecture concepts in functional-programming backend services, based on publicly shared patterns.
 credits:
   - "Inspired by patterns Nubank has publicly shared with the engineering community"
   - "Nubank Building — Functional Programming with Clojure: https://building.nu.com/functional-programming-with-clojure/"
   - "Lucas Cavalcanti — Using Clojure, Microservices, Hexagonal Architecture at Nubank (InfoQ Podcast: https://www.infoq.com/podcasts/lucas-cavalcanti-nubank-fintech-clojure/)"
-globs:
-  - "**/*.js"
-  - "**/*.ts"
 alwaysApply: false
 ---
 
@@ -74,7 +71,7 @@ Models represent domain entities and should be the only data structures used ins
 
 Rules:
 * Prefer strict schemas that reject undeclared attributes.
-* Use the schema framework/lib for model definitions (zod in this project).
+* Use the schema framework/lib for model definitions (a schema library).
 * Do not make models mirror database entities; database representations belong in wire database schemas and adapters.
 
 ## External Layer
@@ -95,7 +92,7 @@ Producers send asynchronous output. They usually receive models, adapt them to w
 
 HTTP server code handles inbound synchronous requests. It should parse and externalize data at the edge, adapt request wire to models, call controllers, then adapt results back to response wire.
 
-In this repository, `diplomat/http` and `diplomat/mcp` follow the same rule: decode/validate with `wire/in`, adapt to models, call controllers, then adapt model results to `wire/out`.
+Any inbound edge, whatever its protocol, follows the same rule: decode and validate with the inbound wire schema, adapt to models, call controllers, then adapt model results to the outbound wire schema.
 
 #### HTTP client
 
@@ -119,7 +116,7 @@ Naming conventions:
 
 Adapters belong at the service boundary, not inside the domain flow itself.
 
-For readability, prefer namespace imports at call sites (for example `transactionAdapters.modelToDb(...)`) rather than many flat function imports.
+For readability, prefer namespace imports at call sites (for example `orderAdapters.modelToDb(...)`) rather than many flat function imports.
 
 ### Wire
 
@@ -168,16 +165,15 @@ A concise dependency model aligned with the existing rule-file version is:
 A practical file layout commonly used in the existing rule-file version is:
 
 ```text
-src/
+service/
 ├── adapters/
-├── main.ts
-├── config.ts
+├── main
+├── config
 ├── controllers/
 ├── diplomat/
 │   ├── consumer/
 │   ├── producer/
 │   ├── http/
-│   ├── mcp/
 │   └── db/
 ├── logic/
 ├── models/

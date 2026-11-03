@@ -1,199 +1,162 @@
 # Code style & generation guidelines
 
-Rules with examples — follow these when writing ANY code in this repo. The do/don't pairs below
-come from real refactors; generating in the "don't" style means the code will be rewritten.
+Rules with do/don't examples for code written in a layered, functional-style service. Examples use a neutral
+order-management domain and generic helpers (a `Result` type with `ok`/`err`, a `guard` and an `okOr` combinator, a
+`pipe` helper); a project substitutes its own libraries.
 
 ## General
 
-- TypeScript strict, ESM with NodeNext: **relative imports end in `.js`** (`from './driver.js'`).
-- `const` + expressions over `let` + mutation. Arrow functions. No classes anywhere in the domain
-  (the only acceptable class usage is library-provided, e.g. the MCP SDK server).
+- Strict typing. `const` + expressions over `let` + mutation. Arrow functions. No classes in the domain (the only
+  acceptable class usage is library-provided).
 - Prefer small named functions over inline complexity; extract when a function does two things.
-- Comments explain *why* (invariants, trade-offs), never *what* the code already says. A rule the code cannot show (a guarantee a port makes, a race a write closes, a column a revert must clear) is pinned by a test with a descriptive name, not only by a comment — a comment can rot, a failing test cannot.
+- Comments explain *why* (invariants, trade-offs), never *what* the code already says. A rule the code cannot show (a
+  guarantee a port makes, a race a write closes) is pinned by a test with a descriptive name, not only by a comment — a
+  comment can rot, a failing test cannot.
 
-## Controllers — safeTry composition (Railway-Oriented)
+## Controllers — Result composition (Railway-Oriented)
 
-Controllers return `ResultAsync<T, AppError>` and compose with `safeTry` generators.
-Each `yield*` short-circuits on the error track. NEVER write resolve-then-early-return chains.
+Controllers return a `Result` (or async `Result`) for **expected** failures and compose with a generator-based
+generator-based result-composition helper. Each `yield*` short-circuits on the error track. Never write resolve-then-early-return chains.
 
 ```ts
 // ✅ DO
-export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<Bill, AppError> =>
-  safeTry(async function* () {
-    const card = yield* resolveCardRef(deps, input.card)
-    const bill = yield* okOr(await deps.bills.get(card.id, input.month, input.year), {
-      code: 'unknown_bill', card: card.name, month: input.month, year: input.year,
+export const cancelOrder = (deps: Deps, input: CancelOrder): AsyncResult<Order, AppError> =>
+  resultFlow(async function* () {
+    const customer = yield* resolveCustomerRef(deps, input.customer)
+    const order = yield* okOr(await deps.orders.get(customer.id, input.reference), {
+      code: 'unknown_order', customer: customer.name, reference: input.reference,
     })
-    return ok(await deps.bills.setStatus(bill.bill.id, 'paid'))
+    return ok(await deps.orders.setStatus(order.id, OrderStatus.enum.cancelled))
   })
 
 // ❌ DON'T
-export const payBill = async (deps, input) => {
-  let cardId: string | null = null            // let + mutation
+export const cancelOrder = async (deps, input) => {
+  let customerId: string | null = null        // let + mutation
   const res = resolveByName(...)              // duplicated resolution boilerplate
   if (res.kind === 'none') return err(...)    // early-return chains
   ...
 }
 ```
 
-- Preconditions: `yield* guard(cond, error)`. Nullables: `yield* okOr(value, error)` (`common/result.ts`).
-  Both arguments are named, not inline: the **condition** is a predicate (pure → `logic/`; repo-touching →
-  a small async controller helper) and the **error** is a colocated model payload. Don't bury the rule in
-  an inline boolean or hand-roll the `{ code, … }` literal:
+- Preconditions: `yield* guard(cond, error)`. Nullables: `yield* okOr(value, error)`. Both arguments are named, not
+  inline: the **condition** is a predicate (pure → the logic layer; touching a repository → a small async controller
+  helper) and the **error** is a colocated model payload. Don't bury the rule in an inline boolean or hand-roll the
+  `{ code, … }` literal:
 
   ```ts
   // ✅ DO — condition + payload each have a home
-  yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)        // pure predicate (logic/)
-  yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name)) // repo predicate (controller)
+  yield* guard(isPayable(input.status), orderErrors.paymentRejected)                          // pure predicate
+  yield* guard(await isReferenceAvailable(deps, input.reference), orderErrors.duplicateReference(input.reference))
 
   // ❌ DON'T — inline condition + inline error literal
-  yield* guard(input.type !== AccountType.enum.credit, { code: 'validation', issues: ['…'] })
-  yield* guard(!(await deps.accounts.findByName(input.name)), { code: 'duplicate_name', entity: 'account', name: input.name })
+  yield* guard(input.status !== OrderStatus.enum.cancelled, { code: 'validation', issues: ['…'] })
   ```
-- Controllers work with **models only**: hand repos domain drafts (e.g. `TransactionDraft`); never build
-  flat db props (`classificationMethod`, `rawInput: null`) and never import `adapters/` — model→db
-  flattening lives in `diplomat/db` via `adapters/`.
-- All boundary adaptation lives outside controllers: diplomats adapt `wire/in -> model` before controller
-  calls and `model -> wire/out` after controller results. Repos may use adapters internally for
-  `model <-> wire/db`.
-- Name resolution: ALWAYS via `controllers/resolve.ts` (`resolveAccountRef`, `resolveCategoryRef`,
-  `resolveCardRef`) — never inline `resolveByName` + error mapping in a controller.
-- Expected failures are `AppError` values; unexpected errors throw (become 500s). Never `try/catch`
+- Controllers work with **models only**: hand repositories domain drafts; never build flat storage properties and never
+  import adapters — model→storage flattening lives in the infrastructure layer via adapters.
+- All boundary adaptation lives outside controllers: the edge adapts wire-in → model before the controller call and
+  model → wire-out after it. Repositories may use adapters internally for model ↔ storage.
+- Name resolution always goes through shared resolvers (`resolveCustomerRef`, `resolveProductRef`) — never inline a
+  lookup-by-name plus error mapping in a controller.
+- Expected failures are error *values*; unexpected errors throw (and become server errors). Never `try/catch`
   business outcomes; never throw domain errors.
-- When resolving independent async deps, pipe `Promise.all` through `R.pipe` for an expression body:
+- When resolving independent async dependencies, pipe the combined `Promise.all` result for an expression body:
 
 ```ts
 // ✅ DO
-export const getStatus = async (deps: Deps, version: string): Promise<StatusOut> =>
-  R.pipe(
-    await Promise.all([deps.health.reachable(), deps.locale().catch(R.constant(Locale.enum.en))]),
-    ([reachable, locale]) => ({ name: 'fintrack', version, db: reachable ? 'ok' : 'error' as const, locale }),
+export const getStatus = async (deps: Deps): Promise<Status> =>
+  pipe(
+    await Promise.all([deps.health.reachable(), deps.locale()]),
+    ([reachable, locale]) => ({ db: reachable ? 'ok' : 'error' as const, locale }),
   )
 
 // ❌ DON'T
-export const getStatus = async (deps: Deps, version: string): Promise<StatusOut> => {
+export const getStatus = async (deps: Deps): Promise<Status> => {
   const [reachable, locale] = await Promise.all([...])
-  return { name: 'fintrack', version, db: reachable ? 'ok' : 'error', locale }
+  return { db: reachable ? 'ok' : 'error', locale }
 }
 ```
 
-### Write-path controllers — return effects, don't perform them (ADR-021)
+### Write-path controllers — return effects, don't perform them
 
-**In progress — not every controller is converted yet.** `docs/canonical/functional-core-imperative-shell.md` is the
-canonical doc; read it before touching a write flow. The shape below is the target for the whole write path,
-proven so far on `createAccount` (`controllers/account/account.ts`) as the first mover. An unconverted flow
-still calls its `deps.<x>.create/update/...` write method exactly as documented above — don't convert a flow
-that isn't in scope for your change just because you're touching the file.
-
-A converted controller still composes with `safeTry`/`guard`/`okOr` exactly as before — only the last step
-changes: instead of `await`ing a repo write and returning the written row, it builds the write as a typed
-`Persistable` (`@rfc0/effect-runner`) via the `logic/persistence.ts` builders, and returns it alongside the
-response, for the diplomat shell's `runEffects` (`@rfc0/effect-runner`) to apply:
+The core of a flow decides; the shell executes. A controller still composes with the Result helpers exactly as above —
+only the last step changes: instead of `await`ing a repository write and returning the written row, it builds the write
+as a typed, entity-tagged effect and returns it alongside the response, for the shell's generic engine to apply. The
+principle is documented in the functional-core / imperative-shell document; read it before touching a write flow.
 
 ```ts
-// ✅ DO — the core decides and returns the write as data; it never calls a repo write method
-export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
-  safeTry(async function* () {
-    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)
-    yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name))
+// ✅ DO — the core decides and returns the write as data; it never calls a repository write method
+export const createOrder = (deps: Deps, input: CreateOrder): AsyncResult<FlowOutcome<Order>, AppError> =>
+  resultFlow(async function* () {
+    yield* guard(isPayable(input.status), orderErrors.paymentRejected)
+    yield* guard(await isReferenceAvailable(deps, input.reference), orderErrors.duplicateReference(input.reference))
 
-    const account: Account = { id: deps.newId(), ...input }  // no version — a new row's is the shell's constant
-    const persist: Persistable[] = [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: account })]
-    return ok({ persist, response: account })
+    const order: Order = { id: deps.newId(), ...input }          // a new row's version is the shell's constant
+    const effects = [effect.insert({ entity: ORDER_ENTITY_TAG, model: order })]
+    return ok({ effects, response: order })
   })
 
-// the diplomat handler (MCP tool / REST route) adapts model → row explicitly, right here, before
-// runEffects ever sees the batch — this is the shell applying the effect
-async (args) => {
-  const flow = () => createAccount(deps, accountAdapters.createWireInToModel(args)).map(accountAdapters.outcomeToDb)
-  return fromResult(await runEffects(flow))
-}
+// the edge handler adapts model → stored row explicitly, once, before the engine sees the batch
+const flow = () => createOrder(deps, orderAdapters.createWireInToModel(args)).map(orderAdapters.outcomeToDb)
+return fromResult(await runEffects(flow))
 
-// ❌ DON'T — the core performing its own write (the pre-ADR-021 shape; fine for an unconverted flow, but
-// don't reintroduce it on a flow you're converting)
-export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Account, AppError> =>
-  safeTry(async function* () {
-    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)
-    yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name))
-    return ok(await deps.accounts.create({ id: deps.newId(), ...input }))
+// ❌ DON'T — the core performing its own write
+export const createOrder = (deps: Deps, input: CreateOrder): AsyncResult<Order, AppError> =>
+  resultFlow(async function* () {
+    yield* guard(isPayable(input.status), orderErrors.paymentRejected)
+    return ok(await deps.orders.create({ id: deps.newId(), ...input }))
   })
 ```
 
-- Build the `Persistable` via `logic/persistence.ts`'s `insert`/`update`/`remove` — one place every converted
-  controller constructs the tagged shape from, instead of hand-writing an `{ op, entity, model }` literal at
-  each call site. These builders are generic over the entity's tag/model (not hardcoded to any one entity), so
-  they never need a new case as more flows convert. The write intent (`op`) they set is a named enum
-  (`PersistOp`), not a bare `'insert'`/`'update'`/`'delete'` string — "constants over literals" applies to the
-  op the same as any other domain value.
-- **The entity tag is owned by the entity's own model file**, not by `@rfc0/effect-runner` (`Persistable` is
-  generic): `models/account.ts` owns `ACCOUNT_ENTITY_TAG = 'account'`, and a new entity adds its own constant
-  there — a shared god enum would be magic-value coupling.
-- An `insert` `Persistable`'s model is the plain, wire-shaped domain model (`Account`) — **no `version`**. A
-  brand-new row's version is always the same structural constant (`INITIAL_VERSION`, exported from
-  the package); that's not a decision the core makes, so it never appears in what the core builds
-  or returns. `update`/`delete` are different: `version` is the value the core actually read, so it's real
-  data the model carries (`AccountEntity` — `Account` + `version`).
-- **The `modelToDb` adaptation happens once, explicitly, at the diplomat handler — never inside `diplomat/db`.**
-  The handler that calls `runEffects` maps the controller's `FlowOutcome` through the entity's own
-  `outcomeToDb` (`adapters/accounts.ts`) *before* handing it to `runEffects`, converting every `Persistable`'s
-  domain-shaped `model` into a db row (baking in `INITIAL_VERSION` for an insert). By the time `runEffects`
-  or the entity's `EntityApplier` (`diplomat/db/repos/accounts.ts`'s `accountApplier`) sees a `Persistable`, its
-  `model` is already a row — the applier only ever writes it, never adapts it. This is the boundary-adaptation
-  rule from earlier in this doc ("diplomats adapt `wire/in -> model` before controller calls and `model ->
-  wire/out` after") extended one step further: the same handler also adapts `model -> db row` between the
-  controller and the shell.
-- **Appliers are registered, never branched on.** An entity's `EntityApplier` lives beside its other persistence
-  code (e.g. `diplomat/db/repos/accounts.ts`) and is registered once in the `ApplierRegistry` at the composition
-  root (`main.ts`); nothing in FinTrack special-cases an entity tag around the engine.
-- **Don't hand-write an `EntityApplier` for a table that already fits the `id`/`version` convention** — call
-  `versionedTableApplier(table)` (`diplomat/db/effects.ts`) instead. `accountApplier` is
-  `versionedTableApplier(accounts)`, nothing more: once the model→row adaptation moved to the handler (above),
-  an applier's `insert`/`update`/`delete` became identical mechanics for every table shaped that way (cast the
-  row, write it, guard on `version`). A table with a secondary `UNIQUE` column beyond `id` (`tags.name`,
-  `dashboards.name`) still uses `versionedTableApplier` for `update`/`delete`, wrapping only `insert` to catch
-  the `UNIQUE` race and rethrow `VersionConflict` (`tagApplier`/`dashboardApplier`). Only hand-write a fully
-  custom `EntityApplier` for a table that doesn't fit the convention at all (no `id`/`version`, e.g. the
-  key-only link tables).
-- Composition (a flow that orchestrates another controller) **merges** `persist` arrays — take the called
-  controller's `persist`, add your own, return the merged batch; don't apply either separately.
-- A converted controller's `deps` still exposes reads (`deps.<x>.list/find/...`) — the purity boundary is
-  writes, not all I/O. Only the write call moves from `await deps.<x>.create(...)` to
-  `persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: account })`.
+- Build effects through shared builders (`insert`/`update`/`remove`), one place that constructs the tagged shape,
+  instead of hand-writing an `{ op, entity, model }` literal at each call site. The builders are generic over the
+  entity's tag and model, so they never need a new case as more flows convert. The write intent (`op`) is a named enum,
+  not a bare string.
+- **The entity tag is owned by the entity's own model**, not by the engine: a shared enum of all entities would be
+  magic-value coupling.
+- An `insert` effect's model is the plain domain model — **no version**. A brand-new row's version is always the same
+  structural constant, so it never appears in what the core builds. `update`/`delete` are different: the version is
+  the value the core actually read, so it is real data the model carries.
+- **Model → stored-row adaptation happens once, explicitly, at the edge handler — never inside the shell's engine.**
+  By the time the engine or an entity's applier sees an effect, its model is already a row; the applier only writes it.
+- **Appliers are registered, never branched on.** An entity's applier lives beside its other persistence code and is
+  registered once at the composition root; nothing special-cases an entity tag around the engine.
+- **Don't hand-write an applier for a table that already fits the shared id/version convention** — reuse the generic
+  one. A table with a secondary unique column still reuses it for update/delete and wraps only `insert` to translate
+  the unique-violation race into a version conflict. Hand-write an applier only for a table that does not fit the
+  convention at all (for example a key-only link table).
+- Composition (a flow that orchestrates another controller) **merges** effect arrays — take the called controller's
+  effects, add your own, return the merged batch; don't apply either separately.
+- A converted controller's dependencies still expose reads — the purity boundary is writes, not all I/O.
 
 ### Controller shape — gather, decide, persist
 
-A controller reads in three named steps: **gather** (resolve refs, repo reads through `deps`), **decide** (one
-pure `logic/` call from the gathered values to an entity, guards and data), **persist** (build `{ persist, response }`).
-Rules belong in the decide step, where they are unit-tested without mocks; the function-shape lint limits
-(`docs/canonical/code-quality.md` § Function shape) hold the controller to it.
+A controller reads in three named steps: **gather** (resolve refs, repository reads through dependencies), **decide**
+(one pure call from the gathered values to an entity, guards and data), **persist** (build the effects and response).
+Rules belong in the decide step, where they are unit-tested without mocks.
 
 ```ts
 // ✅ DO — gather in the controller, the decision is a pure plan call, then persist
-const categorySelection = yield* resolveCategorySelection(deps, input, type)       // gather
-const plan = planNewTransaction({                                                    // decide (logic/transaction.ts)
-  id: deps.newId(), today: toIsoDate(deps.clock()), input, type, source, currency,
-  decimals: await resolveDecimals(deps, currency),
-  funding: { refs: { accountId: account?.id }, sourceId: account?.id },
-  categorySelection, candidates: await matchCandidatesFor(deps, input.description, categorySelection),
-  keepsUnmatchedMerchant: true,
+const shipping = yield* resolveShipping(deps, input, region)                      // gather
+const plan = planNewOrder({                                                       // decide (pure)
+  id: deps.newId(), today: toIsoDate(deps.clock()), input, region, shipping,
+  candidates: await matchCandidatesFor(deps, input.description),
 })
-const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: plan.entity, idempotencyKey: plan.idempotencyKey })]
+const effects = [effect.insert({ entity: ORDER_ENTITY_TAG, model: plan.entity, idempotencyKey: plan.idempotencyKey })]
 
-// ❌ DON'T — status default, classification, entity literal and key derivation written inline in the controller
+// ❌ DON'T — default status, classification, entity literal and key derivation written inline in the controller
 const status = input.status ?? defaultStatusFor(date, today)
-const classification = categorySelection ? userClassification(...) : pickClassification(await deps.merchants.matchCandidates(...))
-const entity: TransactionEntity = { id: deps.newId(), /* … 15 fields … */ }
+const entity: Order = { id: deps.newId(), /* … 15 fields … */ }
 ```
 
-## logic/ — pure and declarative
+## Logic — pure and declarative
 
-- No I/O, no `Date.now()`/`new Date()` (clock comes from deps), no imports from `controllers/` or `diplomat/`.
-- Data transformation with **[remeda](https://remedajs.com/docs/)** when ≥2 stages or grouping is involved (ADR-003):
+- No I/O, no wall-clock reads (the clock comes from dependencies), no imports from controllers or the edge.
+- Transform data with a pipeline library when two or more stages or grouping are involved:
 
 ```ts
 // ✅ DO
-export const summarize = (rows: readonly SummaryRow[]) =>
-  R.pipe(rows, R.groupBy((r) => r.currency), R.entries(), R.map(toCurrencySummary), R.sortBy((s) => s.currency))
+export const summarize = (rows: readonly Row[]) =>
+  pipe(rows, groupBy((r) => r.currency), entries(), map(toCurrencySummary), sortBy((s) => s.currency))
 
 // ❌ DON'T
 const currencies = [...new Set(rows.map((r) => r.currency))].sort()
@@ -201,155 +164,123 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 ```
 
 - Native `map`/`filter` is fine for single-stage transforms.
-- **Guard conditions belong here when pure.** Extract a reusable boolean precondition into a named
-  predicate (e.g. `assertNonCreditType(type)`) instead of inlining `x !== Enum.value` at the `guard` call.
-  Predicates are trivially unit-tested and reused across create/update/delete. (Repo-dependent conditions
-  can't be pure — keep those as small async helpers in the controller.)
-- Every logic function gets a mirrored `test/unit/logic/*.test.ts` (vitest) — pure functions, no mocks.
+- **Guard conditions belong here when pure.** Extract a reusable boolean precondition into a named predicate
+  (`isPayable(status)`) instead of inlining `x !== Enum.value` at the `guard` call. Predicates are trivially
+  unit-tested and reused across create/update/delete. (Repository-dependent conditions can't be pure — keep those as
+  small async helpers in the controller.)
+- Every logic function gets a mirrored unit test — pure functions, no mocks.
 
 ## Testing requirements
 
-- Behavior changes MUST include unit tests in the same change.
-- New logic functions MUST ship with a matching test under `test/unit/logic/`; controller/repo/adapter changes
-  MUST update or add focused unit tests that cover success and expected-failure paths.
-- Prefer small, deterministic tests; avoid network/db side effects in unit tests.
+- Behavior changes ship unit tests in the same change.
+- New logic functions ship with a matching test; controller, repository and adapter changes add or update focused
+  tests covering success **and** expected-failure paths.
+- Prefer small, deterministic tests; avoid network or database side effects in unit tests.
 
-## models/ — zod single source of truth
+## Models — schema as single source of truth
 
-- **Every type and constant lives in `models/`** — plan/facts shapes (`NewTransactionFacts`, `BillPaymentPlan`), `Extract`ed unions, sentinels (`INVALID_REDEEM`), key prefixes. `controllers/` and `logic/` hold functions only; a type a function needs is imported, never declared beside it. Plan/facts types are hand-written TypeScript — they are not domain data, so not zod; domain data stays `z.infer`. The exceptions are shapes that cannot live there: ports that name `diplomat/` types or the composed `AppError` (`controllers/deps.ts`, `StatementImportPlan`) and function-valued dispatch tables.
-
-- Types are ALWAYS `z.infer<typeof Schema>` — never hand-written interfaces for domain data.
-- **Naming: the zod value gets the `Schema` suffix; the inferred type gets the bare name.**
-  `export const AccountSchema = z.object({...})` + `export type Account = z.infer<typeof AccountSchema>`.
-  Derived schemas keep the suffix (`CreateAccountSchema`, `UpdateAccountSchema`) with bare-name types
-  (`CreateAccount`, `UpdateAccount`). This removes the value-vs-type ambiguity at import sites.
-- Distinguish input schemas (`CreateTransactionInput` — names, optional fields) from entity
-  schemas (`Transaction` — ids, resolved). Inputs use `MovementType`; only entities carry
-  `TransactionType` (which includes `'transfer'`).
-- **A shared core schema composes UP (`.extend`), never carries the union for aggregates to carve
-  DOWN (`.omit`) (ADR-019).** A field/rule/error belongs on the shared core schema only if the
-  shared read/balance/persistence side is genuinely defined over it; anything a single aggregate
-  introduces is defined in that aggregate's own model file and layered onto the core with
-  `.extend`, never named on the core for the aggregate to `.omit` away:
+- **Every type and constant lives with the models** — plan/facts shapes, extracted unions, sentinels, key prefixes.
+  Controllers and logic hold functions only; a type a function needs is imported, never declared beside it. Plan/facts
+  types are hand-written (they are not domain data); domain data stays inferred from its schema. The exceptions are
+  shapes that cannot live there: ports naming infrastructure types, and function-valued dispatch tables.
+- Types are always inferred from the schema — never hand-written interfaces for domain data.
+- **Naming: the schema value gets the `Schema` suffix; the inferred type gets the bare name.**
+  `export const OrderSchema = schema.object({...})` + `export type Order = Infer<typeof OrderSchema>`. Derived schemas
+  keep the suffix (`CreateOrderSchema`) with bare-name types (`CreateOrder`). This removes the value-vs-type
+  ambiguity at import sites.
+- Distinguish input schemas (`CreateOrderInput` — names, optional fields) from entity schemas (`Order` — ids,
+  resolved). Inputs use a narrow movement/kind enum; only entities carry the wider one.
+- **A shared core schema composes UP (extend), never carries the union for aggregates to carve DOWN (omit).** A field,
+  rule or error belongs on the shared core only if the shared read/persistence side is genuinely defined over it;
+  anything a single aggregate introduces is defined in that aggregate's own model and layered onto the core:
 
   ```ts
-  // models/transaction.ts (core) — minimal, shared movement vocabulary only
-  export const CreateTransactionSchema = z.object({ description, amount, type, status, date, ... })
-  // no account, no card, no billMonth/billYear — those are a single aggregate's vocabulary
+  // core — minimal, shared vocabulary only
+  export const CreateLineSchema = schema.object({ description, amount, date })
 
-  // models/credit-card.ts — composes UP: adds card-only fields the core never carries
-  export const AddCardPurchaseSchema = CreateTransactionSchema.extend({ card, billMonth, billYear }).strict()
+  // the order aggregate composes UP: adds order-only fields the core never carries
+  export const AddOrderLineSchema = CreateLineSchema.extend({ order, coupon }).strict()
 
-  // models/account.ts — composes UP: adds its own field, omits the create-only type discriminator
-  export const AddAccountMovementSchema = CreateTransactionSchema.extend({ account }).omit({ type: true }).strict()
+  // ❌ DON'T — the core names `order` and `coupon` so every other aggregate must `.omit` them away
   ```
 
-  Field-tied errors move with their field to the aggregate that owns it (e.g. `billPeriodIncomplete`
-  lives in `credit-card.ts`'s `cardErrors`, not the core's `transactionErrors`, since only a
-  card-context schema can carry `billMonth`/`billYear` at all). The one carve-out: a read/balance/
-  summary concern that's *structurally* defined over a value common to every aggregate (e.g. the
-  transfer row kind, `TransactionView`'s discriminator fields) stays on the core even though a
-  single aggregate owns the *policy* around it — the test is "does the shared read/persistence side
-  need this," not "does only one caller set it."
-- **`.describe()` is domain info — put it on the model field**, not re-authored at the edge. It says
-  what the field *is*; the MCP/REST edge derives its schema (`Schema.shape`) so the same text surfaces.
-- **Defaults by intent:** integrity defaults (a value that must exist for validity, e.g.
-  `initialBalance: z.number().default(0)`) go on the **domain** schema; not-null fields stay **required**
-  in the model. Quality-of-life defaults (convenience when omitted, e.g. currency → USD) go on the
-  **wire** schema via `.extend` — never weaken the domain contract for caller convenience.
+  Field-tied errors move with their field to the aggregate that owns it. The one carve-out: a read/summary concern
+  that is *structurally* defined over a value common to every aggregate stays on the core even though a single
+  aggregate owns the policy around it — the test is "does the shared read/persistence side need this," not "does only
+  one caller set it."
+- **Descriptions are domain info — put them on the model field**, not re-authored at the edge. The edge derives its
+  schema from the model so the same text surfaces.
+- **Defaults by intent:** integrity defaults (a value that must exist for validity, such as `quantity` defaulting to
+  `1`) go on the **domain** schema; not-null fields stay **required** in the model. Quality-of-life defaults
+  (convenience when omitted, such as a currency) go on the **wire** schema via extend — never weaken the domain
+  contract for caller convenience.
+- **Expected-error payloads live with the entity.** Each model defines its own error union typed against shared
+  primitives and colocates payload builders. Models never import the composed application-wide error type:
 
   ```ts
-  // models/account.ts — domain: currency is required (integrity), described once
-  currency: CurrencyCode.describe('Account currency (ISO code); fixed once the account has activity'),
-  // wire/in/accounts.ts — boundary: QoL default only
-  export const CreateAccountSchema = modelAccount.CreateAccountSchema.extend({
-    currency: CurrencyCode.default(CurrencyCode.enum.USD),
-  })
-  ```
+  // order model
+  export type OrderError = DuplicateName<'order'> | ValidationError
 
-- **Expected-error payloads live with the entity (ADR-012).** Each model defines its own error union
-  (e.g. `AccountError`) typed against shared primitives from `models/error.ts`, and colocates payload
-  builders. Models never import the composed `AppError`:
-
-  ```ts
-  // models/account.ts
-  import type { DuplicateName, ValidationError } from './error.js'
-
-  export type AccountError = DuplicateName<'account'> | ValidationError
-
-  export const accountErrors = {
-    creditRejected: { code: 'validation', issues: ['…use the card flow…'] } satisfies AccountError,
-    duplicateName: (name: string): AccountError => ({ code: 'duplicate_name', entity: 'account', name }),
+  export const orderErrors = {
+    paymentRejected: { code: 'validation', issues: ['…use the payment flow…'] } satisfies OrderError,
+    duplicateReference: (ref: string): OrderError => ({ code: 'duplicate_name', entity: 'order', name: ref }),
   }
   ```
 
-  Controllers raise them; they never inline the `{ code, … }` literal (see code-quality "Constants over literals").
+  Controllers raise them; they never inline the `{ code, … }` literal.
 
-## diplomat/ — thin, no business logic
+## Edge (inbound/outbound) — thin, no business logic
 
-- http/mcp handlers: zod-parse (`wire/in`) → adapt to model → call controller → adapt model to `wire/out`
-  → translate Result. Nothing else.
-- db: parameterized SQL ONLY — use Drizzle's query builder or the `sql` template tag; never
-  string-interpolate user input (security bug). Decode every row through `wire/db` + `adapters/` zod parsing.
-- Edge and shell expected failures follow the same Result convention as controllers: a `Result`/`ResultAsync` whose error is a plain discriminated object (`{ code, … }`), never a thrown `Error` subclass — a throwing third-party API (`node:fs`, the OS keychain, `readline`) is wrapped exactly once, at the adapter (`Result.fromThrowable` / `ResultAsync.fromPromise`), and only unexpected failures throw.
-- One named definition per route and per tool; the module exports the list and registration is generic
-  (`docs/architecture.md` § Diplomat edge organization). A handler is decode → delegate → map, ~10 lines:
+- Handlers: parse the wire input → adapt to model → call controller → adapt model to wire output → translate the
+  Result. Nothing else.
+- Storage: parameterized queries only — never string-interpolate user input (a security bug). Decode every row through
+  the storage wire schema and adapters.
+- Edge and shell expected failures follow the same Result convention as controllers: a plain discriminated error value
+  (`{ code, … }`), never a thrown error subclass. A throwing third-party API (filesystem, credential store, readline) is
+  wrapped exactly once, at the adapter; only unexpected failures throw.
+- One named definition per route and per tool; the module exports the list and registration is generic. A handler is
+  decode → delegate → map, about ten lines:
 
   ```ts
-  // ✅ DO — HTTP: metadata is data, the handler uses the shared helpers
-  const deleteTagRoute: RouteDefinition = {
-    method: 'delete', scope: WRITE_SCOPE, path: '/api/tags/:id', tags: [TAGS_TAG], summary: 'Delete tag',
-    request: { params: idParam }, responses: { 200: okResponse('Tag deleted', DeletedOut) },
+  // ✅ DO — metadata is data, the handler uses shared helpers
+  const deleteOrderRoute: RouteDefinition = {
+    method: 'delete', path: '/orders/:id', summary: 'Delete order',
     handler: async (req, reply, scope) => {
       const { deps, runEffects } = scope()
-      const flow = () => deleteTag(deps, pathParam(req, 'id')).map(tagAdapters.outcomeToDb)
+      const flow = () => deleteOrder(deps, pathParam(req, 'id')).map(orderAdapters.outcomeToDb)
       return send(reply, await runEffects(flow))
     },
   }
-  export const tagRoutes = [listTagsRoute, createTagRoute, deleteTagRoute]
+  export const orderRoutes = [listOrdersRoute, createOrderRoute, deleteOrderRoute]
 
-  // ✅ DO — MCP: name from ToolName, long description a named constant, handler gets the scoped deps
-  const deleteTagTool = defineTool({
-    name: ToolName.enum.delete_tag,
-    config: { annotations: MUTATING, title: 'Delete tag', description: deleteTagDescription, inputSchema },
-    handle: async (args, { deps, runEffects }) =>
-      fromResult(await runEffects(() => deleteTag(deps, args.id).map(tagAdapters.outcomeToDb))),
-  })
-  export const tagTools = [listTagsTool, createTagTool, deleteTagTool]
-
-  // ❌ DON'T — an inline 422 literal, a bare tool name, a registration function wrapping every handler
-  if (!parsed.success) return reply.status(422).send({ error: { code: 'validation', issues: ['…'] } })
-  server.registerTool('delete_tag', { … }, async (args, extra) => { const { deps } = ctx.as(extra); … })
+  // ❌ DON'T — an inline status-code literal, a bare name, a registration function wrapping every handler
+  if (!parsed.success) return reply.status(VALIDATION_STATUS).send({ error: { code: 'validation', issues: ['…'] } })
   ```
 
-- New MCP tools: rich `description` (the agent reads it!), `.describe()` on non-obvious fields,
-  documented in `docs/mcp-tools.md` in the same change.
+- Agent-facing tool definitions carry a rich description (the agent reads it) and a description on every non-obvious
+  field, documented in the same change.
 
-## Schema validation requirements (Zod)
+## Schema validation requirements
 
-- Every external boundary must validate with Zod before entering the domain (HTTP/MCP inputs, DB records,
-  and external client/resource payloads).
-- Use schema parsing (`parse`/`safeParse`) at the boundary; do not pass unvalidated unknown data to
-  controllers, logic, or models.
-- Prefer `safeParse` when returning expected validation errors on the Result track; use `parse` when a
-  throw-on-invalid boundary is intentional and handled at the edge.
+- Every external boundary validates with a schema before entering the domain (inbound requests, stored records,
+  external client and resource payloads).
+- Use the safe-parse form when returning expected validation errors on the Result track; use the throwing form only
+  when a throw-on-invalid boundary is intentional and handled at the edge.
+- Never pass unvalidated unknown data to controllers, logic, or models.
 
-## adapters/ and wire/
+## Adapters and wire
 
-- Adapters are pure translators for boundary directions: `wireInToModel`, `modelToWireOut`, `modelToDb`,
-  `dbToModel`.
-- Use namespace imports for clarity at call sites, e.g. `import * as transactionAdapters from ...` then
-  `transactionAdapters.modelToDb(...)`.
-- Wire contracts belong under `src/wire/in`, `src/wire/out`, and `src/wire/db`; do not place boundary
-  contracts in `models/`.
+- Adapters are pure translators for boundary directions: `wireInToModel`, `modelToWireOut`, `modelToDb`, `dbToModel`.
+- Use namespace imports for clarity at call sites (`orderAdapters.modelToDb(...)`).
+- Wire contracts live in their own boundary module (inbound, outbound, storage); do not place them with the models.
 
 ## Naming & misc
 
-- Files and folders: kebab-case matching the domain (`credit-cards.ts`); tests live under `test/unit/`/`test/integration/`
-  in a mirrored path, not colocated (`test/unit/logic/bill.test.ts`, never `src/logic/bill.test.ts` — see
-  `CLAUDE.md`'s Commands section; the vitest config only scans `test/unit/**`/`test/integration/**`, so a
-  colocated `src/**/*.test.ts` file silently never runs).
-- IDs `crypto.randomUUID()` via `deps.newId()`; seeds use stable slugs (`cat-transporte`).
-- Dates are `YYYY-MM-DD` strings end-to-end; month math in pure logic (`period.ts`, `recurring.ts`),
-  never via timezone-prone `Date` arithmetic on day-of-month.
-- User-facing strings (descriptions, category names) may be Portuguese; identifiers and comments in English.
+- File and folder names match the domain and follow one casing convention; tests mirror the source layout and are not
+  colocated with it, so the test runner's configured folders always pick them up.
+- Identifiers come from an injected generator and seeds use stable slugs, so tests and seeds are deterministic.
+- Dates are plain ISO date strings end-to-end; month math lives in pure logic, never in timezone-prone date arithmetic
+  on day-of-month.
+- Identifiers and comments are in one language; user-facing strings follow the product's locale.
+
+How a project applies this is that project's own conventions document.
