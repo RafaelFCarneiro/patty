@@ -7,3 +7,9 @@ export const EXCLUSIVE_CREATE_FLAG = 'wx';
 
 /** Rows of the owned tables a `db export` reports, so the person can compare them after the move. Counts only. */
 export type ExportedRowCounts = Readonly<Record<string, number>>;
+
+/** The `code` of the error `open(2)` raises when `EXCLUSIVE_CREATE_FLAG` finds the file already there. */
+export const FILE_EXISTS_CODE = 'EEXIST';
+
+/** The data directory, and anything created to hold the database, is the owner's alone. */
+export const PRIVATE_DIRECTORY_MODE = 0o700;

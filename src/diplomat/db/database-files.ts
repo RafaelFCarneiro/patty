@@ -11,11 +11,16 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { DEMO_DB_KEY, DemoProbeAbsence, type DemoDatabaseLook } from '../../models/demo/core.js';
+import { PRIVATE_DIRECTORY_MODE, type ExportedRowCounts } from '../../models/export.js';
 import { closeDatabase, openDatabaseWithKey } from './driver.js';
+import { countSnapshotRows } from './export.js';
 import { tryExclusiveLock, type ExclusiveLock } from './file-lock.js';
 import { instanceRepo } from './repos/instance.js';
 
 const DATABASE_FILE_SUFFIXES = ['', '-wal', '-shm', '-journal'] as const;
+
+/** Files a database leaves beside itself; a leftover one would be replayed on a database placed next to it. */
+export const DATABASE_COMPANION_SUFFIXES = DATABASE_FILE_SUFFIXES.filter((suffix) => suffix !== '');
 
 export const databaseExists = (databasePath: string): boolean => existsSync(databasePath);
 
@@ -70,6 +75,11 @@ const onCopyOf = async <T>(databasePath: string, look: (copyPath: string) => Pro
   }
 };
 
+/** Proves `key` opens the database at `databasePath` and counts its rows, on a private copy: nothing at
+ *  `databasePath` is opened, checkpointed or written. Rejects when the key is wrong or the file is no database. */
+export const countRowsOnCopy = (databasePath: string, key: string): Promise<ExportedRowCounts> =>
+  onCopyOf(databasePath, (copyPath) => countSnapshotRows(copyPath, key));
+
 const lookAtOpenable = async (path: string): Promise<DemoDatabaseLook> => {
   const db = await openDatabaseWithKey({ DB_PATH: path }, DEMO_DB_KEY, { initializeJournal: false });
   try {
@@ -94,6 +104,6 @@ const LOCK_SUFFIX = '.lock';
 /** Held by the OS, so a dead process releases it; the lock file is never deleted, or waiters would lock another. */
 export const acquireDatabaseLock = (databasePath: string): Promise<ExclusiveLock | null> => {
   const lockPath = `${databasePath}${LOCK_SUFFIX}`;
-  mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
+  mkdirSync(dirname(lockPath), { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
   return tryExclusiveLock(lockPath);
 };

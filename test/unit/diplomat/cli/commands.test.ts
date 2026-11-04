@@ -5,7 +5,7 @@ import { EXIT_FAILURE, EXIT_INTERRUPTED, type CliIo, type Shell } from '../../..
 import { promptEnded, type PromptEnd, type Terminal } from '../../../../src/diplomat/cli/terminal.js';
 import { databaseAheadMessage, databaseErrors } from '../../../../src/models/database.js';
 import { unusedDemo } from '../../fixtures/demo.js';
-import { unusedExporter } from '../../fixtures/exporter.js';
+import { unusedExporter, unusedImporter } from '../../fixtures/exporter.js';
 
 const NO_CHANGES = { warnings: [], lines: [] };
 
@@ -43,6 +43,7 @@ const rig = (terminal: Terminal) => {
       }),
     },
     exporter: unusedExporter,
+    importer: unusedImporter,
     demo: unusedDemo,
   };
   return { io, out, err, shellClosed: () => shellClosed };

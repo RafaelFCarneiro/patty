@@ -1,4 +1,6 @@
 import { PRIVATE_FILE_MODE, type ExportedRowCounts } from '../../models/export.js';
+import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
+import { KeyImportRefusal } from '../../models/key-import.js';
 import { NPX_COMMAND } from '../../models/package.js';
 import { INVITE_PATH } from '../../models/auth/origin.js';
 import type { PasswordReset } from '../../models/auth/password.js';
@@ -6,6 +8,20 @@ import type { IssuedInvite, RevokedCredentials, UserSummary } from '../../models
 
 const MOVE_GUIDE = 'docs/auth.md, "Moving an npm install to Docker"';
 const fileMode = (): string => PRIVATE_FILE_MODE.toString(8).padStart(4, '0');
+
+const countsLine = (counts: ExportedRowCounts): string =>
+  Object.entries(counts)
+    .map(([table, rows]) => `${table} ${rows}`)
+    .join(', ');
+
+const KEY_IMPORT_REFUSALS = {
+  [KeyImportRefusal.enum.key_file_configured]:
+    'FINTRACK_DB_KEY_FILE is set: this install reads its key from that file, not from the keychain. Unset it to use the keychain',
+  [KeyImportRefusal.enum.key_env_configured]:
+    'FINTRACK_DB_KEY is set: this install reads its key from the environment, not from the keychain. Unset it to use the keychain',
+  [KeyImportRefusal.enum.keychain_holds_key]:
+    `the OS keychain already holds a database key for this install; an import never replaces it. Remove the "${KEYCHAIN_SERVICE}" / "${DB_KEY_KEYCHAIN_ACCOUNT}" keychain entry yourself if you mean to`,
+} as const satisfies Record<KeyImportRefusal, string>;
 
 const endedCredentials = (revoked: RevokedCredentials): string =>
   `sessions ended: ${revoked.sessionsEnded}, tokens and sign-ins revoked: ${revoked.tokensRevoked}`;
@@ -51,11 +67,33 @@ export const CLI_MESSAGES = {
   snapshotExported: (path: string, counts: ExportedRowCounts) =>
     [
       `Database snapshot written to ${path} (mode ${fileMode()}, encrypted under the same key, never overwritten).`,
-      `Rows (whole database, every user): ${Object.entries(counts)
-        .map(([table, rows]) => `${table} ${rows}`)
-        .join(', ')}`,
+      `Rows (whole database, every user): ${countsLine(counts)}`,
       `Compare these after the move: ${MOVE_GUIDE}.`,
     ].join('\n'),
+  keyImported: () =>
+    [
+      'Database key stored in the OS keychain, where the server reads it.',
+      `Next: ${NPX_COMMAND} db import --from <snapshot>, then ${NPX_COMMAND} setup <client>.`,
+    ].join('\n'),
+  snapshotImported: (path: string, counts: ExportedRowCounts) =>
+    [
+      `Database snapshot imported to ${path} (mode ${fileMode()}, never overwritten). Nothing was migrated: the next start does that, after its usual safety copy.`,
+      `Rows (whole database, every user): ${countsLine(counts)}`,
+      `Compare these with the export's: ${MOVE_GUIDE}. Next: ${NPX_COMMAND} setup <client>.`,
+    ].join('\n'),
+  keyImportRefused: (refusal: KeyImportRefusal) => KEY_IMPORT_REFUSALS[refusal],
+  keyFileInvalid:
+    'the file does not hold a database key: expected 64 hexadecimal characters and at most one trailing newline (no spaces, no carriage return), as `key export` writes it',
+  keyDoesNotOpenDatabase: (path: string) => `the key does not open the database at ${path}; nothing was stored`,
+  keyDoesNotOpenSnapshot: (path: string) =>
+    `${path} does not open with this install's key, or is not a database; nothing was imported`,
+  noKeyToImport: `no database key found (FINTRACK_DB_KEY_FILE, FINTRACK_DB_KEY or the OS keychain); import the key first: ${NPX_COMMAND} key import --from <file>`,
+  databaseLeftovers: (path: string) =>
+    `${path} has a leftover -wal, -shm or -journal file beside it; remove it yourself first, or it would be replayed on the imported database`,
+  importSourceMissing: (path: string) => `${path} does not exist or is not a file`,
+  importSourceUnreadable: (path: string) => `cannot read ${path}`,
+  databaseExists: (path: string) =>
+    `a database already exists at ${path}; an import never overwrites it. Move it away yourself if you mean to replace it`,
   destinationExists: (path: string) => `${path} already exists; choose a new file (an export never overwrites)`,
   destinationDirectoryMissing: (path: string) => `the directory of ${path} does not exist`,
   keyBesideData: (directory: string) =>

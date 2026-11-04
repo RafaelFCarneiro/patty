@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createClient } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { enableWal, resolveEncryptionKey } from '../../../../src/diplomat/db/driver.js';
+import {
+  enableWal,
+  findEncryptionKey,
+  keychainHoldsKey,
+  resolveEncryptionKey,
+  storeKeychainKey,
+} from '../../../../src/diplomat/db/driver.js';
 
 const keychain = vi.hoisted(() => ({
   loaded: vi.fn(),
@@ -133,6 +139,47 @@ describe('resolveEncryptionKey (ADR-032)', () => {
     ).rejects.toThrow();
 
     expect(readdirSync(dataDir)).toEqual([]);
+  });
+});
+
+describe('the keychain key helpers (key import)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    keychain.getPassword.mockReset();
+    keychain.setPassword.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('keychainHoldsKey reads the entry and never writes one', async () => {
+    keychain.getPassword.mockReturnValueOnce(null).mockReturnValueOnce(FILE_KEY);
+    await expect(keychainHoldsKey()).resolves.toBe(false);
+    await expect(keychainHoldsKey()).resolves.toBe(true);
+    expect(keychain.setPassword).not.toHaveBeenCalled();
+  });
+
+  it('storeKeychainKey writes the key to the entry the server reads', async () => {
+    await storeKeychainKey(FILE_KEY);
+    expect(keychain.setPassword).toHaveBeenCalledWith(FILE_KEY);
+  });
+
+  it('findEncryptionKey answers null for an empty keychain instead of generating a key', async () => {
+    keychain.getPassword.mockReturnValue(null);
+    await expect(findEncryptionKey({ DB_PATH })).resolves.toBeNull();
+    expect(keychain.setPassword).not.toHaveBeenCalled();
+  });
+
+  it('findEncryptionKey follows the server order: file, env, keychain', async () => {
+    keychain.getPassword.mockReturnValue(FILE_KEY);
+    await expect(findEncryptionKey({ DB_PATH })).resolves.toBe(FILE_KEY);
+    await expect(findEncryptionKey({ DB_PATH, FINTRACK_DB_KEY: ENV_KEY })).resolves.toBe(ENV_KEY);
+  });
+
+  it('findEncryptionKey rejects a malformed keychain entry', async () => {
+    keychain.getPassword.mockReturnValue('not-a-valid-key');
+    await expect(findEncryptionKey({ DB_PATH })).rejects.toThrow(/keychain is not a 64-character hex key/);
   });
 });
 

@@ -4,8 +4,10 @@ import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@libsql/client';
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
-import { EncryptionKey, type Config } from '../../config.js';
-import { KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
+import type { Config } from '../../config.js';
+import { EncryptionKey } from '../../models/encryption-key.js';
+import { PRIVATE_DIRECTORY_MODE } from '../../models/export.js';
+import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
 import * as schema from './schema.js';
 
 export type Db = LibSQLDatabase<typeof schema>;
@@ -17,7 +19,6 @@ export type Db = LibSQLDatabase<typeof schema>;
  *  resolves. */
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-const KEYCHAIN_ACCOUNT = 'db-encryption-key';
 
 // ADR-024: WAL lets readers (the HTTP sidecar) proceed without blocking the single writer, instead
 // of rollback-journal's mutual blocking. busy_timeout makes a contended writer wait for the lock
@@ -65,17 +66,21 @@ const validateStoredKey = (stored: string): string => {
   if (!parsed.success) {
     throw new Error(
       'fintrack: the encryption key stored in the OS keychain is not a 64-character hex key. ' +
-        'Remove the "fintrack" / "db-encryption-key" keychain entry (this loses access to an existing database ' +
+        `Remove the "${KEYCHAIN_SERVICE}" / "${DB_KEY_KEYCHAIN_ACCOUNT}" keychain entry (this loses access to an existing database ` +
         `encrypted with it), or supply the correct key. ${KEY_GENERATION_HINT}`,
     );
   }
   return parsed.data;
 };
 
+const keychainEntry = async () => {
+  const { Entry } = await loadKeyring();
+  return new Entry(KEYCHAIN_SERVICE, DB_KEY_KEYCHAIN_ACCOUNT);
+};
+
 const resolveKeychainKey = async (): Promise<string> => {
   try {
-    const { Entry } = await loadKeyring();
-    const entry = new Entry(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+    const entry = await keychainEntry();
     const existing = entry.getPassword();
     if (existing) return existing;
 
@@ -90,9 +95,8 @@ const resolveKeychainKey = async (): Promise<string> => {
   }
 };
 
-// Order: key file -> env var -> OS keychain. The key is never written next to the data: the
-// keychain generates on first run for local use only, and every other path fails fast.
-export const resolveEncryptionKey = async (config: DbConfig): Promise<string> => {
+/** The key from the configured file or env var, else null: the sources that never touch the keychain. */
+const configuredKey = (config: DbConfig): string | null => {
   if (config.FINTRACK_DB_KEY_FILE) {
     console.warn('fintrack: using the encryption key from FINTRACK_DB_KEY_FILE; OS keychain bypassed.');
     return readKeyFile(config.FINTRACK_DB_KEY_FILE);
@@ -103,7 +107,29 @@ export const resolveEncryptionKey = async (config: DbConfig): Promise<string> =>
     console.warn('fintrack: using FINTRACK_DB_KEY from the environment; OS keychain bypassed.');
     return config.FINTRACK_DB_KEY;
   }
-  return validateStoredKey(await resolveKeychainKey());
+  return null;
+};
+
+// Order: key file -> env var -> OS keychain. The key is never written next to the data: the
+// keychain generates on first run for local use only, and every other path fails fast.
+export const resolveEncryptionKey = async (config: DbConfig): Promise<string> =>
+  configuredKey(config) ?? validateStoredKey(await resolveKeychainKey());
+
+/** Whether the OS keychain already holds the database key. Reads; never generates. */
+export const keychainHoldsKey = async (): Promise<boolean> => Boolean((await keychainEntry()).getPassword());
+
+/** Stores `key` in the entry the server reads (`resolveEncryptionKey`'s). Replaces whatever is there: the caller
+ *  decides whether that is allowed. */
+export const storeKeychainKey = async (key: string): Promise<void> => {
+  (await keychainEntry()).setPassword(key);
+};
+
+/** The key `resolveEncryptionKey` would answer, but never generates one: null when no source holds a key. */
+export const findEncryptionKey = async (config: DbConfig): Promise<string | null> => {
+  const configured = configuredKey(config);
+  if (configured !== null) return configured;
+  const stored = (await keychainEntry()).getPassword();
+  return stored ? validateStoredKey(stored) : null;
 };
 
 /** Best-effort: WAL is verified to work with libSQL's encryption-at-rest in this project's target
@@ -148,7 +174,7 @@ export const openDatabaseWithKey = async (
 ): Promise<Db> => {
   // mode 0o700 applies only when the directory is first created; pre-existing directories
   // keep their current permissions (Node does not retroactively tighten them).
-  mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 });
+  mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
   const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey });
   if (initializeJournal) await enableWal(client);
   // busy_timeout is per-connection (ADR-024), so it is asserted unconditionally on every open.

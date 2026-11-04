@@ -5,6 +5,7 @@ import { isLoopbackHost, LOOPBACK_HOST } from './common/net.js';
 import { AuthMode, DEFAULT_AUTH_MODE } from './models/auth/mode.js';
 import { DEFAULT_PROFILE, ProfileSchema } from './models/auth/sign-in.js';
 import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from './models/demo/core.js';
+import { EncryptionKey } from './models/encryption-key.js';
 import { Locale } from './models/locale.js';
 
 export const McpTransport = z.enum(['stdio', 'http']);
@@ -29,9 +30,7 @@ export const DEMO_DB_PATH = join(DATA_DIRECTORY, 'demo.db');
 // a contributor's local dev instance never collides with an already-running installed instance.
 const DEFAULT_PORT = 51737;
 
-/** The database encryption key: 64 hex characters (32 bytes). Shared by every key source — the env
- *  var is decoded here, the key file's contents in `diplomat/db/driver.ts`. */
-export const EncryptionKey = z.string().regex(/^[0-9a-f]{64}$/i, 'must be a 64-character hex string');
+export { EncryptionKey };
 
 // `TRUST_PROXY=0` trusts zero proxy hops: no proxy.
 const NO_PROXY_HOPS = 0;

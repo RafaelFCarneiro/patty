@@ -12,7 +12,7 @@ import {
   type DemoFailure,
   type DemoPrepared,
 } from '../../../../../src/models/demo/core.js';
-import { unusedExporter } from '../../../fixtures/exporter.js';
+import { unusedExporter, unusedImporter } from '../../../fixtures/exporter.js';
 
 const DATABASE_PATH = '/home/x/.fintrack/demo.db';
 const PREPARED: DemoPrepared = {
@@ -31,6 +31,7 @@ const rig = (prepared: Result<DemoPrepared, DemoFailure>, served: Result<void, D
     out: (line: string) => out.push(line),
     err: (line: string) => err.push(line),
     exporter: unusedExporter,
+    importer: unusedImporter,
     demo,
     openShell: () => {
       throw new Error('the demo opens no shell');

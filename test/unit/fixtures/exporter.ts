@@ -1,4 +1,4 @@
-import type { Exporter } from '../../../src/diplomat/cli/io.js';
+import type { Exporter, Importer } from '../../../src/diplomat/cli/io.js';
 
 /** For a CLI harness whose commands never export: any use is a bug in the test. */
 export const unusedExporter: Exporter = {
@@ -7,4 +7,17 @@ export const unusedExporter: Exporter = {
   },
   provenKey: () => Promise.reject(new Error('exporter used')),
   writeSnapshot: () => Promise.reject(new Error('exporter used')),
+};
+
+/** For a CLI harness whose commands never import: any use is a bug in the test. */
+export const unusedImporter: Importer = {
+  databasePath: () => {
+    throw new Error('importer used');
+  },
+  keySources: () => Promise.reject(new Error('importer used')),
+  proveAgainstDatabase: () => Promise.reject(new Error('importer used')),
+  storeKey: () => Promise.reject(new Error('importer used')),
+  resolveKey: () => Promise.reject(new Error('importer used')),
+  inspectSnapshot: () => Promise.reject(new Error('importer used')),
+  placeSnapshot: () => Promise.reject(new Error('importer used')),
 };

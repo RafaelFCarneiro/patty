@@ -6,8 +6,8 @@ import { reasonOf } from '../../models/error.js';
 import type { Exporter } from './io.js';
 import { CLI_MESSAGES } from './messages.js';
 
-const realPath = Result.fromThrowable((path: string): string => realpathSync.native(path), reasonOf);
-const statLink = Result.fromThrowable(lstatSync, reasonOf);
+export const realPath = Result.fromThrowable((path: string): string => realpathSync.native(path), reasonOf);
+export const statLink = Result.fromThrowable(lstatSync, reasonOf);
 
 type Located = { destination: string; directory: string };
 

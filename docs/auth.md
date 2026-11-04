@@ -580,6 +580,57 @@ cannot read your OS keychain, so the key goes to a file it mounts as a secret. T
 `scripts/docker-move-smoke.sh` runs steps 3–7 against an image (an npm-style database with a claimed owner and one account), so
 the commands above are the commands that are tested.
 
+## Importing a key and a database
+
+`key import` and `db import` are the mirror of the exports above: they put a key and a database snapshot into an
+install. Use them to move to another machine, to go from Docker back to npm, to restore a backup, or to move between
+installs. Like the exports they are terminal-only (not reachable from MCP, HTTP or a token) and neither one migrates:
+the next start migrates the database, after its usual [safety copy](#backups-made-before-a-migration).
+
+**The order is always `key import`, then `db import`, then `setup <client>`.** `db import` needs the key to prove the
+snapshot, and `setup` needs the database.
+
+```bash
+npx @rafaelfcarneiro/fintrack@latest key import --from ./fintrack_db_key
+npx @rafaelfcarneiro/fintrack@latest db import --from ./fintrack.snapshot.db
+npx @rafaelfcarneiro/fintrack@latest setup <client>
+```
+
+- `key import --from <file>` reads the file `key export` wrote: the 64 hexadecimal characters and at most one trailing
+  newline, nothing else (a symlink to it is fine, which is how a Docker secret is mounted). It stores the key in the OS
+  keychain entry the server reads. It **refuses** when
+  - the keychain already holds a key for this install. There is no `--force`: remove the `fintrack` / `db-encryption-key`
+    keychain entry yourself if you mean to replace it (that loses access to a database encrypted with the old key);
+  - `FINTRACK_DB_KEY_FILE` or `FINTRACK_DB_KEY` is set: those installs read the key from there, not from the keychain;
+  - a database already exists at `DB_PATH` and the key does not open it. Without a database, only the format is checked;
+    `db import` proves the key against the snapshot.
+
+  The key is never printed, logged or put in an error.
+- `db import --from <file>` takes a snapshot written by `db export`. It resolves the key as the server does (key file,
+  then env var, then keychain) but never generates one, so run `key import` first, and it **refuses** when
+  - a database already exists at `DB_PATH` (move it away yourself to replace it), or `--from` is `DB_PATH` itself (real
+    paths are compared, so a symlink does not get around it);
+  - the snapshot does not open with that key, or is not a database. Both checks run on a private copy: nothing at `--from`
+    or `DB_PATH` is opened or written, and a refusal creates nothing.
+
+  Otherwise it copies the snapshot to `DB_PATH` (created new, owner-only `0600`; the data directory `0700` if it had to be
+  created) and prints the row counts of the accounts and transactions tables, to compare with what `db export` printed.
+  The snapshot must be one `db export` wrote: a live database file with a `-wal` beside it would be copied without it.
+
+**Docker to npm.** Stop the container, then export from it and import on the host. The container's key is already on the
+host as `fintrack_db_key`, so only the data needs exporting:
+
+```bash
+docker compose stop fintrack
+docker compose run --rm --no-deps -T --entrypoint sh fintrack \
+  -c 'umask 077; node dist/main.js db export --to /tmp/back.db >&2 && cat /tmp/back.db' > ./fintrack.snapshot.db
+npx @rafaelfcarneiro/fintrack@latest key import --from ./fintrack_db_key
+npx @rafaelfcarneiro/fintrack@latest db import --from ./fintrack.snapshot.db
+```
+
+`scripts/docker-move-smoke.sh` also runs this direction (with the key supplied as a file, since a CI host has no
+keychain); the key-into-keychain step is covered by the integration tests with an in-memory keychain.
+
 ## Backups made before a migration
 
 Before applying a migration that **rewrites existing data** — Phase 1's owner insert is the first — startup

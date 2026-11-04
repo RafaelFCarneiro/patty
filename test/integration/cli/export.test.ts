@@ -23,6 +23,7 @@ import { accounts, transactions } from '../../../src/diplomat/db/schema.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { PRIVATE_FILE_MODE } from '../../../src/models/export.js';
 import { unusedDemo } from '../../unit/fixtures/demo.js';
+import { unusedImporter } from '../../unit/fixtures/exporter.js';
 
 /**
  * `key export` and `db export` against a real encrypted database, in process: the exporter is the production one
@@ -53,6 +54,7 @@ const io = (): CliIo =>
     interruptSignal: () => new AbortController().signal,
     clients: { find: () => undefined },
     exporter: createExporter(),
+    importer: unusedImporter,
     demo: unusedDemo,
   }) satisfies CliIo;
 
@@ -173,7 +175,7 @@ describe('fintrack key export', () => {
     expect(await run('key', 'export')).toBe(EXIT_FAILURE);
     expect(err.join('\n')).toContain('--to <file>');
     expect(await run('key', 'export', 'extra', '--to', join(outputDirectory, 'k'))).toBe(EXIT_FAILURE);
-    expect(await run('key', 'import')).toBe(EXIT_FAILURE);
+    expect(await run('key', 'frobnicate')).toBe(EXIT_FAILURE);
   });
 });
 
