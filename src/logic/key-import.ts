@@ -1,15 +1,12 @@
 import { EncryptionKey } from '../models/encryption-key.js';
-import { KEY_FILE_MAX_CHARACTERS, KeyImportRefusal, type KeySources } from '../models/key-import.js';
+import { KEY_FILE_LINE_ENDINGS, KEY_FILE_MAX_CHARACTERS, KeyImportRefusal, type KeySources } from '../models/key-import.js';
 
-const TRAILING_NEWLINE = '\n';
-
-/** The key a file holds — exactly what `key export` writes: the key and at most one trailing newline. Null for
- *  anything else; the contents are never echoed. */
+/** The key a file holds: what `key export` writes (the key and a newline), with or without it, or with a CRLF. At most
+ *  one line ending; null for anything else. The contents are never echoed. */
 export const decodeKeyFile = (contents: string): string | null => {
   if (contents.length > KEY_FILE_MAX_CHARACTERS) return null;
-  const parsed = EncryptionKey.safeParse(
-    contents.endsWith(TRAILING_NEWLINE) ? contents.slice(0, -TRAILING_NEWLINE.length) : contents,
-  );
+  const ending = KEY_FILE_LINE_ENDINGS.find((candidate) => contents.endsWith(candidate));
+  const parsed = EncryptionKey.safeParse(ending === undefined ? contents : contents.slice(0, -ending.length));
   return parsed.success ? parsed.data : null;
 };
 

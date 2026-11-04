@@ -8,6 +8,7 @@ describe('decodeKeyFile', () => {
   it('reads the key with or without one trailing newline, as `key export` writes it', () => {
     expect(decodeKeyFile(`${KEY}\n`)).toBe(KEY);
     expect(decodeKeyFile(KEY)).toBe(KEY);
+    expect(decodeKeyFile(`${KEY}\r\n`)).toBe(KEY);
   });
 
   it.each([
@@ -16,7 +17,9 @@ describe('decodeKeyFile', () => {
     ['long', `${KEY}0`],
     ['not hexadecimal', `${'g'.repeat(64)}`],
     ['two newlines', `${KEY}\n\n`],
-    ['a carriage return', `${KEY}\r\n`],
+    ['a lone carriage return', `${KEY}\r`],
+    ['two CRLFs', `${KEY}\r\n\r\n`],
+    ['a CRLF then a newline', `${KEY}\r\n\n`],
     ['leading whitespace', ` ${KEY}`],
   ])('answers null for %s', (_name, contents) => {
     expect(decodeKeyFile(contents)).toBeNull();

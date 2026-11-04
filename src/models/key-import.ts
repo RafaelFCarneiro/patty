@@ -11,5 +11,8 @@ export type KeySources = {
 export const KeyImportRefusal = z.enum(['key_file_configured', 'key_env_configured', 'keychain_holds_key']);
 export type KeyImportRefusal = z.infer<typeof KeyImportRefusal>;
 
-/** A key file is the key and at most one newline: nothing longer is one. */
-export const KEY_FILE_MAX_CHARACTERS = 65;
+/** The line endings a key file may end with, once: `key export` writes `\n`; an editor on Windows may add `\r\n`. */
+export const KEY_FILE_LINE_ENDINGS = ['\r\n', '\n'] as const;
+
+/** A key file is the key and at most one line ending: nothing longer is one. */
+export const KEY_FILE_MAX_CHARACTERS = 64 + Math.max(...KEY_FILE_LINE_ENDINGS.map((ending) => ending.length));

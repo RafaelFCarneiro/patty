@@ -183,6 +183,11 @@ describe('fintrack key import', () => {
     expect(existsSync(installDatabase)).toBe(false);
   });
 
+  it('accepts a CRLF line ending', async () => {
+    expect(await run('key', 'import', '--from', writeKeyFile('crlf', `${KEY}\r\n`))).toBe(EXIT_OK);
+    expect(keychain.stored).toBe(KEY);
+  });
+
   it('accepts the key without its trailing newline, and through a symlink as a mounted secret is', async () => {
     const bare = writeKeyFile('bare', KEY);
     const link = join(outputDirectory, 'link');
@@ -365,6 +370,15 @@ describe('fintrack db import', () => {
     const junk = writeKeyFile('junk.db', 'this is not a database'.repeat(100));
     expect(await run('db', 'import', '--from', junk)).toBe(EXIT_FAILURE);
     expect(existsSync(installDirectory)).toBe(false);
+  });
+
+  it.each(['-wal', '-journal'])('refuses a source with a %s beside it, creating nothing', async (suffix) => {
+    writeFileSync(`${snapshot}${suffix}`, 'committed pages');
+    expect(await run('db', 'import', '--from', snapshot)).toBe(EXIT_FAILURE);
+    expect(err.join('\n')).toContain(CLI_MESSAGES.snapshotNotStandalone(snapshot));
+    expect(err.join('\n')).toContain('db export');
+    expect(existsSync(installDirectory)).toBe(false);
+    expect(out).toEqual([]);
   });
 
   it('refuses a malformed keychain entry, creating nothing', async () => {

@@ -1,6 +1,9 @@
 import { tmpdir } from 'node:os';
+import { pipeline } from 'node:stream/promises';
 import {
   copyFileSync,
+  createReadStream,
+  createWriteStream,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -11,16 +14,20 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { DEMO_DB_KEY, DemoProbeAbsence, type DemoDatabaseLook } from '../../models/demo/core.js';
-import { PRIVATE_DIRECTORY_MODE, type ExportedRowCounts } from '../../models/export.js';
+import {
+  DATABASE_COMPANION_SUFFIXES,
+  EXCLUSIVE_CREATE_FLAG,
+  FILE_EXISTS_CODE,
+  PRIVATE_DIRECTORY_MODE,
+  PRIVATE_FILE_MODE,
+  type ExportedRowCounts,
+} from '../../models/export.js';
 import { closeDatabase, openDatabaseWithKey } from './driver.js';
 import { countSnapshotRows } from './export.js';
 import { tryExclusiveLock, type ExclusiveLock } from './file-lock.js';
 import { instanceRepo } from './repos/instance.js';
 
-const DATABASE_FILE_SUFFIXES = ['', '-wal', '-shm', '-journal'] as const;
-
-/** Files a database leaves beside itself; a leftover one would be replayed on a database placed next to it. */
-export const DATABASE_COMPANION_SUFFIXES = DATABASE_FILE_SUFFIXES.filter((suffix) => suffix !== '');
+const DATABASE_FILE_SUFFIXES = ['', ...DATABASE_COMPANION_SUFFIXES] as const;
 
 export const databaseExists = (databasePath: string): boolean => existsSync(databasePath);
 
@@ -96,6 +103,21 @@ export const probeDatabase = async (databasePath: string): Promise<DemoDatabaseL
     return await onCopyOf(databasePath, lookAtOpenable);
   } catch {
     return UNREADABLE;
+  }
+};
+
+/** Copies `from` to a new owner-only file at `to`, creating the data directory. A file that was already there is not
+ *  ours to remove (`wx` refused it); anything the copy started is. */
+export const copyNewPrivateFile = async (from: string, to: string): Promise<void> => {
+  mkdirSync(dirname(to), { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
+  try {
+    await pipeline(
+      createReadStream(from),
+      createWriteStream(to, { flags: EXCLUSIVE_CREATE_FLAG, mode: PRIVATE_FILE_MODE }),
+    );
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code !== FILE_EXISTS_CODE) rmSync(to, { force: true });
+    throw cause;
   }
 };
 

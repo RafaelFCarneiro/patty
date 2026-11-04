@@ -83,11 +83,13 @@ export const CLI_MESSAGES = {
     ].join('\n'),
   keyImportRefused: (refusal: KeyImportRefusal) => KEY_IMPORT_REFUSALS[refusal],
   keyFileInvalid:
-    'the file does not hold a database key: expected 64 hexadecimal characters and at most one trailing newline (no spaces, no carriage return), as `key export` writes it',
+    'the file does not hold a database key: expected 64 hexadecimal characters and at most one trailing newline (no spaces), as `key export` writes it',
   keyDoesNotOpenDatabase: (path: string) => `the key does not open the database at ${path}; nothing was stored`,
   keyDoesNotOpenSnapshot: (path: string) =>
     `${path} does not open with this install's key, or is not a database; nothing was imported`,
   noKeyToImport: `no database key found (FINTRACK_DB_KEY_FILE, FINTRACK_DB_KEY or the OS keychain); import the key first: ${NPX_COMMAND} key import --from <file>`,
+  snapshotNotStandalone: (path: string) =>
+    `${path} is not a standalone snapshot (a -wal or -journal file sits beside it); create one with \`${NPX_COMMAND} db export\``,
   databaseLeftovers: (path: string) =>
     `${path} has a leftover -wal, -shm or -journal file beside it; remove it yourself first, or it would be replayed on the imported database`,
   importSourceMissing: (path: string) => `${path} does not exist or is not a file`,
