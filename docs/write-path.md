@@ -10,7 +10,7 @@
 Every write flow is converted. `deps` exposes **no write method at all** — controllers only decide and return
 effects; the domain is structurally incapable of writing.
 
-Per `docs/functional-core-imperative-shell.md`: a controller **decides** and returns the write as data; the
+Per `docs/canonical/functional-core-imperative-shell.md`: a controller **decides** and returns the write as data; the
 diplomat shell **applies** it. Organized below by concern — the core's contract, the boundary adaptation, the
 engine wiring, appliers, outcomes, and the per-flow notes.
 
@@ -179,9 +179,11 @@ the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
   exactly one table** (the proxy is not the rule — a single-table applier could still smuggle in a decision or a
   read). All registered appliers satisfy it.
 - **`versionedTableApplier(table, { readBack? })`** (`diplomat/db/effects.ts`) builds a complete `EntityApplier`
-  from a drizzle table for any `id`+`version` table (one `TableContext` — table, key column, owner scope, `readBack` —
+  from a drizzle table for any `id`+`version` table **that is not tenant-owned** (identity and instance tables, shared
+  data — their flows act across users); a tenant-owned table of this shape uses `ownedTableApplier(table, userId)`
+  instead, and one that lacks the shape keeps a hand-written scoped applier (§ Scoped appliers) (one `TableContext` — table, key column, owner scope, `readBack` —
   built once, and four named operations over it: `insertRow`, `updateRow`, `deleteRow`, `checkRow`; `insertRow` is
-  `assertKeyMatchesTable`, `rowToInsert`, `conflictTarget` and `persistedIdAfter`) — `accountApplier` is `versionedTableApplier(accounts)`;
+  `assertKeyMatchesTable`, `rowToInsert`, `conflictTarget` and `persistedIdAfter`) — `accountApplier(userId)` is `ownedTableApplier(accounts, userId)`;
   `transactionApplier` adds a `readBack`. It writes the next version computed in application code (never a
   SQL-side `version + 1`) guarded by `WHERE id = ? AND version = ?`. Dedup is by convention: the applier uses the
   table's fixed `idempotencyKey` column when it exists (only `transactions` today): the key is merged onto the row,

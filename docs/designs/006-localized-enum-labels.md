@@ -137,7 +137,7 @@ Server-side resolution matches how category names already work.
 > Hand this to a coding agent. Source of truth: this design; **read ADR-009** (the chrome exception) first.
 > Work on branch **`feat/account-type-labels`** (already exists with this doc); `git fetch && git rebase
 > origin/main` first. Read `CLAUDE.md` (esp. the **Definition of Done**), `docs/architecture.md`,
-> `docs/code-style.md`, `docs/code-quality.md`. Mirror how default **category names** are localized at read time
+> `docs/canonical/code-style.md`, `docs/canonical/code-quality.md`. Mirror how default **category names** are localized at read time
 > (the settings/locale resolution + category controller/adapter). Skim the models for the six enums, and the
 > read paths: `controllers/accounts.ts`, `controllers/categories.ts`, `controllers/recurring.ts`,
 > `controllers/bills.ts`, `adapters/transactions.ts` (the `TransactionView` assembly), `wire/out`, and

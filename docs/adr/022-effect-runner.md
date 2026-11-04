@@ -110,7 +110,7 @@ being generalized is precisely the *generic* executor.
   bill-cycle dedup are all unnecessary and removed.
 - **Recurring is unaffected** — it stays an atomic unit (its chosen mode remains valid).
 - **A future message-dispatch effect kind** has a defined home; not built here.
-- **Docs**: `docs/functional-core-imperative-shell.md` reframed (the shell runs *effects* — persistence one kind,
+- **Docs**: `docs/canonical/functional-core-imperative-shell.md` reframed (the shell runs *effects* — persistence one kind,
   response always, messaging future; the executor is `runEffects`; granularity = atomic unit vs sequence);
   `docs/architecture.md` dependency-table/wording; an amendment note on ADR-021 (its runner is renamed/generalized
   here). These land on acceptance (the doc's as-built status + the literal rename are not treated as done while

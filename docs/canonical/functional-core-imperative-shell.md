@@ -1,10 +1,8 @@
 # Functional Core, Imperative Shell
 
 > **Canonical principle.** Read this in full before writing or reviewing any code that produces a side effect
-> (persistence, message dispatch). It is agnostic of any specific domain, entity, or infrastructure — for how
-> this project applies it (concrete types, appliers, current state), see `docs/architecture.md` and the full
-> write-path mechanics in `docs/write-path.md`. It sits
-> alongside `docs/diplomatic-architecture.md`: Diplomatic Architecture says *where* the layers are; this says
+> (persistence, message dispatch). It is agnostic of any specific domain, entity, or infrastructure. It sits
+> alongside the Diplomatic Architecture document: Diplomatic Architecture says *where* the layers are; this says
 > *what crosses the boundary between them* — **decisions flow out of the core as data; effects are executed by
 > the shell.**
 

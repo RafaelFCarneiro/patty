@@ -138,8 +138,8 @@ than the JSON column with no current need; revisit only if cross-locale name sea
 > superseded `i18n_key` + `logic/i18n` catalog with seed types in `models/`; this revision **replaces** that —
 > expect to delete and move code, not just add.
 
-**Before coding**, also read: `CLAUDE.md`, `docs/architecture.md`, `docs/diplomatic-architecture.md`,
-`docs/code-style.md`, `docs/code-quality.md`. Skim `src/diplomat/db/schema.ts`, `src/diplomat/db/bootstrap.ts`,
+**Before coding**, also read: `CLAUDE.md`, `docs/architecture.md`, `docs/canonical/diplomatic-architecture.md`,
+`docs/canonical/code-style.md`, `docs/canonical/code-quality.md`. Skim `src/diplomat/db/schema.ts`, `src/diplomat/db/bootstrap.ts`,
 `src/models/category.ts`, `src/diplomat/db/repos/categories.ts`, `src/controllers/categories.ts`,
 `src/controllers/resolve.ts`, `src/config.ts`, `src/diplomat/mcp/server.ts`.
 

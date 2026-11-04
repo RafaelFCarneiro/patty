@@ -2,7 +2,7 @@
 
 **Status:** Accepted · **Date:** 2026-08-07 · **Deciders:** Rafael · A layering decision for the **read
 side**, the counterpart to **ADR-016** (bounded-context ownership on the write side) and the diplomat-layering
-rules in `docs/diplomatic-architecture.md`. Refines **ADR-011** (safe dynamic aggregation SQL): aggregation
+rules in `docs/canonical/diplomatic-architecture.md`. Refines **ADR-011** (safe dynamic aggregation SQL): aggregation
 stays in the repo, but *correlation across aggregates* does not. Supersedes the `budgetTargetMatch`
 shared-fragment approach introduced with Feature Design 015/016.
 

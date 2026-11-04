@@ -1,9 +1,9 @@
 # FinTrack v2 — Architecture (as built)
 
 > **This file describes the system as it IS.** Update it in the same change that alters architecture.
-> Roadmap and vision: `docs/PLAN.md`. Decisions + rationale: `docs/adr/`. Agent instructions: `CLAUDE.md`.
-> Layer concepts: `docs/diplomatic-architecture.md` (where the layers are) and
-> `docs/functional-core-imperative-shell.md` (what crosses the write-path boundary between them — ADR-021,
+> Decisions + rationale: `docs/adr/`. Agent instructions: `CLAUDE.md`.
+> Layer concepts: `docs/canonical/diplomatic-architecture.md` (where the layers are) and
+> `docs/canonical/functional-core-imperative-shell.md` (what crosses the write-path boundary between them — ADR-021,
 > mandatory reading alongside the Diplomat doc for any write-flow change).
 > Write-path mechanics: `docs/write-path.md`. Browser `/ui` surface: `docs/ui.md`. Operator guide to authentication: `docs/auth.md`.
 
@@ -34,7 +34,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 
 1. Schema stack: zod is the schema system used for models and boundary decoding.
 2. Controller dependency style: controllers orchestrate through injected deps interfaces (`controllers/deps.ts`) and must not import `diplomat/` modules directly. **Documented exception**: `import type` of repo contracts from `diplomat/db/repos` is allowed (type-only imports erase at runtime; the contracts live next to their implementations until a dedicated ports module is warranted).
-3. Diplomat role: `diplomat/http` and `diplomat/mcp` remain thin edges (parse/delegate/translate), while side effects are composed in controllers via deps. **FinTrack restriction**: unlike the generic Diplomat pattern, controllers here must NOT import `diplomat/` modules — they interact exclusively through injected deps interfaces (`controllers/deps.ts`). The generic dependency table in `docs/diplomatic-architecture.md` lists `diplomat.*` as a valid controller dependency; that does not apply here.
+3. Diplomat role: `diplomat/http` and `diplomat/mcp` remain thin edges (parse/delegate/translate), while side effects are composed in controllers via deps. **FinTrack restriction**: unlike the generic Diplomat pattern, controllers here must NOT import `diplomat/` modules — they interact exclusively through injected deps interfaces (`controllers/deps.ts`). The generic dependency table in `docs/canonical/diplomatic-architecture.md` lists `diplomat.*` as a valid controller dependency; that does not apply here.
 4. Adaptation boundaries: adapters are pure translators for all boundary crossings, not only db. They convert `wire/in -> model`, `model -> wire/out`, and `model <-> wire/db`.
 5. Persistence adaptation: controllers hand repos **domain drafts** (models — e.g. `TransactionDraft` with nested `classification`); `diplomat/db` may use adapters internally to flatten model→db and decode db→model. Controllers never build db-wire shapes and never call adapters.
 6. Edge flow contract: `diplomat/http`, `diplomat/mcp`, and other diplomats adapt external payloads with wire schemas + adapters before calling controllers, then adapt controller results back to wire/out.
@@ -379,7 +379,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     go negative / exceed 1 — over-budget is reported, never an error; effective headroom is
     trivially `limit − effective.amount` for a caller that wants it. The response groups every
     budget by its top-level category name (per-currency and per-sub-category lines read as one
-    coherent unit; still no cross-currency total — that needs FX, the deferred PLAN open question).
+    coherent unit; the lines are never combined across currencies — a converted total is only the opt-in top-level `converted` block).
     **The read surface (`list_budgets`,
     `get_budget_status`) honors invariant 13's locale resolution**: the repo
     (`diplomat/db/repos/budgets.ts`) selects the budgeted node's (and, for a sub-category target,
@@ -748,7 +748,7 @@ only adapts args → model, builds the flow, runs it through the scoped runner a
 is orchestration that belongs in a controller. All of `src/**` is held to the
 Function-shape limits (`eslint.config.js`: 40 lines, complexity 10, depth 3, 15 statements per function); a controller
 reads gather → decide → persist, the decide step being a pure `logic/` plan function, and in the shell a factory only
-binds (below, and `docs/code-quality.md` § Function shape).
+binds (below, and `docs/canonical/code-quality.md` § Function shape).
 
 **MCP — `diplomat/mcp`.** `definition.ts` defines `ToolDefinition` (`{ name: ToolName, config: { title, description,
 inputSchema, annotations }, handle(args, scoped, ctx) }`), `ResourceDefinition` and `PromptDefinition`, plus the
@@ -850,6 +850,95 @@ discriminator (default dashboards are git-versioned `.html` files under `ui/dash
 reconciliation, the management flows (`save`/`delete`/`rename`, all FC/IS), and entity-tagged **SSE** live-update
 fed by the `runEffects` post-commit hook — is documented in full in **`docs/ui.md`**. The `dashboards` table
 shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-027.
+
+## Conventions in this repo
+
+How this repository binds the agnostic principles in `docs/canonical/` (`code-quality.md`, `code-style.md`,
+`diplomatic-architecture.md`, `functional-core-imperative-shell.md`). Each line states a binding — a library, a
+location, a lint rule or a limit — not the principle behind it.
+
+### Libraries per concern
+
+| Concern | Choice | ADR |
+|---|---|---|
+| Schemas, boundary decoding, domain types (`z.infer`) | zod — `models/`, `wire/` | — |
+| Fallible control flow | neverthrow — `ResultAsync`, `safeTry` generators in controllers | 001, 003 |
+| `guard` / `okOr` combinators | `common/result.ts` | 003 |
+| Data reshaping (≥2 stages, grouping) | remeda — `R.pipe`, `groupBy`, `countBy`, … (table below) | 003 |
+| Dual-calling helpers (plain call and pipe) | remeda `purry` | — |
+| Effect engine (`runEffects`, `Persistable`, `INITIAL_VERSION`, `VersionConflict`, change bus) | `@rfc0/effect-runner`; the SQLite port is `diplomat/db` | 031 |
+
+Preferred remeda helpers (canonical `code-quality.md` § Declarative over imperative):
+
+| Instead of… | Use… |
+|---|---|
+| counter in a loop | `R.countBy` |
+| `reduce` building an object | `R.groupBy`, `R.mapValues`, `R.sumBy` |
+| `a \|\| b \|\| c` / `a && b && c` over predicates | `R.anyPass` / `R.allPass` |
+| chained `.filter().map().sort()` | `R.pipe` |
+| `{...a, ...b, ...c}` | `R.mergeAll` |
+| `.filter(fn)[0]`, `find(fn) ?? x` | `R.firstBy` / `R.find` |
+| `switch` that only transforms a value | `R.conditional` |
+| `() => fixedValue` | `R.constant` |
+
+### Where shared helpers live
+
+- Result combinators `guard`/`okOr`: `common/result.ts`. Name resolution (`resolveAccountRef`, `resolveCategoryRef`,
+  `resolveCardRef`): `controllers/resolve.ts`. Controller ports (`Deps`, read-only): `controllers/deps.ts`.
+- `Persistable` builders (`insert`/`update`/`remove`): `logic/persistence.ts`; the `PersistOp` enum they set is owned by `@rfc0/effect-runner`.
+- Entity tags (`ACCOUNT_ENTITY_TAG`, …): each entity's own `models/` file. Appliers: beside the entity's repo in
+  `diplomat/db/repos/`, registered once at the composition root (`docs/write-path.md`). Model → row adaptation
+  (`outcomeToDb`) happens once, in the edge handler.
+- Applier choice follows who the table belongs to, not a `user_id` column alone. A tenant-owned table with the
+  `id`/`version` shape uses `ownedTableApplier(table, userId)` (built per user by `runEffectsFor(principal)`: inserts
+  stamp the user; updates, deletes and checks add `AND user_id = :me`). Anything else keeps its own applier: a
+  hand-written scoped one, an unscoped identity applier (the auth flows act across users), or one for key-only or
+  shared data. The authoritative list is the registries — `src/composition/runtime.ts` (per-user) and
+  `AUTH_APPLIERS` in `src/composition/auth.ts` — not this document. A new tenant-owned table also needs `user_id`, a
+  scoped repo, a row in the isolation suite (`test/integration/tenancy/`) and a line in the tenancy map — see § Tenancy.
+- Error payloads: `<entity>Errors` colocated on the entity model, typed against `models/error.ts` (ADR-012); models never
+  import the composed `AppError`.
+- Schema naming: `XSchema` for the zod value, bare `X` for the inferred type. Core schemas compose up with `.extend`;
+  never put an aggregate-specific field on the shared core for other aggregates to `.omit` away (ADR-019) — omitting a
+  create-only discriminator or statement-level field from a derived input schema is fine. Domain integrity defaults live on the model; convenience defaults on `wire/in` via `.extend`.
+- Edge definitions: one named `RouteDefinition` / `defineTool(…)` per route / tool in
+  `diplomat/http/routes/<domain>.ts` / `diplomat/mcp/tools/<domain>.ts`; `ToolName` (`diplomat/mcp/tool-name.ts`) is
+  lint-restricted to the MCP edge (ADR-025; § Diplomat edge organization).
+- Wire contracts: `wire/in`, `wire/out`, `wire/db` — never in `models/`.
+
+### Lint enforcement (`eslint.config.js`)
+
+| Rule | Scope | Limit / effect |
+|---|---|---|
+| Imperative constructs (`for`, `for…of`, `for…in`, `while`, `do…while`, `let`, `.push(`) | `src/logic/`, `src/controllers/`, `src/adapters/` | error; `diplomat/**` and `composition/**` exempt |
+| Function shape | all of `src/**` | 40 lines, complexity 10, depth 3, 15 statements |
+| Switch size | all of `src/**` | `SwitchStatement > SwitchCase:nth-child(7)` is an error → use a `satisfies Record<Kind, …>` table |
+| kebab-case file and folder names (`eslint-plugin-check-file`) | `src/`, `test/`, `scripts/`, `ui/` | error |
+| `@typescript-eslint/consistent-type-imports` | `src/**`, `test/**` | `import { a, type B }` |
+| `no-duplicate-imports` | `src/**`, `test/**` | one import per module |
+
+### Folder and test layout
+
+- Layers under `src/`: `adapters/`, `controllers/`, `diplomat/{http,mcp,db}/`, `logic/`, `models/`, `wire/{in,out,db}/`,
+  `composition/`, `main.ts`, `config.ts`. ESM with NodeNext: relative imports end in `.js`.
+- A domain with more than one file in a layer gets a folder in that layer and its files drop the folder's name:
+  `logic/demo/plan.ts`, `logic/demo/database.ts` (not `logic/demo.ts`, `logic/demo-database.ts`); likewise
+  `controllers/auth/`, `models/demo/`.
+- Tests live under `test/unit/` and `test/integration/` in a mirrored path, never colocated (the vitest configs scan only
+  those folders, so `src/**/*.test.ts` silently never runs). Every `logic/` function has a mirrored
+  `test/unit/logic/*.test.ts`; shared fixtures are in `test/unit/fixtures/`.
+- Identifiers: `deps.newId()` (`crypto.randomUUID()`); seeds use stable slugs (`cat-transport`). Dates are
+  `YYYY-MM-DD`, month math in `logic/period.ts` / `logic/recurring.ts`. User-facing strings may be Portuguese; identifiers
+  and comments are English.
+
+### ADR behind each binding
+
+- ADR-001 — neverthrow for Result types; ADR-003 — remeda for data reshaping.
+- ADR-012 — expected-error payloads live with the entity.
+- ADR-019 — core schemas compose up (`.extend`), not down (`.omit`).
+- ADR-021 — write path returns `{ persist, response }`; the shell applies it.
+- ADR-025 — diplomat edge organization.
+- ADR-031 — effect engine is the external `@rfc0/effect-runner`.
 
 ## ADR index
 

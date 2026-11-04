@@ -117,7 +117,7 @@ The **safe-composition** decision (whitelist maps vs. string-built columns vs. a
 different return types: `search` returns **rows** (`TransactionView[]`); `aggregate` returns **reductions**
 (grouped `{ key, label, value, count }` per currency). Folding aggregation into `search` via a `groupBy?` flag
 makes its return type **polymorphic** (rows when absent, aggregates when present) — a discriminated union the
-agent and the type system must branch on. That violates single-responsibility (`docs/code-quality.md`: "one
+agent and the type system must branch on. That violates single-responsibility (`docs/canonical/code-quality.md`: "one
 job; if the description says *and*, split it") and mirrors the existing split (`get_spending_summary` is already
 a separate read tool, not a flag on `search`). Two intent-named tools also route better for the MCP agent
 ("list my restaurant transactions" → search; "how much per category" → aggregate). The genuine overlap — the
@@ -157,7 +157,7 @@ block makes the invariant structural.
 > Hand this to a coding agent. The design above is the source of truth; **read ADR-011 first**
 > (`docs/adr/011-safe-dynamic-aggregation.md`). Work on branch **`feat/aggregate-spending`** off `main`;
 > `git fetch && git rebase origin/main` first. Read `CLAUDE.md` (esp. the **Definition of Done**),
-> `docs/architecture.md` (invariants, dependency table), `docs/code-style.md`, `docs/code-quality.md`. Mirror the
+> `docs/architecture.md` (invariants, dependency table), `docs/canonical/code-style.md`, `docs/canonical/code-quality.md`. Mirror the
 > existing summary stack: `src/controllers/summary.ts`, `src/logic/summary.ts`, the `summaryRows` method in
 > `src/diplomat/db/repos/transactions.ts`, and `src/diplomat/mcp/server.ts` (`get_spending_summary`). For the
 > category-label resolution pattern (select `c.name` + `c.names`, resolve in TS), study `summaryRows` +

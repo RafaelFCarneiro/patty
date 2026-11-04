@@ -107,7 +107,7 @@ for a finance tool.
 
 > Hand this to a coding agent. The design above is the source of truth. Work on branch
 > **`feat/delete-categories`** off `main`; `git fetch && git rebase origin/main` first. Read `CLAUDE.md` (esp.
-> the **Definition of Done**), `docs/architecture.md`, `docs/code-style.md`, `docs/code-quality.md`. Mirror the
+> the **Definition of Done**), `docs/architecture.md`, `docs/canonical/code-style.md`, `docs/canonical/code-quality.md`. Mirror the
 > existing category surface: `src/controllers/categories.ts`, `src/diplomat/db/repos/categories.ts`,
 > `src/controllers/resolve.ts` (`resolveCategoryRef` / `resolveSubCategoryRef`), `src/common/errors.ts` (the
 > `AppError` union + `delete_transaction`'s shape for reference), `src/diplomat/mcp/server.ts`, and

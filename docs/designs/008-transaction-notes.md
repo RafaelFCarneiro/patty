@@ -79,8 +79,8 @@ table can come later if multi-note is ever wanted.
 
 > Hand this to a coding agent. Source of truth: this design. Work on branch **`feat/transaction-notes`** off
 > `main`; `git fetch && git rebase origin/main` first. **Follow the project guidelines — mandatory:** read
-> `CLAUDE.md` (esp. the **Definition of Done**), `docs/architecture.md`, `docs/diplomatic-architecture.md`,
-> `docs/code-style.md`, `docs/code-quality.md`, and conform (diplomatic layering, zod-decode at boundaries,
+> `CLAUDE.md` (esp. the **Definition of Done**), `docs/architecture.md`, `docs/canonical/diplomatic-architecture.md`,
+> `docs/canonical/code-style.md`, `docs/canonical/code-quality.md`, and conform (diplomatic layering, zod-decode at boundaries,
 > constants over literals, single responsibility). Mirror how `rawInput` is threaded through the transaction
 > stack — `note` follows the exact same path. Skim `src/diplomat/db/schema.ts`,
 > `src/diplomat/db/queries/transaction-select.ts`, `src/models/transaction.ts`, `src/adapters/transactions.ts`,

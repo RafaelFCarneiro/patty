@@ -85,8 +85,8 @@ HTTP-only; invisible under the default stdio transport. The MCP tool is the surf
 
 > Hand this to a coding agent. Source of truth: this design. Work on branch **`feat/mcp-status`** off `main`;
 > `git fetch && git rebase origin/main` first. **Follow the project guidelines — mandatory:** read `CLAUDE.md`
-> (esp. the **Definition of Done**), `docs/architecture.md`, `docs/diplomatic-architecture.md`,
-> `docs/code-style.md`, `docs/code-quality.md`, and conform (diplomatic layering, `safeTry`/`ResultAsync` or
+> (esp. the **Definition of Done**), `docs/architecture.md`, `docs/canonical/diplomatic-architecture.md`,
+> `docs/canonical/code-style.md`, `docs/canonical/code-quality.md`, and conform (diplomatic layering, `safeTry`/`ResultAsync` or
 > plain async as the existing read controllers do, thin diplomats, constants over literals). Skim `src/main.ts`
 > (composition root), `src/diplomat/mcp/server.ts` (`buildMcpServer`, the `new McpServer({...})` line),
 > `src/diplomat/mcp/stdio.ts`, `src/controllers/summary.ts` (a simple read controller to mirror),

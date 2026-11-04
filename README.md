@@ -212,13 +212,12 @@ Integration tests run against an ephemeral in-process libSQL database, exercise 
 
 | File | What it covers |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | System as built — relational schema, layer rules, invariants |
+| [`docs/architecture.md`](docs/architecture.md) | System as built — relational schema, layer rules, invariants, conventions in this repo |
 | [`docs/demo.md`](docs/demo.md) | The demo: what it contains, the `tour` prompt, reset and remove |
 | [`docs/mcp-tools.md`](docs/mcp-tools.md) | Full MCP tool contract: inputs, outputs, error codes, examples |
 | [`docs/mcp-clients.md`](docs/mcp-clients.md) | Connecting to Claude, VS Code, ChatGPT, Ollama |
 | [`docs/releasing.md`](docs/releasing.md) | Publishing, installing the private package, updating, ports |
-| [`docs/code-style.md`](docs/code-style.md) | Code patterns: safeTry controllers, remeda pipelines, zod decoding |
-| [`docs/PLAN.md`](docs/PLAN.md) | Roadmap and future phases |
+| [`docs/canonical/`](docs/canonical/) | Agnostic principles: diplomatic architecture, functional core / imperative shell, code quality, code style |
 | [`docs/adr/`](docs/adr/) | Architecture Decision Records |
 | [`CLAUDE.md`](CLAUDE.md) | Agent and contributor conventions |
 

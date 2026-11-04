@@ -116,7 +116,7 @@ The three sub-decisions:
    The sentinel throw exists only *inside* the repo method to trigger rollback; the repo API stays throw-free
    for expected outcomes; neverthrow stays entirely domain-side; unexpected errors still throw through (500).
 
-### Layering check (dependency table, `docs/diplomatic-architecture.md`)
+### Layering check (dependency table, `docs/canonical/diplomatic-architecture.md`)
 
 - Deltas in `models/` — models depend on schema definitions only: unchanged. ✓
 - Controllers build deltas from models/logic and call injected deps: unchanged. ✓
@@ -175,7 +175,7 @@ materialization stays as-is.
   saga in `createTransaction` disappears; conflict semantics become typed outcomes instead of interleaving
   arguments in review threads.
 - **Harder:** each migrated flow needs its delta type + repo method + outcome mapping; contributors must learn
-  the "delta in, outcome out" idiom (documented in `docs/architecture.md` + `docs/code-style.md` on acceptance).
+  the "delta in, outcome out" idiom (documented in `docs/architecture.md` + `docs/canonical/code-style.md` on acceptance).
 - **New invariant (added to `docs/architecture.md` on acceptance):** *a controller flow performing more than one
   repo write MUST either hand a per-flow delta to a single transactional repo method (`diplomat/db`), or document why
   idempotent replay makes the non-atomic sequence safe (as `apply_due_recurring` does).* Review/verifier
@@ -203,7 +203,7 @@ interleavings) where feasible.
 
 1. [ ] Review/accept this ADR (decision review — no implementation in this PR).
 2. [ ] On acceptance: add the multi-write invariant to `docs/architecture.md` (+ index this ADR) and the idiom
-   to `docs/code-style.md`.
+   to `docs/canonical/code-style.md`.
 3. [ ] Migrate `updateTransaction` (first mover), then `payBill`, then `createTransaction` — one PR each
    (after the ADR-014 pagination first mover lands).
 4. [ ] Add the invariant to the self-review/verifier checklist in `CLAUDE.md`.

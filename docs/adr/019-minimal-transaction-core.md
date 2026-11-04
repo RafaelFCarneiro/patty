@@ -150,7 +150,7 @@ of its own — which is what "context-wide boundary" already committed us to.
   case — its row kind is core ledger vocabulary (balance/summary/read are defined over it), its policy is
   account-context.*
 - **Docs**: `docs/architecture.md` (dependency-table model/logic ownership rows + the invariant),
-  `docs/code-style.md` (the compose-up rule with the `.extend`-not-`.omit` example), this ADR's status on
+  `docs/canonical/code-style.md` (the compose-up rule with the `.extend`-not-`.omit` example), this ADR's status on
   acceptance.
 
 ## Migration plan (incremental — behavior-preserving; each PR behind the full gate + coverage parity)
@@ -172,7 +172,7 @@ same assertions pass from their new homes.
 
 1. [x] Review/accept this ADR (decision review — no implementation in this PR).
 2. [x] On acceptance: add this ADR to the `docs/architecture.md` index (accepted/rejected only), plus the
-   dependency-table invariant + compose-up rule in `docs/architecture.md` / `docs/code-style.md`.
+   dependency-table invariant + compose-up rule in `docs/architecture.md` / `docs/canonical/code-style.md`.
 3. [x] Implement step 1 (schema compose-up). [x] Implement step 2 (logic re-homing) — `isCardOwned` deleted
    (not relocated) and `guardTransferMutability` moved to the account context per ADR-020's refinement, rather
    than as originally planned in this ADR's Migration plan; `assertBillPeriodPaired`/`withBillId` → credit-card

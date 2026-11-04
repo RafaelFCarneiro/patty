@@ -13,7 +13,7 @@ ADR-010 (credit cards as liability accounts) and ADR-012 (per-model errors).
 > **Mechanism note (2026-07-15):** the feature contract below (auto-assignment, explicit cycle override,
 > paid-bill immutability) is unchanged, but the implementation mechanism this doc describes —
 > `billsRepo.ensureAndAttach` and its self-heal-on-replay compensation — was replaced by ADR-021 phase 2b
-> (`docs/functional-core-imperative-shell.md`): the target bill and the transaction are now decided by the
+> (`docs/canonical/functional-core-imperative-shell.md`): the target bill and the transaction are now decided by the
 > domain and applied atomically by the generic unit of work as a `Persistable` batch, so there is no separate
 > attach step and no self-heal case left to guard. See `docs/architecture.md`'s invariant 8 and
 > `docs/write-path.md` for the current mechanism.
@@ -137,7 +137,7 @@ return a client-visible error for the same request.
 ## Implementation prompt
 
 > Hand this section to a coding agent. The design above is the source of truth; read
-> `docs/diplomatic-architecture.md`, `docs/code-quality.md`, `docs/code-style.md`, `docs/architecture.md`,
+> `docs/canonical/diplomatic-architecture.md`, `docs/canonical/code-quality.md`, `docs/canonical/code-style.md`, `docs/architecture.md`,
 > ADR-010, ADR-012, and Design 011 first. Work on branch `feat/transaction-bill-assignment`.
 
 ### Steps
