@@ -897,10 +897,12 @@ Preferred remeda helpers (canonical `code-quality.md` § Declarative over impera
   - **Tenant-owned tables that don't fit that shape** (`user_settings`, `merchant_category`, the transaction↔tag link
     table) keep a hand-written scoped applier (`docs/write-path.md` § Scoped appliers).
   - **Identity tables** (users, sessions, access_tokens, invites, client_grants, setup_codes, instance settings) and
-    shared reference data (merchants, currency_rates) use `versionedTableApplier(table)`: some carry a `user_id`, but
+    shared reference data that fits the `id`/`version` shape (currency_rates) use `versionedTableApplier(table)`: some carry a `user_id`, but
     the auth flows act on another user's credentials (an admin reissuing an invite, revoking a token), so a per-user
     scope would stamp or block the wrong owner; authorization is enforced by those flows (`AUTH_APPLIERS`,
     `src/composition/auth.ts`).
+  - **Key-only shared data** (`merchants`) has no `id`/`version`, so it keeps the hand-written insert-only
+    `merchantApplier` (`diplomat/db/repos/merchants.ts`), registered as it is.
   - A new tenant-owned table needs `user_id`, a scoped repo, a scoped applier, a row in the isolation suite
     (`test/integration/tenancy/`) and a line in the tenancy map — see § Tenancy.
 - Error payloads: `<entity>Errors` colocated on the entity model, typed against `models/error.ts` (ADR-012); models never
@@ -934,7 +936,7 @@ Preferred remeda helpers (canonical `code-quality.md` § Declarative over impera
 - Tests live under `test/unit/` and `test/integration/` in a mirrored path, never colocated (the vitest configs scan only
   those folders, so `src/**/*.test.ts` silently never runs). Every `logic/` function has a mirrored
   `test/unit/logic/*.test.ts`; shared fixtures are in `test/unit/fixtures/`.
-- Identifiers: `deps.newId()` (`crypto.randomUUID()`); seeds use stable slugs (`cat-transporte`). Dates are
+- Identifiers: `deps.newId()` (`crypto.randomUUID()`); seeds use stable slugs (`cat-transport`). Dates are
   `YYYY-MM-DD`, month math in `logic/period.ts` / `logic/recurring.ts`. User-facing strings may be Portuguese; identifiers
   and comments are English.
 

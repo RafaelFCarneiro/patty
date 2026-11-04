@@ -16,7 +16,7 @@ order-management domain and generic helpers (a `Result` type with `ok`/`err`, a 
 ## Controllers — Result composition (Railway-Oriented)
 
 Controllers return a `Result` (or async `Result`) for **expected** failures and compose with a generator-based
-generator-based result-composition helper. Each `yield*` short-circuits on the error track. Never write resolve-then-early-return chains.
+result-composition helper. Each `yield*` short-circuits on the error track. Never write resolve-then-early-return chains.
 
 ```ts
 // ✅ DO
