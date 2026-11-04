@@ -1,8 +1,23 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { acquireDatabaseLock, canonicalPath, removeDatabaseFiles } from '../../../../src/diplomat/db/database-files.js';
+import {
+  acquireDatabaseLock,
+  canonicalPath,
+  copyNewPrivateFile,
+  removeDatabaseFiles,
+} from '../../../../src/diplomat/db/database-files.js';
 
 let dir: string;
 
@@ -92,5 +107,25 @@ describe('acquireDatabaseLock', () => {
     const path = join(dir, 'd.db');
     await (await acquireDatabaseLock(path))?.release();
     expect(existsSync(`${path}.lock`)).toBe(true);
+  });
+});
+
+describe('copyNewPrivateFile', () => {
+  it('copies into a new owner-only file', async () => {
+    writeFileSync(join(dir, 'from.db'), 'snapshot');
+    await copyNewPrivateFile(join(dir, 'from.db'), join(dir, 'data', 'to.db'));
+    expect(readFileSync(join(dir, 'data', 'to.db'), 'utf8')).toBe('snapshot');
+    expect(statSync(join(dir, 'data', 'to.db')).mode & 0o777).toBe(0o600);
+  });
+
+  it('leaves a file that was already there untouched, even when the source is gone too', async () => {
+    writeFileSync(join(dir, 'to.db'), 'theirs');
+    await expect(copyNewPrivateFile(join(dir, 'missing.db'), join(dir, 'to.db'))).rejects.toThrow();
+    expect(readFileSync(join(dir, 'to.db'), 'utf8')).toBe('theirs');
+  });
+
+  it('removes the partial file it created when the source cannot be read', async () => {
+    await expect(copyNewPrivateFile(join(dir, 'missing.db'), join(dir, 'to.db'))).rejects.toThrow();
+    expect(existsSync(join(dir, 'to.db'))).toBe(false);
   });
 });

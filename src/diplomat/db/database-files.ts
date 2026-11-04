@@ -1,9 +1,9 @@
 import { tmpdir } from 'node:os';
+import { open } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import {
   copyFileSync,
   createReadStream,
-  createWriteStream,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -17,7 +17,6 @@ import { DEMO_DB_KEY, DemoProbeAbsence, type DemoDatabaseLook } from '../../mode
 import {
   DATABASE_COMPANION_SUFFIXES,
   EXCLUSIVE_CREATE_FLAG,
-  FILE_EXISTS_CODE,
   PRIVATE_DIRECTORY_MODE,
   PRIVATE_FILE_MODE,
   type ExportedRowCounts,
@@ -106,17 +105,16 @@ export const probeDatabase = async (databasePath: string): Promise<DemoDatabaseL
   }
 };
 
-/** Copies `from` to a new owner-only file at `to`, creating the data directory. A file that was already there is not
- *  ours to remove (`wx` refused it); anything the copy started is. */
+/** Copies `from` to a new owner-only file at `to`, creating the data directory. The `wx` open comes first and alone:
+ *  if it is refused the file was not ours and nothing is removed; once it succeeds the file is ours to remove if the
+ *  copy fails (including a source that vanished meanwhile). */
 export const copyNewPrivateFile = async (from: string, to: string): Promise<void> => {
   mkdirSync(dirname(to), { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
+  const destination = await open(to, EXCLUSIVE_CREATE_FLAG, PRIVATE_FILE_MODE);
   try {
-    await pipeline(
-      createReadStream(from),
-      createWriteStream(to, { flags: EXCLUSIVE_CREATE_FLAG, mode: PRIVATE_FILE_MODE }),
-    );
+    await pipeline(createReadStream(from), destination.createWriteStream());
   } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code !== FILE_EXISTS_CODE) rmSync(to, { force: true });
+    rmSync(to, { force: true });
     throw cause;
   }
 };
