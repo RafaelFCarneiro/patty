@@ -193,25 +193,16 @@ describe('the keychain key helpers (key import)', () => {
 
   it('an import racing a server’s key generation never ends up replacing the server’s key', async () => {
     let stored = null as string | null;
-    const events: string[] = [];
-    const who = () => (new Error().stack ?? '').split('\n').slice(2, 5).map((l) => l.trim().replace(/\(.*[\\/]/, '(')).join(' < ');
-    keychain.getPassword.mockImplementation(() => {
-      events.push(`get ${stored?.slice(0, 2)} @ ${who()}`);
-      return stored;
-    });
+    keychain.getPassword.mockImplementation(() => stored);
     keychain.setPassword.mockImplementation((value: string) => {
-      events.push(`set ${value.slice(0, 2)} @ ${who()}`);
       stored = value;
     });
-    await keychainHoldsKey();
-    events.length = 0;
     const [resolved, imported] = await Promise.all([
       resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH }),
       storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH),
     ]);
-    const trace = events.join('\n');
-    expect({ imported, trace }).toEqual({ imported: resolved === FILE_KEY, trace });
     expect(stored).toBe(resolved);
+    expect(imported).toBe(resolved === FILE_KEY);
   });
 
   it('surfaces the lock’s own message, not the keychain one, when another process holds the key lock', async () => {

@@ -104,10 +104,10 @@ describe('waitForExclusiveLock', () => {
     const failure = await outcome;
     expect(failure?.message).toBe(wait.timeoutMessage);
     expect(failure?.cause).toBe(busy);
-    expect(close).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledTimes(statementsRun().filter((sql) => sql === 'BEGIN EXCLUSIVE').length);
   });
 
-  it('takes the lock as soon as the holder lets go, and releases it on request', async () => {
+  it('closes the client of every busy attempt, not only the one that takes the lock', async () => {
     vi.useFakeTimers();
     let busyAttempts = 2;
     execute.mockImplementation(async (sql: string) => {
@@ -119,6 +119,6 @@ describe('waitForExclusiveLock', () => {
     await lock.release();
     expect(statementsRun().filter((sql) => sql === 'BEGIN EXCLUSIVE')).toHaveLength(3);
     expect(statementsRun()).toContain('ROLLBACK');
-    expect(close).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledTimes(3);
   });
 });

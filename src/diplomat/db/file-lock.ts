@@ -40,49 +40,46 @@ export const rollbackQuietly = async (client: Client): Promise<void> => {
   }
 };
 
-export type LockWait = { waitMs: number; retryMs: number; timeoutMessage: string };
+type LockAttempt = { lock: ExclusiveLock } | { lock: null; cause: unknown };
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-const beginWithin = async (client: Client, deadline: number, wait: LockWait): Promise<void> => {
-  const attempt = await tryBeginExclusive(client);
-  if (attempt.acquired) return;
-  if (Date.now() >= deadline) throw new Error(wait.timeoutMessage, { cause: attempt.cause });
-  await sleep(wait.retryMs);
-  return beginWithin(client, deadline, wait);
-};
-
-export const waitForExclusiveLock = async (lockPath: string, wait: LockWait): Promise<ExclusiveLock> => {
+// A client that failed to begin must be closed, not retried: its later begin succeeds but its release leaves the OS
+// lock held until the process exits.
+const attemptExclusiveLock = async (lockPath: string): Promise<LockAttempt> => {
   const client = await openLockFile(lockPath);
   try {
-    await beginWithin(client, Date.now() + wait.waitMs, wait);
-  } catch (cause) {
-    client.close();
-    throw cause;
-  }
-  return {
-    release: async () => {
-      await rollbackQuietly(client);
+    const attempt = await tryBeginExclusive(client);
+    if (!attempt.acquired) {
       client.close();
-    },
-  };
-};
-
-export const tryExclusiveLock = async (lockPath: string): Promise<ExclusiveLock | null> => {
-  const client = await openLockFile(lockPath);
-  try {
-    if (!(await tryBeginExclusive(client)).acquired) {
-      client.close();
-      return null;
+      return { lock: null, cause: attempt.cause };
     }
   } catch (cause) {
     client.close();
     throw cause;
   }
   return {
-    release: async () => {
-      await rollbackQuietly(client);
-      client.close();
+    lock: {
+      release: async () => {
+        await rollbackQuietly(client);
+        client.close();
+      },
     },
   };
 };
+
+export const tryExclusiveLock = async (lockPath: string): Promise<ExclusiveLock | null> =>
+  (await attemptExclusiveLock(lockPath)).lock;
+
+export type LockWait = { waitMs: number; retryMs: number; timeoutMessage: string };
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const acquireWithin = async (lockPath: string, deadline: number, wait: LockWait): Promise<ExclusiveLock> => {
+  const attempt = await attemptExclusiveLock(lockPath);
+  if (attempt.lock !== null) return attempt.lock;
+  if (Date.now() >= deadline) throw new Error(wait.timeoutMessage, { cause: attempt.cause });
+  await sleep(wait.retryMs);
+  return acquireWithin(lockPath, deadline, wait);
+};
+
+export const waitForExclusiveLock = (lockPath: string, wait: LockWait): Promise<ExclusiveLock> =>
+  acquireWithin(lockPath, Date.now() + wait.waitMs, wait);

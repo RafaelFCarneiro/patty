@@ -59,7 +59,9 @@ const readKeyFile = (path: string): string => {
 };
 
 // The only place the native keychain module is loaded, so the file/env key paths never load it (ADR-032).
-const loadKeyring = () => import('@napi-rs/keyring');
+const importKeyring = () => import('@napi-rs/keyring');
+let keyring: ReturnType<typeof importKeyring> | undefined;
+const loadKeyring = () => (keyring ??= importKeyring());
 
 // A hand-edited or corrupted keychain entry must fail here with a clear message, not reach libSQL.
 const validateStoredKey = (stored: string): string => {

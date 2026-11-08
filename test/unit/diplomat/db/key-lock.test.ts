@@ -38,6 +38,14 @@ describe('withKeyLock', () => {
     expect(events).toEqual(['a in', 'a out', 'b in', 'b out']);
   });
 
+  it('leaves no lock held once contending writers are done', async () => {
+    const slow = () => withKeyLock(() => new Promise<void>((resolve) => setTimeout(resolve, 100)), lockPath, 3_000);
+    await Promise.all([slow(), slow()]);
+    const again = await tryExclusiveLock(lockPath);
+    expect(again).not.toBeNull();
+    await again?.release();
+  });
+
   it('waits for a holder that lets go within the wait', async () => {
     const first = await withKeyLock(async () => 1, lockPath);
     const held = await tryExclusiveLock(lockPath);
