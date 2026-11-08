@@ -192,7 +192,7 @@ describe('the keychain key helpers (key import)', () => {
   });
 
   it('an import racing a server’s key generation never ends up replacing the server’s key', async () => {
-    let stored: string | null = null;
+    let stored = null as string | null;
     const events: string[] = [];
     keychain.getPassword.mockImplementation(() => {
       events.push(`get ${stored?.slice(0, 2)}`);
