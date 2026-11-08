@@ -193,10 +193,24 @@ describe('the keychain key helpers (key import)', () => {
 
   it('an import racing a server’s key generation never ends up replacing the server’s key', async () => {
     let stored: string | null = null;
-    keychain.getPassword.mockImplementation(() => stored);
+    const events: string[] = [];
+    keychain.getPassword.mockImplementation(() => {
+      events.push(`get ${stored?.slice(0, 2)}`);
+      return stored;
+    });
     keychain.setPassword.mockImplementation((value: string) => {
+      events.push(`set ${value.slice(0, 2)}`);
       stored = value;
     });
+    const [resolved, imported] = await Promise.all([
+      resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH }),
+      storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH),
+    ]);
+    const trace = `${events.join(' | ')} || resolved ${resolved.slice(0, 2)} stored ${stored?.slice(0, 2)} imported ${imported}`;
+    expect(trace).toBe(trace.replace(/^/, ''));
+    expect(stored).toBe(resolved);
+    expect({ imported, trace }).toEqual({ imported: resolved === FILE_KEY, trace });
+  });
     const [resolved, imported] = await Promise.all([
       resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH }),
       storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH),
