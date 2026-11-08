@@ -8,6 +8,7 @@ import type { Config } from '../../config.js';
 import { EncryptionKey } from '../../models/encryption-key.js';
 import { PRIVATE_DIRECTORY_MODE } from '../../models/export.js';
 import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
+import { KeyLockBusyError, withKeyLock } from './key-lock.js';
 import * as schema from './schema.js';
 
 export type Db = LibSQLDatabase<typeof schema>;
@@ -78,18 +79,26 @@ const keychainEntry = async () => {
   return new Entry(KEYCHAIN_SERVICE, DB_KEY_KEYCHAIN_ACCOUNT);
 };
 
-const resolveKeychainKey = async (): Promise<string> => {
-  try {
-    const entry = await keychainEntry();
+type KeychainEntry = Awaited<ReturnType<typeof keychainEntry>>;
+
+/** Re-reads the entry under the key lock: another process may have written a key since the caller looked. */
+const generateKeychainKey = (entry: KeychainEntry): Promise<string> =>
+  withKeyLock(async () => {
     const existing = entry.getPassword();
     if (existing) return existing;
-
     const key = randomBytes(32).toString('hex');
     entry.setPassword(key);
     return key;
+  });
+
+const resolveKeychainKey = async (): Promise<string> => {
+  try {
+    const entry = await keychainEntry();
+    return entry.getPassword() || (await generateKeychainKey(entry));
   } catch (cause) {
+    if (cause instanceof KeyLockBusyError) throw cause;
     throw new Error(
-      `fintrack: cannot access the OS keychain for the database encryption key, and no key source was configured. ${KEY_GENERATION_HINT}`,
+      `fintrack: cannot read or write the database encryption key in the OS keychain (or take its lock), and no key source was configured. ${KEY_GENERATION_HINT}`,
       { cause },
     );
   }
@@ -118,10 +127,15 @@ export const resolveEncryptionKey = async (config: DbConfig): Promise<string> =>
 /** Whether the OS keychain already holds the database key. Reads; never generates. */
 export const keychainHoldsKey = async (): Promise<boolean> => Boolean((await keychainEntry()).getPassword());
 
-/** Stores `key` in the entry the server reads (`resolveEncryptionKey`'s). Replaces whatever is there: the caller
- *  decides whether that is allowed. */
-export const storeKeychainKey = async (key: string): Promise<void> => {
-  (await keychainEntry()).setPassword(key);
+/** Stores `key` in the entry the server reads (`resolveEncryptionKey`'s) unless it already holds one, checked under the
+ *  key lock the server's own generation takes: false when a key is there, whoever wrote it. Never replaces. */
+export const storeKeychainKeyIfAbsent = async (key: string): Promise<boolean> => {
+  const entry = await keychainEntry();
+  return withKeyLock(async () => {
+    if (entry.getPassword()) return false;
+    entry.setPassword(key);
+    return true;
+  });
 };
 
 /** The key `resolveEncryptionKey` would answer, but never generates one: null when no source holds a key. */

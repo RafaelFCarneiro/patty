@@ -16,3 +16,7 @@ export const KEY_FILE_LINE_ENDINGS = ['\r\n', '\n'] as const;
 
 /** A key file is the key and at most one line ending: nothing longer is one. */
 export const KEY_FILE_MAX_CHARACTERS = 64 + Math.max(...KEY_FILE_LINE_ENDINGS.map((ending) => ending.length));
+
+/** How long a writer of the keychain key waits for another one before giving up, and how often it asks again. */
+export const KEY_LOCK_WAIT_MS = 60_000;
+export const KEY_LOCK_RETRY_MS = 50;

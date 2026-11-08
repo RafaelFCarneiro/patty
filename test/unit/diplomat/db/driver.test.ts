@@ -3,12 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createClient } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as KeyLock from '../../../../src/diplomat/db/key-lock.js';
+import { acquireKeyLockForTest } from '../../fixtures/key-lock.js';
 import {
   enableWal,
   findEncryptionKey,
   keychainHoldsKey,
   resolveEncryptionKey,
-  storeKeychainKey,
+  storeKeychainKeyIfAbsent,
 } from '../../../../src/diplomat/db/driver.js';
 
 const keychain = vi.hoisted(() => ({
@@ -26,6 +28,12 @@ vi.mock('@napi-rs/keyring', () => {
       setPassword = keychain.setPassword;
     },
   };
+});
+
+vi.mock('../../../../src/diplomat/db/key-lock.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof KeyLock>();
+  const { keyLockPathForTest } = await import('../../fixtures/key-lock.js');
+  return { ...actual, withKeyLock: <T>(work: () => Promise<T>) => actual.withKeyLock(work, keyLockPathForTest()) };
 });
 
 const FILE_KEY = 'a'.repeat(64);
@@ -160,9 +168,43 @@ describe('the keychain key helpers (key import)', () => {
     expect(keychain.setPassword).not.toHaveBeenCalled();
   });
 
-  it('storeKeychainKey writes the key to the entry the server reads', async () => {
-    await storeKeychainKey(FILE_KEY);
+  it('storeKeychainKeyIfAbsent writes the key to the entry the server reads when it is empty', async () => {
+    keychain.getPassword.mockReturnValue(null);
+    await expect(storeKeychainKeyIfAbsent(FILE_KEY)).resolves.toBe(true);
     expect(keychain.setPassword).toHaveBeenCalledWith(FILE_KEY);
+  });
+
+  it('storeKeychainKeyIfAbsent never replaces a key that is there', async () => {
+    keychain.getPassword.mockReturnValue(ENV_KEY);
+    await expect(storeKeychainKeyIfAbsent(FILE_KEY)).resolves.toBe(false);
+    expect(keychain.setPassword).not.toHaveBeenCalled();
+  });
+
+  it('generation re-reads the entry under the lock and keeps a key another process wrote meanwhile', async () => {
+    keychain.getPassword.mockReturnValueOnce(null).mockReturnValueOnce(ENV_KEY);
+    await expect(resolveEncryptionKey({ DB_PATH })).resolves.toBe(ENV_KEY);
+    expect(keychain.setPassword).not.toHaveBeenCalled();
+  });
+
+  it('an import racing a server’s key generation never ends up replacing the server’s key', async () => {
+    let stored: string | null = null;
+    keychain.getPassword.mockImplementation(() => stored);
+    keychain.setPassword.mockImplementation((value: string) => {
+      stored = value;
+    });
+    const [resolved, imported] = await Promise.all([
+      resolveEncryptionKey({ DB_PATH }),
+      storeKeychainKeyIfAbsent(FILE_KEY),
+    ]);
+    expect(stored).toBe(resolved);
+    expect(imported).toBe(resolved === FILE_KEY);
+  });
+
+  it('a server whose keychain already holds a key never waits for the key lock', async () => {
+    keychain.getPassword.mockReturnValue(FILE_KEY);
+    const held = await acquireKeyLockForTest();
+    await expect(resolveEncryptionKey({ DB_PATH })).resolves.toBe(FILE_KEY);
+    await held.release();
   });
 
   it('findEncryptionKey answers null for an empty keychain instead of generating a key', async () => {

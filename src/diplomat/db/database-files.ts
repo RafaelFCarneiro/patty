@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { open } from 'node:fs/promises';
+import { link, open } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import {
   copyFileSync,
@@ -105,17 +106,26 @@ export const probeDatabase = async (databasePath: string): Promise<DemoDatabaseL
   }
 };
 
-/** Copies `from` to a new owner-only file at `to`, creating the data directory. The `wx` open comes first and alone:
- *  if it is refused the file was not ours and nothing is removed; once it succeeds the file is ours to remove if the
- *  copy fails (including a source that vanished meanwhile). */
+const IMPORT_STAGING_INFIX = '.import-';
+
+/** Copies `from` into a staging file only this call can have created (`wx`, a name no other call draws). */
+const copyToStaging = async (from: string, staging: string): Promise<void> => {
+  const destination = await open(staging, EXCLUSIVE_CREATE_FLAG, PRIVATE_FILE_MODE);
+  await pipeline(createReadStream(from), destination.createWriteStream());
+};
+
+/** Copies `from` to a new owner-only file at `to`, creating the data directory. The copy is staged beside `to` and
+ *  published with a hard link, which is atomic and refuses a `to` that exists (a dangling link included): `to` is
+ *  never visible empty or half-written, never replaced, and an interrupted or failed copy leaves nothing at it. The
+ *  staging file is this call's own and is always removed. */
 export const copyNewPrivateFile = async (from: string, to: string): Promise<void> => {
   mkdirSync(dirname(to), { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
-  const destination = await open(to, EXCLUSIVE_CREATE_FLAG, PRIVATE_FILE_MODE);
+  const staging = `${to}${IMPORT_STAGING_INFIX}${randomUUID()}`;
   try {
-    await pipeline(createReadStream(from), destination.createWriteStream());
-  } catch (cause) {
-    rmSync(to, { force: true });
-    throw cause;
+    await copyToStaging(from, staging);
+    await link(staging, to);
+  } finally {
+    rmSync(staging, { force: true });
   }
 };
 

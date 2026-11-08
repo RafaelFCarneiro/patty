@@ -527,7 +527,11 @@ cannot read your OS keychain, so the key goes to a file it mounts as a secret. T
   the server does (file, then env var, then keychain), proves it by opening your database with it and reading once, and
   only then writes. The file is created owner-only (`0600`), is never overwritten (there is no `--force`), and cannot be in
   the database's own directory or under it (real paths are compared, so a relative path or a symlink does not get around it).
-  The key is never printed, logged or put in an error.
+  The key is never printed, logged or put in an error. The check "the keychain is empty" and the store are one step under
+  a per-user key lock (`~/.fintrack/db-key.lock`, held by the OS, so a dead process lets go), the same lock the server
+  takes when it generates a key on first start: another process that writes a key in the gap is never replaced, and the
+  import refuses as above. A server whose keychain already holds a key never takes the lock. A writer waits up to 60 s
+  for the lock (a keychain may sit on an unlock prompt) before failing with a message to try again.
 - `db export --to <file>` writes a consistent, still-encrypted snapshot (`VACUUM INTO`, the same mechanism as the
   [backups made before a migration](#backups-made-before-a-migration)), owner-only, never overwriting. It is standalone (no
   `-wal` file) and opens with the same key. It prints the row counts of the accounts and transactions tables (counts only)
@@ -613,8 +617,11 @@ npx @rafaelfcarneiro/fintrack@latest setup <client>
   - the snapshot does not open with that key, or is not a database. Both checks run on a private copy: nothing at `--from`
     or `DB_PATH` is opened or written, and a refusal creates nothing.
 
-  Otherwise it copies the snapshot to `DB_PATH` (created new, owner-only `0600`; the data directory `0700` if it had to be
-  created) and prints the row counts of the accounts and transactions tables, to compare with what `db export` printed.
+  Otherwise it copies the snapshot beside `DB_PATH` into a private staging file (`<DB_PATH>.import-<random>`, `0600`;
+  the data directory `0700` if it had to be created) and publishes it with a hard link, which is atomic and refuses a
+  `DB_PATH` that exists: `DB_PATH` is never visible empty or half-copied, so a client starting meanwhile cannot open it,
+  and an interrupted import leaves at most that staging file, never something at `DB_PATH` that blocks the next one. It
+  then prints the row counts of the accounts and transactions tables, to compare with what `db export` printed.
   The snapshot must be one `db export` wrote: a live database file with a `-wal` beside it would be copied without it.
 
 **Docker to npm.** Stop the container, then export from it and import on the host. The container's key is already on the

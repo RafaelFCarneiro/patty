@@ -27,6 +27,7 @@ import { accounts, transactions } from '../../../src/diplomat/db/schema.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { PRIVATE_FILE_MODE } from '../../../src/models/export.js';
 import { KeyImportRefusal } from '../../../src/models/key-import.js';
+import type * as KeyLock from '../../../src/diplomat/db/key-lock.js';
 import { unusedDemo } from '../../unit/fixtures/demo.js';
 
 /**
@@ -38,12 +39,20 @@ const KEY = 'a1'.repeat(32);
 const OTHER_KEY = 'b2'.repeat(32);
 const COUNTS = { accounts: 1, transactions: 1 };
 
-const keychain = vi.hoisted(() => ({ stored: null as string | null, broken: false }));
+const keychain = vi.hoisted(() => ({
+  stored: null as string | null,
+  broken: false,
+  reads: 0,
+  /** Another process writes this key just before the Nth read of the entry (1-based), as it would in the gap. */
+  interloper: null as { atRead: number; key: string } | null,
+}));
 
 vi.mock('@napi-rs/keyring', () => ({
   Entry: class {
     getPassword = () => {
       if (keychain.broken) throw new Error('keychain locked');
+      keychain.reads += 1;
+      if (keychain.interloper?.atRead === keychain.reads) keychain.stored = keychain.interloper.key;
       return keychain.stored;
     };
     setPassword = (password: string) => {
@@ -52,6 +61,12 @@ vi.mock('@napi-rs/keyring', () => ({
     };
   },
 }));
+
+vi.mock('../../../src/diplomat/db/key-lock.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof KeyLock>();
+  const { keyLockPathForTest } = await import('../../unit/fixtures/key-lock.js');
+  return { ...actual, withKeyLock: <T>(work: () => Promise<T>) => actual.withKeyLock(work, keyLockPathForTest()) };
+});
 
 let root = '';
 let sourceDatabase = '';
@@ -150,6 +165,8 @@ beforeEach(async () => {
   mkdirSync(outputDirectory);
   keychain.stored = null;
   keychain.broken = false;
+  keychain.reads = 0;
+  keychain.interloper = null;
   out = [];
   err = [];
   warnings = [];
@@ -194,6 +211,14 @@ describe('fintrack key import', () => {
     symlinkSync(bare, link);
     expect(await run('key', 'import', '--from', link)).toBe(EXIT_OK);
     expect(keychain.stored).toBe(KEY);
+  });
+
+  it('refuses, keeping it, a key another process stores between the check and the store', async () => {
+    keychain.interloper = { atRead: 2, key: OTHER_KEY };
+    expect(await run('key', 'import', '--from', keyFile)).toBe(EXIT_FAILURE);
+    expect(keychain.stored).toBe(OTHER_KEY);
+    expect(err.join('\n')).toContain(CLI_MESSAGES.keyImportRefused(KeyImportRefusal.enum.keychain_holds_key));
+    expect(everythingPrinted()).not.toContain(KEY);
   });
 
   it.each([

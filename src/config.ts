@@ -22,6 +22,9 @@ export const osLocale = (env: NodeJS.ProcessEnv = process.env): string | undefin
 
 export const DEMO_DB_PATH = join(DATA_DIRECTORY, 'demo.db');
 
+/** One per OS user, like the keychain entry it guards: installs with different `DB_PATH`s share that entry. */
+export const KEY_LOCK_PATH = join(DATA_DIRECTORY, 'db-key.lock');
+
 // Deliberately NOT 3000/3001/8000/8080/etc — those are the most commonly used ports across
 // Node/Fastify/React dev-server defaults, so picking one of them maximizes collision risk with
 // other software on a typical dev machine. This value sits in IANA's dynamic/private range

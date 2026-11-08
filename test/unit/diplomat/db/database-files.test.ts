@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -12,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FILE_EXISTS_CODE } from '../../../../src/models/export.js';
 import {
   acquireDatabaseLock,
   canonicalPath,
@@ -127,5 +129,28 @@ describe('copyNewPrivateFile', () => {
   it('removes the partial file it created when the source cannot be read', async () => {
     await expect(copyNewPrivateFile(join(dir, 'missing.db'), join(dir, 'to.db'))).rejects.toThrow();
     expect(existsSync(join(dir, 'to.db'))).toBe(false);
+  });
+
+  it('leaves only the published file behind, no staging copy', async () => {
+    writeFileSync(join(dir, 'from.db'), 'snapshot');
+    await copyNewPrivateFile(join(dir, 'from.db'), join(dir, 'to.db'));
+    expect(readdirSync(dir).sort()).toEqual(['from.db', 'to.db']);
+  });
+
+  it('refuses a destination that appeared first, keeping it and leaving no staging copy', async () => {
+    writeFileSync(join(dir, 'from.db'), 'snapshot');
+    writeFileSync(join(dir, 'to.db'), 'theirs');
+    const copy = copyNewPrivateFile(join(dir, 'from.db'), join(dir, 'to.db'));
+    await expect(copy).rejects.toMatchObject({ code: FILE_EXISTS_CODE });
+    expect(readFileSync(join(dir, 'to.db'), 'utf8')).toBe('theirs');
+    expect(readdirSync(dir).sort()).toEqual(['from.db', 'to.db']);
+  });
+
+  it('refuses a dangling link at the destination without creating what it points to', async () => {
+    writeFileSync(join(dir, 'from.db'), 'snapshot');
+    symlinkSync(join(dir, 'future.db'), join(dir, 'to.db'));
+    const copy = copyNewPrivateFile(join(dir, 'from.db'), join(dir, 'to.db'));
+    await expect(copy).rejects.toMatchObject({ code: FILE_EXISTS_CODE });
+    expect(existsSync(join(dir, 'future.db'))).toBe(false);
   });
 });
