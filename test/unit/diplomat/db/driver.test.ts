@@ -207,16 +207,8 @@ describe('the keychain key helpers (key import)', () => {
       storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH),
     ]);
     const trace = `${events.join(' | ')} || resolved ${resolved.slice(0, 2)} stored ${stored?.slice(0, 2)} imported ${imported}`;
-    expect(trace).toBe(trace.replace(/^/, ''));
     expect(stored).toBe(resolved);
     expect({ imported, trace }).toEqual({ imported: resolved === FILE_KEY, trace });
-  });
-    const [resolved, imported] = await Promise.all([
-      resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH }),
-      storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH),
-    ]);
-    expect(stored).toBe(resolved);
-    expect(imported).toBe(resolved === FILE_KEY);
   });
 
   it('surfaces the lock’s own message, not the keychain one, when another process holds the key lock', async () => {
