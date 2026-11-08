@@ -9,7 +9,6 @@ export const unusedExporter: Exporter = {
   writeSnapshot: () => Promise.reject(new Error('exporter used')),
 };
 
-/** For a CLI harness whose commands never import: any use is a bug in the test. */
 export const unusedImporter: Importer = {
   databasePath: () => {
     throw new Error('importer used');

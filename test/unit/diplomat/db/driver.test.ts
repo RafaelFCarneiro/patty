@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createClient } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as KeyLock from '../../../../src/diplomat/db/key-lock.js';
-import { acquireKeyLockForTest } from '../../fixtures/key-lock.js';
+import { acquireKeyLockForTest, keyLockPathForTest } from '../../fixtures/key-lock.js';
 import {
   enableWal,
   findEncryptionKey,
@@ -32,13 +32,16 @@ vi.mock('@napi-rs/keyring', () => {
 
 vi.mock('../../../../src/diplomat/db/key-lock.js', async (importOriginal) => {
   const actual = await importOriginal<typeof KeyLock>();
-  const { keyLockPathForTest } = await import('../../fixtures/key-lock.js');
-  return { ...actual, withKeyLock: <T>(work: () => Promise<T>) => actual.withKeyLock(work, keyLockPathForTest()) };
+  return {
+    ...actual,
+    withKeyLock: <T>(work: () => Promise<T>, lockPath: string) => actual.withKeyLock(work, lockPath, 150),
+  };
 });
 
 const FILE_KEY = 'a'.repeat(64);
 const ENV_KEY = 'b'.repeat(64);
 const DB_PATH = '/unused/fintrack.db';
+const KEY_LOCK_PATH = keyLockPathForTest();
 
 describe('resolveEncryptionKey (ADR-032)', () => {
   let tmpDir: string;
@@ -108,19 +111,21 @@ describe('resolveEncryptionKey (ADR-032)', () => {
 
   it('falls back to the keychain, generating and storing a key on first run', async () => {
     keychain.getPassword.mockReturnValue(null);
-    const key = await resolveEncryptionKey({ DB_PATH });
+    const key = await resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH });
     expect(key).toMatch(/^[0-9a-f]{64}$/);
     expect(keychain.setPassword).toHaveBeenCalledWith(key);
   });
 
   it('returns the existing keychain key', async () => {
     keychain.getPassword.mockReturnValue(FILE_KEY);
-    await expect(resolveEncryptionKey({ DB_PATH })).resolves.toBe(FILE_KEY);
+    await expect(resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH })).resolves.toBe(FILE_KEY);
   });
 
   it('rejects a malformed existing keychain entry instead of passing it to libSQL', async () => {
     keychain.getPassword.mockReturnValue('not-a-valid-key');
-    await expect(resolveEncryptionKey({ DB_PATH })).rejects.toThrow(/keychain is not a 64-character hex key/);
+    await expect(resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH })).rejects.toThrow(
+      /keychain is not a 64-character hex key/,
+    );
     expect(keychain.setPassword).not.toHaveBeenCalled();
   });
 
@@ -128,7 +133,7 @@ describe('resolveEncryptionKey (ADR-032)', () => {
     keychain.getPassword.mockImplementation(() => {
       throw new Error('no secret service');
     });
-    await expect(resolveEncryptionKey({ DB_PATH })).rejects.toThrow(
+    await expect(resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH })).rejects.toThrow(
       /keychain.*openssl rand -hex 32.*FINTRACK_DB_KEY_FILE.*FINTRACK_DB_KEY/s,
     );
     expect(keychain.setPassword).not.toHaveBeenCalled();
@@ -170,19 +175,19 @@ describe('the keychain key helpers (key import)', () => {
 
   it('storeKeychainKeyIfAbsent writes the key to the entry the server reads when it is empty', async () => {
     keychain.getPassword.mockReturnValue(null);
-    await expect(storeKeychainKeyIfAbsent(FILE_KEY)).resolves.toBe(true);
+    await expect(storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH)).resolves.toBe(true);
     expect(keychain.setPassword).toHaveBeenCalledWith(FILE_KEY);
   });
 
   it('storeKeychainKeyIfAbsent never replaces a key that is there', async () => {
     keychain.getPassword.mockReturnValue(ENV_KEY);
-    await expect(storeKeychainKeyIfAbsent(FILE_KEY)).resolves.toBe(false);
+    await expect(storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH)).resolves.toBe(false);
     expect(keychain.setPassword).not.toHaveBeenCalled();
   });
 
   it('generation re-reads the entry under the lock and keeps a key another process wrote meanwhile', async () => {
     keychain.getPassword.mockReturnValueOnce(null).mockReturnValueOnce(ENV_KEY);
-    await expect(resolveEncryptionKey({ DB_PATH })).resolves.toBe(ENV_KEY);
+    await expect(resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH })).resolves.toBe(ENV_KEY);
     expect(keychain.setPassword).not.toHaveBeenCalled();
   });
 
@@ -193,17 +198,35 @@ describe('the keychain key helpers (key import)', () => {
       stored = value;
     });
     const [resolved, imported] = await Promise.all([
-      resolveEncryptionKey({ DB_PATH }),
-      storeKeychainKeyIfAbsent(FILE_KEY),
+      resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH }),
+      storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH),
     ]);
     expect(stored).toBe(resolved);
     expect(imported).toBe(resolved === FILE_KEY);
   });
 
+  it('surfaces the lock’s own message, not the keychain one, when another process holds the key lock', async () => {
+    keychain.getPassword.mockReturnValue(null);
+    const held = await acquireKeyLockForTest();
+    const resolving = resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH });
+    await expect(resolving).rejects.toThrow(/another fintrack process is writing the database key/);
+    await expect(resolving).rejects.not.toThrow(/OS keychain/);
+    await held.release();
+  });
+
+  it('wraps a keychain failure in the keychain message', async () => {
+    keychain.getPassword.mockImplementation(() => {
+      throw new Error('keychain locked');
+    });
+    await expect(resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH })).rejects.toThrow(
+      /cannot read or write the database encryption key in the OS keychain/,
+    );
+  });
+
   it('a server whose keychain already holds a key never waits for the key lock', async () => {
     keychain.getPassword.mockReturnValue(FILE_KEY);
     const held = await acquireKeyLockForTest();
-    await expect(resolveEncryptionKey({ DB_PATH })).resolves.toBe(FILE_KEY);
+    await expect(resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH })).resolves.toBe(FILE_KEY);
     await held.release();
   });
 

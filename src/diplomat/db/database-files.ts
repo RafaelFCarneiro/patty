@@ -82,8 +82,6 @@ const onCopyOf = async <T>(databasePath: string, look: (copyPath: string) => Pro
   }
 };
 
-/** Proves `key` opens the database at `databasePath` and counts its rows, on a private copy: nothing at
- *  `databasePath` is opened, checkpointed or written. Rejects when the key is wrong or the file is no database. */
 export const countRowsOnCopy = (databasePath: string, key: string): Promise<ExportedRowCounts> =>
   onCopyOf(databasePath, (copyPath) => countSnapshotRows(copyPath, key));
 
@@ -108,16 +106,12 @@ export const probeDatabase = async (databasePath: string): Promise<DemoDatabaseL
 
 const IMPORT_STAGING_INFIX = '.import-';
 
-/** Copies `from` into a staging file only this call can have created (`wx`, a name no other call draws). */
 const copyToStaging = async (from: string, staging: string): Promise<void> => {
   const destination = await open(staging, EXCLUSIVE_CREATE_FLAG, PRIVATE_FILE_MODE);
   await pipeline(createReadStream(from), destination.createWriteStream());
 };
 
-/** Copies `from` to a new owner-only file at `to`, creating the data directory. The copy is staged beside `to` and
- *  published with a hard link, which is atomic and refuses a `to` that exists (a dangling link included): `to` is
- *  never visible empty or half-written, never replaced, and an interrupted or failed copy leaves nothing at it. The
- *  staging file is this call's own and is always removed. */
+// Hard link, not rename: link refuses an existing target.
 export const copyNewPrivateFile = async (from: string, to: string): Promise<void> => {
   mkdirSync(dirname(to), { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
   const staging = `${to}${IMPORT_STAGING_INFIX}${randomUUID()}`;

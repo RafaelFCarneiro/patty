@@ -8,7 +8,6 @@ import { findEncryptionKey, keychainHoldsKey, storeKeychainKeyIfAbsent } from '.
 import { reasonOf } from '../models/error.js';
 import { KeyImportRefusal } from '../models/key-import.js';
 
-/** Runs `work`, answering its failure as the Result track: a thrown reason is words, never a stack or a key. */
 const attempt = async <T>(work: () => Promise<T>, failure: (cause: unknown) => string): Promise<Result<T, string>> => {
   try {
     return ok(await work());
@@ -24,7 +23,6 @@ export const createImporter = (): Importer => ({
       const config = loadConfig();
       const keyFileConfigured = Boolean(config.FINTRACK_DB_KEY_FILE);
       const keyEnvConfigured = Boolean(config.FINTRACK_DB_KEY);
-      // A configured source is refused anyway: the keychain is not consulted for it (a headless host may have none).
       return {
         keyFileConfigured,
         keyEnvConfigured,
@@ -40,7 +38,7 @@ export const createImporter = (): Importer => ({
     );
   },
   storeKey: async (key) => {
-    const stored = await attempt(() => storeKeychainKeyIfAbsent(key), reasonOf);
+    const stored = await attempt(() => storeKeychainKeyIfAbsent(key, loadConfig().KEY_LOCK_PATH), reasonOf);
     return stored.andThen((written) =>
       written ? ok(undefined) : err(CLI_MESSAGES.keyImportRefused(KeyImportRefusal.enum.keychain_holds_key)),
     );

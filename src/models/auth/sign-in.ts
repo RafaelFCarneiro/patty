@@ -34,7 +34,6 @@ export const PROFILE_ENV_VAR = 'FINTRACK_PROFILE';
  *  `signin:<profile>:<dbId>` — `dbId` makes a development database and a production one keep apart. */
 export const KEYCHAIN_SERVICE = 'fintrack';
 
-/** The keychain account of the database encryption key, under `KEYCHAIN_SERVICE`. */
 export const DB_KEY_KEYCHAIN_ACCOUNT = 'db-encryption-key';
 export const SIGN_IN_ACCOUNT_PREFIX = 'signin';
 export const DB_ID_LENGTH = 12;

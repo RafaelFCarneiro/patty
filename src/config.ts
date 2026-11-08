@@ -22,8 +22,8 @@ export const osLocale = (env: NodeJS.ProcessEnv = process.env): string | undefin
 
 export const DEMO_DB_PATH = join(DATA_DIRECTORY, 'demo.db');
 
-/** One per OS user, like the keychain entry it guards: installs with different `DB_PATH`s share that entry. */
-export const KEY_LOCK_PATH = join(DATA_DIRECTORY, 'db-key.lock');
+// One lock per OS user: the keychain entry it guards is per user, not per DB_PATH.
+const DEFAULT_KEY_LOCK_PATH = join(DATA_DIRECTORY, 'db-key.lock');
 
 // Deliberately NOT 3000/3001/8000/8080/etc — those are the most commonly used ports across
 // Node/Fastify/React dev-server defaults, so picking one of them maximizes collision risk with
@@ -32,7 +32,6 @@ export const KEY_LOCK_PATH = join(DATA_DIRECTORY, 'db-key.lock');
 // published package; `npm run dev` overrides PORT back to the familiar 3001 (package.json), so
 // a contributor's local dev instance never collides with an already-running installed instance.
 const DEFAULT_PORT = 51737;
-
 
 // `TRUST_PROXY=0` trusts zero proxy hops: no proxy.
 const NO_PROXY_HOPS = 0;
@@ -135,6 +134,7 @@ const Env = z
   .transform((env) => ({
     ...env,
     DB_PATH: env.DB_PATH ?? (env.FINTRACK_DEMO ? DEMO_DB_PATH : DEFAULT_DB_PATH),
+    KEY_LOCK_PATH: DEFAULT_KEY_LOCK_PATH,
   }))
   .transform((env) =>
     env.FINTRACK_DEMO ? { ...env, FINTRACK_DB_KEY: DEMO_DB_KEY, FINTRACK_AUTH: AuthMode.enum.disabled } : env,

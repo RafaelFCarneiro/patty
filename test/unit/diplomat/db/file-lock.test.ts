@@ -10,7 +10,8 @@ vi.mock('@libsql/client', async (importOriginal) => ({
   createClient: () => ({ execute, close }),
 }));
 
-const { NEVER_BLOCK_IN_SQLITE_MS, tryExclusiveLock } = await import('../../../../src/diplomat/db/file-lock.js');
+const { NEVER_BLOCK_IN_SQLITE_MS, tryExclusiveLock, waitForExclusiveLock } =
+  await import('../../../../src/diplomat/db/file-lock.js');
 const { withMigrationLock } = await import('../../../../src/diplomat/db/migration-lock.js');
 
 const wrappedBusy = () => new Error('query failed', { cause: new LibsqlError('database is locked', 'SQLITE_BUSY') });
@@ -82,6 +83,42 @@ describe('withMigrationLock on the shared helper', () => {
         throw failure;
       }),
     ).rejects.toBe(failure);
+    expect(close).toHaveBeenCalledOnce();
+  });
+});
+
+describe('waitForExclusiveLock', () => {
+  const wait = { waitMs: 200, retryMs: 50, timeoutMessage: 'the lock stayed busy' };
+
+  it('polls to the deadline, then fails with the given message, the busy error as cause, client closed', async () => {
+    vi.useFakeTimers();
+    const busy = wrappedBusy();
+    execute.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN EXCLUSIVE') throw busy;
+    });
+    const outcome = waitForExclusiveLock('/data/x.lock', wait).then(
+      () => undefined,
+      (cause: Error) => cause,
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    const failure = await outcome;
+    expect(failure?.message).toBe(wait.timeoutMessage);
+    expect(failure?.cause).toBe(busy);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('takes the lock as soon as the holder lets go, and releases it on request', async () => {
+    vi.useFakeTimers();
+    let busyAttempts = 2;
+    execute.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN EXCLUSIVE' && busyAttempts-- > 0) throw wrappedBusy();
+    });
+    const acquiring = waitForExclusiveLock('/data/x.lock', wait);
+    await vi.advanceTimersByTimeAsync(100);
+    const lock = await acquiring;
+    await lock.release();
+    expect(statementsRun().filter((sql) => sql === 'BEGIN EXCLUSIVE')).toHaveLength(3);
+    expect(statementsRun()).toContain('ROLLBACK');
     expect(close).toHaveBeenCalledOnce();
   });
 });

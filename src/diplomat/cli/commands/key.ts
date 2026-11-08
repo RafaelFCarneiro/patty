@@ -59,7 +59,6 @@ const exportKey = async (args: readonly string[], io: CliIo): Promise<number> =>
   return EXIT_OK;
 };
 
-/** Refuses while the server would read its key from anywhere else, or the keychain already holds one. */
 const checkKeySources = (importer: Importer): ResultAsync<void, string> =>
   new ResultAsync(importer.keySources()).andThen((sources) => {
     const refusal = keyImportRefusal(sources);

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { tryExclusiveLock } from '../../../../src/diplomat/db/file-lock.js';
-import { KeyLockBusyError, withKeyLock } from '../../../../src/diplomat/db/key-lock.js';
+import { withKeyLock } from '../../../../src/diplomat/db/key-lock.js';
 
 let dir: string;
 let lockPath: string;
@@ -45,11 +45,13 @@ describe('withKeyLock', () => {
     await expect(withKeyLock(async () => first + 1, lockPath, 2_000)).resolves.toBe(2);
   });
 
-  it('gives up with a KeyLockBusyError, running no work, when the holder never lets go', async () => {
+  it('gives up with its own message, running no work, when the holder never lets go', async () => {
     await withKeyLock(async () => undefined, lockPath);
     const held = await tryExclusiveLock(lockPath);
     let ran = false;
-    await expect(withKeyLock(async () => void (ran = true), lockPath, 150)).rejects.toBeInstanceOf(KeyLockBusyError);
+    await expect(withKeyLock(async () => void (ran = true), lockPath, 150)).rejects.toThrow(
+      /another fintrack process is writing the database key/,
+    );
     expect(ran).toBe(false);
     await held?.release();
   });

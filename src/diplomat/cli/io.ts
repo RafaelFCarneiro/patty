@@ -60,19 +60,12 @@ export type Exporter = {
  * returned for printing. Neither method migrates or seeds: the next start does, with its usual safety copy.
  */
 export type Importer = {
-  /** The database file this process would open (`DB_PATH`). */
   databasePath: () => string;
-  /** Where the server could already read its key from, and whether the OS keychain holds one. Reads; never writes. */
   keySources: () => Promise<Result<KeySources, string>>;
-  /** Proves `key` opens the database at `DB_PATH` when there is one, on a private copy (else nothing to prove). */
   proveAgainstDatabase: (key: string) => Promise<Result<void, string>>;
-  /** Stores `key` in the OS keychain entry the server reads. */
   storeKey: (key: string) => Promise<Result<void, string>>;
-  /** The key the server would use (file, env, keychain), never generating one; the error says no source holds one. */
   resolveKey: () => Promise<Result<string, string>>;
-  /** Proves the snapshot opens with `key` and counts its rows, on a private copy: nothing is written. */
   inspectSnapshot: (snapshot: string, key: string) => Promise<Result<ExportedRowCounts, string>>;
-  /** Copies the snapshot to `DB_PATH` (new, owner-only, creating the data directory); a failure leaves nothing. */
   placeSnapshot: (snapshot: string) => Promise<Result<void, string>>;
 };
 
@@ -100,7 +93,6 @@ export type CliIo = {
   clients: ClientConfigs;
   /** The database and its key, for the export commands. */
   exporter: Exporter;
-  /** The database and its key, for the import commands. */
   importer: Importer;
   demo: DemoShell;
 };

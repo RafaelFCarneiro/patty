@@ -620,7 +620,7 @@ npx @rafaelfcarneiro/fintrack@latest setup <client>
   Otherwise it copies the snapshot beside `DB_PATH` into a private staging file (`<DB_PATH>.import-<random>`, `0600`;
   the data directory `0700` if it had to be created) and publishes it with a hard link, which is atomic and refuses a
   `DB_PATH` that exists: `DB_PATH` is never visible empty or half-copied, so a client starting meanwhile cannot open it,
-  and an interrupted import leaves at most that staging file, never something at `DB_PATH` that blocks the next one. It
+  and an interrupted import leaves at most that staging file, never something at `DB_PATH` that blocks the next one. A killed import can leave a `*.import-*` staging file beside `DB_PATH`; it is safe to delete. It
   then prints the row counts of the accounts and transactions tables, to compare with what `db export` printed.
   The snapshot must be one `db export` wrote: a live database file with a `-wal` beside it would be copied without it.
 

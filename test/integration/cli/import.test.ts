@@ -122,7 +122,6 @@ const seedSource = async () => {
   closeDatabase(db);
 };
 
-/** The install A → B move starts from what `key export` and `db export` wrote on A. */
 const exportFromSource = async () => {
   vi.stubEnv('DB_PATH', sourceDatabase);
   vi.stubEnv('FINTRACK_DB_KEY', KEY);

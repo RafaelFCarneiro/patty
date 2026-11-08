@@ -40,6 +40,34 @@ export const rollbackQuietly = async (client: Client): Promise<void> => {
   }
 };
 
+export type LockWait = { waitMs: number; retryMs: number; timeoutMessage: string };
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const beginWithin = async (client: Client, deadline: number, wait: LockWait): Promise<void> => {
+  const attempt = await tryBeginExclusive(client);
+  if (attempt.acquired) return;
+  if (Date.now() >= deadline) throw new Error(wait.timeoutMessage, { cause: attempt.cause });
+  await sleep(wait.retryMs);
+  return beginWithin(client, deadline, wait);
+};
+
+export const waitForExclusiveLock = async (lockPath: string, wait: LockWait): Promise<ExclusiveLock> => {
+  const client = await openLockFile(lockPath);
+  try {
+    await beginWithin(client, Date.now() + wait.waitMs, wait);
+  } catch (cause) {
+    client.close();
+    throw cause;
+  }
+  return {
+    release: async () => {
+      await rollbackQuietly(client);
+      client.close();
+    },
+  };
+};
+
 export const tryExclusiveLock = async (lockPath: string): Promise<ExclusiveLock | null> => {
   const client = await openLockFile(lockPath);
   try {

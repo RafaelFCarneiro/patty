@@ -125,8 +125,6 @@ export const TargetUsernameSchema = z
   .transform(normalizeUsername)
   .pipe(z.string().min(1).max(OPTION_MAX_LENGTH));
 
-/** `key` and `db`: export writes a file the person carries elsewhere, import puts one into this install. Neither takes
- *  positionals; the file is named by `--to` (export) or `--from` (import). */
 export const KeySubcommand = z.enum(['export', 'import']);
 export type KeySubcommand = z.infer<typeof KeySubcommand>;
 export const DbSubcommand = z.enum(['export', 'import']);
@@ -145,5 +143,4 @@ export type ImportOptions = z.infer<typeof ImportOptionsSchema>;
 
 /** The flags both export subcommands take, in `parseArgs` form. */
 export const EXPORT_FLAGS = { to: { type: 'string' } } as const;
-/** The flags both import subcommands take, in `parseArgs` form. */
 export const IMPORT_FLAGS = { from: { type: 'string' } } as const;

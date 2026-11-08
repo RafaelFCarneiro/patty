@@ -8,7 +8,7 @@ import type { Config } from '../../config.js';
 import { EncryptionKey } from '../../models/encryption-key.js';
 import { PRIVATE_DIRECTORY_MODE } from '../../models/export.js';
 import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
-import { KeyLockBusyError, withKeyLock } from './key-lock.js';
+import { withKeyLock } from './key-lock.js';
 import * as schema from './schema.js';
 
 export type Db = LibSQLDatabase<typeof schema>;
@@ -19,7 +19,6 @@ export type Db = LibSQLDatabase<typeof schema>;
  *  (the engine's port, generic over an opaque `TTx`) so every existing import path there still
  *  resolves. */
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
-
 
 // ADR-024: WAL lets readers (the HTTP sidecar) proceed without blocking the single writer, instead
 // of rollback-journal's mutual blocking. busy_timeout makes a contended writer wait for the lock
@@ -33,7 +32,8 @@ export const BUSY_TIMEOUT_MS = 5000;
 export const assertBusyTimeout = (client: ReturnType<typeof createClient>): Promise<unknown> =>
   client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
 
-type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY' | 'FINTRACK_DB_KEY_FILE'>;
+type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY' | 'FINTRACK_DB_KEY_FILE'> &
+  Partial<Pick<Config, 'KEY_LOCK_PATH'>>;
 
 const KEY_GENERATION_HINT =
   'Generate one with `openssl rand -hex 32` and provide it via FINTRACK_DB_KEY_FILE ' +
@@ -81,30 +81,39 @@ const keychainEntry = async () => {
 
 type KeychainEntry = Awaited<ReturnType<typeof keychainEntry>>;
 
-/** Re-reads the entry under the key lock: another process may have written a key since the caller looked. */
-const generateKeychainKey = (entry: KeychainEntry): Promise<string> =>
-  withKeyLock(async () => {
-    const existing = entry.getPassword();
-    if (existing) return existing;
-    const key = randomBytes(32).toString('hex');
-    entry.setPassword(key);
-    return key;
-  });
-
-const resolveKeychainKey = async (): Promise<string> => {
+const inKeychain = async <T>(work: () => T | Promise<T>): Promise<T> => {
   try {
-    const entry = await keychainEntry();
-    return entry.getPassword() || (await generateKeychainKey(entry));
+    return await work();
   } catch (cause) {
-    if (cause instanceof KeyLockBusyError) throw cause;
     throw new Error(
-      `fintrack: cannot read or write the database encryption key in the OS keychain (or take its lock), and no key source was configured. ${KEY_GENERATION_HINT}`,
+      `fintrack: cannot read or write the database encryption key in the OS keychain, and no key source was configured. ${KEY_GENERATION_HINT}`,
       { cause },
     );
   }
 };
 
-/** The key from the configured file or env var, else null: the sources that never touch the keychain. */
+const generateKeychainKey = (entry: KeychainEntry, keyLockPath: string | undefined): Promise<string> => {
+  if (keyLockPath === undefined)
+    throw new Error('fintrack: generating a database key needs KEY_LOCK_PATH in the config.');
+  return withKeyLock(
+    () =>
+      inKeychain(() => {
+        const existing = entry.getPassword();
+        if (existing) return existing;
+        const key = randomBytes(32).toString('hex');
+        entry.setPassword(key);
+        return key;
+      }),
+    keyLockPath,
+  );
+};
+
+const resolveKeychainKey = async (keyLockPath: string | undefined): Promise<string> => {
+  const entry = await inKeychain(keychainEntry);
+  const existing = await inKeychain(() => entry.getPassword());
+  return existing || generateKeychainKey(entry, keyLockPath);
+};
+
 const configuredKey = (config: DbConfig): string | null => {
   if (config.FINTRACK_DB_KEY_FILE) {
     console.warn('fintrack: using the encryption key from FINTRACK_DB_KEY_FILE; OS keychain bypassed.');
@@ -122,23 +131,19 @@ const configuredKey = (config: DbConfig): string | null => {
 // Order: key file -> env var -> OS keychain. The key is never written next to the data: the
 // keychain generates on first run for local use only, and every other path fails fast.
 export const resolveEncryptionKey = async (config: DbConfig): Promise<string> =>
-  configuredKey(config) ?? validateStoredKey(await resolveKeychainKey());
+  configuredKey(config) ?? validateStoredKey(await resolveKeychainKey(config.KEY_LOCK_PATH));
 
-/** Whether the OS keychain already holds the database key. Reads; never generates. */
 export const keychainHoldsKey = async (): Promise<boolean> => Boolean((await keychainEntry()).getPassword());
 
-/** Stores `key` in the entry the server reads (`resolveEncryptionKey`'s) unless it already holds one, checked under the
- *  key lock the server's own generation takes: false when a key is there, whoever wrote it. Never replaces. */
-export const storeKeychainKeyIfAbsent = async (key: string): Promise<boolean> => {
+export const storeKeychainKeyIfAbsent = async (key: string, keyLockPath: string): Promise<boolean> => {
   const entry = await keychainEntry();
   return withKeyLock(async () => {
     if (entry.getPassword()) return false;
     entry.setPassword(key);
     return true;
-  });
+  }, keyLockPath);
 };
 
-/** The key `resolveEncryptionKey` would answer, but never generates one: null when no source holds a key. */
 export const findEncryptionKey = async (config: DbConfig): Promise<string | null> => {
   const configured = configuredKey(config);
   if (configured !== null) return configured;
