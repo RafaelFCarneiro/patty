@@ -60,6 +60,7 @@ describe('withMigrationLock — failure paths', () => {
     );
     expect(failure.cause).toBe(lastBusy);
     expect(work).not.toHaveBeenCalled();
-    expect(close).toHaveBeenCalledOnce();
+    const attempts = execute.mock.calls.filter(([sql]) => sql === 'BEGIN EXCLUSIVE').length;
+    expect(close).toHaveBeenCalledTimes(attempts);
   });
 });

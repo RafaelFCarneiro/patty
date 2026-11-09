@@ -3,6 +3,7 @@
 # database (claimed owner, one account, written through the stdio server) is exported with `key export` and `db export`,
 # loaded into the compose volume with the guide's own commands, and the image is started with the exported key. The
 # owner must log in with the password they chose on npm (no setup code), see the account, and the counts must match.
+# Then the way back: the container's data is exported and imported (`db import`) into an empty npm install.
 # Usage: scripts/docker-move-smoke.sh [image]   (default: fintrack:ci; run from the repository root)
 set -euo pipefail
 
@@ -60,6 +61,7 @@ cd "$COMPOSE_DIR"
 (umask 077; npm_side "${FINTRACK[@]}" key export --to ./fintrack_db_key >"$WORKDIR/key-export.out" 2>&1) || { cat "$WORKDIR/key-export.out" >&2; fail "key export failed"; }
 npm_side "${FINTRACK[@]}" db export --to ./fintrack.snapshot.db >"$WORKDIR/db-export.out" 2>&1 || { cat "$WORKDIR/db-export.out" >&2; fail "db export failed"; }
 [ "$(cat ./fintrack_db_key)" = "$KEY_VALUE" ] || fail "the exported key file does not hold the npm key"
+cp ./fintrack_db_key "$WORKDIR/key.copy"   # the reverse leg reads it as the host user, after the Linux chown below
 if cat "$WORKDIR/key-export.out" "$WORKDIR/db-export.out" "$WORKDIR/stdio.out" | grep -F "$KEY_VALUE" >/dev/null; then fail "the key was printed"; fi
 mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }  # GNU first: BSD's -f is a different flag on Linux
 [ "$(mode ./fintrack_db_key)" = "600" ] || fail "key file is not 0600"
@@ -98,5 +100,21 @@ echo "== guide step 7: the account is there, and the counts match what db export
 ACCOUNTS_JSON="$(curl -fsS -b "$COOKIE_JAR" -H "Origin: $BASE" "$BASE/api/accounts")"
 echo "$ACCOUNTS_JSON" | grep -F "\"$ACCOUNT_NAME\"" >/dev/null || fail "/api/accounts does not list $ACCOUNT_NAME"
 [ "$(echo "$ACCOUNTS_JSON" | grep -o '"name"' | wc -l | tr -d ' ')" = "$EXPECTED_ACCOUNTS" ] || fail "the account count differs from db export's"
+
+echo "== reverse (Docker -> npm): db export from the container's volume, db import into an empty npm install"
+compose stop fintrack >/dev/null
+compose run --rm --no-deps -T --entrypoint sh fintrack \
+  -c 'umask 077; node dist/main.js db export --to /tmp/back.db >&2 && cat /tmp/back.db' \
+  > "$WORKDIR/back.snapshot.db" 2>"$WORKDIR/back-export.err" || { cat "$WORKDIR/back-export.err" >&2; fail "db export inside the container failed"; }
+BACK_DIR="$WORKDIR/npm-again"
+back_side() { DB_PATH="$BACK_DIR/fintrack.db" FINTRACK_DB_KEY_FILE="$WORKDIR/key.copy" "$@"; }
+back_side "${FINTRACK[@]}" db import --from "$WORKDIR/back.snapshot.db" >"$WORKDIR/db-import.out" 2>&1 \
+  || { cat "$WORKDIR/db-import.out" >&2; fail "db import into an empty npm install failed"; }
+[ "$(mode "$BACK_DIR/fintrack.db")" = "600" ] || fail "the imported database is not 0600"
+IMPORTED_ACCOUNTS="$(grep -oE 'accounts [0-9]+' "$WORKDIR/db-import.out" | awk '{print $2}')"
+[ "$IMPORTED_ACCOUNTS" = "$EXPECTED_ACCOUNTS" ] || fail "db import reported $IMPORTED_ACCOUNTS accounts, expected $EXPECTED_ACCOUNTS"
+if back_side "${FINTRACK[@]}" db import --from "$WORKDIR/back.snapshot.db" >/dev/null 2>&1; then fail "db import overwrote a database"; fi
+back_side "${FINTRACK[@]}" users list 2>/dev/null | grep -F "$OWNER" >/dev/null || fail "the imported database does not open with the key, or lost the owner"
+if cat "$WORKDIR/db-import.out" | grep -F "$KEY_VALUE" >/dev/null; then fail "the key was printed"; fi
 
 echo "move smoke OK"

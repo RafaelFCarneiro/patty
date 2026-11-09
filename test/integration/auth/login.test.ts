@@ -24,7 +24,7 @@ import {
   useAuthApp,
   type MemoryStore,
 } from './helpers.js';
-import { unusedExporter } from '../../unit/fixtures/exporter.js';
+import { unusedExporter, unusedImporter } from '../../unit/fixtures/exporter.js';
 import { unusedDemo } from '../../unit/fixtures/demo.js';
 
 const createApp = useAuthApp();
@@ -90,6 +90,7 @@ const rig = async (setup: Setup = {}) => {
     interruptSignal: () => interrupt.signal,
     clients: { find: () => undefined },
     exporter: unusedExporter,
+    importer: unusedImporter,
     demo: unusedDemo,
   };
   return { ctx, cookie, out, err, io, shell, server, stores, storeFor, waits, interrupt };

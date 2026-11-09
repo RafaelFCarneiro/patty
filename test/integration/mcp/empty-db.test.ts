@@ -33,6 +33,7 @@ import { listCategories } from '../../../src/controllers/categories.js';
 import { getPreferences, setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'b'.repeat(64);
 const MIGRATIONS = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -47,6 +48,7 @@ describe('empty DB (ADR-008)', () => {
   beforeAll(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-empty-'));
     db = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: join(tmpDir, 'empty.db'),
       FINTRACK_DB_KEY: TEST_KEY,
     });

@@ -15,6 +15,7 @@ import {
   TransactionType,
 } from '../../../src/models/transaction.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'e'.repeat(64);
 
@@ -25,6 +26,7 @@ let repo: MerchantsRepo;
 beforeEach(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-merchants-top-'));
   db = await openDatabase({
+    KEY_LOCK_PATH: keyLockPathForTest(),
     DB_PATH: join(tmpDir, 'merchants-top.db'),
     FINTRACK_DB_KEY: TEST_KEY,
   });

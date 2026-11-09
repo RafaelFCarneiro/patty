@@ -7,6 +7,7 @@ import { type Db, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { subCategoriesRepo } from '../../../src/diplomat/db/repos/sub-categories.js';
 import { categories, users } from '../../../src/diplomat/db/schema.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const OTHER_USER_ID = 'user-other';
 
@@ -15,7 +16,11 @@ let db: Db;
 
 beforeEach(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-subcategories-repo-'));
-  db = await openDatabase({ DB_PATH: join(tmpDir, 'subcategories.db'), FINTRACK_DB_KEY: 'a'.repeat(64) });
+  db = await openDatabase({
+    KEY_LOCK_PATH: keyLockPathForTest(),
+    DB_PATH: join(tmpDir, 'subcategories.db'),
+    FINTRACK_DB_KEY: 'a'.repeat(64),
+  });
   await bootstrap(db);
   await db
     .insert(users)

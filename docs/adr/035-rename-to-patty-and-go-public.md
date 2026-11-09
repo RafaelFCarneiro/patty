@@ -1,0 +1,152 @@
+# ADR-035: Rename to PATTY and go public
+
+**Status:** Accepted · **Date:** 2026-11-03 · **Deciders:** Rafael · **Revises ADR-032** (where the image and
+package are published) and every place an earlier ADR names the product.
+
+## Context
+
+The name FinTrack is already used by other products. The project is about to become public — the repository, the
+npm package and the Docker image — so the name changes first, while its only real user is its author.
+
+The new name is **PATTY — Personal Agent Tracking for Treasure and Yield**.
+
+The name is not only text. About a dozen identifiers are things an existing install depends on (the data directory,
+the keychain entry, environment variables, the MCP server name, stored token scopes). Renaming them blindly makes an
+existing database unreachable. At the same time, the product must not keep the old name around in compatibility code.
+
+## Decision
+
+### 1. The new names (clean break, no aliases)
+
+| Concern | Today | After |
+|---|---|---|
+| GitHub repository | `RafaelFCarneiro/fintrack` | `RafaelFCarneiro/patty` |
+| npm package | `@rafaelfcarneiro/fintrack` (GitHub Packages, private) | `@rfc0/patty` (npmjs.com, public) |
+| CLI binary | `fintrack` | `patty` |
+| Docker image | `ghcr.io/rafaelfcarneiro/fintrack` | `ghcr.io/rafaelfcarneiro/patty` |
+| Data directory / file | `~/.fintrack/fintrack.db`, `demo.db` | `~/.patty/patty.db`, `demo.db` |
+| Keychain service | `fintrack` (accounts `db-encryption-key`, `signin:<profile>:<dbId>`) | `patty` (same accounts) |
+| Environment variables | `FINTRACK_AUTH`, `_DB_KEY`, `_DB_KEY_FILE`, `_DEMO`, `_HTTP`, `_LOCALE`, `_PROFILE`, `_TOKEN` | `PATTY_*` |
+| MCP server names | `fintrack`, `fintrack-demo` | `patty`, `patty-demo` |
+| MCP resource URIs | `fintrack://accounts`, … | `patty://accounts`, … |
+| Token scopes | `fintrack:read`, `fintrack:write` | `patty:read`, `patty:write` |
+| Access-token prefix | `ftk_` | `ptk_` |
+| Session cookie | `fintrack_session` | `patty_session` |
+| Docker volume / secret | `fintrack-data`, `fintrack_db_key` | `patty-data`, `patty_db_key` |
+| Dashboard globals | `window.fintrackOnDataChanged`, `window.__fintrackCurrencies` | brand-neutral: `window.onAppDataChanged`, `window.__appCurrencies` |
+| Internal markers | `<!--fintrack:auth-controls-->`, `fintrack-probe-` temp prefix | `patty:` / `patty-probe-` |
+
+Ports stay as they are (`51737`, `51738`). The code, docs, tests, scripts, CI and Docker files carry no `fintrack`
+reference after the rename, other than historical text in ADRs and designs, which records what was true then.
+
+The dashboard globals become brand-neutral rather than `patty`-prefixed. Dashboards a user saved are stored in the
+database and call these globals; a neutral name means a future rename can never break them again.
+
+### 2. Moving an install: generic import commands, no compatibility code
+
+The product gains the mirror of the existing export commands, `key import --from <file>` and
+`db import --from <file>`. Neither knows about the old name:
+
+- **`key import`** stores the key in the keychain entry, after proving it opens the database already at `DB_PATH` when
+  there is one (otherwise only the key's format is checked). It never prints the key, refuses if an entry already
+  exists, and refuses while a key file or environment variable is configured.
+- **`db import`** resolves the key as the server does (never generating one), proves the snapshot opens with it, and
+  places the snapshot at `DB_PATH`, owner-only (`0600`), refusing to overwrite an existing database. It does not
+  migrate; the next start migrates as usual.
+
+The order of a move is `key import`, then `db import`, then `setup <client>`.
+
+They are useful on their own: moving between machines, going from Docker back to npm, restoring a backup.
+
+**Data cleanup on first open.** A migration in the rename PR deletes every row of `access_tokens` and `client_grants`.
+Their scopes and token prefix no longer exist, so they could never authenticate again, and stored scope values that no
+longer decode would break the token list. The migration names no old value: it deletes, it doesn't rewrite. Owners
+create new tokens and approve new sign-ins after the move.
+
+**The author's one-time move** is a runbook in the PR description, not product code:
+
+1. With the old package: `key export --to …` and `db export --to …`.
+2. With `@rfc0/patty`: `key import --from …`, `db import --from …`, `setup <client>`.
+3. Remove the old client entry by hand, approve the new sign-in, recreate access tokens.
+4. Re-save any dashboard saved under the old globals (ask the AI to update it; the bundled ones are replaced by the
+   package).
+5. Delete the old data directory and keychain entry once the new install shows the data.
+
+### 3. Publishing
+
+- **npm: staged publish with manual approval, the same process as `@rfc0/effect-runner`.**
+  - The release workflow runs the full gate, then **stages** the version with `npm stage publish --access public`
+    through npm trusted publishing (OIDC: no token or secret; provenance is automatic). A staged version is not
+    installable and does not move `latest`.
+  - The version goes live only when the owner **approves it on npmjs.com** (or `npm stage approve <id>`, which
+    needs 2FA). Until then `npx @rfc0/patty@latest` keeps resolving to the previous approved version.
+  - Versioning stays automatic: semantic-release still derives the version from Conventional Commits and creates
+    the tag, the GitHub Release and the notes. Its npm plugin no longer publishes (`npmPublish: false`); the staged
+    publish is the next step of the same workflow. (A Release created with the workflow's own token cannot trigger
+    a second workflow, so effect-runner's `on: release` trigger would not fire here; the steps are the same.)
+  - The trusted publisher on npmjs.com is configured for this repository and `release.yml`. npm only offers that
+    setting on an existing package, so the very first version is published by hand from a terminal (2FA), as
+    effect-runner's `0.2.0` was; every later version comes from the workflow.
+  - The private GitHub Packages package is deleted after the move.
+- **Docker: the same gate on `latest`.** The release pushes the public image `ghcr.io/rafaelfcarneiro/patty` with
+  its version tag only (`:X.Y.Z`). A second job, behind a GitHub Environment (`release`) that requires the owner's
+  approval, moves `:latest` to that version. Approve it after approving the npm version, so `npx …@latest` and
+  `docker pull …:latest` move together.
+- **GitHub:** the repository is renamed (GitHub redirects the old URL) and then made public (§4). Every link in
+  README, docs, `package.json` (`repository`, `homepage`, `bugs`) and the banner points at the new repository.
+- **effect-runner:** a docs-only PR there renames `docs/adr/0001-extracted-from-fintrack.md` and its mentions to the
+  generic "extracted from a personal-finance app", and updates the links into this repository.
+
+### 4. Before going public: the pre-publication scan
+
+Making the repository public publishes its whole history. Right before that step, and not earlier:
+
+- **Secrets:** `gitleaks detect` over every commit, including the AI-session checkpoint commits and the briefly
+  committed `.claude/settings.local.json` (June 2026; at last check it held only tool-permission rules).
+- **Personal data:** no real statement, account number, name or amount in any committed fixture, doc or example.
+  At last check, no `.env`, database, backup, key, `.csv`, `.ofx` or `.pdf` was ever committed.
+- **Nubank linkage in docs:** earlier versions of the architecture doc and the roadmap described the Diplomat
+  Architecture as "Nubank's" / "a Nubank pattern". The current docs say "inspired by" and carry a not-affiliated
+  note. The decision at that step: keep the history as it is, or run one narrow `git filter-repo --replace-text`
+  pass over that wording. A rewrite changes almost every commit SHA (old links and quoted SHAs stop resolving), so it
+  is done at most once, just before publishing.
+- **The old name:** not a concern; old commits may keep it.
+
+The history is kept (no fresh repository), subject to the scan.
+
+## Options considered
+
+- **Keep old names as fallbacks for a few releases** (read `FINTRACK_*` and `~/.fintrack` if the new ones are
+  absent) — rejected: it keeps the old name in the product, for one known user.
+- **A `migrate-from-fintrack` command** — rejected for the same reason; the generic import commands do the job.
+- **Rewrite stored scope values in a migration** — rejected: the migration would have to name the old values, and
+  the tokens are unusable anyway because the prefix changes.
+- **A fresh public repository** — not needed: the history is kept, subject to the scan.
+
+## Consequences
+
+- Every client config, token and stdio sign-in is reissued once. Data, users and passwords carry over.
+- Saved dashboards using the old globals need re-saving once; afterwards the globals never change with the name.
+- Old install commands stop working; the README and docs show only the new ones.
+- The rename PR is large but mechanical. Its gate includes a repository-wide check that `fintrack` appears only in
+  ADR and design history.
+
+## Plan
+
+1. [x] Accept this ADR (2026-11-03).
+2. [ ] Import PR (`feat/key-db-import`): `key import` / `db import` with tests, under the current names. Generic and
+       independent, so it lands before the rename and keeps the rename PR mechanical.
+3. [ ] Rename PR (`refactor/rename-to-patty`): every name in §1, the token/grant cleanup migration, the brand-neutral
+       dashboard globals (bundled dashboards and skills updated), docs, CI and Docker files, and the staged release
+       workflow of §3 — **switched off** until step 6 (a repository variable gates it), so no merge publishes
+       anything before the scan. Gate plus verification subagent; `grep -rni fintrack` outside `docs/adr` and
+       `docs/designs` is empty.
+4. [ ] effect-runner docs PR (§3).
+5. [ ] Pre-publication scan and the history decision (§4).
+6. [ ] Rename the GitHub repository and make it public. Publish the first `@rfc0/patty` version by hand, then
+       configure the trusted publisher on npmjs.com and the `release` environment on GitHub, and switch the release
+       workflow on. From then on, each release is staged by the workflow and goes live when approved (npm, then
+       Docker `latest`).
+7. [ ] The author moves his install with the runbook (§2) — after step 6, since the new client entry installs
+       `@rfc0/patty` from npm. Until then the old private package keeps working.
+8. [ ] Delete the private GitHub Packages package.

@@ -3,7 +3,8 @@ import type { Result, ResultAsync } from 'neverthrow';
 import type { ZodType, ZodTypeDef } from 'zod';
 import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter } from '../../controllers/deps.js';
 import { reasonOf } from '../../models/error.js';
-import type { ExportedRowCounts } from '../../models/export.js';
+import type { ExportedRowCounts, StagedCopy } from '../../models/export.js';
+import type { KeySources } from '../../models/key-import.js';
 import { databaseAheadMessage, type DatabaseAhead } from '../../models/database.js';
 import type { DemoFailure, DemoPrepared } from '../../models/demo/core.js';
 import type { DemoOptions } from '../../wire/in/cli.js';
@@ -53,6 +54,23 @@ export type Exporter = {
   writeSnapshot: (destination: string) => Promise<Result<ExportedRowCounts, string>>;
 };
 
+/**
+ * What `key import` and `db import` need, and nothing else — the mirror of `Exporter`. A key crosses this port only
+ * inward (`storeKey`) or as the value `resolveKey` hands the one command that proves a snapshot with it; it is never
+ * returned for printing. Neither method migrates or seeds: the next start does, with its usual safety copy.
+ */
+export type Importer = {
+  databasePath: () => string;
+  keySources: () => Promise<Result<KeySources, string>>;
+  proveAgainstDatabase: (key: string) => Promise<Result<void, string>>;
+  storeKey: (key: string) => Promise<Result<void, string>>;
+  resolveKey: () => Promise<Result<string, string>>;
+  inspectSnapshot: (staged: StagedCopy, key: string) => Promise<Result<ExportedRowCounts, string>>;
+  stageSnapshot: (snapshot: string) => Promise<Result<StagedCopy, string>>;
+  publishSnapshot: (staged: StagedCopy) => Promise<Result<void, string>>;
+  discardSnapshot: (staged: StagedCopy) => void;
+};
+
 export type DemoShell = {
   databasePath: string;
   hasDatabase: () => boolean;
@@ -77,6 +95,7 @@ export type CliIo = {
   clients: ClientConfigs;
   /** The database and its key, for the export commands. */
   exporter: Exporter;
+  importer: Importer;
   demo: DemoShell;
 };
 

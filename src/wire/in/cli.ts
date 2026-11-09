@@ -125,17 +125,22 @@ export const TargetUsernameSchema = z
   .transform(normalizeUsername)
   .pipe(z.string().min(1).max(OPTION_MAX_LENGTH));
 
-/** `key export` and `db export`: one subcommand each, no positionals, and the file to write named by `--to`. */
-export const KeySubcommand = z.enum(['export']);
+export const KeySubcommand = z.enum(['export', 'import']);
 export type KeySubcommand = z.infer<typeof KeySubcommand>;
-export const DbSubcommand = z.enum(['export']);
+export const DbSubcommand = z.enum(['export', 'import']);
 export type DbSubcommand = z.infer<typeof DbSubcommand>;
 export const EXPORT_POSITIONALS = 0;
+export const IMPORT_POSITIONALS = 0;
 
-export const ExportOptionsSchema = z.object({
-  to: z.string({ required_error: 'the destination is required: --to <file>' }).min(1).max(PATH_MAX_LENGTH),
-});
+const pathOption = (flag: string) =>
+  z.string({ required_error: `the file is required: --${flag} <file>` }).min(1).max(PATH_MAX_LENGTH);
+
+export const ExportOptionsSchema = z.object({ to: pathOption('to') });
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
+
+export const ImportOptionsSchema = z.object({ from: pathOption('from') });
+export type ImportOptions = z.infer<typeof ImportOptionsSchema>;
 
 /** The flags both export subcommands take, in `parseArgs` form. */
 export const EXPORT_FLAGS = { to: { type: 'string' } } as const;
+export const IMPORT_FLAGS = { from: { type: 'string' } } as const;

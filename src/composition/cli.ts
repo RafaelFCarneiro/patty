@@ -14,6 +14,7 @@ import type { DatabaseAhead } from '../models/database.js';
 import { AuthMode } from '../models/auth/mode.js';
 import { createDemoShell } from './demo/shell.js';
 import { createExporter } from './export.js';
+import { createImporter } from './import.js';
 import { createSignInFor } from './sign-in/wiring.js';
 
 /**
@@ -86,6 +87,7 @@ const defaultCliIo = (): CliIo => ({
   interruptSignal,
   clients: clientConfigs,
   exporter: createExporter(),
+  importer: createImporter(),
   demo: createDemoShell(),
 });
 

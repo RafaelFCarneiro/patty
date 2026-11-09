@@ -527,7 +527,11 @@ cannot read your OS keychain, so the key goes to a file it mounts as a secret. T
   the server does (file, then env var, then keychain), proves it by opening your database with it and reading once, and
   only then writes. The file is created owner-only (`0600`), is never overwritten (there is no `--force`), and cannot be in
   the database's own directory or under it (real paths are compared, so a relative path or a symlink does not get around it).
-  The key is never printed, logged or put in an error.
+  The key is never printed, logged or put in an error. The check "the keychain is empty" and the store are one step under
+  a per-user key lock (`~/.fintrack/db-key.lock`, held by the OS, so a dead process lets go), the same lock the server
+  takes when it generates a key on first start: another process that writes a key in the gap is never replaced, and the
+  import refuses as above. A server whose keychain already holds a key never takes the lock. A writer waits up to 60 s
+  for the lock (a keychain may sit on an unlock prompt) before failing with a message to try again.
 - `db export --to <file>` writes a consistent, still-encrypted snapshot (`VACUUM INTO`, the same mechanism as the
   [backups made before a migration](#backups-made-before-a-migration)), owner-only, never overwriting. It is standalone (no
   `-wal` file) and opens with the same key. It prints the row counts of the accounts and transactions tables (counts only)
@@ -579,6 +583,68 @@ cannot read your OS keychain, so the key goes to a file it mounts as a secret. T
 
 `scripts/docker-move-smoke.sh` runs steps 3–7 against an image (an npm-style database with a claimed owner and one account), so
 the commands above are the commands that are tested.
+
+## Importing a key and a database
+
+`key import` and `db import` are the mirror of the exports above: they put a key and a database snapshot into an
+install. Use them to move to another machine, to go from Docker back to npm, to restore a backup, or to move between
+installs. Like the exports they are terminal-only (not reachable from MCP, HTTP or a token) and neither one migrates:
+the next start migrates the database, after its usual [safety copy](#backups-made-before-a-migration).
+
+**The order is always `key import`, then `db import`, then `setup <client>`.** `db import` needs the key to prove the
+snapshot, and `setup` needs the database.
+
+```bash
+npx @rafaelfcarneiro/fintrack@latest key import --from ./fintrack_db_key
+npx @rafaelfcarneiro/fintrack@latest db import --from ./fintrack.snapshot.db
+npx @rafaelfcarneiro/fintrack@latest setup <client>
+```
+
+- `key import --from <file>` reads the file `key export` wrote: the 64 hexadecimal characters and at most one trailing
+  newline, nothing else (a symlink to it is fine, which is how a Docker secret is mounted). It stores the key in the OS
+  keychain entry the server reads. It **refuses** when
+  - the keychain already holds a key for this install. There is no `--force`: remove the `fintrack` / `db-encryption-key`
+    keychain entry yourself if you mean to replace it (that loses access to a database encrypted with the old key);
+  - `FINTRACK_DB_KEY_FILE` or `FINTRACK_DB_KEY` is set: those installs read the key from there, not from the keychain;
+  - a database already exists at `DB_PATH` and the key does not open it. Without a database, only the format is checked;
+    `db import` proves the key against the snapshot.
+
+  The key is never printed, logged or put in an error.
+- `db import --from <file>` takes a snapshot written by `db export`. It resolves the key as the server does (key file,
+  then env var, then keychain) but never generates one, so run `key import` first, and it **refuses** when
+  - a database already exists at `DB_PATH` (move it away yourself to replace it), or `--from` is `DB_PATH` itself (real
+    paths are compared, so a symlink does not get around it);
+  - the snapshot does not open with that key, or is not a database. Both checks run on a private copy: nothing at `--from`
+    or `DB_PATH` is opened or written, and a refusal creates nothing.
+
+  Otherwise it copies the snapshot beside `DB_PATH` into a private staging file (`<DB_PATH>.import-<random>`, `0600`;
+  the data directory `0700` if it had to be created) and publishes it with a hard link, which is atomic and refuses a
+  `DB_PATH` that exists: `DB_PATH` is never visible empty or half-copied, so a client starting meanwhile cannot open it,
+  and an interrupted import leaves at most that staging file, never something at `DB_PATH` that blocks the next one. A
+  killed import can leave a `*.import-*` staging file beside `DB_PATH`; it is safe to delete. The staged file is the one
+  that is checked, counted and published, so the snapshot changing meanwhile cannot install bytes that were not checked;
+  a `-wal` or `-journal` appearing beside the snapshot before the copy ends refuses the import. It then prints the row counts of the accounts and transactions tables, to compare with what `db export` printed.
+  The snapshot must be one `db export` wrote: a live database file with a `-wal` beside it would be copied without it.
+
+**Docker to npm.** Stop the container, then export from it and import on the host. The container's key is already on the
+host as `fintrack_db_key`, so only the data needs exporting:
+
+```bash
+docker compose stop fintrack
+(umask 077; docker compose run --rm --no-deps -T --entrypoint sh fintrack \
+  -c 'umask 077; node dist/main.js db export --to /tmp/back.db >&2 && cat /tmp/back.db' > ./fintrack.snapshot.db)
+sudo chown "$USER" ./fintrack_db_key   # Linux only, see below
+npx @rafaelfcarneiro/fintrack@latest key import --from ./fintrack_db_key
+npx @rafaelfcarneiro/fintrack@latest db import --from ./fintrack.snapshot.db
+```
+
+The outer `umask 077` matters: the host shell creates `./fintrack.snapshot.db` for the redirection before Docker starts,
+so the one inside the container does not reach it. On native Linux the move to Docker handed the key file to UID 1000 so
+the container could read it; the `chown` takes it back so `key import` can read it as you (Docker Desktop did not change
+the owner, so skip it there).
+
+`scripts/docker-move-smoke.sh` also runs this direction (with the key supplied as a file, since a CI host has no
+keychain); the key-into-keychain step is covered by the integration tests with an in-memory keychain.
 
 ## Backups made before a migration
 

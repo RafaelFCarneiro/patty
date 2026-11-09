@@ -22,8 +22,8 @@ Commands:
   logout           Revoke the saved sign-in and remove it from the keychain
   auth <command>   Owner login: setup, reset-password
   users <command>  Manage who can sign in: list, invite, reissue, disable, enable, role
-  key <command>    Export the database key (export --to <file>) to move an npm install to Docker
-  db <command>     Export an encrypted snapshot of the database (export --to <file>)
+  key <command>    Move the database key between installs (export --to <file>, import --from <file>)
+  db <command>     Move an encrypted snapshot of the database between installs (export --to, import --from)
   demo             Try FinTrack on throwaway sample data, on its own port (--country, --reset)
 
 The setup, auth, users, key and db commands print their own help when run with no arguments. With no command at all, FinTrack runs as an MCP server (stdio).

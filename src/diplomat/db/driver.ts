@@ -4,8 +4,11 @@ import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@libsql/client';
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
-import { EncryptionKey, type Config } from '../../config.js';
-import { KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
+import type { Config } from '../../config.js';
+import { EncryptionKey } from '../../models/encryption-key.js';
+import { PRIVATE_DIRECTORY_MODE } from '../../models/export.js';
+import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
+import { withKeyLock } from './key-lock.js';
 import * as schema from './schema.js';
 
 export type Db = LibSQLDatabase<typeof schema>;
@@ -16,8 +19,6 @@ export type Db = LibSQLDatabase<typeof schema>;
  *  (the engine's port, generic over an opaque `TTx`) so every existing import path there still
  *  resolves. */
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
-
-const KEYCHAIN_ACCOUNT = 'db-encryption-key';
 
 // ADR-024: WAL lets readers (the HTTP sidecar) proceed without blocking the single writer, instead
 // of rollback-journal's mutual blocking. busy_timeout makes a contended writer wait for the lock
@@ -31,7 +32,7 @@ export const BUSY_TIMEOUT_MS = 5000;
 export const assertBusyTimeout = (client: ReturnType<typeof createClient>): Promise<unknown> =>
   client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
 
-type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY' | 'FINTRACK_DB_KEY_FILE'>;
+type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY' | 'FINTRACK_DB_KEY_FILE' | 'KEY_LOCK_PATH'>;
 
 const KEY_GENERATION_HINT =
   'Generate one with `openssl rand -hex 32` and provide it via FINTRACK_DB_KEY_FILE ' +
@@ -57,7 +58,9 @@ const readKeyFile = (path: string): string => {
 };
 
 // The only place the native keychain module is loaded, so the file/env key paths never load it (ADR-032).
-const loadKeyring = () => import('@napi-rs/keyring');
+const importKeyring = () => import('@napi-rs/keyring');
+let keyring: ReturnType<typeof importKeyring> | undefined;
+const loadKeyring = () => (keyring ??= importKeyring());
 
 // A hand-edited or corrupted keychain entry must fail here with a clear message, not reach libSQL.
 const validateStoredKey = (stored: string): string => {
@@ -65,34 +68,52 @@ const validateStoredKey = (stored: string): string => {
   if (!parsed.success) {
     throw new Error(
       'fintrack: the encryption key stored in the OS keychain is not a 64-character hex key. ' +
-        'Remove the "fintrack" / "db-encryption-key" keychain entry (this loses access to an existing database ' +
+        `Remove the "${KEYCHAIN_SERVICE}" / "${DB_KEY_KEYCHAIN_ACCOUNT}" keychain entry (this loses access to an existing database ` +
         `encrypted with it), or supply the correct key. ${KEY_GENERATION_HINT}`,
     );
   }
   return parsed.data;
 };
 
-const resolveKeychainKey = async (): Promise<string> => {
-  try {
-    const { Entry } = await loadKeyring();
-    const entry = new Entry(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
-    const existing = entry.getPassword();
-    if (existing) return existing;
+const keychainEntry = async () => {
+  const { Entry } = await loadKeyring();
+  return new Entry(KEYCHAIN_SERVICE, DB_KEY_KEYCHAIN_ACCOUNT);
+};
 
-    const key = randomBytes(32).toString('hex');
-    entry.setPassword(key);
-    return key;
+type KeychainEntry = Awaited<ReturnType<typeof keychainEntry>>;
+
+const inKeychain = async <T>(work: () => T | Promise<T>): Promise<T> => {
+  try {
+    return await work();
   } catch (cause) {
     throw new Error(
-      `fintrack: cannot access the OS keychain for the database encryption key, and no key source was configured. ${KEY_GENERATION_HINT}`,
+      `fintrack: cannot read or write the database encryption key in the OS keychain, and no key source was configured. ${KEY_GENERATION_HINT}`,
       { cause },
     );
   }
 };
 
-// Order: key file -> env var -> OS keychain. The key is never written next to the data: the
-// keychain generates on first run for local use only, and every other path fails fast.
-export const resolveEncryptionKey = async (config: DbConfig): Promise<string> => {
+const generateKeychainKey = (entry: KeychainEntry, keyLockPath: string): Promise<string> => {
+  return withKeyLock(
+    () =>
+      inKeychain(() => {
+        const existing = entry.getPassword();
+        if (existing) return existing;
+        const key = randomBytes(32).toString('hex');
+        entry.setPassword(key);
+        return key;
+      }),
+    keyLockPath,
+  );
+};
+
+const resolveKeychainKey = async (keyLockPath: string): Promise<string> => {
+  const entry = await inKeychain(keychainEntry);
+  const existing = await inKeychain(() => entry.getPassword());
+  return existing || generateKeychainKey(entry, keyLockPath);
+};
+
+const configuredKey = (config: DbConfig): string | null => {
   if (config.FINTRACK_DB_KEY_FILE) {
     console.warn('fintrack: using the encryption key from FINTRACK_DB_KEY_FILE; OS keychain bypassed.');
     return readKeyFile(config.FINTRACK_DB_KEY_FILE);
@@ -103,7 +124,30 @@ export const resolveEncryptionKey = async (config: DbConfig): Promise<string> =>
     console.warn('fintrack: using FINTRACK_DB_KEY from the environment; OS keychain bypassed.');
     return config.FINTRACK_DB_KEY;
   }
-  return validateStoredKey(await resolveKeychainKey());
+  return null;
+};
+
+// Order: key file -> env var -> OS keychain. The key is never written next to the data: the
+// keychain generates on first run for local use only, and every other path fails fast.
+export const resolveEncryptionKey = async (config: DbConfig): Promise<string> =>
+  configuredKey(config) ?? validateStoredKey(await resolveKeychainKey(config.KEY_LOCK_PATH));
+
+export const keychainHoldsKey = async (): Promise<boolean> => Boolean((await keychainEntry()).getPassword());
+
+export const storeKeychainKeyIfAbsent = async (key: string, keyLockPath: string): Promise<boolean> => {
+  const entry = await keychainEntry();
+  return withKeyLock(async () => {
+    if (entry.getPassword()) return false;
+    entry.setPassword(key);
+    return true;
+  }, keyLockPath);
+};
+
+export const findEncryptionKey = async (config: DbConfig): Promise<string | null> => {
+  const configured = configuredKey(config);
+  if (configured !== null) return configured;
+  const stored = (await keychainEntry()).getPassword();
+  return stored ? validateStoredKey(stored) : null;
 };
 
 /** Best-effort: WAL is verified to work with libSQL's encryption-at-rest in this project's target
@@ -148,7 +192,7 @@ export const openDatabaseWithKey = async (
 ): Promise<Db> => {
   // mode 0o700 applies only when the directory is first created; pre-existing directories
   // keep their current permissions (Node does not retroactively tighten them).
-  mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 });
+  mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
   const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey });
   if (initializeJournal) await enableWal(client);
   // busy_timeout is per-connection (ADR-024), so it is asserted unconditionally on every open.

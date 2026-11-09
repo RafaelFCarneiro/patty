@@ -11,6 +11,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeDatabase, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { waitForStderr } from './helpers.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 /**
  * The real binary over a real pipe, as Claude Desktop runs it: an unsigned `tools/call` returns the link and the code,
@@ -98,7 +99,7 @@ const approve = (origin: string, cookie: string, code: string, access: 'read' | 
   });
 
 const database = async () => {
-  const db = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
   return { db, close: () => closeDatabase(db) };
 };
 

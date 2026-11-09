@@ -11,6 +11,7 @@ import { closeDatabase, openDatabase, type Db } from '../../../src/diplomat/db/d
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migration-barrier.js';
 import { checkDatabaseNotAhead } from '../../../src/diplomat/db/version-guard.js';
 import { DatabaseAheadCode, databaseAheadMessage, databaseErrors } from '../../../src/models/database.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'f'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -25,7 +26,7 @@ let dbPath: string;
 const opened: Db[] = [];
 
 const open = async (): Promise<Db> => {
-  const db = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
   opened.push(db);
   return db;
 };

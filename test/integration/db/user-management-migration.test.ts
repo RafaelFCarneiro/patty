@@ -11,6 +11,7 @@ import { DATA_REWRITING_MIGRATIONS } from '../../../src/diplomat/db/migrations.j
 import { backupPath } from '../../../src/diplomat/db/safety-copy.js';
 import { isUniqueConstraintViolation } from '../../../src/diplomat/db/sqlite-errors.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'f'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -30,7 +31,7 @@ const journalBefore = (folder: string, tag = MIGRATION_TAG): void => {
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
 
-const open = () => openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
+const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
 
 /** A pre-migration database in which the owner has claimed the instance and a stdio sign-in exists. */
 const previousRelease = async (): Promise<Db> => {

@@ -7,3 +7,13 @@ export const EXCLUSIVE_CREATE_FLAG = 'wx';
 
 /** Rows of the owned tables a `db export` reports, so the person can compare them after the move. Counts only. */
 export type ExportedRowCounts = Readonly<Record<string, number>>;
+
+export const DATABASE_COMPANION_SUFFIXES = ['-wal', '-shm', '-journal'] as const;
+
+export const DATA_BEARING_SUFFIXES = ['-wal', '-journal'] as const;
+
+export const FILE_EXISTS_CODE = 'EEXIST';
+
+export const PRIVATE_DIRECTORY_MODE = 0o700;
+
+export type StagedCopy = { path: string; source: string; createdDirectory: string | null };

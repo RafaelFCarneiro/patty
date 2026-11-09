@@ -10,6 +10,7 @@ import { McpTransport } from '../../../src/config.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'f'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -50,6 +51,7 @@ afterEach(() => {
 
 const openOpts = () => ({
   DB_PATH: dbPath,
+  KEY_LOCK_PATH: keyLockPathForTest(),
   FINTRACK_DB_KEY: TEST_KEY,
   PORT: 3001,
   MCP_TRANSPORT: McpTransport.enum.http,

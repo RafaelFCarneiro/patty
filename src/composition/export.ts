@@ -7,7 +7,7 @@ import { closeDatabase, openDatabaseWithKey, resolveEncryptionKey, type Db } fro
 import { countSnapshotRows } from '../diplomat/db/export.js';
 import { snapshotTo } from '../diplomat/db/safety-copy.js';
 import { reasonOf } from '../models/error.js';
-import type { ExportedRowCounts } from '../models/export.js';
+import { FILE_EXISTS_CODE, type ExportedRowCounts } from '../models/export.js';
 
 type KeyedDatabase = { key: string; db: Db };
 
@@ -33,8 +33,6 @@ const openKeyed = async (): Promise<Result<KeyedDatabase, string>> => {
   }
 };
 
-const FILE_EXISTS = 'EEXIST';
-
 /** Nothing is left behind by a snapshot that failed — except a file that was there before we asked (`wx` refused it),
  *  which is not ours to remove. */
 const snapshotAndCount = async ({ key, db }: KeyedDatabase, destination: string): Promise<ExportedRowCounts> => {
@@ -42,7 +40,7 @@ const snapshotAndCount = async ({ key, db }: KeyedDatabase, destination: string)
     await snapshotTo(db, destination);
     return await countSnapshotRows(destination, key);
   } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code !== FILE_EXISTS) rmSync(destination, { force: true });
+    if ((cause as NodeJS.ErrnoException).code !== FILE_EXISTS_CODE) rmSync(destination, { force: true });
     throw cause;
   }
 };
