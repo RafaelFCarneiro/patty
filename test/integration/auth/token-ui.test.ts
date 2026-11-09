@@ -18,7 +18,7 @@ import {
 
 const createApp = useAuthApp();
 
-const SECRET = /data-testid="token-secret">(ftk_[A-Za-z0-9_-]+)</;
+const SECRET = /data-testid="token-secret">(ptk_[A-Za-z0-9_-]+)</;
 
 const get = (ctx: Awaited<ReturnType<typeof createApp>>, url: string, cookie: string) =>
   ctx.app.inject({ method: 'GET', url, headers: { host: LOOPBACK_HOST, cookie } });
@@ -86,7 +86,7 @@ describe('/ui/access/tokens', () => {
     expect(created.headers['cache-control']).toBe('no-store');
     expect(created.body).toContain("you won't see this token again");
     const token = SECRET.exec(created.body)?.[1] ?? '';
-    expect(token).toMatch(/^ftk_[A-Za-z0-9_-]{43}$/);
+    expect(token).toMatch(/^ptk_[A-Za-z0-9_-]{43}$/);
 
     const list = await get(ctx, '/ui/access/tokens', cookie);
     expect(list.body).not.toContain(token);
@@ -168,7 +168,7 @@ describe('/ui/access/tokens', () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
     const deps = authDepsOf(ctx);
-    const legacy = 'ftk_legacyTokenMintedBeforeAdr034Ends';
+    const legacy = 'ptk_legacyTokenMintedBeforeAdr034Ends';
     const now = new Date().toISOString();
     await ctx.db.insert(accessTokens).values({
       id: 'legacy-token',
@@ -176,7 +176,7 @@ describe('/ui/access/tokens', () => {
       name: 'old script',
       tokenHash: deps.secrets.hashSecret(legacy),
       prefix: legacy.slice(0, 10),
-      scopes: ['fintrack:read'],
+      scopes: ['patty:read'],
       createdAt: now,
       expiresAt: null,
     });
@@ -272,7 +272,7 @@ describe('the shell’s access-tokens link', () => {
   });
 
   it('is absent when auth is disabled', async () => {
-    const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
+    const ctx = await createApp({ auth: { PATTY_AUTH: AuthMode.enum.disabled } });
     const shell = await ctx.app.inject({ method: 'GET', url: '/ui', headers: { host: LOOPBACK_HOST } });
     expect(shell.statusCode).toBe(200);
     expect(shell.body).not.toContain('/ui/access/tokens');

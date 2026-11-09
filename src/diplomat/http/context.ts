@@ -8,7 +8,7 @@ export type HttpContext = Tenancy & {
 };
 
 const DOCUMENTATION_ONLY = (): never => {
-  throw new Error('fintrack: this HTTP context only documents the routes (OpenAPI) — it serves none');
+  throw new Error('patty: this HTTP context only documents the routes (OpenAPI) — it serves none');
 };
 
 /** Builds the route list for documentation only (no request, no principal); handlers must never run. */

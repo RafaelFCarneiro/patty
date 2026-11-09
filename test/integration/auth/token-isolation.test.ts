@@ -72,7 +72,7 @@ describe('a bearer token can never reach token management', () => {
     app.addHook('onRequest', async (req) => {
       req.principal = {
         ...OWNER_PRINCIPAL,
-        scopes: [Scope.enum['fintrack:write']],
+        scopes: [Scope.enum['patty:write']],
         via: PrincipalVia.enum.token,
         tokenId: 't',
       };
@@ -132,7 +132,7 @@ describe('a script running in the dashboard origin cannot mint itself a token', 
     });
     expect(wrong.statusCode).toBe(403);
     expect(wrong.body).toContain('That password is not correct.');
-    expect((await mintToken(ctx, cookie)).token).toMatch(/^ftk_/);
+    expect((await mintToken(ctx, cookie)).token).toMatch(/^ptk_/);
   });
 
   it('guessing the password is throttled like a login', async () => {
@@ -171,7 +171,7 @@ describe('credential classification follows the route the router matched', () =>
       const res = await ctx.app.inject({
         method: 'GET',
         url,
-        headers: { ...headers, authorization: 'Bearer ftk_bad' },
+        headers: { ...headers, authorization: 'Bearer ptk_bad' },
       });
       expect(res.statusCode, url).toBe(401);
       expect(res.json(), url).toEqual({ error: { code: 'invalid_token' } });

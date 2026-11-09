@@ -14,12 +14,12 @@ describe('readJsonOrEmpty', () => {
   });
 
   it('returns an empty object when the file does not exist', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     expect(readJsonOrEmpty(join(tempDir, 'missing.json'))._unsafeUnwrap()).toEqual({ config: {}, warnings: [] });
   });
 
   it('reports the underlying file read failure message', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     const configPath = join(tempDir, 'config.json');
     mkdirSync(configPath);
 
@@ -33,7 +33,7 @@ describe('readJsonOrEmpty', () => {
   });
 
   it('treats an empty file as an empty object', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     const configPath = join(tempDir, 'config.json');
     writeFileSync(configPath, '', 'utf8');
 
@@ -41,7 +41,7 @@ describe('readJsonOrEmpty', () => {
   });
 
   it('falls back to an empty object for malformed JSON content', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     const configPath = join(tempDir, 'config.json');
     writeFileSync(configPath, '{ invalid-json', 'utf8');
 
@@ -50,27 +50,27 @@ describe('readJsonOrEmpty', () => {
     expect(readJsonOrEmpty(configPath)._unsafeUnwrap()).toEqual({
       config: {},
       warnings: [
-        `fintrack setup: ${configPath} does not contain a JSON object at the root — replacing it during setup.`,
+        `patty setup: ${configPath} does not contain a JSON object at the root — replacing it during setup.`,
       ],
     });
     expect(errorSpy).not.toHaveBeenCalled(); // it reports; the setup command prints
   });
 
   it('falls back to an empty object for non-object JSON roots', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     const configPath = join(tempDir, 'config.json');
     writeFileSync(configPath, '[]', 'utf8');
 
     expect(readJsonOrEmpty(configPath)._unsafeUnwrap()).toEqual({
       config: {},
       warnings: [
-        `fintrack setup: ${configPath} does not contain a JSON object at the root — replacing it during setup.`,
+        `patty setup: ${configPath} does not contain a JSON object at the root — replacing it during setup.`,
       ],
     });
   });
 
   it('returns the object it finds, with no warning', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     const configPath = join(tempDir, 'config.json');
     writeFileSync(configPath, '{"theme":"dark"}', 'utf8');
 
@@ -88,7 +88,7 @@ describe('what each client reports', () => {
   });
 
   const withHome = async () => {
-    home = mkdtempSync(join(tmpdir(), 'fintrack-clients-'));
+    home = mkdtempSync(join(tmpdir(), 'patty-clients-'));
     vi.resetModules();
     vi.doMock('node:os', () => ({ homedir: () => home }));
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -151,7 +151,7 @@ describe('what each client reports', () => {
 
   it('codex escapes the demo path, so a Windows path or a quote still pastes as valid JSON', async () => {
     const { clientConfigs } = await withHome();
-    const path = 'C:\\Users\\al"ice\\.fintrack\\demo.db';
+    const path = 'C:\\Users\\al"ice\\.patty\\demo.db';
     const [snippet] = clientConfigs.find('codex')!.addDemo(path)._unsafeUnwrap().lines;
     const env = /"env": (\{.*\})/.exec(snippet ?? '')?.[1] ?? '';
     expect(JSON.parse(env)).toMatchObject({ DB_PATH: path });
@@ -161,6 +161,6 @@ describe('what each client reports', () => {
     const { clientConfigs } = await withHome();
     const report = clientConfigs.find('codex')!.run('work')._unsafeUnwrap();
     expect(report.lines).toHaveLength(1);
-    expect(report.lines[0]).toContain('"env": { "FINTRACK_PROFILE": "work" }');
+    expect(report.lines[0]).toContain('"env": { "PATTY_PROFILE": "work" }');
   });
 });

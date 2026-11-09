@@ -12,9 +12,9 @@ import {
 } from '../../../../src/diplomat/client-config/merge.js';
 
 describe('mergeMcpServersKey', () => {
-  it('adds fintrack entry to an empty config', () => {
+  it('adds patty entry to an empty config', () => {
     const result = mergeMcpServersKey({}, { ...STDIO_ENTRY });
-    expect(result).toEqual({ mcpServers: { fintrack: STDIO_ENTRY } });
+    expect(result).toEqual({ mcpServers: { patty: STDIO_ENTRY } });
   });
 
   it('preserves existing mcpServers entries', () => {
@@ -22,14 +22,14 @@ describe('mergeMcpServersKey', () => {
     const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY });
     expect(result.mcpServers).toEqual({
       other: { command: 'other-cmd', args: [] },
-      fintrack: STDIO_ENTRY,
+      patty: STDIO_ENTRY,
     });
   });
 
-  it('overwrites an existing fintrack entry (idempotent)', () => {
-    const existing = { mcpServers: { fintrack: { command: 'old', args: [] } } };
+  it('overwrites an existing patty entry (idempotent)', () => {
+    const existing = { mcpServers: { patty: { command: 'old', args: [] } } };
     const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY });
-    expect((result.mcpServers as Record<string, unknown>)['fintrack']).toEqual(STDIO_ENTRY);
+    expect((result.mcpServers as Record<string, unknown>)['patty']).toEqual(STDIO_ENTRY);
   });
 
   it('preserves top-level keys unrelated to mcpServers', () => {
@@ -41,20 +41,20 @@ describe('mergeMcpServersKey', () => {
   it('treats a non-object mcpServers value as empty', () => {
     const existing = { mcpServers: 'corrupt' };
     const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY });
-    expect(result).toEqual({ mcpServers: { fintrack: STDIO_ENTRY } });
+    expect(result).toEqual({ mcpServers: { patty: STDIO_ENTRY } });
   });
 
   it('treats an array mcpServers value as empty', () => {
     const existing = { mcpServers: [] };
     const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY });
-    expect(result).toEqual({ mcpServers: { fintrack: STDIO_ENTRY } });
+    expect(result).toEqual({ mcpServers: { patty: STDIO_ENTRY } });
   });
 });
 
 describe('mergeServersKey', () => {
-  it('adds fintrack entry under servers key (VS Code shape)', () => {
+  it('adds patty entry under servers key (VS Code shape)', () => {
     const result = mergeServersKey({}, { ...VSCODE_ENTRY });
-    expect(result).toEqual({ servers: { fintrack: VSCODE_ENTRY } });
+    expect(result).toEqual({ servers: { patty: VSCODE_ENTRY } });
   });
 
   it('preserves existing servers entries', () => {
@@ -62,14 +62,14 @@ describe('mergeServersKey', () => {
     const result = mergeServersKey(existing, { ...VSCODE_ENTRY });
     expect(result.servers).toEqual({
       other: { type: 'stdio', command: 'x', args: [] },
-      fintrack: VSCODE_ENTRY,
+      patty: VSCODE_ENTRY,
     });
   });
 
-  it('overwrites an existing fintrack entry (idempotent)', () => {
-    const existing = { servers: { fintrack: { type: 'stdio', command: 'old', args: [] } } };
+  it('overwrites an existing patty entry (idempotent)', () => {
+    const existing = { servers: { patty: { type: 'stdio', command: 'old', args: [] } } };
     const result = mergeServersKey(existing, { ...VSCODE_ENTRY });
-    expect((result.servers as Record<string, unknown>)['fintrack']).toEqual(VSCODE_ENTRY);
+    expect((result.servers as Record<string, unknown>)['patty']).toEqual(VSCODE_ENTRY);
   });
 
   it('preserves top-level keys unrelated to servers', () => {
@@ -81,13 +81,13 @@ describe('mergeServersKey', () => {
   it('treats a non-object servers value as empty', () => {
     const existing = { servers: null };
     const result = mergeServersKey(existing, { ...VSCODE_ENTRY });
-    expect(result).toEqual({ servers: { fintrack: VSCODE_ENTRY } });
+    expect(result).toEqual({ servers: { patty: VSCODE_ENTRY } });
   });
 
   it('treats an array servers value as empty', () => {
     const existing = { servers: [] };
     const result = mergeServersKey(existing, { ...VSCODE_ENTRY });
-    expect(result).toEqual({ servers: { fintrack: VSCODE_ENTRY } });
+    expect(result).toEqual({ servers: { patty: VSCODE_ENTRY } });
   });
 });
 
@@ -105,7 +105,7 @@ describe('resolveConfigObject', () => {
 describe('STDIO_ENTRY', () => {
   it('uses npx with the published package', () => {
     expect(STDIO_ENTRY.command).toBe('npx');
-    expect(STDIO_ENTRY.args).toEqual(['-y', '@rafaelfcarneiro/fintrack@latest']);
+    expect(STDIO_ENTRY.args).toEqual(['-y', '@rfc0/patty@latest']);
   });
 });
 
@@ -122,27 +122,27 @@ describe('withProfile (ADR-034 §5.2)', () => {
     expect(withProfile(VSCODE_ENTRY, 'default')).toBe(VSCODE_ENTRY);
   });
 
-  it('adds FINTRACK_PROFILE to the entry’s env only for a non-default profile, keeping the rest', () => {
-    expect(withProfile(STDIO_ENTRY, 'work')).toEqual({ ...STDIO_ENTRY, env: { FINTRACK_PROFILE: 'work' } });
-    expect(withProfile(VSCODE_ENTRY, 'work')).toEqual({ ...VSCODE_ENTRY, env: { FINTRACK_PROFILE: 'work' } });
+  it('adds PATTY_PROFILE to the entry’s env only for a non-default profile, keeping the rest', () => {
+    expect(withProfile(STDIO_ENTRY, 'work')).toEqual({ ...STDIO_ENTRY, env: { PATTY_PROFILE: 'work' } });
+    expect(withProfile(VSCODE_ENTRY, 'work')).toEqual({ ...VSCODE_ENTRY, env: { PATTY_PROFILE: 'work' } });
   });
 });
 
 describe('the demo entry', () => {
-  it('merges under its own name and leaves the fintrack entry alone', () => {
-    const existing = { mcpServers: { fintrack: { command: 'real' } } };
-    const demo = withDemo(STDIO_ENTRY, '/home/x/.fintrack/demo.db');
+  it('merges under its own name and leaves the patty entry alone', () => {
+    const existing = { mcpServers: { patty: { command: 'real' } } };
+    const demo = withDemo(STDIO_ENTRY, '/home/x/.patty/demo.db');
     expect(mergeMcpServersKey(existing, demo, DEMO_SERVER_NAME).mcpServers).toEqual({
-      fintrack: { command: 'real' },
+      patty: { command: 'real' },
       [DEMO_SERVER_NAME]: demo,
     });
     expect(mergeServersKey({}, demo, DEMO_SERVER_NAME)).toEqual({ servers: { [DEMO_SERVER_NAME]: demo } });
   });
 
   it('runs the same server against the demo database, port and key switch', () => {
-    expect(withDemo(VSCODE_ENTRY, '/home/x/.fintrack/demo.db')).toEqual({
+    expect(withDemo(VSCODE_ENTRY, '/home/x/.patty/demo.db')).toEqual({
       ...VSCODE_ENTRY,
-      env: { DB_PATH: '/home/x/.fintrack/demo.db', PORT: String(DEMO_PORT), [DEMO_ENV_VAR]: DEMO_ENV_ON },
+      env: { DB_PATH: '/home/x/.patty/demo.db', PORT: String(DEMO_PORT), [DEMO_ENV_VAR]: DEMO_ENV_ON },
     });
   });
 });

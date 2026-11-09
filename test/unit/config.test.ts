@@ -10,10 +10,10 @@ import { AuthMode } from '../../src/models/auth/mode.js';
 const ORIGINAL_ENV = { ...process.env };
 
 beforeEach(() => {
-  delete process.env['FINTRACK_DB_KEY'];
-  delete process.env['FINTRACK_DB_KEY_FILE'];
+  delete process.env['PATTY_DB_KEY'];
+  delete process.env['PATTY_DB_KEY_FILE'];
   delete process.env['HOST'];
-  delete process.env['FINTRACK_LOCALE'];
+  delete process.env['PATTY_LOCALE'];
 });
 
 afterEach(() => {
@@ -21,32 +21,32 @@ afterEach(() => {
 });
 
 describe('loadConfig', () => {
-  it('accepts a 64-character hex FINTRACK_DB_KEY', () => {
-    process.env['FINTRACK_DB_KEY'] = 'a'.repeat(64);
+  it('accepts a 64-character hex PATTY_DB_KEY', () => {
+    process.env['PATTY_DB_KEY'] = 'a'.repeat(64);
     expect(() => loadConfig()).not.toThrow();
   });
 
   it('accepts uppercase hex characters', () => {
-    process.env['FINTRACK_DB_KEY'] = 'A'.repeat(64);
+    process.env['PATTY_DB_KEY'] = 'A'.repeat(64);
     expect(() => loadConfig()).not.toThrow();
   });
 
   it('rejects a key shorter than 64 characters', () => {
-    process.env['FINTRACK_DB_KEY'] = 'a'.repeat(63);
+    process.env['PATTY_DB_KEY'] = 'a'.repeat(63);
     expect(() => loadConfig()).toThrow();
   });
 
   it('rejects a key longer than 64 characters', () => {
-    process.env['FINTRACK_DB_KEY'] = 'a'.repeat(65);
+    process.env['PATTY_DB_KEY'] = 'a'.repeat(65);
     expect(() => loadConfig()).toThrow();
   });
 
   it('rejects non-hex characters', () => {
-    process.env['FINTRACK_DB_KEY'] = 'g'.repeat(64);
+    process.env['PATTY_DB_KEY'] = 'g'.repeat(64);
     expect(() => loadConfig()).toThrow();
   });
 
-  it('allows FINTRACK_DB_KEY to be omitted (falls back to keychain)', () => {
+  it('allows PATTY_DB_KEY to be omitted (falls back to keychain)', () => {
     expect(() => loadConfig()).not.toThrow();
   });
 
@@ -69,44 +69,44 @@ describe('loadConfig', () => {
   });
 
   it('rejects a tilde-prefixed DB_PATH override', () => {
-    process.env['DB_PATH'] = '~/.fintrack/fintrack.db';
+    process.env['DB_PATH'] = '~/.patty/patty.db';
     expect(() => loadConfig()).toThrow();
   });
 
-  it('accepts valid FINTRACK_LOCALE values (en, es, pt)', () => {
+  it('accepts valid PATTY_LOCALE values (en, es, pt)', () => {
     for (const locale of ['en', 'es', 'pt']) {
-      process.env['FINTRACK_LOCALE'] = locale;
-      expect(loadConfig().FINTRACK_LOCALE).toBe(locale);
+      process.env['PATTY_LOCALE'] = locale;
+      expect(loadConfig().PATTY_LOCALE).toBe(locale);
     }
   });
 
-  it('rejects invalid FINTRACK_LOCALE values', () => {
-    process.env['FINTRACK_LOCALE'] = 'fr';
+  it('rejects invalid PATTY_LOCALE values', () => {
+    process.env['PATTY_LOCALE'] = 'fr';
     expect(() => loadConfig()).toThrow();
   });
 
-  it('allows FINTRACK_LOCALE to be omitted', () => {
+  it('allows PATTY_LOCALE to be omitted', () => {
     const config = loadConfig();
-    expect(config.FINTRACK_LOCALE).toBeUndefined();
+    expect(config.PATTY_LOCALE).toBeUndefined();
   });
 
-  it('FINTRACK_HTTP defaults to true when omitted (ADR-013 Decision 7 — on by default)', () => {
-    delete process.env['FINTRACK_HTTP'];
-    expect(loadConfig().FINTRACK_HTTP).toBe(true);
+  it('PATTY_HTTP defaults to true when omitted (ADR-013 Decision 7 — on by default)', () => {
+    delete process.env['PATTY_HTTP'];
+    expect(loadConfig().PATTY_HTTP).toBe(true);
   });
 
-  it('FINTRACK_HTTP is false only for the literal string "false" (opt-out)', () => {
-    process.env['FINTRACK_HTTP'] = 'false';
-    expect(loadConfig().FINTRACK_HTTP).toBe(false);
+  it('PATTY_HTTP is false only for the literal string "false" (opt-out)', () => {
+    process.env['PATTY_HTTP'] = 'false';
+    expect(loadConfig().PATTY_HTTP).toBe(false);
 
-    process.env['FINTRACK_HTTP'] = 'true';
-    expect(loadConfig().FINTRACK_HTTP).toBe(true);
+    process.env['PATTY_HTTP'] = 'true';
+    expect(loadConfig().PATTY_HTTP).toBe(true);
 
     // Any other value — including a falsy-looking one like '0' — does not opt out, since only
     // the exact string 'false' does. This keeps the on-by-default posture from being silently
     // undone by an unrelated or malformed env value.
-    process.env['FINTRACK_HTTP'] = '0';
-    expect(loadConfig().FINTRACK_HTTP).toBe(true);
+    process.env['PATTY_HTTP'] = '0';
+    expect(loadConfig().PATTY_HTTP).toBe(true);
   });
 
   it('default PORT is not a common Node/Fastify dev-server port (3000/3001/8080/etc)', () => {
@@ -165,50 +165,50 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow();
   });
 
-  it('accepts an absolute FINTRACK_DB_KEY_FILE', () => {
-    process.env['FINTRACK_DB_KEY_FILE'] = '/run/secrets/fintrack_db_key';
-    expect(loadConfig().FINTRACK_DB_KEY_FILE).toBe('/run/secrets/fintrack_db_key');
+  it('accepts an absolute PATTY_DB_KEY_FILE', () => {
+    process.env['PATTY_DB_KEY_FILE'] = '/run/secrets/patty_db_key';
+    expect(loadConfig().PATTY_DB_KEY_FILE).toBe('/run/secrets/patty_db_key');
   });
 
-  it('rejects a relative FINTRACK_DB_KEY_FILE', () => {
-    process.env['FINTRACK_DB_KEY_FILE'] = 'secrets/key';
+  it('rejects a relative PATTY_DB_KEY_FILE', () => {
+    process.env['PATTY_DB_KEY_FILE'] = 'secrets/key';
     expect(() => loadConfig()).toThrow(/absolute path/);
   });
 
-  it('rejects FINTRACK_DB_KEY and FINTRACK_DB_KEY_FILE set together (ambiguous source)', () => {
-    process.env['FINTRACK_DB_KEY'] = 'a'.repeat(64);
-    process.env['FINTRACK_DB_KEY_FILE'] = '/run/secrets/fintrack_db_key';
+  it('rejects PATTY_DB_KEY and PATTY_DB_KEY_FILE set together (ambiguous source)', () => {
+    process.env['PATTY_DB_KEY'] = 'a'.repeat(64);
+    process.env['PATTY_DB_KEY_FILE'] = '/run/secrets/patty_db_key';
     expect(() => loadConfig()).toThrow(/ambiguous/);
   });
 });
 
-describe('the demo (FINTRACK_DEMO)', () => {
+describe('the demo (PATTY_DEMO)', () => {
   it('the published demo key is a valid database key', () => {
     expect(EncryptionKey.safeParse(DEMO_DB_KEY).success).toBe(true);
   });
 
-  it('fixes the key and turns the login off, whatever FINTRACK_AUTH says', () => {
+  it('fixes the key and turns the login off, whatever PATTY_AUTH says', () => {
     process.env[DEMO_ENV_VAR] = DEMO_ENV_ON;
-    process.env['FINTRACK_AUTH'] = AuthMode.enum.required;
+    process.env['PATTY_AUTH'] = AuthMode.enum.required;
     expect(loadConfig()).toMatchObject({
-      FINTRACK_DEMO: true,
-      FINTRACK_DB_KEY: DEMO_DB_KEY,
-      FINTRACK_AUTH: AuthMode.enum.disabled,
+      PATTY_DEMO: true,
+      PATTY_DB_KEY: DEMO_DB_KEY,
+      PATTY_AUTH: AuthMode.enum.disabled,
     });
   });
 
   it('is off unless it is exactly 1, and then changes nothing about the real install', () => {
     process.env[DEMO_ENV_VAR] = 'true';
-    delete process.env['FINTRACK_AUTH'];
+    delete process.env['PATTY_AUTH'];
     const config = loadConfig();
-    expect(config.FINTRACK_DEMO).toBe(false);
-    expect(config.FINTRACK_DB_KEY).toBeUndefined();
-    expect(config.FINTRACK_AUTH).toBe(AuthMode.enum.required);
+    expect(config.PATTY_DEMO).toBe(false);
+    expect(config.PATTY_DB_KEY).toBeUndefined();
+    expect(config.PATTY_AUTH).toBe(AuthMode.enum.required);
   });
 
   it.each([
-    ['FINTRACK_DB_KEY', 'a'.repeat(64)],
-    ['FINTRACK_DB_KEY_FILE', '/run/secrets/key'],
+    ['PATTY_DB_KEY', 'a'.repeat(64)],
+    ['PATTY_DB_KEY_FILE', '/run/secrets/key'],
   ])('refuses to be combined with %s: the demo key is not a choice', (name, value) => {
     process.env[DEMO_ENV_VAR] = DEMO_ENV_ON;
     process.env[name] = value;
@@ -225,17 +225,17 @@ describe('the demo (FINTRACK_DEMO)', () => {
   });
 
   it('demoConfig is the demo database on the demo port, and ignores the real install’s environment', () => {
-    process.env['DB_PATH'] = '/real/fintrack.db';
+    process.env['DB_PATH'] = '/real/patty.db';
     process.env['PORT'] = '3001';
-    process.env['FINTRACK_DB_KEY'] = 'b'.repeat(64);
-    process.env['FINTRACK_AUTH'] = AuthMode.enum.required;
+    process.env['PATTY_DB_KEY'] = 'b'.repeat(64);
+    process.env['PATTY_AUTH'] = AuthMode.enum.required;
     expect(demoConfig(DEMO_DB_PATH)).toMatchObject({
       DB_PATH: DEMO_DB_PATH,
       PORT: DEMO_PORT,
       HOST: LOOPBACK_HOST,
       MCP_TRANSPORT: 'http',
-      FINTRACK_DB_KEY: DEMO_DB_KEY,
-      FINTRACK_AUTH: AuthMode.enum.disabled,
+      PATTY_DB_KEY: DEMO_DB_KEY,
+      PATTY_AUTH: AuthMode.enum.disabled,
     });
   });
 

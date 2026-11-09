@@ -21,9 +21,9 @@ export const DEMO_DB_KEY = '0123456789abcdef'.repeat(4);
 
 export const DEMO_PORT = 51738;
 
-export const DEMO_SERVER_NAME = 'fintrack-demo';
+export const DEMO_SERVER_NAME = 'patty-demo';
 
-export const DEMO_ENV_VAR = 'FINTRACK_DEMO';
+export const DEMO_ENV_VAR = 'PATTY_DEMO';
 export const DEMO_ENV_ON = '1';
 
 export const DemoNotReadyCode = z.enum(['demo_not_ready']);
@@ -35,7 +35,7 @@ export const demoNotReady = (databasePath: string): DemoNotReady => ({
 });
 
 export const demoNotReadyMessage = ({ databasePath }: DemoNotReady): string =>
-  `fintrack: ${DEMO_ENV_VAR} is set, but ${databasePath} is not a demo database. Create it with: ${NPX_COMMAND} demo`;
+  `patty: ${DEMO_ENV_VAR} is set, but ${databasePath} is not a demo database. Create it with: ${NPX_COMMAND} demo`;
 
 /** Where a generated purchase comes from. The pack names the accounts and cards; the generator maps these to them. */
 export const DemoFunding = z.enum(['checking', 'wallet', 'primaryCard', 'secondaryCard', 'global']);

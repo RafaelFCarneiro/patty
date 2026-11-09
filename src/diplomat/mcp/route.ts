@@ -23,7 +23,7 @@ import { toolScopesOf } from './scopes.js';
  *
  * Authorization (ADR-033 §3): the auth hook has already authenticated the request and checked the route-level
  * `read` scope (config below). A `preHandler` then reads the parsed JSON-RPC body and, for a `tools/call` of a
- * write tool (any message, if the SDK is given a batch), demands `fintrack:write` — a short token gets a 403
+ * write tool (any message, if the SDK is given a batch), demands `patty:write` — a short token gets a 403
  * `insufficient_scope` challenge before any tool runs. The principal then travels to the tools as `req.raw.auth`
  * (the SDK's `AuthInfo`), where `scopes.ts` checks it again.
  */

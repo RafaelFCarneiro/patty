@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 const loadSetup = async () => {
-  homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-demo-'));
+  homeDir = mkdtempSync(join(tmpdir(), 'patty-setup-demo-'));
   originalCwd = process.cwd();
   process.chdir(homeDir);
   vi.resetModules();
@@ -39,11 +39,11 @@ const loadSetup = async () => {
   return { run: (...args: string[]) => runSetupCommand(args, io), out, err, openShell, openTerminal };
 };
 
-const demoDatabase = () => join(homeDir, '.fintrack', 'demo.db');
+const demoDatabase = () => join(homeDir, '.patty', 'demo.db');
 const claudeCodeFile = () => join(homeDir, '.claude', 'mcp.json');
 const readConfig = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as Record<string, any>;
 const demoEnv = () => ({
-  DB_PATH: join(homeDir, '.fintrack', 'demo.db'),
+  DB_PATH: join(homeDir, '.patty', 'demo.db'),
   PORT: String(DEMO_PORT),
   [DEMO_ENV_VAR]: DEMO_ENV_ON,
 });
@@ -54,16 +54,16 @@ const writeConfig = (path: string, config: unknown) => {
 };
 
 describe('setup <client> --demo', () => {
-  it('adds fintrack-demo beside the fintrack entry, which it leaves exactly as it was', async () => {
+  it('adds patty-demo beside the patty entry, which it leaves exactly as it was', async () => {
     const { run, openShell, openTerminal } = await loadSetup();
-    const real = { command: 'npx', args: ['-y', 'pinned'], env: { FINTRACK_PROFILE: 'work' } };
-    writeConfig(claudeCodeFile(), { theme: 'dark', mcpServers: { fintrack: real, other: { command: 'x' } } });
+    const real = { command: 'npx', args: ['-y', 'pinned'], env: { PATTY_PROFILE: 'work' } };
+    writeConfig(claudeCodeFile(), { theme: 'dark', mcpServers: { patty: real, other: { command: 'x' } } });
 
     expect(await run('claude-code', '--demo')).toBe(0);
 
     const config = readConfig(claudeCodeFile());
     expect(config.theme).toBe('dark');
-    expect(config.mcpServers.fintrack).toEqual(real);
+    expect(config.mcpServers.patty).toEqual(real);
     expect(config.mcpServers.other).toEqual({ command: 'x' });
     expect(config.mcpServers[DEMO_SERVER_NAME]).toMatchObject({ command: 'npx', env: demoEnv() });
     expect(openShell).not.toHaveBeenCalled();
@@ -78,10 +78,10 @@ describe('setup <client> --demo', () => {
     expect(await run('copilot', '--demo')).toBe(0);
     expect(readFileSync(file, 'utf8')).toBe(first);
     expect(readConfig(file).servers[DEMO_SERVER_NAME]).toMatchObject({ type: 'stdio', env: demoEnv() });
-    expect(readConfig(file).servers).not.toHaveProperty('fintrack');
+    expect(readConfig(file).servers).not.toHaveProperty('patty');
   });
 
-  it('writes no fintrack entry of its own when there was none', async () => {
+  it('writes no patty entry of its own when there was none', async () => {
     const { run } = await loadSetup();
     expect(await run('claude-code', '--demo')).toBe(0);
     expect(Object.keys(readConfig(claudeCodeFile()).mcpServers)).toEqual([DEMO_SERVER_NAME]);
@@ -90,12 +90,12 @@ describe('setup <client> --demo', () => {
   it('says to run demo once while the demo database does not exist yet', async () => {
     const { run, out } = await loadSetup();
     expect(await run('claude-code', '--demo')).toBe(0);
-    expect(out).toContain('  Run `npx @rafaelfcarneiro/fintrack@latest demo` once to create the demo data.');
+    expect(out).toContain('  Run `npx @rfc0/patty@latest demo` once to create the demo data.');
   });
 
   it('says nothing about it once the demo database exists', async () => {
     const { run, out } = await loadSetup();
-    mkdirSync(join(homeDir, '.fintrack'), { recursive: true });
+    mkdirSync(join(homeDir, '.patty'), { recursive: true });
     writeFileSync(demoDatabase(), '');
     expect(await run('claude-code', '--demo')).toBe(0);
     expect(out.join('\n')).not.toContain('once to create the demo data');
@@ -139,7 +139,7 @@ describe('setup <client> --demo', () => {
 
 describe('a client file that is not plain JSON (VS Code allows comments and trailing commas)', () => {
   const JSONC =
-    '{\n  // my servers\n  "servers": { "fintrack": { "command": "x" }, "other": { "command": "y" },\n  }\n}\n';
+    '{\n  // my servers\n  "servers": { "patty": { "command": "x" }, "other": { "command": "y" },\n  }\n}\n';
   const vscodeFile = () => join(homeDir, '.vscode', 'mcp.json');
 
   it.each(['--demo', '--remove-demo'])('%s refuses it and leaves every entry in it as it was', async (flag) => {
@@ -153,19 +153,19 @@ describe('a client file that is not plain JSON (VS Code allows comments and trai
 });
 
 describe('setup <client> --remove-demo', () => {
-  it('removes only the fintrack-demo entry', async () => {
+  it('removes only the patty-demo entry', async () => {
     const { run } = await loadSetup();
     const real = { command: 'npx', args: ['-y', 'pinned'] };
     writeConfig(claudeCodeFile(), {
       theme: 'dark',
-      mcpServers: { fintrack: real, other: { command: 'x' }, [DEMO_SERVER_NAME]: { command: 'npx', env: demoEnv() } },
+      mcpServers: { patty: real, other: { command: 'x' }, [DEMO_SERVER_NAME]: { command: 'npx', env: demoEnv() } },
     });
 
     expect(await run('claude-code', '--remove-demo')).toBe(0);
 
     expect(readConfig(claudeCodeFile())).toEqual({
       theme: 'dark',
-      mcpServers: { fintrack: real, other: { command: 'x' } },
+      mcpServers: { patty: real, other: { command: 'x' } },
     });
   });
 
@@ -186,7 +186,7 @@ describe('setup <client> --remove-demo', () => {
 
   it('leaves a file with no demo entry byte for byte as it is', async () => {
     const { run, out } = await loadSetup();
-    writeConfig(claudeCodeFile(), { mcpServers: { fintrack: { command: 'npx' } } });
+    writeConfig(claudeCodeFile(), { mcpServers: { patty: { command: 'npx' } } });
     const before = { text: readFileSync(claudeCodeFile(), 'utf8'), mtime: statSync(claudeCodeFile()).mtimeMs };
     expect(await run('claude-code', '--remove-demo')).toBe(0);
     expect(readFileSync(claudeCodeFile(), 'utf8')).toBe(before.text);

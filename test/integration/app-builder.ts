@@ -48,16 +48,16 @@ export type AppContext = {
 
 /** Auth `required` on a loopback bind with the sidecar on — what a container behind a proxy runs. */
 export const REQUIRED_AUTH: AuthConfig = {
-  FINTRACK_AUTH: AuthMode.enum.required,
+  PATTY_AUTH: AuthMode.enum.required,
   PUBLIC_URL: undefined,
   HOST: '127.0.0.1',
   PORT: 51737,
   MCP_TRANSPORT: 'http',
-  FINTRACK_HTTP: true,
+  PATTY_HTTP: true,
   // Only a stdio sign-in's temporary page reads these; the app builder never serves one.
-  DB_PATH: '/nonexistent/fintrack.db',
+  DB_PATH: '/nonexistent/patty.db',
   TRUST_PROXY: undefined,
-  FINTRACK_LOCALE: undefined,
+  PATTY_LOCALE: undefined,
   FIAT_RATE_STALE_HOURS: 24,
   CRYPTO_RATE_STALE_HOURS: 1,
 };
@@ -74,7 +74,7 @@ export const buildApp = async (opts?: {
   const db = await openDatabase({
     KEY_LOCK_PATH: keyLockPathForTest(),
     DB_PATH: opts?.dbPath ?? (inject('DB_PATH' as never) as string),
-    FINTRACK_DB_KEY: TEST_ENCRYPTION_KEY,
+    PATTY_DB_KEY: TEST_ENCRYPTION_KEY,
   });
 
   await bootstrap(db);
@@ -89,7 +89,7 @@ export const buildApp = async (opts?: {
   };
   const runtime = createRuntime(
     db,
-    { FINTRACK_LOCALE: undefined, FIAT_RATE_STALE_HOURS: 24, CRYPTO_RATE_STALE_HOURS: 1 },
+    { PATTY_LOCALE: undefined, FIAT_RATE_STALE_HOURS: 24, CRYPTO_RATE_STALE_HOURS: 1 },
     { onChangeError: opts?.onChangeError, clock: () => now() },
   );
   const scopedAs: AppContext['scopedAs'] = (principal) => scopedFor(runtime, { ...OWNER_PRINCIPAL, ...principal });

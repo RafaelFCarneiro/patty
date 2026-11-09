@@ -16,9 +16,9 @@ const countsLine = (counts: ExportedRowCounts): string =>
 
 const KEY_IMPORT_REFUSALS = {
   [KeyImportRefusal.enum.key_file_configured]:
-    'FINTRACK_DB_KEY_FILE is set: this install reads its key from that file, not from the keychain. Unset it to use the keychain',
+    'PATTY_DB_KEY_FILE is set: this install reads its key from that file, not from the keychain. Unset it to use the keychain',
   [KeyImportRefusal.enum.key_env_configured]:
-    'FINTRACK_DB_KEY is set: this install reads its key from the environment, not from the keychain. Unset it to use the keychain',
+    'PATTY_DB_KEY is set: this install reads its key from the environment, not from the keychain. Unset it to use the keychain',
   [KeyImportRefusal.enum.keychain_holds_key]:
     `the OS keychain already holds a database key for this install; an import never replaces it. Remove the "${KEYCHAIN_SERVICE}" / "${DB_KEY_KEYCHAIN_ACCOUNT}" keychain entry yourself if you mean to`,
 } as const satisfies Record<KeyImportRefusal, string>;
@@ -30,7 +30,7 @@ const endedCredentials = (revoked: RevokedCredentials): string =>
 export const CLI_MESSAGES = {
   ownerClaimed: (username: string) =>
     `Owner claimed: "${username}". Log in to the dashboard (/ui) with this username and your password.`,
-  alreadyClaimed: (username: string) => `FinTrack is already set up: the owner is "${username}".`,
+  alreadyClaimed: (username: string) => `PATTY is already set up: the owner is "${username}".`,
   passwordReset: (reset: PasswordReset) => `Password reset for "${reset.username}".`,
   sessionsEnded: (count: number) => `Sessions ended: ${count}`,
   tokensRevoked: (count: number) => `Access tokens revoked: ${count}`,
@@ -61,7 +61,7 @@ export const CLI_MESSAGES = {
   keyExported: (path: string) =>
     [
       `Database key written to ${path} (mode ${fileMode()}, never overwritten).`,
-      "Use it as FINTRACK_DB_KEY_FILE, or as the container's fintrack_db_key secret. Keep it away from the data and its backups.",
+      "Use it as PATTY_DB_KEY_FILE, or as the container's patty_db_key secret. Keep it away from the data and its backups.",
       `Next: ${NPX_COMMAND} db export --to <file>, then follow ${MOVE_GUIDE}.`,
     ].join('\n'),
   snapshotExported: (path: string, counts: ExportedRowCounts) =>
@@ -87,7 +87,7 @@ export const CLI_MESSAGES = {
   keyDoesNotOpenDatabase: (path: string) => `the key does not open the database at ${path}; nothing was stored`,
   keyDoesNotOpenSnapshot: (path: string) =>
     `${path} does not open with this install's key, or is not a database; nothing was imported`,
-  noKeyToImport: `no database key found (FINTRACK_DB_KEY_FILE, FINTRACK_DB_KEY or the OS keychain); import the key first: ${NPX_COMMAND} key import --from <file>`,
+  noKeyToImport: `no database key found (PATTY_DB_KEY_FILE, PATTY_DB_KEY or the OS keychain); import the key first: ${NPX_COMMAND} key import --from <file>`,
   snapshotNotStandalone: (path: string) =>
     `${path} is not a standalone snapshot (a -wal or -journal file sits beside it); create one with \`${NPX_COMMAND} db export\``,
   databaseLeftovers: (path: string) =>
@@ -101,6 +101,6 @@ export const CLI_MESSAGES = {
   keyBesideData: (directory: string) =>
     `${directory} holds (or contains) the database; the key must never sit next to the data it unlocks. Choose another directory`,
   snapshotIsDatabase: (path: string) => `${path} is the database itself; choose another file`,
-  failure: (reason: string) => `fintrack: ${reason}`,
+  failure: (reason: string) => `patty: ${reason}`,
   unexpectedArgument: (argument: string) => `unexpected argument "${argument}"`,
 } as const;

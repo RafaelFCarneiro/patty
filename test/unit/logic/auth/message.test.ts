@@ -19,7 +19,7 @@ describe('setupBanner', () => {
   it('also names the terminal route, from the shared constant', () => {
     const banner = setupBanner({ code: 'ABCD', setupUrl: 'http://127.0.0.1:51737/ui/setup', expiresAt: 'later' });
     expect(banner).toContain(TERMINAL_SETUP_HINT);
-    expect(TERMINAL_SETUP_HINT).toBe('or run `npx @rafaelfcarneiro/fintrack@latest auth setup` in a terminal');
+    expect(TERMINAL_SETUP_HINT).toBe('or run `npx @rfc0/patty@latest auth setup` in a terminal');
   });
 });
 
@@ -29,7 +29,7 @@ describe('notSignedInMessage', () => {
   it('names the link and the code, and nothing but the user code travels in the URL', () => {
     const message = notSignedInMessage({ origin: ORIGIN, userCode: 'ABCD-EFGH', ownerUnclaimed: false });
     expect(message).toBe(
-      'FinTrack: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.',
+      'PATTY: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.',
     );
     expect(connectUrl(ORIGIN, 'ABCD-EFGH')).toBe('http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH');
   });
@@ -37,14 +37,14 @@ describe('notSignedInMessage', () => {
   it('points an unclaimed owner at the pinned setup command', () => {
     const message = notSignedInMessage({ origin: ORIGIN, userCode: 'ABCD-EFGH', ownerUnclaimed: true });
     expect(message).toContain(`Owner not set up yet? Run \`${NPX_COMMAND} auth setup\`.`);
-    expect(NPX_COMMAND).toBe('npx @rafaelfcarneiro/fintrack@latest');
+    expect(NPX_COMMAND).toBe('npx @rfc0/patty@latest');
   });
 
-  it('without an HTTP server says to log in from a terminal or set FINTRACK_TOKEN, with no link', () => {
+  it('without an HTTP server says to log in from a terminal or set PATTY_TOKEN, with no link', () => {
     const message = notSignedInMessage({ origin: null, userCode: null, ownerUnclaimed: false });
     expect(message).toBe(STDIO_MESSAGES.notSignedInWithoutHttp);
     expect(message).toContain(`${NPX_COMMAND} login`);
-    expect(message).toContain('FINTRACK_TOKEN');
+    expect(message).toContain('PATTY_TOKEN');
     expect(message).not.toContain('/ui/connect');
   });
 
@@ -55,6 +55,6 @@ describe('notSignedInMessage', () => {
       STDIO_MESSAGES.invalidEnvToken,
     ].join('\n');
     for (const [command] of wording.matchAll(/npx [^\s`]+/g))
-      expect(command).toBe('npx @rafaelfcarneiro/fintrack@latest');
+      expect(command).toBe('npx @rfc0/patty@latest');
   });
 });

@@ -27,7 +27,7 @@ export const keychainSignInStore = (
     useEntry(account, (entry) => entry.setPassword(token)).match(
       () => true,
       () => {
-        report('fintrack: could not save the sign-in to the OS keychain; it will last only until this process exits.');
+        report('patty: could not save the sign-in to the OS keychain; it will last only until this process exits.');
         return false;
       },
     ),

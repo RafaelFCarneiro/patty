@@ -14,7 +14,7 @@ export const withMigrationLock = <T>(dbFile: string, work: () => Promise<T>): Pr
       waitMs: WAIT_LIMIT_MS,
       retryMs: POLL_INTERVAL_MS,
       timeoutMessage:
-        `fintrack: another FinTrack process has held the migration lock (${path}) for over ` +
+        `patty: another PATTY process has held the migration lock (${path}) for over ` +
         `${WAIT_LIMIT_MS / 1000}s. Stop it and retry.`,
     },
     work,

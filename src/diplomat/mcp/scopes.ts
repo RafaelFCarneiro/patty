@@ -13,7 +13,7 @@ import { jsonError, textError } from './respond.js';
  * `annotations.readOnlyHint`; its scope is derived from that one hint (`logic/auth/scope.ts`'s `scopeOfTool`) and
  * recorded here, so there is a single source for both the HTTP edge's pre-check (`route.ts`) and the in-handler check
  * below.
- * Resources and prompts only read, so they need `fintrack:read`.
+ * Resources and prompts only read, so they need `patty:read`.
  *
  * `guardScopes` wraps `server.registerTool`, `registerResource` and `registerPrompt`:
  *   - registering a tool without a boolean `readOnlyHint` throws — an undeclared tool cannot exist;
@@ -84,7 +84,7 @@ export const guardScopes = (server: McpServer, options: ScopeGuardOptions): void
   server.registerTool = ((name, config, callback) => {
     const readOnlyHint = config.annotations?.readOnlyHint;
     if (typeof readOnlyHint !== 'boolean') {
-      throw new Error(`fintrack: MCP tool "${name}" must declare annotations.readOnlyHint (its scope derives from it)`);
+      throw new Error(`patty: MCP tool "${name}" must declare annotations.readOnlyHint (its scope derives from it)`);
     }
     const required = scopeOfTool(readOnlyHint);
     scopes.set(name, required);

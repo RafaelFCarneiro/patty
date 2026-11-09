@@ -17,11 +17,11 @@ let tmpDir: string;
 let db: Db;
 
 beforeEach(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-currencies-seed-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-currencies-seed-'));
   db = await openDatabase({
     KEY_LOCK_PATH: keyLockPathForTest(),
     DB_PATH: join(tmpDir, 'seed.db'),
-    FINTRACK_DB_KEY: TEST_KEY,
+    PATTY_DB_KEY: TEST_KEY,
   });
 });
 

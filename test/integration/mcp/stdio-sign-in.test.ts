@@ -28,8 +28,8 @@ let dir = '';
 let dbPath = '';
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'fintrack-stdio-signin-'));
-  dbPath = join(dir, 'fintrack.db');
+  dir = mkdtempSync(join(tmpdir(), 'patty-stdio-signin-'));
+  dbPath = join(dir, 'patty.db');
   const claimed = spawnSync(
     process.execPath,
     [TSX_CLI, 'src/main.ts', 'auth', 'setup', '--username', 'rafael', '--password-stdin'],
@@ -37,7 +37,7 @@ beforeEach(() => {
       input: PASSWORD,
       encoding: 'utf8',
       timeout: SPAWN_TIMEOUT_MS,
-      env: { ...process.env, DB_PATH: dbPath, FINTRACK_DB_KEY: KEY },
+      env: { ...process.env, DB_PATH: dbPath, PATTY_DB_KEY: KEY },
     },
   );
   if (claimed.status !== 0) throw new Error(`could not claim the owner: ${claimed.stderr}`);
@@ -55,17 +55,17 @@ const startServer = async (port = '0', sidecar: 'up' | 'blocked' = 'up'): Promis
     env: {
       ...process.env,
       MCP_TRANSPORT: 'stdio',
-      FINTRACK_HTTP: 'true',
+      PATTY_HTTP: 'true',
       PORT: port,
       DB_PATH: dbPath,
-      FINTRACK_DB_KEY: KEY,
-      FINTRACK_AUTH: 'required',
-      FINTRACK_TOKEN: '',
+      PATTY_DB_KEY: KEY,
+      PATTY_AUTH: 'required',
+      PATTY_TOKEN: '',
     },
   });
   let captured = '';
   transport.stderr?.on('data', (chunk: Buffer) => void (captured += chunk.toString()));
-  const client = new Client({ name: 'fintrack-stdio-signin-vitest', version: '4.5.6' });
+  const client = new Client({ name: 'patty-stdio-signin-vitest', version: '4.5.6' });
   await client.connect(transport);
   await waitForStderr(() => captured, sidecar === 'up' ? /HTTP sidecar up/i : /HTTP sidecar disabled/i);
   const origin = sidecar === 'up' ? /(http:\/\/127\.0\.0\.1:\d+)\/api/.exec(captured)?.[1] : 'none';
@@ -99,7 +99,7 @@ const approve = (origin: string, cookie: string, code: string, access: 'read' | 
   });
 
 const database = async () => {
-  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: KEY });
   return { db, close: () => closeDatabase(db) };
 };
 
@@ -111,14 +111,14 @@ describe('stdio sign-in end to end (the binary)', () => {
       expect(asked.isError).toBe(true);
       const code = /code=([0-9A-Z]{4}-[0-9A-Z]{4})/.exec(textOf(asked))?.[1];
       expect(textOf(asked)).toBe(
-        `FinTrack: not signed in. Open ${origin}/ui/connect?code=${code} and confirm the code ${code}.`,
+        `PATTY: not signed in. Open ${origin}/ui/connect?code=${code} and confirm the code ${code}.`,
       );
 
       const cookie = await logIn(origin);
       const consent = await fetch(`${origin}/ui/connect?code=${code}`, { headers: { cookie } });
       expect(consent.status).toBe(200);
       const page = await consent.text();
-      expect(page).toContain('fintrack-stdio-signin-vitest');
+      expect(page).toContain('patty-stdio-signin-vitest');
       expect(page).toContain('4.5.6');
       expect((await approve(origin, cookie, code!, 'write')).status).toBe(200);
 
@@ -133,7 +133,7 @@ describe('stdio sign-in end to end (the binary)', () => {
     const { db, close } = await database();
     try {
       expect(await db.all(sql`SELECT kind, client_name, revoked_at IS NOT NULL AS revoked FROM access_tokens`)).toEqual(
-        [{ kind: 'stdio', client_name: 'fintrack-stdio-signin-vitest', revoked: 1 }],
+        [{ kind: 'stdio', client_name: 'patty-stdio-signin-vitest', revoked: 1 }],
       );
       expect(await db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'redeemed' }]);
     } finally {
@@ -162,7 +162,7 @@ describe('stdio sign-in end to end (the binary)', () => {
       const refused = await client.callTool({ name: 'create_tag', arguments: { name: 'nope' } });
       expect(refused.isError).toBe(true);
       expect(textOf(refused)).toContain('insufficient_scope');
-      expect(stderr()).not.toMatch(/ftk_[A-Za-z0-9_-]{20,}/);
+      expect(stderr()).not.toMatch(/ptk_[A-Za-z0-9_-]{20,}/);
       expect(stderr()).not.toContain(PASSWORD);
     } finally {
       await transport.close();
@@ -172,7 +172,7 @@ describe('stdio sign-in end to end (the binary)', () => {
 
 describe('a stdio process whose sidecar cannot bind (the binary)', () => {
   it('serves /ui/connect itself, on its own database — never pointing at whatever holds the port', async () => {
-    // Something else owns the configured port (another FinTrack on a different database would look just like this).
+    // Something else owns the configured port (another PATTY on a different database would look just like this).
     const squatter = createServer((_req, res) => res.end('not this database'));
     await new Promise<void>((resolve) => squatter.listen(0, '127.0.0.1', resolve));
     const taken = (squatter.address() as AddressInfo).port;
@@ -182,7 +182,7 @@ describe('a stdio process whose sidecar cannot bind (the binary)', () => {
       const [, origin, code] = /(http:\/\/localhost:(?:\d+))\/ui\/connect\?code=([0-9A-Z]{4}-[0-9A-Z]{4})/.exec(asked)!;
       expect(origin).not.toContain(`:${taken}`);
       expect(asked).toBe(
-        `FinTrack: not signed in. Open ${origin}/ui/connect?code=${code} and confirm the code ${code}.`,
+        `PATTY: not signed in. Open ${origin}/ui/connect?code=${code} and confirm the code ${code}.`,
       );
 
       const cookie = await logIn(origin!);
@@ -192,7 +192,7 @@ describe('a stdio process whose sidecar cannot bind (the binary)', () => {
       expect(accounts.isError).toBeFalsy();
       // Redeemed, so its temporary page has been closed again.
       await expect(fetch(`${origin}/api/health`)).rejects.toThrow();
-      expect(stderr()).not.toMatch(/ftk_[A-Za-z0-9_-]{20,}/);
+      expect(stderr()).not.toMatch(/ptk_[A-Za-z0-9_-]{20,}/);
     } finally {
       await transport.close();
       await new Promise((resolve) => squatter.close(resolve));

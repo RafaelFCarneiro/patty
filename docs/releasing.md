@@ -1,9 +1,10 @@
 # Releasing & installing
 
-FinTrack is published as a **private** npm package to **GitHub Packages**:
-`@rafaelfcarneiro/fintrack`. Publishing is fully automated — no manual version bumps.
+PATTY is published as a **public** npm package, `@rfc0/patty`, on npmjs.com, and as the public container image
+`ghcr.io/rafaelfcarneiro/patty` (ADR-035 §3). Versions are automatic — no manual bumps — but **nothing goes live
+without the owner's approval**, twice: once for npm, once for the image's `latest` tag.
 
-## How releases work (automated)
+## How releases work
 
 The `.github/workflows/release.yml` workflow runs on every push to `main`. It:
 
@@ -13,26 +14,56 @@ The `.github/workflows/release.yml` workflow runs on every push to `main`. It:
    - `feat:` → minor (`0.1.0` → `0.2.0`)
    - `feat!:` / `BREAKING CHANGE:` → major (`0.1.0` → `1.0.0`)
    - `docs:` / `chore:` / `refactor:` / `test:` → **no release** (nothing publishes)
-3. If there is a releasable change, it publishes the package, creates a GitHub Release with
-   auto-generated notes, and tags the commit (`v0.2.0`).
+3. If there is a releasable change, semantic-release creates the `vX.Y.Z` tag and the GitHub Release with
+   auto-generated notes, and writes the version into `package.json` for this run. Its npm plugin has
+   `npmPublish: false`: it versions, it does not publish.
+4. The next step of the same job **stages** the version: `npm install -g npm@latest`, then
+   `npm stage publish --access public` against `https://registry.npmjs.org`, through npm **trusted publishing**
+   (OIDC: the job has `id-token: write`, and there is no npm token or secret anywhere). Provenance is automatic.
+   A staged version is not installable and does not move `latest`.
 
-There is **no version field to edit** — `package.json` stays at `0.0.0-development`; the real version
-lives in git tags / the GitHub Release. semantic-release intentionally does **not** commit anything back
-to `main` (no `@semantic-release/git` plugin), so it never fights branch protection.
+There is **no version field to edit** — `package.json` stays at `0.0.0-development`; the real version lives in git
+tags / the GitHub Release. semantic-release intentionally does **not** commit anything back to `main` (no
+`@semantic-release/git` plugin), so it never fights branch protection.
 
-Nothing extra is needed in the repo: the workflow authenticates with the built-in `GITHUB_TOKEN`
-(scopes granted via the job's `permissions:` block). No secrets to configure.
+### Approving a release (two approvals, in this order)
+
+1. **npm.** Open the staged version on npmjs.com (package `@rfc0/patty` → staged versions) and approve it — or run
+   `npm stage approve <id>` (needs 2FA). Until then `npx @rfc0/patty@latest` keeps resolving to the previous approved
+   version.
+2. **Docker `latest`.** The `image` job has already pushed `ghcr.io/rafaelfcarneiro/patty:X.Y.Z` (and `X.Y`, `X`).
+   The `promote-latest` job waits on the **`release`** GitHub Environment, which requires the owner's approval:
+   Actions → the run → *Review deployments* → approve. It then moves `:latest` to that version. Approve it **after**
+   the npm version, so `npx …@latest` and `docker pull …:latest` move together.
+
+### `RELEASE_ENABLED` (the switch)
+
+The whole workflow is gated with `if: vars.RELEASE_ENABLED == 'true'`. The repository variable **is unset** until the
+rename is done and the pre-publication scan has passed (ADR-035 steps 6–7), so a merge to `main` runs nothing here
+and publishes nothing. To turn releases on: Settings → Secrets and variables → Actions → Variables →
+`RELEASE_ENABLED` = `true`. To stop them again, delete the variable or set it to anything else.
+
+### One-time setup (before the first automated release)
+
+- **The first version is published by hand.** npm offers the trusted-publisher setting only on an existing package, so
+  the very first version is published from a terminal with 2FA (`npm publish --access public`), as
+  `@rfc0/effect-runner`'s `0.2.0` was.
+- **Trusted publisher.** On npmjs.com → `@rfc0/patty` → Settings → Trusted publisher: GitHub Actions, repository
+  `RafaelFCarneiro/patty`, workflow `release.yml`, environment left empty.
+- **GitHub Environment.** Create the environment **`release`** (Settings → Environments) with *Required reviewers*
+  set to the owner.
+- **Delete the old private package** on GitHub Packages once the move is done.
 
 ## Container image (GHCR)
 
-The same workflow publishes the container image (ADR-032) right after the npm release. The `release` job exposes
+The same workflow publishes the container image (ADR-032) right after the release is cut. The `release` job exposes
 two outputs, `released` and `version`, read from the `vX.Y.Z` tag semantic-release creates on `HEAD` (it has no
 `@semantic-release/git`, so `HEAD` is the tagged commit; no tag → `released=false`). The `image` job runs only when
 `released == 'true'`:
 
 - checks out the release tag, sets up QEMU + buildx, logs in to `ghcr.io` with `GITHUB_TOKEN`
   (`permissions: contents: read, packages: write`);
-- tags `ghcr.io/rafaelfcarneiro/fintrack` as `X.Y.Z`, `X.Y`, `X` and `latest` — the same version as the npm package;
+- tags `ghcr.io/rafaelfcarneiro/patty` as `X.Y.Z`, `X.Y` and `X` — never `latest`: that moves only in the `promote-latest` job, behind the `release` environment's approval;
 - builds **`linux/amd64` and `linux/arm64`** from the `Dockerfile` (the TypeScript build runs natively on the runner;
   only the production `npm ci` runs per target architecture), pushing with provenance and an SBOM and a GitHub Actions
   layer cache.
@@ -44,8 +75,8 @@ and runs `scripts/docker-smoke.sh` against it: read-only root, key from a mounte
 the setup code read from the container log and exchanged at `/ui/setup`, then `/api/status` + `/ui` + MCP `initialize`
 with the session cookie and a matching `Origin`, a cross-origin write refused, the owner/session/data surviving a
 restart with no second setup code, personal access tokens minted through the session and used as a bearer on `/mcp` and `/api` (a read token refused `403 insufficient_scope` on a write tool and route, a bad bearer never falling back to the cookie, no credential answered `401` with a `resource_metadata` URL that resolves, a revoked token refused at once), no key/password/session or access token in logs/config/volume, and a fast failure with the `openssl` hint when no key is supplied. Run it
-locally with `docker build -t fintrack:ci . && scripts/docker-smoke.sh fintrack:ci`.
-`scripts/docker-move-smoke.sh fintrack:ci` (from the repository root, with dependencies installed) runs the npm→Docker move guide of `docs/auth.md` end to end; it is a local check and is not part of CI.
+locally with `docker build -t patty:ci . && scripts/docker-smoke.sh patty:ci`.
+`scripts/docker-move-smoke.sh patty:ci` (from the repository root, with dependencies installed) runs the npm→Docker move guide of `docs/auth.md` end to end; it is a local check and is not part of CI.
 
 ### Base-image mirror (why builds don't pull from Docker Hub)
 
@@ -70,51 +101,39 @@ the `org.opencontainers.image.source` annotation) so `GITHUB_TOKEN` in CI can re
 *Manage Actions access* with read access. Until then builds fall back to Docker Hub.
 
 **One-time manual step:** a package first pushed to GHCR is **private** and linked to the repository only by label.
-After the first image release, open the repository's **Packages → fintrack → Package settings** and set the
-visibility you want (keep it private, or make it public so `docker compose up` works without `docker login ghcr.io`).
-Private pulls need a token with `read:packages`.
+After the first image release, open the repository's **Packages → patty → Package settings** and set the visibility to
+**public**, so `docker compose up` and `docker pull` work without `docker login ghcr.io`.
 
-## Installing & using the package (per machine, one-time auth)
+## Installing & using the package
 
-Because the package is private on GitHub Packages, npm needs a token to download it.
+The package is public on npmjs.com: no token, no `~/.npmrc` entry.
 
-1. Create a GitHub **Personal Access Token (classic)** with the `read:packages` scope:
-   GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic).
-2. Add it to your `~/.npmrc`:
+```bash
+npx @rfc0/patty@latest          # one-off
+# or (a global install is NOT refreshed by `npx` — see "Why an older build refuses a newer database" below)
+npm install -g @rfc0/patty && patty
+```
 
-   ```ini
-   @rafaelfcarneiro:registry=https://npm.pkg.github.com
-   //npm.pkg.github.com/:_authToken=YOUR_READ_PACKAGES_TOKEN
-   ```
-
-3. Run it:
-
-   ```bash
-   npx @rafaelfcarneiro/fintrack@latest          # one-off
-   # or (a global install is NOT refreshed by `npx` — see "Why an older build refuses a newer database" below)
-   npm install -g @rafaelfcarneiro/fintrack && fintrack
-   ```
-
-By default this starts a **stdio MCP server** — the client spawns it directly (no port, no URL). See `docs/mcp-clients.md` for client config. To start in HTTP mode instead (REST + streamable HTTP MCP on port 51737): `MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack@latest`. The package only replaces the clone + `npm run dev` step with a single command; the encrypted database at `<home directory>/.fintrack/fintrack.db` (key in the OS keychain; set `FINTRACK_DB_KEY` for headless) is otherwise identical.
+By default this starts a **stdio MCP server** — the client spawns it directly (no port, no URL). See `docs/mcp-clients.md` for client config. To start in HTTP mode instead (REST + streamable HTTP MCP on port 51737): `MCP_TRANSPORT=http npx @rfc0/patty@latest`. The package only replaces the clone + `npm run dev` step with a single command; the encrypted database at `<home directory>/.patty/patty.db` (key in the OS keychain; set `PATTY_DB_KEY` for headless) is otherwise identical.
 
 ## Updating to a new version
 
 `npx` resolves to the latest published version, but it caches. To always run the newest:
 
 ```bash
-npx @rafaelfcarneiro/fintrack@latest     # bypasses the npx cache, fetches newest
+npx @rfc0/patty@latest     # bypasses the npx cache, fetches newest
 ```
 
 If you installed globally instead:
 
 ```bash
-npm view @rafaelfcarneiro/fintrack version          # what's the latest published?
-npm update -g @rafaelfcarneiro/fintrack             # update to it
-npm ls -g @rafaelfcarneiro/fintrack   # confirm installed version
+npm view @rfc0/patty version          # what's the latest published?
+npm update -g @rfc0/patty             # update to it
+npm ls -g @rfc0/patty   # confirm installed version
 ```
 
 Upgrades are safe to run anytime: the database migrates itself forward on the next start
-(`bootstrap()` applies any pending Drizzle migrations idempotently), and your `<home directory>/.fintrack/fintrack.db` is untouched
+(`bootstrap()` applies any pending Drizzle migrations idempotently), and your `<home directory>/.patty/patty.db` is untouched
 otherwise. You'll see new releases on the repo's **Releases** page with auto-generated notes.
 
 ## Why an older build refuses a newer database (the version guard)
@@ -131,7 +150,7 @@ server, and failed inside an old seed against the newer schema. No data was harm
 Consequences for releases:
 
 - **The guard only protects builds that include it.** A build released before it has no guard, so a stale copy of *that* generation can still run against a newer database
-  — hence the `@latest` pinning, and the global-install check `npm ls -g @rafaelfcarneiro/fintrack` in the message.
+  — hence the `@latest` pinning, and the global-install check `npm ls -g @rfc0/patty` in the message.
 - **Journal `when` values must only grow.** Drizzle stamps each applied migration with its journal entry's `when`; the guard reads that as "newer". Generate migrations in order
   (`drizzle-kit generate`), never hand-edit an earlier entry's `when` upwards past a later one, and never rebase a migration to an earlier timestamp than one already released.
 - **`drizzle-kit generate` cannot load the schema as-is**: `schema.ts` imports models that import `@rfc0/effect-runner`, whose `exports` map has an `import` condition only, and drizzle-kit loads the schema through `require`. Temporarily add `"default": "./dist/index.js"` next to `"import"` in `node_modules/@rfc0/effect-runner/package.json`, run `npx drizzle-kit generate --name <name>`, then restore the file (`npm ci` also does). A migration that drops a UNIQUE constraint or adds a NOT NULL foreign key needs a hand-written table rebuild (see `drizzle/0021_tenancy_data.sql`): keep the generated snapshot, replace the generated SQL.
@@ -150,15 +169,15 @@ connection's `foreign_keys`/`busy_timeout`. A failure means drizzle's behavior c
 
 ## Transport modes (`MCP_TRANSPORT`)
 
-FinTrack supports two MCP transports, selected by the `MCP_TRANSPORT` env var (default `stdio`):
+PATTY supports two MCP transports, selected by the `MCP_TRANSPORT` env var (default `stdio`):
 
 | Value | What starts | Port needed? | REST available? |
 |-------|-------------|--------------|-----------------|
 | `stdio` (default) | Client spawns the process; JSON-RPC over stdin/stdout, **plus** a best-effort Fastify sidecar on `PORT` (on by default) | Optional (non-fatal if taken) | Yes, unless the sidecar didn't bind |
-| `stdio` + `FINTRACK_HTTP=false` | stdio MCP only, sidecar disabled | **No** | No |
+| `stdio` + `PATTY_HTTP=false` | stdio MCP only, sidecar disabled | **No** | No |
 | `http` | Fastify on `PORT` (default 51737); streamable HTTP MCP + REST | Yes (fatal if taken) | Yes |
 
-The `stdio` transport itself has **no port concerns for the MCP connection** — the client always talks to it over stdin/stdout regardless of the sidecar. The sidecar (`/api` + `/ui`) starts automatically alongside it by default, since dashboards are a core feature, not an add-on (ADR-013 Decision 7) — see the next section for its bind behavior. Set `FINTRACK_HTTP=false` to run stdio-only with nothing bound at all.
+The `stdio` transport itself has **no port concerns for the MCP connection** — the client always talks to it over stdin/stdout regardless of the sidecar. The sidecar (`/api` + `/ui`) starts automatically alongside it by default, since dashboards are a core feature, not an add-on (ADR-013 Decision 7) — see the next section for its bind behavior. Set `PATTY_HTTP=false` to run stdio-only with nothing bound at all.
 
 ## Port configuration (HTTP mode and the sidecar)
 
@@ -169,13 +188,13 @@ The `stdio` transport itself has **no port concerns for the MCP connection** —
 If you run several servers in HTTP mode, give each its own port:
 
 ```bash
-MCP_TRANSPORT=http PORT=3007 npx @rafaelfcarneiro/fintrack@latest
+MCP_TRANSPORT=http PORT=3007 npx @rfc0/patty@latest
 # then point the client at http://127.0.0.1:3007/mcp
 ```
 
 **Bind-failure behavior differs by mode, by design (ADR-013 Decision 7):**
 
-- **Pure `http` mode:** if the chosen port is already taken, startup fails fast with an actionable message (the port number and the exact `PORT=… fintrack` command to retry) rather than a raw `EADDRINUSE` stack trace, and the process exits — there's nothing else running to fall back to.
+- **Pure `http` mode:** if the chosen port is already taken, startup fails fast with an actionable message (the port number and the exact `PORT=… patty` command to retry) rather than a raw `EADDRINUSE` stack trace, and the process exits — there's nothing else running to fall back to.
 - **`stdio` sidecar (on by default):** the same conflict is **non-fatal** — this is a resilience fallback, not the normal state. The sidecar logs the same kind of actionable message to stderr and simply doesn't start; the stdio MCP connection keeps working, so the client can diagnose/free the port and you restart once it's free again.
 
 How this lands in each HTTP-mode client:
@@ -187,4 +206,5 @@ How this lands in each HTTP-mode client:
 
 Versioning starts from `v1.0.0` on the first `feat:`-or-higher commit merged to `main` (semantic-release's
 default for an untagged repo is `1.0.0`). To start lower, push an initial tag before the first release, e.g.
-`git tag v0.1.0 && git push origin v0.1.0`, and the next `feat:` becomes `0.2.0`.
+`git tag v0.1.0 && git push origin v0.1.0`, and the next `feat:` becomes `0.2.0`. Do the one-time setup above first,
+then set `RELEASE_ENABLED`.

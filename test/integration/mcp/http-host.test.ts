@@ -25,13 +25,13 @@ describe('pure http mode binds the configured HOST (ADR-032)', () => {
   let stderr = '';
 
   beforeAll(async () => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-http-host-test-'));
-    // Key via FINTRACK_DB_KEY_FILE, so the file path is exercised end-to-end and the keychain is never touched.
+    tmpDir = mkdtempSync(join(tmpdir(), 'patty-http-host-test-'));
+    // Key via PATTY_DB_KEY_FILE, so the file path is exercised end-to-end and the keychain is never touched.
     const keyFile = join(tmpDir, 'db-key');
     writeFileSync(keyFile, `${'d'.repeat(64)}\n`);
 
-    // A globally configured FINTRACK_DB_KEY (CI/headless) would clash with the key file as a second source.
-    const { FINTRACK_DB_KEY: _inheritedKey, ...inheritedEnv } = process.env;
+    // A globally configured PATTY_DB_KEY (CI/headless) would clash with the key file as a second source.
+    const { PATTY_DB_KEY: _inheritedKey, ...inheritedEnv } = process.env;
     child = spawn(process.execPath, [TSX_CLI, ENTRY], {
       env: {
         ...inheritedEnv,
@@ -40,12 +40,12 @@ describe('pure http mode binds the configured HOST (ADR-032)', () => {
         // PORT=0 lets the OS assign a free port so this never collides with a running instance.
         PORT: '0',
         DB_PATH: join(tmpDir, 'http-host.db'),
-        FINTRACK_DB_KEY_FILE: keyFile,
+        PATTY_DB_KEY_FILE: keyFile,
       },
     });
     child.stdout?.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
     child.stderr?.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
-    await waitForStderr(() => stdout + stderr, /fintrack: REST /);
+    await waitForStderr(() => stdout + stderr, /patty: REST /);
   });
 
   afterAll(async () => {

@@ -31,7 +31,7 @@ const journalBefore = (folder: string, tag = MIGRATION_TAG): void => {
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
 
-const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
+const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: TEST_KEY });
 
 /** A pre-migration database in which the owner has claimed the instance and a stdio sign-in exists. */
 const previousRelease = async (): Promise<Db> => {
@@ -50,8 +50,8 @@ const previousRelease = async (): Promise<Db> => {
 };
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-user-management-migration-'));
-  dbPath = join(tmpDir, 'fintrack.db');
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-user-management-migration-'));
+  dbPath = join(tmpDir, 'patty.db');
   beforeFolder = join(tmpDir, 'before-migrations');
   cpSync(REAL_MIGRATIONS_FOLDER, beforeFolder, { recursive: true });
   journalBefore(beforeFolder);

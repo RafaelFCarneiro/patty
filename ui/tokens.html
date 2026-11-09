@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FinTrack — access tokens</title>
+    <title>PATTY — access tokens</title>
     <link rel="stylesheet" href="{{stylesheet}}" />
   </head>
   <body>
@@ -11,12 +11,12 @@
       <h1>Access tokens</h1>
       <p class="auth-lede">
         Personal access tokens let scripts and MCP clients call <code>/api</code> and <code>/mcp</code> with
-        <code>Authorization: Bearer ftk_…</code>. {{usersLink}}<a href="{{dashboards}}">Back to the dashboards</a>
+        <code>Authorization: Bearer ptk_…</code>. {{usersLink}}<a href="{{dashboards}}">Back to the dashboards</a>
       </p>
       {{error}}
       <h2>Claude sign-ins</h2>
       <p class="auth-hint">
-        Each Claude session that signed in with the browser (<code>/ui/connect</code> or <code>fintrack login</code>).
+        Each Claude session that signed in with the browser (<code>/ui/connect</code> or <code>patty login</code>).
         Revoking one takes effect on that client's next call; they expire on their own.
       </p>
       {{signIns}}

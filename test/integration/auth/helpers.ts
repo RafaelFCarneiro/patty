@@ -53,7 +53,7 @@ export const useAuthApp = () => {
   const apps: AppContext[] = [];
 
   const create = async (opts?: Parameters<typeof buildApp>[0]): Promise<AppContext> => {
-    const dir = mkdtempSync(join(tmpdir(), 'fintrack-auth-test-'));
+    const dir = mkdtempSync(join(tmpdir(), 'patty-auth-test-'));
     dirs.push(dir);
     const ctx = await buildApp({ dbPath: join(dir, 'test.db'), auth: {}, ...opts });
     apps.push(ctx);
@@ -114,7 +114,7 @@ export const browserHeaders = (cookie: string): Record<string, string> => ({
   cookie,
 });
 
-const SECRET_PATTERN = /data-testid="token-secret">(ftk_[A-Za-z0-9_-]+)</;
+const SECRET_PATTERN = /data-testid="token-secret">(ptk_[A-Za-z0-9_-]+)</;
 
 export type MintedToken = { token: string; id: string };
 
@@ -284,7 +284,7 @@ export const countedTemporaryServer = (ctx: AppContext) => {
   const counts = { started: 0, closed: 0 };
   const origins: string[] = [];
   const start = async (): Promise<SignInServer> => {
-    const env = { ...process.env, DB_PATH: '/tmp/fintrack-never-opened.db', FINTRACK_DB_KEY: 'c'.repeat(64) };
+    const env = { ...process.env, DB_PATH: '/tmp/patty-never-opened.db', PATTY_DB_KEY: 'c'.repeat(64) };
     const server = await startSignInServer({ ...loadConfig(env), PUBLIC_URL: undefined }, ctx.db);
     counts.started += 1;
     origins.push(server.origin);

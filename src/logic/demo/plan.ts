@@ -29,7 +29,7 @@ import { CurrencyCode, FIAT_DECIMALS } from '../../models/money.js';
 import { RecurringPeriod } from '../../models/recurring.js';
 
 /** The generator is a pure function of this seed, the country pack and today's date. */
-export const DEMO_SEED = 'fintrack-demo';
+export const DEMO_SEED = 'patty-demo';
 
 /** The last four full months plus the current one, so the dashboards always look current. */
 export const DEMO_MONTHS_BACK = 4;

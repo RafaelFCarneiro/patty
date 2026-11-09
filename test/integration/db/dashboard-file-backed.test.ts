@@ -21,11 +21,11 @@ let tmpDir: string;
 let db: Db;
 
 beforeEach(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-dashboard-file-backed-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-dashboard-file-backed-'));
   db = await openDatabase({
     KEY_LOCK_PATH: keyLockPathForTest(),
     DB_PATH: join(tmpDir, 'file-backed.db'),
-    FINTRACK_DB_KEY: TEST_KEY,
+    PATTY_DB_KEY: TEST_KEY,
   });
   await bootstrap(db);
 });

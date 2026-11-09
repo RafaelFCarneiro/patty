@@ -101,7 +101,7 @@ const io = (): CliIo =>
 const run = (...args: string[]) => runCli(args, io());
 
 const seedSource = async () => {
-  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: sourceDatabase, FINTRACK_DB_KEY: KEY });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: sourceDatabase, PATTY_DB_KEY: KEY });
   await bootstrap(db);
   await db
     .insert(accounts)
@@ -125,11 +125,11 @@ const seedSource = async () => {
 
 const exportFromSource = async () => {
   vi.stubEnv('DB_PATH', sourceDatabase);
-  vi.stubEnv('FINTRACK_DB_KEY', KEY);
+  vi.stubEnv('PATTY_DB_KEY', KEY);
   expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_OK);
   expect(await run('db', 'export', '--to', snapshot)).toBe(EXIT_OK);
   vi.stubEnv('DB_PATH', installDatabase);
-  vi.stubEnv('FINTRACK_DB_KEY', undefined);
+  vi.stubEnv('PATTY_DB_KEY', undefined);
   out = [];
   err = [];
 };
@@ -155,13 +155,13 @@ const writeKeyFile = (name: string, contents: string) => {
 };
 
 beforeEach(async () => {
-  root = realpathSync(mkdtempSync(join(tmpdir(), 'fintrack-import-')));
-  sourceDatabase = join(root, 'a', 'fintrack.db');
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'patty-import-')));
+  sourceDatabase = join(root, 'a', 'patty.db');
   installDirectory = join(root, 'b', 'data');
-  installDatabase = join(installDirectory, 'fintrack.db');
+  installDatabase = join(installDirectory, 'patty.db');
   outputDirectory = join(root, 'carry');
-  keyFile = join(outputDirectory, 'fintrack_db_key');
-  snapshot = join(outputDirectory, 'fintrack.snapshot.db');
+  keyFile = join(outputDirectory, 'patty_db_key');
+  snapshot = join(outputDirectory, 'patty.snapshot.db');
   mkdirSync(outputDirectory);
   keychain.stored = null;
   keychain.broken = false;
@@ -170,7 +170,7 @@ beforeEach(async () => {
   out = [];
   err = [];
   warnings = [];
-  vi.stubEnv('FINTRACK_DB_KEY_FILE', undefined);
+  vi.stubEnv('PATTY_DB_KEY_FILE', undefined);
   vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => void warnings.push(args));
   await seedSource();
   await exportFromSource();
@@ -182,7 +182,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe('fintrack key import', () => {
+describe('patty key import', () => {
   it('stores the key in the keychain, which the server then opens an existing database with', async () => {
     mkdirSync(installDirectory, { recursive: true });
     copyFileSync(snapshot, installDatabase);
@@ -258,10 +258,10 @@ describe('fintrack key import', () => {
   });
 
   it.each([
-    ['FINTRACK_DB_KEY', KeyImportRefusal.enum.key_env_configured],
-    ['FINTRACK_DB_KEY_FILE', KeyImportRefusal.enum.key_file_configured],
+    ['PATTY_DB_KEY', KeyImportRefusal.enum.key_env_configured],
+    ['PATTY_DB_KEY_FILE', KeyImportRefusal.enum.key_file_configured],
   ])('refuses while %s is set: that install reads its key from there', async (variable, refusal) => {
-    vi.stubEnv(variable, variable === 'FINTRACK_DB_KEY' ? OTHER_KEY : keyFile);
+    vi.stubEnv(variable, variable === 'PATTY_DB_KEY' ? OTHER_KEY : keyFile);
     expect(await run('key', 'import', '--from', keyFile)).toBe(EXIT_FAILURE);
     expect(keychain.stored).toBeNull();
     expect(err.join('\n')).toContain(CLI_MESSAGES.keyImportRefused(refusal));
@@ -296,8 +296,8 @@ describe('fintrack key import', () => {
   });
 
   it('fails cleanly, as a failure and not a stack trace, when two key sources are configured', async () => {
-    vi.stubEnv('FINTRACK_DB_KEY', KEY);
-    vi.stubEnv('FINTRACK_DB_KEY_FILE', keyFile);
+    vi.stubEnv('PATTY_DB_KEY', KEY);
+    vi.stubEnv('PATTY_DB_KEY_FILE', keyFile);
     expect(await run('key', 'import', '--from', keyFile)).toBe(EXIT_FAILURE);
     expect(keychain.stored).toBeNull();
   });
@@ -309,7 +309,7 @@ describe('fintrack key import', () => {
   });
 });
 
-describe('fintrack db import', () => {
+describe('patty db import', () => {
   beforeEach(async () => {
     expect(await run('key', 'import', '--from', keyFile)).toBe(EXIT_OK);
     out = [];
@@ -340,7 +340,7 @@ describe('fintrack db import', () => {
     const source = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: sourceDatabase,
-      FINTRACK_DB_KEY: KEY,
+      PATTY_DB_KEY: KEY,
     });
     expect(await source.all(sql`SELECT hash FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`)).toEqual(migrations);
     closeDatabase(source);
@@ -350,10 +350,10 @@ describe('fintrack db import', () => {
 
   it('works with the key from a key file or the environment as well as the keychain', async () => {
     keychain.stored = null;
-    vi.stubEnv('FINTRACK_DB_KEY_FILE', keyFile);
+    vi.stubEnv('PATTY_DB_KEY_FILE', keyFile);
     expect(await run('db', 'import', '--from', snapshot)).toBe(EXIT_OK);
     expect(
-      await countRows({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: installDatabase, FINTRACK_DB_KEY_FILE: keyFile }),
+      await countRows({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: installDatabase, PATTY_DB_KEY_FILE: keyFile }),
     ).toEqual(COUNTS);
   });
 
@@ -442,10 +442,10 @@ describe('fintrack db import', () => {
   });
 
   it('fails as a CLI failure, not a crash, when the configuration itself is invalid', async () => {
-    vi.stubEnv('FINTRACK_DB_KEY', KEY);
-    vi.stubEnv('FINTRACK_DB_KEY_FILE', keyFile);
+    vi.stubEnv('PATTY_DB_KEY', KEY);
+    vi.stubEnv('PATTY_DB_KEY_FILE', keyFile);
     expect(await run('db', 'import', '--from', snapshot)).toBe(EXIT_FAILURE);
-    expect(err.join('\n')).toContain('FINTRACK_DB_KEY');
+    expect(err.join('\n')).toContain('PATTY_DB_KEY');
     expect(existsSync(installDatabase)).toBe(false);
   });
 

@@ -79,9 +79,9 @@ const failingFirstStep: typeof seedDemo = async (db, options) => {
 };
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'fintrack-demo-command-'));
+  dir = mkdtempSync(join(tmpdir(), 'patty-demo-command-'));
   demoPath = join(dir, 'demo.db');
-  realPath = join(dir, 'fintrack.db');
+  realPath = join(dir, 'patty.db');
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
@@ -196,8 +196,8 @@ describe('demo — safety: it never touches what is not a demo database', () => 
   it('refuses a missing demo file whose directory is a symlinked alias of the real database’s directory', async () => {
     mkdirSync(join(dir, 'real'));
     symlinkSync(join(dir, 'real'), join(dir, 'alias'));
-    const real = join(dir, 'real', 'x', 'fintrack.db');
-    const shell = shellWith({ databasePath: join(dir, 'alias', 'x', 'fintrack.db'), realDatabasePath: () => real });
+    const real = join(dir, 'real', 'x', 'patty.db');
+    const shell = shellWith({ databasePath: join(dir, 'alias', 'x', 'patty.db'), realDatabasePath: () => real });
     expect((await shell.prepare({ country: DemoCountry.enum.us, reset: false }))._unsafeUnwrapErr().code).toBe(
       real_database,
     );

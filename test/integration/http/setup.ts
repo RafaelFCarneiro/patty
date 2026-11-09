@@ -11,7 +11,7 @@ export const setupHttpTest = () => {
   let tmpDir: string | undefined;
 
   beforeAll(async () => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-http-test-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'patty-http-test-'));
     ctx = await buildApp({ dbPath: join(tmpDir, 'test.db') });
     await ctx.app.ready();
   });

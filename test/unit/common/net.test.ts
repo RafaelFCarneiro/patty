@@ -56,7 +56,7 @@ describe('portInUseMessage', () => {
   it('points the client at the default loopback when the error carries no address', () => {
     const message = portInUseMessage({ port: 3001 });
     expect(message).toContain(portInUseReason(3001));
-    expect(message).toContain('PORT=3002 fintrack');
+    expect(message).toContain('PORT=3002 patty');
     expect(message).toContain('http://127.0.0.1:3002/mcp');
   });
 
@@ -101,7 +101,7 @@ describe('hostnameOfHostHeader', () => {
     ['127.0.0.1:51737', '127.0.0.1'],
     ['localhost', 'localhost'],
     ['[::1]:51737', '::1'],
-    ['fintrack.example.com:8443', 'fintrack.example.com'],
+    ['patty.example.com:8443', 'patty.example.com'],
   ])('extracts the hostname of %s', (header, hostname) => {
     expect(hostnameOfHostHeader(header)).toBe(hostname);
   });

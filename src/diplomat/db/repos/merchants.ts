@@ -67,7 +67,7 @@ export type MerchantsRepo = {
   /** Find merchant→category candidates whose key appears in the normalized description. */
   matchCandidates: (normalizedDescription: string) => Promise<MerchantMatch[]>;
   /** The `limit` most-transacted merchants (effective, non-transfer), each with its dominant
-   *  category — backs `fintrack://merchants/top`. */
+   *  category — backs `patty://merchants/top`. */
   top: (limit: number) => Promise<MerchantTopDbRow[]>;
 };
 

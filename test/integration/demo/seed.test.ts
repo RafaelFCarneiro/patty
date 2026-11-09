@@ -35,7 +35,7 @@ let db: Db;
 const seed = (country: DemoCountry) => seedDemo(db, { country, today: TODAY, config: CONFIG });
 
 const owner = () =>
-  scopedFor(createRuntime(db, { ...CONFIG, FINTRACK_LOCALE: undefined }, { clock: () => TODAY }), OWNER_PRINCIPAL);
+  scopedFor(createRuntime(db, { ...CONFIG, PATTY_LOCALE: undefined }, { clock: () => TODAY }), OWNER_PRINCIPAL);
 
 const count = async (table: string, where = '1 = 1'): Promise<number> => {
   const [row] = await db.all<{ n: number }>(sql.raw(`SELECT COUNT(*) AS n FROM ${table} WHERE ${where}`));
@@ -48,11 +48,11 @@ const existingData = async () => ({
 });
 
 beforeEach(async () => {
-  dir = mkdtempSync(join(tmpdir(), 'fintrack-demo-seed-'));
+  dir = mkdtempSync(join(tmpdir(), 'patty-demo-seed-'));
   db = await openDatabase({
     KEY_LOCK_PATH: keyLockPathForTest(),
     DB_PATH: join(dir, 'demo.db'),
-    FINTRACK_DB_KEY: TEST_KEY,
+    PATTY_DB_KEY: TEST_KEY,
   });
   await bootstrap(db);
 });

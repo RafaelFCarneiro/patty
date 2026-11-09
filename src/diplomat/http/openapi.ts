@@ -41,7 +41,7 @@ export type RouteDefinition = RouteMeta & { handler: RouteHandler };
 // this is the sole conversion to OpenAPI's `{param}` syntax, applied when documenting.
 const toOpenApiPath = (fastifyPath: string): string => fastifyPath.replace(/:([A-Za-z]+)/g, '{$1}');
 
-export const MISSING_PRINCIPAL_MESSAGE = 'fintrack: a route reached user data without an authenticated principal';
+export const MISSING_PRINCIPAL_MESSAGE = 'patty: a route reached user data without an authenticated principal';
 
 const withScope =
   (tenancy: Tenancy, handler: RouteHandler) =>
@@ -86,10 +86,10 @@ export const buildOpenApiDocument = (definitions: RouteDefinition[], version: st
   return generator.generateDocument({
     openapi: '3.0.3',
     info: {
-      title: 'FinTrack API',
+      title: 'PATTY API',
       version,
       description:
-        'REST contract for the FinTrack HTTP API (ADR-013). MCP (POST /mcp) is the primary surface; ' +
+        'REST contract for the PATTY HTTP API (ADR-013). MCP (POST /mcp) is the primary surface; ' +
         'this document exists so agent-generated dashboards can call /api with correct request/response shapes.',
     },
   });

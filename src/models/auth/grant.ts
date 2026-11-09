@@ -12,7 +12,7 @@ import { TokenAccess } from './token.js';
  *  extends it. */
 export const SignInDuration = z.enum(['session', '24h', '7d', '30d']);
 export type SignInDuration = z.infer<typeof SignInDuration>;
-/** `fintrack login` runs in a shell that exits, so it has no "this session" to tie a sign-in to. */
+/** `patty login` runs in a shell that exits, so it has no "this session" to tie a sign-in to. */
 export const LoginDuration = SignInDuration.exclude([SignInDuration.enum.session]);
 export type LoginDuration = z.infer<typeof LoginDuration>;
 export const DEFAULT_SIGN_IN_DURATION = SignInDuration.enum['24h'];
@@ -27,10 +27,10 @@ export const SIGN_IN_DURATION_MS: Readonly<Record<SignInDuration, number>> = {
 /** The longest any sign-in may last (an admin may lower it after ADR-033 Phase 4, never raise it). */
 export const MAX_SIGN_IN_DURATION_MS = SIGN_IN_DURATION_MS['30d'];
 
-/** The device-style grant: the stdio process (or `fintrack login`) asks, a person approves in the browser. */
+/** The device-style grant: the stdio process (or `patty login`) asks, a person approves in the browser. */
 export const GrantStatus = z.enum(['pending', 'approved', 'denied', 'redeemed', 'expired']);
 export type GrantStatus = z.infer<typeof GrantStatus>;
-/** Who asked: an MCP client over stdio, or `fintrack login` in a shell. Decides whether `session` is offered. */
+/** Who asked: an MCP client over stdio, or `patty login` in a shell. Decides whether `session` is offered. */
 export const GrantChannel = z.enum(['stdio', 'cli']);
 export type GrantChannel = z.infer<typeof GrantChannel>;
 
@@ -50,7 +50,7 @@ export const ClientGrantEntitySchema = withPersistenceMeta(
     clientVersion: z.string().max(CLIENT_VERSION_MAX_LENGTH),
     profile: ProfileSchema,
     channel: GrantChannel,
-    /** What the asker would like pre-selected on the consent page (`fintrack login --scope/--duration`). */
+    /** What the asker would like pre-selected on the consent page (`patty login --scope/--duration`). */
     hintAccess: TokenAccess.nullable(),
     hintDuration: SignInDuration.nullable(),
     status: GrantStatus,

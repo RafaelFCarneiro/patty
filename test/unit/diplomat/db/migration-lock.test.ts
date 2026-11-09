@@ -8,8 +8,8 @@ let dir: string;
 let dbFile: string;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'fintrack-lock-'));
-  dbFile = join(dir, 'fintrack.db');
+  dir = mkdtempSync(join(tmpdir(), 'patty-lock-'));
+  dbFile = join(dir, 'patty.db');
 });
 
 afterEach(() => rmSync(dir, { recursive: true, force: true }));

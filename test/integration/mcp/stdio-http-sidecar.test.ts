@@ -25,7 +25,7 @@ let transport: StdioClientTransport;
 let stderr = '';
 
 beforeAll(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sidecar-stdio-test-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-sidecar-stdio-test-'));
   const dbPath = join(tmpDir, 'sidecar.db');
 
   // Occupy the sidecar's target port before the server ever starts, so its bind attempt fails.
@@ -40,17 +40,17 @@ beforeAll(async () => {
     env: {
       ...process.env,
       MCP_TRANSPORT: McpTransport.enum.stdio,
-      FINTRACK_HTTP: 'true',
+      PATTY_HTTP: 'true',
       PORT: String(blockedPort),
       DB_PATH: dbPath,
-      FINTRACK_DB_KEY: TEST_KEY,
+      PATTY_DB_KEY: TEST_KEY,
     },
   });
   transport.stderr?.on('data', (chunk: Buffer) => {
     stderr += chunk.toString();
   });
 
-  client = new Client({ name: 'fintrack-sidecar-stdio-vitest', version: '1.0.0' });
+  client = new Client({ name: 'patty-sidecar-stdio-vitest', version: '1.0.0' });
   await client.connect(transport);
 });
 

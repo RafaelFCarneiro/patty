@@ -55,7 +55,7 @@ export const renderConnectPage = async (fields: Consent & { error?: string }): P
 
 const CLOSE_TAB_HINT = 'You can close this tab.';
 
-// Once a request is answered the page has nothing left to offer: a temporary server (`fintrack login`, or a stdio
+// Once a request is answered the page has nothing left to offer: a temporary server (`patty login`, or a stdio
 // process whose own dashboard could not start) closes as soon as the sign-in is picked up, so a link back to its
 // dashboards would be dead moments later. A page that is only an error keeps the way out while the server still lives.
 const nextStep = (answered: boolean): string =>

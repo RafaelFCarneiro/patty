@@ -8,7 +8,7 @@ const definitions = buildRouteDefinitions(documentationContext('0.0.0'));
 
 describe('REST route scopes (ADR-033 §3)', () => {
   it('names the two scopes the enum defines', () => {
-    expect([READ_SCOPE, WRITE_SCOPE]).toEqual([Scope.enum['fintrack:read'], Scope.enum['fintrack:write']]);
+    expect([READ_SCOPE, WRITE_SCOPE]).toEqual([Scope.enum['patty:read'], Scope.enum['patty:write']]);
   });
 
   it('every route definition declares a scope, and it is the default method rule', () => {

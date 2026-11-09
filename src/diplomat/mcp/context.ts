@@ -10,7 +10,7 @@ export type McpContext = {
 
 export type CallerExtra = { principal: Principal };
 
-export const MISSING_CALLER_MESSAGE = 'fintrack: an MCP callback reached user data without an authenticated principal';
+export const MISSING_CALLER_MESSAGE = 'patty: an MCP callback reached user data without an authenticated principal';
 
 /** Throws without a principal rather than defaulting to anyone. */
 export const callerOf = (extra: unknown): Principal => {

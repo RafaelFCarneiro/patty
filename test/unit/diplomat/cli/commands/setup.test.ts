@@ -63,7 +63,7 @@ describe('runSetup', () => {
   });
 
   it('prints a platform-agnostic Claude Desktop restart instruction', async () => {
-    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    homeDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     originalCwd = process.cwd();
     process.chdir(homeDir);
 
@@ -92,7 +92,7 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
   });
 
   const loadWithHome = async () => {
-    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    homeDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     originalCwd = process.cwd();
     process.chdir(homeDir);
     vi.resetModules();
@@ -113,7 +113,7 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
     expect(await runGuidedSetup('claude-code', claim)).toBe(0);
 
     expect(order).toEqual(['claim']);
-    expect(JSON.parse(readFileSync(claudeCodeConfig(), 'utf8'))).toEqual({ mcpServers: { fintrack: STDIO_ENTRY } });
+    expect(JSON.parse(readFileSync(claudeCodeConfig(), 'utf8'))).toEqual({ mcpServers: { patty: STDIO_ENTRY } });
   });
 
   it('writes no config at all when the claim fails (no terminal, bad input…)', async () => {
@@ -133,7 +133,7 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
 
     expect(readFileSync(claudeCodeConfig(), 'utf8')).toBe(once);
     expect(JSON.parse(once)).toEqual({
-      mcpServers: { other: { command: 'x' }, fintrack: STDIO_ENTRY },
+      mcpServers: { other: { command: 'x' }, patty: STDIO_ENTRY },
       theme: 'dark',
     });
   });
@@ -172,7 +172,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
   });
 
   const loadWithHome = async () => {
-    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    homeDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     originalCwd = process.cwd();
     process.chdir(homeDir);
     vi.resetModules();
@@ -199,14 +199,14 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
     expect(order).toEqual(['claim', 'sign-in:default']);
   });
 
-  it('writes FINTRACK_PROFILE into the entry and signs in as that profile when one is chosen', async () => {
+  it('writes PATTY_PROFILE into the entry and signs in as that profile when one is chosen', async () => {
     const { runGuidedSetup } = await loadWithHome();
     const signIn = vi.fn(async () => undefined);
 
     await runGuidedSetup('claude-code', async () => EXIT_OK, signIn, 'work');
 
     expect(JSON.parse(readFileSync(claudeCodeConfig(), 'utf8'))).toEqual({
-      mcpServers: { fintrack: { ...STDIO_ENTRY, env: { FINTRACK_PROFILE: 'work' } } },
+      mcpServers: { patty: { ...STDIO_ENTRY, env: { PATTY_PROFILE: 'work' } } },
     });
     expect(signIn).toHaveBeenCalledWith('work');
   });
@@ -221,7 +221,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
       'work',
     );
     expect(JSON.parse(readFileSync(join(homeDir, '.vscode', 'mcp.json'), 'utf8'))).toEqual({
-      servers: { fintrack: { ...VSCODE_ENTRY, env: { FINTRACK_PROFILE: 'work' } } },
+      servers: { patty: { ...VSCODE_ENTRY, env: { PATTY_PROFILE: 'work' } } },
     });
 
     await runGuidedSetup(
@@ -230,7 +230,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
       async () => undefined,
       'work',
     );
-    expect(out.join('\n')).toContain('"env": { "FINTRACK_PROFILE": "work" }');
+    expect(out.join('\n')).toContain('"env": { "PATTY_PROFILE": "work" }');
   });
 
   it('writes no env at all for the default profile', async () => {
@@ -240,7 +240,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
       async () => EXIT_OK,
       async () => undefined,
     );
-    expect(JSON.parse(readFileSync(claudeCodeConfig(), 'utf8')).mcpServers.fintrack).not.toHaveProperty('env');
+    expect(JSON.parse(readFileSync(claudeCodeConfig(), 'utf8')).mcpServers.patty).not.toHaveProperty('env');
   });
 
   it('does not offer a sign-in when the claim failed', async () => {
@@ -264,7 +264,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
     const { runSetup, out } = await loadWithHome();
     expect(runSetup(undefined)).toBe(0);
     expect(out.join('\n')).toContain('--profile <name>');
-    expect(out.join('\n')).toContain('npx @rafaelfcarneiro/fintrack@latest setup');
+    expect(out.join('\n')).toContain('npx @rfc0/patty@latest setup');
   });
 });
 
@@ -281,7 +281,7 @@ describe('runGuidedSetup — a client config that cannot be read or written', ()
   });
 
   it('prints the message on stderr and answers exit code 1, with no sign-in offered and no process.exit', async () => {
-    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    homeDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     originalCwd = process.cwd();
     process.chdir(homeDir);
     vi.resetModules();
@@ -295,8 +295,8 @@ describe('runGuidedSetup — a client config that cannot be read or written', ()
     expect(await runGuidedSetup('claude-code', async () => EXIT_OK, signIn)).toBe(1);
 
     expect(err).toHaveLength(1);
-    expect(err[0]).toMatch(/^fintrack setup: failed to read .*mcp\.json: EISDIR:/);
-    expect(out).toEqual(['Setting up FinTrack MCP for Claude Code (CLI)...']);
+    expect(err[0]).toMatch(/^patty setup: failed to read .*mcp\.json: EISDIR:/);
+    expect(out).toEqual(['Setting up PATTY MCP for Claude Code (CLI)...']);
     expect(signIn).not.toHaveBeenCalled();
     expect(exit).not.toHaveBeenCalled();
   });
@@ -319,7 +319,7 @@ describe('runSetup — help and an unknown tool', () => {
     expect(code).toBe(1);
     expect(out).toEqual([]);
     expect(err).toEqual([
-      'fintrack setup: unknown tool "no-such-tool"\n\nRun without arguments to see available tools.',
+      'patty setup: unknown tool "no-such-tool"\n\nRun without arguments to see available tools.',
     ]);
     expect(exit).not.toHaveBeenCalled();
     vi.restoreAllMocks();
@@ -339,7 +339,7 @@ describe('runGuidedSetup — everything a successful setup prints, in order', ()
   });
 
   it('says Setting up…, Updated…, the next step, then Done. — all on out, nothing on err', async () => {
-    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    homeDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     originalCwd = process.cwd();
     process.chdir(homeDir);
     vi.resetModules();
@@ -350,7 +350,7 @@ describe('runGuidedSetup — everything a successful setup prints, in order', ()
     expect(await runGuidedSetup('claude-code', async () => EXIT_OK)).toBe(0);
 
     expect(out).toEqual([
-      'Setting up FinTrack MCP for Claude Code (CLI)...',
+      'Setting up PATTY MCP for Claude Code (CLI)...',
       `  Updated: ${join(homeDir, '.claude', 'mcp.json')}`,
       '  Verify with: claude mcp list',
       'Done.',
@@ -360,7 +360,7 @@ describe('runGuidedSetup — everything a successful setup prints, in order', ()
   });
 
   it('puts a replaced-config warning on err, ahead of the lines on out', async () => {
-    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    homeDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
     originalCwd = process.cwd();
     process.chdir(homeDir);
     vi.resetModules();

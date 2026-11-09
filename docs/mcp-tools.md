@@ -1,4 +1,4 @@
-# FinTrack MCP tools
+# PATTY MCP tools
 
 Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All tools share these conventions:
 
@@ -10,30 +10,30 @@ Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All too
 
 ## Scopes per tool
 
-**There is no user-management tool, by design.** Creating, inviting, disabling and promoting users, and the instance's sign-in cap, are session-only and admin-only: browser pages under `/ui/access/users` and the trusted terminal's `fintrack users` command ([`auth.md`](auth.md#users-roles-and-invitations)). No token — whatever its scope — and no MCP client can reach them.
+**There is no user-management tool, by design.** Creating, inviting, disabling and promoting users, and the instance's sign-in cap, are session-only and admin-only: browser pages under `/ui/access/users` and the trusted terminal's `patty users` command ([`auth.md`](auth.md#users-roles-and-invitations)). No token — whatever its scope — and no MCP client can reach them.
 
-Over HTTP with authentication `required`, `/mcp` takes an `Authorization: Bearer ftk_…` personal access token (or a session
+Over HTTP with authentication `required`, `/mcp` takes an `Authorization: Bearer ptk_…` personal access token (or a session
 cookie), and every tool needs a scope ([`auth.md`](auth.md#scopes)). A tool's scope derives from its
-`annotations.readOnlyHint`: `true` → `fintrack:read`, otherwise `fintrack:write` (which includes read). A read-only token
+`annotations.readOnlyHint`: `true` → `patty:read`, otherwise `patty:write` (which includes read). A read-only token
 that calls a write tool gets HTTP `403` with `WWW-Authenticate: Bearer error="insufficient_scope",
-scope="fintrack:write", …` before the tool runs. Resources (`fintrack://…`) and prompts need `fintrack:read`. Over stdio the caller is the
-signed-in credential — a `FINTRACK_TOKEN` or a saved browser sign-in, each with its own scopes ([`auth.md`](auth.md#signing-in-claude-stdio)):
+scope="patty:write", …` before the tool runs. Resources (`patty://…`) and prompts need `patty:read`. Over stdio the caller is the
+signed-in credential — a `PATTY_TOKEN` or a saved browser sign-in, each with its own scopes ([`auth.md`](auth.md#signing-in-claude-stdio)):
 a read-only one that calls a write tool gets the same `insufficient_scope` tool error, and a session with **no** credential gets an
-ordinary error result, `FinTrack: not signed in. Open <origin>/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.`, from every
-tool, resource read and prompt get (the lists and `initialize` still work). Only an explicit `FINTRACK_AUTH=disabled` makes stdio the trusted owner.
+ordinary error result, `PATTY: not signed in. Open <origin>/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.`, from every
+tool, resource read and prompt get (the lists and `initialize` still work). Only an explicit `PATTY_AUTH=disabled` makes stdio the trusted owner.
 
 The split is pinned by a unit test (`test/unit/diplomat/mcp/scopes.test.ts`), so reclassifying a tool is a reviewed diff.
 
 | Scope | Tools |
 |---|---|
-| `fintrack:read` (`readOnlyHint: true`) | `aggregate_spending`, `find_correlations`, `get_account_balances`, `get_bill`, `get_budget_status`, `get_preferences`, `get_spending_summary`, `get_status`, `list_accounts`, `list_budgets`, `list_categories`, `list_credit_cards`, `list_dashboards`, `list_exchange_rates`, `list_recurring`, `list_sub_categories`, `list_tags`, `search_transactions` |
-| `fintrack:write` (`readOnlyHint: false`) | `add_account_expense`, `add_account_income`, `add_card_purchase`, `apply_due_recurring`, `confirm_transaction`, `create_account`, `create_budget`, `create_category`, `create_credit_card`, `create_recurring`, `create_sub_category`, `create_tag`, `create_transfer`, `delete_account`, `delete_account_transaction`, `delete_budget`, `delete_card_transaction`, `delete_category`, `delete_credit_card`, `delete_dashboard`, `delete_sub_category`, `delete_tag`, `import_account_statement`, `import_card_statement`, `pay_bill`, `rename_dashboard`, `revert_bill_payment`, `save_dashboard`, `set_base_currency`, `set_exchange_rate`, `set_exchange_rates`, `set_locale`, `update_account`, `update_account_transaction`, `update_budget`, `update_card_transaction`, `update_credit_card` |
+| `patty:read` (`readOnlyHint: true`) | `aggregate_spending`, `find_correlations`, `get_account_balances`, `get_bill`, `get_budget_status`, `get_preferences`, `get_spending_summary`, `get_status`, `list_accounts`, `list_budgets`, `list_categories`, `list_credit_cards`, `list_dashboards`, `list_exchange_rates`, `list_recurring`, `list_sub_categories`, `list_tags`, `search_transactions` |
+| `patty:write` (`readOnlyHint: false`) | `add_account_expense`, `add_account_income`, `add_card_purchase`, `apply_due_recurring`, `confirm_transaction`, `create_account`, `create_budget`, `create_category`, `create_credit_card`, `create_recurring`, `create_sub_category`, `create_tag`, `create_transfer`, `delete_account`, `delete_account_transaction`, `delete_budget`, `delete_card_transaction`, `delete_category`, `delete_credit_card`, `delete_dashboard`, `delete_sub_category`, `delete_tag`, `import_account_statement`, `import_card_statement`, `pay_bill`, `rename_dashboard`, `revert_bill_payment`, `save_dashboard`, `set_base_currency`, `set_exchange_rate`, `set_exchange_rates`, `set_locale`, `update_account`, `update_account_transaction`, `update_budget`, `update_card_transaction`, `update_credit_card` |
 
 **Whose data a tool sees (ADR-033 §5).** Every tool, resource and prompt acts as the authenticated user: it reads only that user's own rows plus the shared defaults, and writes only that user's rows. Another user's id or name is reported exactly as one that does not exist (`unknown_*`, or `{ deleted: false }` for the idempotent deletes) — never "forbidden" — and the candidate lists in not-found/ambiguous errors name only your own rows and the defaults. The **shared defaults** — the seeded categories, the bundled dashboards — are the same for everyone and **read-only**: `delete_category`, `delete_sub_category`'s targets, `delete_dashboard` and `rename_dashboard` on one answer a `validation` error with one message. Names and idempotency keys are unique **per user**, so two users may each have an account called "Checking", and the same statement imports for each of them. `set_exchange_rate(s)` writes shared market data.
 
 Error codes added by token authentication (HTTP only, not tool results): `invalid_token` (`401`), `insufficient_scope`
 (`403`, carries the `scope` needed). Inside a tool call a scope failure (defence in depth) comes back as a tool error
-`{ "error": { "code": "insufficient_scope", "scope": "fintrack:write" } }`.
+`{ "error": { "code": "insufficient_scope", "scope": "patty:write" } }`.
 
 ## Transaction write basics
 
@@ -594,10 +594,10 @@ read-only at the install location; `inline` — DB-stored, `save_dashboard`'s on
 (`GET /ui`) groups `file` dashboards as top-level items and `inline` ones under a "Custom" submenu, straight
 off `list_dashboards`. `skills/dashboard-building/SKILL.md` is the guardrail checklist an agent follows to
 build or adapt a dashboard without violating the no-inline-data rule — read the contract
-(`fintrack://openapi`), map sections to real endpoints, and self-check against the hard rules before calling
+(`patty://openapi`), map sections to real endpoints, and self-check against the hard rules before calling
 `save_dashboard`.
 
-- `save_dashboard`: `name`, `html` (required — a content fragment, despite the field name). **Upsert** — saving to an existing name replaces it immediately, no rebuild/restart. **Always stores `source: 'inline'`** (ADR-027 Phase 2 non-negotiable) — saving under a bundled default's name never touches the default (it is shared and read-only): it creates **your own** inline dashboard of that name, which replaces the default for you alone; a custom dashboard can never become file-backed. **CRITICAL**: the fragment must never embed financial data, secrets, or tokens — render layout/styling only and `fetch()` data client-side from `/api` on load (read the `fintrack://openapi` resource for the contract), so the dashboard is always live and safe to share. Returns the stored `{ name, html, updatedAt, source }`.
+- `save_dashboard`: `name`, `html` (required — a content fragment, despite the field name). **Upsert** — saving to an existing name replaces it immediately, no rebuild/restart. **Always stores `source: 'inline'`** (ADR-027 Phase 2 non-negotiable) — saving under a bundled default's name never touches the default (it is shared and read-only): it creates **your own** inline dashboard of that name, which replaces the default for you alone; a custom dashboard can never become file-backed. **CRITICAL**: the fragment must never embed financial data, secrets, or tokens — render layout/styling only and `fetch()` data client-side from `/api` on load (read the `patty://openapi` resource for the contract), so the dashboard is always live and safe to share. Returns the stored `{ name, html, updatedAt, source }`.
   - **Rejected (`validation`, 422) if the content can't possibly render as a fragment**: empty content, a full `<!doctype>`/`<html>` document root still present (the shell owns that now), an external `<script src>` reference (fragments carry zero external references — the shell already loads Chart.js once), or an inline `<script>` with a JS syntax error (checked by compiling it, never executing it). This is a cheap render-ability check, not sanitization or a full HTML validator — full sanitization is out of scope for this local single-user app (ADR-013 Phase A). A rejected save leaves the previously stored dashboard untouched.
 - `list_dashboards`: no input — returns all dashboards as `{ name, updatedAt, source }` (HTML omitted).
 - `delete_dashboard`: `name` (required). **Idempotent** — an already-absent name is not an error, returns `{ deleted: false }` (same shape as `delete_tag`). Present → deletes it and returns `{ deleted: true }`; `GET /api/dashboards/:name` 404s afterward (`GET /ui/:name` itself still serves the shell either way — see below). Deleting a name that is a bundled (`file`) default and not your own copy answers the shared-default `validation` error instead; deleting your own copy of it brings the default back for you.
@@ -609,9 +609,9 @@ REST mirror: `GET /api/dashboards` (list, HTML omitted), `GET /api/dashboards/:n
 
 `set_locale`: `locale` (`en|es|pt`), `source` (`inferred|explicit`). Sets the display language for default category names. The AI agent calls this with `source: "inferred"` when it detects the user's language from conversation, or `source: "explicit"` when the user directly requests a locale change. **Guardrails**: (1) Anti-churn — only switch on a clear, sustained language change, not isolated foreign words, merchant names, or proper nouns. (2) Respect explicit — if the current `locale_source` is `"explicit"`, an `inferred` switch is rejected with a `validation` error; the user must explicitly request the change. Error: `validation`.
 
-`get_preferences`: no input. Returns `{ locale, localeSource, baseCurrency }` — the **stored** locale preference, not the effective display locale, plus the **resolved** base currency (explicit override if set, else derived from locale). Use to check whether the user set the locale explicitly before attempting an inferred switch. Note: when `FINTRACK_LOCALE` is set, `list_categories` uses the env value for display names, which may differ from the stored `locale` returned here.
+`get_preferences`: no input. Returns `{ locale, localeSource, baseCurrency }` — the **stored** locale preference, not the effective display locale, plus the **resolved** base currency (explicit override if set, else derived from locale). Use to check whether the user set the locale explicitly before attempting an inferred switch. Note: when `PATTY_LOCALE` is set, `list_categories` uses the env value for display names, which may differ from the stored `locale` returned here.
 
-**Resolution order** (for display names): `FINTRACK_LOCALE` env var → the caller's own `user_settings.locale` → `'en'` (cold-start default). Preferences are per user: one user's `set_locale` or `set_base_currency` never changes another's.
+**Resolution order** (for display names): `PATTY_LOCALE` env var → the caller's own `user_settings.locale` → `'en'` (cold-start default). Preferences are per user: one user's `set_locale` or `set_base_currency` never changes another's.
 
 ## set_base_currency
 
@@ -621,23 +621,23 @@ REST mirror: `GET /api/preferences` (`get_preferences`), `POST /api/settings/bas
 
 ## set_exchange_rate / set_exchange_rates / list_exchange_rates
 
-ADR-026 Phase 2. A cached, agent-refreshed rate table (`currency_rates`) — **FinTrack never fetches rates itself** (local-first, zero external calls, ADR-004/005). The agent (or a scheduled task) sources current rates (e.g. PTAX for fiat, a crypto price API) and upserts them here; nothing in the backend reaches the network. Rates are self-contained and carry their own `asOf`, so freshness is always visible to whoever reads them. **This is not a history log** — a pair (`from`, `to`) has at most one stored rate; a later `set_exchange_rate` for the same pair **overwrites** it (upsert-latest), never appends. These tools populate/inspect the cache; `get_account_balances` is the read surface that converts against it (ADR-026 Phase 3, see below).
+ADR-026 Phase 2. A cached, agent-refreshed rate table (`currency_rates`) — **PATTY never fetches rates itself** (local-first, zero external calls, ADR-004/005). The agent (or a scheduled task) sources current rates (e.g. PTAX for fiat, a crypto price API) and upserts them here; nothing in the backend reaches the network. Rates are self-contained and carry their own `asOf`, so freshness is always visible to whoever reads them. **This is not a history log** — a pair (`from`, `to`) has at most one stored rate; a later `set_exchange_rate` for the same pair **overwrites** it (upsert-latest), never appends. These tools populate/inspect the cache; `get_account_balances` is the read surface that converts against it (ADR-026 Phase 3, see below).
 
 - `set_exchange_rate`: `from`, `to` (`CurrencyCode`, required, must differ — `validation` if equal), `rate` (positive number — 1 unit of `from` = `rate` units of `to`), `asOf` (ISO 8601 timestamp, required), `source` (optional free-text provenance, e.g. `"PTAX"`, `"coingecko"`). Returns the stored view `{ from, to, rate, asOf, source? }`. Error: `validation` (`from === to`).
 - `set_exchange_rates`: `rates` (array of the same shape as `set_exchange_rate`'s input, 1–50 items). Bulk upsert with **partial success** — each item is applied independently (its own transaction/retry), so one bad pair never blocks the others. Returns `{ items: [{ status: "ok", rate: {...} } | { status: "error", from, to, error }] }`, one entry per input item in order.
 - `list_exchange_rates`: no input. Returns every stored rate as `{ from, to, rate, asOf, source? }[]`. Staleness is not evaluated here — this is the raw cache; `get_account_balances` applies the per-class staleness window (fiat 24h / crypto 1h, both configurable via `FIAT_RATE_STALE_HOURS`/`CRYPTO_RATE_STALE_HOURS`) when it converts against it.
 
-REST mirror: `GET /api/exchange-rates` (`list_exchange_rates`), `POST /api/exchange-rates` (`set_exchange_rate`), `POST /api/exchange-rates/bulk` (`set_exchange_rates`). MCP resource: `fintrack://exchange-rates` mirrors `list_exchange_rates`.
+REST mirror: `GET /api/exchange-rates` (`list_exchange_rates`), `POST /api/exchange-rates` (`set_exchange_rate`), `POST /api/exchange-rates/bulk` (`set_exchange_rates`). MCP resource: `patty://exchange-rates` mirrors `list_exchange_rates`.
 
 ## get_status
 
-No input. Returns `{ name: "fintrack", version, db, locale, demo }`:
+No input. Returns `{ name: "patty", version, db, locale, demo }`:
 
-- `name` — always `"fintrack"`.
+- `name` — always `"patty"`.
 - `version` — the package version from `package.json` (same value as the `serverInfo.version` reported in the MCP `initialize` handshake). In dev: `0.0.0-development`; in published releases: the semantic-release version.
 - `db` — `"ok"` if the database is reachable, `"error"` otherwise.
 - `locale` — the effective active locale (`en`, `es`, or `pt`).
-- `demo` — `true` when the database is marked a demo (`settings.instance_kind = demo`): sample data, not the person's finances. A demo database also sends MCP server `instructions` at `initialize` saying so (say it once, never use it for real finances, use the `fintrack` server for those), in the demo's language (`en`/`pt`/`es`, its owner's `user_settings.locale`); a standard database sends none.
+- `demo` — `true` when the database is marked a demo (`settings.instance_kind = demo`): sample data, not the person's finances. A demo database also sends MCP server `instructions` at `initialize` saying so (say it once, never use it for real finances, use the `patty` server for those), in the demo's language (`en`/`pt`/`es`, its owner's `user_settings.locale`); a standard database sends none.
 
 A convenience for tool-only callers (AI agent / chat user). The MCP protocol already exposes version via the `initialize` handshake `serverInfo` and liveness via `ping` — this tool complements those for callers that can only invoke tools.
 
@@ -647,21 +647,21 @@ REST mirror: `GET /api/status` returns the same payload (and, over HTTP with aut
 
 Unlike tools (invoked with arguments), resources are read by URI — no input schema, no side effects.
 
-### `fintrack://openapi`
+### `patty://openapi`
 
-Returns the same OpenAPI 3.0 document served at `GET /api/openapi.json` (`application/json`, `text` content). Generated from the `wire/in`/`wire/out`/`models` zod schemas that back the REST routes (ADR-013 Phase A) — read this before generating `fetch()` calls against `/api` so the shapes can't be guessed wrong. This is the app's first MCP resource; read via `resources/read` with `uri: "fintrack://openapi"` (discoverable via `resources/list`).
+Returns the same OpenAPI 3.0 document served at `GET /api/openapi.json` (`application/json`, `text` content). Generated from the `wire/in`/`wire/out`/`models` zod schemas that back the REST routes (ADR-013 Phase A) — read this before generating `fetch()` calls against `/api` so the shapes can't be guessed wrong. This is the app's first MCP resource; read via `resources/read` with `uri: "patty://openapi"` (discoverable via `resources/list`).
 
 ### Reference resources (Feature Design 018)
 
 Static-URI, read-only resources exposing the user's vocabulary — categories, accounts, tags, credit cards, and most-transacted merchants — so an agent resolving natural-language input ("R$32 uber ontem") can read them directly instead of round-tripping a `list_*` tool call every turn. Each mirrors its `list_*` tool exactly (same controller, same data — resource and tool can never disagree). `application/json`, one `contents` entry per resource.
 
-- **`fintrack://categories`** — same array as `list_categories`: top-level categories with locale-resolved display names, `kind` (expense/income/both), and `id`.
-- **`fintrack://accounts`** — same array as `list_accounts`: `name`, `type`, `currency`.
-- **`fintrack://tags`** — same array as `list_tags`.
-- **`fintrack://credit-cards`** — same array as `list_credit_cards`.
-- **`fintrack://merchants/top`** — the 20 (`DEFAULT_TOP_MERCHANTS_LIMIT`, `models/merchant.ts`) merchants with the most effective, non-transfer transactions, each `{ merchant, transactionCount, categoryName }` ordered by `transactionCount` descending. `categoryName` is the category the merchant is most often classified into (by transaction frequency, not spend), locale-resolved; `null` when every one of the merchant's transactions is uncategorized. A reference/vocabulary list, not a spend report — no per-currency amounts, no caller-supplied limit (static URI, no `ResourceTemplate` parameters).
-- **`fintrack://currencies`** (ADR-026 Phase 1) — same array as `GET /api/currencies`: `{ code, symbol, name, decimals }` for every currency (fiat BRL/USD/MXN/COP, crypto USDC/BTC). No matching `list_*` tool — currencies are a seeded reference table with no write path, so this resource is the read surface. `decimals` is what lets a client format a non-ISO code correctly: `Intl.NumberFormat`'s `style: 'currency'` mode either throws (a malformed code) or silently mis-formats (a well-formed-but-unrecognized 3-letter code like `BTC` — 2 decimals, no real symbol) for USDC/BTC, so format with `symbol` + `decimals` instead for any code not in `Intl.supportedValuesOf('currency')`.
-- **`fintrack://exchange-rates`** (ADR-026 Phase 2) — same array as `list_exchange_rates`: `{ from, to, rate, asOf, source? }` for every cached rate. Unlike `fintrack://currencies`, this **does** have a write path (`set_exchange_rate(s)`) — read it to see which pairs are cached and how stale they are before deciding whether to refresh.
+- **`patty://categories`** — same array as `list_categories`: top-level categories with locale-resolved display names, `kind` (expense/income/both), and `id`.
+- **`patty://accounts`** — same array as `list_accounts`: `name`, `type`, `currency`.
+- **`patty://tags`** — same array as `list_tags`.
+- **`patty://credit-cards`** — same array as `list_credit_cards`.
+- **`patty://merchants/top`** — the 20 (`DEFAULT_TOP_MERCHANTS_LIMIT`, `models/merchant.ts`) merchants with the most effective, non-transfer transactions, each `{ merchant, transactionCount, categoryName }` ordered by `transactionCount` descending. `categoryName` is the category the merchant is most often classified into (by transaction frequency, not spend), locale-resolved; `null` when every one of the merchant's transactions is uncategorized. A reference/vocabulary list, not a spend report — no per-currency amounts, no caller-supplied limit (static URI, no `ResourceTemplate` parameters).
+- **`patty://currencies`** (ADR-026 Phase 1) — same array as `GET /api/currencies`: `{ code, symbol, name, decimals }` for every currency (fiat BRL/USD/MXN/COP, crypto USDC/BTC). No matching `list_*` tool — currencies are a seeded reference table with no write path, so this resource is the read surface. `decimals` is what lets a client format a non-ISO code correctly: `Intl.NumberFormat`'s `style: 'currency'` mode either throws (a malformed code) or silently mis-formats (a well-formed-but-unrecognized 3-letter code like `BTC` — 2 decimals, no real symbol) for USDC/BTC, so format with `symbol` + `decimals` instead for any code not in `Intl.supportedValuesOf('currency')`.
+- **`patty://exchange-rates`** (ADR-026 Phase 2) — same array as `list_exchange_rates`: `{ from, to, rate, asOf, source? }` for every cached rate. Unlike `patty://currencies`, this **does** have a write path (`set_exchange_rate(s)`) — read it to see which pairs are cached and how stale they are before deciding whether to refresh.
 
 ## Prompts (Feature Design 019)
 

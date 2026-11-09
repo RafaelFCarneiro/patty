@@ -17,7 +17,7 @@ const SSE_CONTENT_TYPE = 'text/event-stream; charset=utf-8';
 const SSE_SESSION_RECHECK_MS = 30_000;
 
 // Where ui/shell.html reserves room for controls that only exist when sessions do (ADR-033).
-const AUTH_CONTROLS_MARKER = '<!--fintrack:auth-controls-->';
+const AUTH_CONTROLS_MARKER = '<!--patty:auth-controls-->';
 const TOKENS_CONTROL =
   `<a href="${TOKENS_PATH}" class="sidebar-more-btn sidebar-tokens" aria-label="Access tokens" title="Access tokens">` +
   '<i class="fa-solid fa-key"></i></a>';

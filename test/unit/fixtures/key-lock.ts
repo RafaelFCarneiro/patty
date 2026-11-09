@@ -4,7 +4,7 @@ import { threadId } from 'node:worker_threads';
 import { tryExclusiveLock, type ExclusiveLock } from '../../../src/diplomat/db/file-lock.js';
 
 export const keyLockPathForTest = (): string =>
-  join(tmpdir(), `fintrack-key-lock-test-${process.pid}-${threadId}.lock`);
+  join(tmpdir(), `patty-key-lock-test-${process.pid}-${threadId}.lock`);
 
 export const acquireKeyLockForTest = async (): Promise<ExclusiveLock> => {
   const lock = await tryExclusiveLock(keyLockPathForTest());

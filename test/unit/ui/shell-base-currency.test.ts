@@ -100,7 +100,7 @@ describe('shell boot (ui/app.js)', () => {
       '/api/preferences': () => ({ baseCurrency: base }),
     });
     const seen: string[] = [];
-    sandbox.fintrackOnDataChanged = () => seen.push(sandbox.DEFAULT_CURRENCY as string);
+    sandbox.onAppDataChanged = () => seen.push(sandbox.DEFAULT_CURRENCY as string);
     base = 'MXN';
     stream.onmessage?.({ data: JSON.stringify({ entities: ['userSettings'] }) });
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -110,14 +110,14 @@ describe('shell boot (ui/app.js)', () => {
   describe('document title', () => {
     const overview = { '/api/dashboards/overview': () => ({ name: 'Overview', html: '<p>ok</p>' }) };
 
-    it('is "FinTrack — <dashboard>" once the dashboard has rendered', async () => {
+    it('is "PATTY — <dashboard>" once the dashboard has rendered', async () => {
       const { document } = await bootShell(overview);
-      expect(document.title).toBe('FinTrack — Overview');
+      expect(document.title).toBe('PATTY — Overview');
     });
 
     it('starts with [Demo] when the server marked the page as a demo', async () => {
       const { document } = await bootShell(overview, { demo: true });
-      expect(document.title).toBe('[Demo] FinTrack — Overview');
+      expect(document.title).toBe('[Demo] PATTY — Overview');
     });
   });
 });

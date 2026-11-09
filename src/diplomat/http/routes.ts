@@ -39,7 +39,7 @@ import { resolvePrincipal } from './session.js';
  * `buildRouteDefinitions` concatenates every domain's routes into ONE array — method, path,
  * OpenAPI docs, and the real handler together for each entry, still the single source of truth.
  * `registerRoutes` mounts this list on Fastify and documents it at `/api/openapi.json`; the MCP
- * resource `fintrack://openapi` documents the same list without ever mounting it — so there is
+ * resource `patty://openapi` documents the same list without ever mounting it — so there is
  * nowhere for the two surfaces to drift apart (ADR-013 Phase A).
  */
 export const buildRouteDefinitions = (ctx: HttpContext): RouteDefinition[] => [

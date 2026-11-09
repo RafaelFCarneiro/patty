@@ -116,7 +116,7 @@ describe('auth hook — required mode', () => {
 
 describe('auth hook — disabled mode', () => {
   it('serves every route without a session, acting as the owner', async () => {
-    const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
+    const ctx = await createApp({ auth: { PATTY_AUTH: AuthMode.enum.disabled } });
     expect(ctx.auth.mode).toBe(AuthMode.enum.disabled);
     expect((await ctx.app.inject({ method: 'GET', url: '/api/status' })).statusCode).toBe(200);
     expect((await ctx.app.inject({ method: 'GET', url: '/ui' })).statusCode).toBe(200);
@@ -129,7 +129,7 @@ describe('auth hook — disabled mode', () => {
   });
 
   it('registers no login or setup pages and no logout control', async () => {
-    const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
+    const ctx = await createApp({ auth: { PATTY_AUTH: AuthMode.enum.disabled } });
     expect((await ctx.app.inject({ method: 'GET', url: '/ui/login' })).statusCode).toBe(200); // the SPA shell
     expect((await ctx.app.inject({ method: 'POST', url: '/ui/login' })).statusCode).toBe(404);
     expect((await ctx.app.inject({ method: 'GET', url: '/ui' })).body).not.toContain('/ui/logout');
@@ -142,7 +142,7 @@ describe('logout control in the shell', () => {
     const cookie = await claimOwner(ctx);
     const res = await ctx.app.inject({ method: 'GET', url: '/ui', headers: { cookie } });
     expect(res.body).toContain('action="/ui/logout"');
-    expect(res.body).not.toContain('fintrack:auth-controls');
+    expect(res.body).not.toContain('patty:auth-controls');
   });
 });
 
@@ -214,22 +214,22 @@ describe('CSRF', () => {
   });
 
   it('expects PUBLIC_URL when set — and still accepts the loopback host it was reached on', async () => {
-    const publicUrl = 'https://fintrack.example.com';
+    const publicUrl = 'https://patty.example.com';
     const ctx = await createApp({ auth: { PUBLIC_URL: publicUrl } });
     const cookie = await claimOwner(ctx).catch(() => '');
     // claimOwner posts from the loopback origin, which stays valid alongside PUBLIC_URL.
     expect(cookie).not.toBe('');
-    expect((await unsafe(ctx, cookie, { origin: publicUrl, host: 'fintrack.example.com' })).statusCode).toBe(201);
+    expect((await unsafe(ctx, cookie, { origin: publicUrl, host: 'patty.example.com' })).statusCode).toBe(201);
     expect((await unsafe(ctx, cookie, { origin: LOOPBACK_ORIGIN })).statusCode).toBe(409);
     expect(
-      (await unsafe(ctx, cookie, { origin: 'https://evil.example', host: 'fintrack.example.com' })).statusCode,
+      (await unsafe(ctx, cookie, { origin: 'https://evil.example', host: 'patty.example.com' })).statusCode,
     ).toBe(403);
   });
 
   it('refuses unsafe cookie requests when no origin can be established (non-loopback Host)', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
-    const res = await unsafe(ctx, cookie, { host: 'fintrack.lan:51737', origin: 'http://fintrack.lan:51737' });
+    const res = await unsafe(ctx, cookie, { host: 'patty.lan:51737', origin: 'http://patty.lan:51737' });
     expect(res.statusCode).toBe(403);
     expect(res.json().error.hint).toContain('PUBLIC_URL');
   });

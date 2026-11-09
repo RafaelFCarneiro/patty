@@ -26,7 +26,7 @@ describe('MCP integration > get_status', () => {
 
   it('returns name, version, db ok, and locale', async () => {
     const status = (await callTool(client, { name: 'get_status' })) as Status;
-    expect(status.name).toBe('fintrack');
+    expect(status.name).toBe('patty');
     expect(status.version).toBe(pkg.version);
     expect(status.version.length).toBeGreaterThan(0);
     expect(status.db).toBe('ok');

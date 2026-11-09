@@ -12,8 +12,8 @@ export const McpTransport = z.enum(['stdio', 'http']);
 
 // Absolute default so the DB is always created in a stable, writable location
 // regardless of the cwd when spawned by an MCP client (e.g. Claude Desktop).
-const DATA_DIRECTORY = join(homedir(), '.fintrack');
-const DEFAULT_DB_PATH = join(DATA_DIRECTORY, 'fintrack.db');
+const DATA_DIRECTORY = join(homedir(), '.patty');
+const DEFAULT_DB_PATH = join(DATA_DIRECTORY, 'patty.db');
 
 const OS_LOCALE_VARIABLES = ['LC_ALL', 'LC_MESSAGES', 'LANG'] as const;
 
@@ -39,7 +39,7 @@ const NO_PROXY_HOPS = 0;
 /** Whether anything besides this machine can reach the instance: a non-loopback bind, or a reverse proxy
  *  configured in front of it (`PUBLIC_URL` names its external origin; `TRUST_PROXY` says to believe it). A
  *  proxy typically connects to a loopback bind, so `HOST` alone would call that instance private. Only used to
- *  refuse `FINTRACK_AUTH=disabled` on such an instance. */
+ *  refuse `PATTY_AUTH=disabled` on such an instance. */
 export const isExposed = (env: {
   HOST: string;
   PUBLIC_URL?: string;
@@ -59,7 +59,7 @@ const PublicUrl = z
   .string()
   .url()
   .refine((value) => /^https?:\/\//.test(value) && new URL(value).origin === value, {
-    message: 'PUBLIC_URL must be an http(s) origin with no path or trailing slash, e.g. https://fintrack.example.com',
+    message: 'PUBLIC_URL must be an http(s) origin with no path or trailing slash, e.g. https://patty.example.com',
   });
 
 // Fastify's `trustProxy`: `true`/`false`, a hop count, or a comma-separated list of trusted
@@ -76,30 +76,30 @@ const TrustProxy = z
 
 const Env = z
   .object({
-    // Unset: the demo's under FINTRACK_DEMO, so the demo never defaults to the real database.
+    // Unset: the demo's under PATTY_DEMO, so the demo never defaults to the real database.
     DB_PATH: z
       .string()
       .refine(isAbsolute, {
         message: `DB_PATH must be an absolute path — "~" is not expanded by Node. Use a full path, e.g. ${DEFAULT_DB_PATH}`,
       })
       .optional(),
-    FINTRACK_DB_KEY: EncryptionKey.optional(),
-    // File holding the key (e.g. a Docker secret at /run/secrets/fintrack_db_key) — keeps it out of
+    PATTY_DB_KEY: EncryptionKey.optional(),
+    // File holding the key (e.g. a Docker secret at /run/secrets/patty_db_key) — keeps it out of
     // `docker inspect`, unlike the env var (ADR-032).
-    FINTRACK_DB_KEY_FILE: z
+    PATTY_DB_KEY_FILE: z
       .string()
-      .refine(isAbsolute, { message: 'FINTRACK_DB_KEY_FILE must be an absolute path' })
+      .refine(isAbsolute, { message: 'PATTY_DB_KEY_FILE must be an absolute path' })
       .optional(),
-    FINTRACK_LOCALE: Locale.optional(),
+    PATTY_LOCALE: Locale.optional(),
     PORT: z.coerce.number().default(DEFAULT_PORT),
     // Loopback by default: a wildcard bind is an explicit opt-in (a container needs it; ADR-032).
     HOST: z.string().min(1).default(LOOPBACK_HOST),
     // `required` everywhere, loopback included; `disabled` is an explicit, loopback-only opt-out.
-    FINTRACK_AUTH: z.preprocess(unsetWhenEmpty, AuthMode.default(DEFAULT_AUTH_MODE)),
+    PATTY_AUTH: z.preprocess(unsetWhenEmpty, AuthMode.default(DEFAULT_AUTH_MODE)),
     // Which saved sign-in a stdio process uses, so two client configs on one machine can sign in as two users
     // (ADR-034 §2); and the headless alternative to the browser sign-in — a personal access token in the env.
-    FINTRACK_PROFILE: z.preprocess(unsetWhenEmpty, ProfileSchema.default(DEFAULT_PROFILE)),
-    FINTRACK_TOKEN: optionalEnv(z.string()),
+    PATTY_PROFILE: z.preprocess(unsetWhenEmpty, ProfileSchema.default(DEFAULT_PROFILE)),
+    PATTY_TOKEN: optionalEnv(z.string()),
     // External origin of this instance behind a reverse proxy — the CSRF expected origin, and https
     // turns on the cookie `Secure` flag. Optional in Phase 1 (OAuth makes it mandatory in Phase 3).
     PUBLIC_URL: optionalEnv(PublicUrl),
@@ -113,8 +113,8 @@ const Env = z
     // HTTP sidecar alongside stdio MCP (ADR-013 Decision 7) — on by default: the dashboard/REST
     // surface is a core feature, not an add-on. A bind failure is caught and non-fatal (stdio
     // keeps working regardless) — that's a resilience fallback, not the normal state. Set
-    // FINTRACK_HTTP=false to opt out and skip starting it entirely.
-    FINTRACK_HTTP: z
+    // PATTY_HTTP=false to opt out and skip starting it entirely.
+    PATTY_HTTP: z
       .string()
       .optional()
       .transform((v) => v !== 'false'),
@@ -123,28 +123,28 @@ const Env = z
     FIAT_RATE_STALE_HOURS: z.coerce.number().positive().default(24),
     CRYPTO_RATE_STALE_HOURS: z.coerce.number().positive().default(1),
   })
-  .refine((env) => !(env.FINTRACK_DB_KEY && env.FINTRACK_DB_KEY_FILE), {
-    path: ['FINTRACK_DB_KEY_FILE'],
-    message: 'FINTRACK_DB_KEY and FINTRACK_DB_KEY_FILE are both set — the key source is ambiguous; set only one',
+  .refine((env) => !(env.PATTY_DB_KEY && env.PATTY_DB_KEY_FILE), {
+    path: ['PATTY_DB_KEY_FILE'],
+    message: 'PATTY_DB_KEY and PATTY_DB_KEY_FILE are both set — the key source is ambiguous; set only one',
   })
-  .refine((env) => !(env.FINTRACK_DEMO && (env.FINTRACK_DB_KEY || env.FINTRACK_DB_KEY_FILE)), {
+  .refine((env) => !(env.PATTY_DEMO && (env.PATTY_DB_KEY || env.PATTY_DB_KEY_FILE)), {
     path: [DEMO_ENV_VAR],
-    message: `${DEMO_ENV_VAR} fixes the database key — do not also set FINTRACK_DB_KEY or FINTRACK_DB_KEY_FILE`,
+    message: `${DEMO_ENV_VAR} fixes the database key — do not also set PATTY_DB_KEY or PATTY_DB_KEY_FILE`,
   })
   .transform((env) => ({
     ...env,
-    DB_PATH: env.DB_PATH ?? (env.FINTRACK_DEMO ? DEMO_DB_PATH : DEFAULT_DB_PATH),
+    DB_PATH: env.DB_PATH ?? (env.PATTY_DEMO ? DEMO_DB_PATH : DEFAULT_DB_PATH),
     KEY_LOCK_PATH: DEFAULT_KEY_LOCK_PATH,
   }))
   .transform((env) =>
-    env.FINTRACK_DEMO ? { ...env, FINTRACK_DB_KEY: DEMO_DB_KEY, FINTRACK_AUTH: AuthMode.enum.disabled } : env,
+    env.PATTY_DEMO ? { ...env, PATTY_DB_KEY: DEMO_DB_KEY, PATTY_AUTH: AuthMode.enum.disabled } : env,
   )
-  .refine((env) => !(env.FINTRACK_AUTH === AuthMode.enum.disabled && isExposed(env)), {
-    path: ['FINTRACK_AUTH'],
+  .refine((env) => !(env.PATTY_AUTH === AuthMode.enum.disabled && isExposed(env)), {
+    path: ['PATTY_AUTH'],
     message:
-      'FINTRACK_AUTH=disabled is only allowed on a loopback HOST (127.0.0.0/8, ::1, localhost) with no PUBLIC_URL ' +
+      'PATTY_AUTH=disabled is only allowed on a loopback HOST (127.0.0.0/8, ::1, localhost) with no PUBLIC_URL ' +
       'or TRUST_PROXY — the API would be unauthenticated to everyone who can reach it (directly or through a ' +
-      'reverse proxy). Remove FINTRACK_AUTH (it defaults to required) or drop the exposure.',
+      'reverse proxy). Remove PATTY_AUTH (it defaults to required) or drop the exposure.',
   });
 
 export type Config = z.infer<typeof Env>;

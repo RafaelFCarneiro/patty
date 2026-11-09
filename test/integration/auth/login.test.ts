@@ -107,7 +107,7 @@ const grants = (ctx: AppContext) =>
     sql`SELECT status, profile, channel, client_name, client_version, hint_access, hint_duration FROM client_grants`,
   );
 
-describe('fintrack login', () => {
+describe('patty login', () => {
   it('prints the link and the code, waits for the approval, and saves the sign-in to the keychain', async () => {
     const r = await rig({ whenWaiting: approve({ access: 'write', duration: '7d' }) });
 
@@ -119,14 +119,14 @@ describe('fintrack login', () => {
     expect(code).toBe(linkCode);
     expect(r.out).toContain(LOGIN_MESSAGES.waiting);
     expect(r.out.at(-1)).toMatch(/^Signed in on profile "default" \(write\) until \d{4}-\d{2}-\d{2}T/);
-    expect(r.storeFor('default').saved()).toMatch(/^ftk_/);
+    expect(r.storeFor('default').saved()).toMatch(/^ptk_/);
     expect(r.waits).toEqual([GRANT_POLL_INTERVAL_MS]);
     expect(r.err).toEqual([]);
     expect(r.server.close).toHaveBeenCalledOnce();
     expect(r.shell.close).toHaveBeenCalledOnce();
   });
 
-  it('reports itself as `fintrack login` with this build’s version, over the cli channel', async () => {
+  it('reports itself as `patty login` with this build’s version, over the cli channel', async () => {
     const r = await rig({ whenWaiting: approve() });
     await runLogin([], r.io);
     expect(await grants(r.ctx)).toEqual([
@@ -134,7 +134,7 @@ describe('fintrack login', () => {
         status: 'redeemed',
         profile: 'default',
         channel: 'cli',
-        client_name: 'fintrack login',
+        client_name: 'patty login',
         client_version: '1.2.3',
         hint_access: null,
         hint_duration: null,
@@ -148,7 +148,7 @@ describe('fintrack login', () => {
     const saved = r.storeFor('default').saved()!;
     const printed = [...r.out, ...r.err].join('\n');
     expect(printed).not.toContain(saved);
-    expect(printed).not.toMatch(/ftk_/);
+    expect(printed).not.toMatch(/ptk_/);
     expect(printed).not.toMatch(/[A-Za-z0-9_-]{43}/);
   });
 
@@ -170,16 +170,16 @@ describe('fintrack login', () => {
     const exit = await runLogin(['--profile', 'work', '--duration', '30d', '--scope', 'write'], r.io);
 
     expect(exit).toBe(EXIT_OK);
-    expect(r.storeFor('work').saved()).toMatch(/^ftk_/);
+    expect(r.storeFor('work').saved()).toMatch(/^ptk_/);
     expect(r.storeFor('default').saved()).toBeNull();
     expect((await grants(r.ctx))[0]).toMatchObject({ profile: 'work', hint_access: 'write', hint_duration: '30d' });
     expect(r.out.at(-1)).toContain('profile "work"');
   });
 
-  it('uses FINTRACK_PROFILE (the shell’s default) when no --profile is given', async () => {
+  it('uses PATTY_PROFILE (the shell’s default) when no --profile is given', async () => {
     const r = await rig({ defaultProfile: 'laptop', whenWaiting: approve() });
     await runLogin([], r.io);
-    expect(r.storeFor('laptop').saved()).toMatch(/^ftk_/);
+    expect(r.storeFor('laptop').saved()).toMatch(/^ptk_/);
   });
 
   it('fails when the request is denied, saving nothing', async () => {
@@ -211,7 +211,7 @@ describe('fintrack login', () => {
     expect(r.shell.close).toHaveBeenCalledOnce();
   });
 
-  it('refuses under FINTRACK_AUTH=disabled, starting nothing', async () => {
+  it('refuses under PATTY_AUTH=disabled, starting nothing', async () => {
     const r = await rig({ authRequired: false });
     expect(await runLogin([], r.io)).toBe(EXIT_FAILURE);
     expect(r.err).toEqual([LOGIN_MESSAGES.authDisabled]);
@@ -272,7 +272,7 @@ describe('fintrack login', () => {
   });
 });
 
-describe('fintrack logout', () => {
+describe('patty logout', () => {
   const signedInRig = async () => {
     const r = await rig({ whenWaiting: approve({ access: 'write' }) });
     await runLogin([], r.io);
@@ -315,7 +315,7 @@ describe('fintrack logout', () => {
     expect(await runLogout(['--profile', 'work'], r.io)).toBe(EXIT_OK);
 
     expect(r.storeFor('work').saved()).toBeNull();
-    expect(r.storeFor('default').saved()).toMatch(/^ftk_/);
+    expect(r.storeFor('default').saved()).toMatch(/^ptk_/);
     expect(
       await r.ctx.db.all(sql`SELECT profile, revoked_at IS NOT NULL AS revoked FROM access_tokens ORDER BY profile`),
     ).toEqual([
@@ -334,7 +334,7 @@ describe('fintrack logout', () => {
   it('does not delete a newer sign-in another process saved while it was revoking', async () => {
     const r = await signedInRig();
     const store = r.storeFor('default');
-    const newer = 'ftk_saved-by-another-process';
+    const newer = 'ptk_saved-by-another-process';
     const load = store.load.bind(store);
     let loads = 0;
     store.load = () =>
@@ -360,7 +360,7 @@ describe('fintrack logout', () => {
     expect(await runLogout([], r.io)).toBe(EXIT_FAILURE);
 
     expect(r.out).toEqual([]);
-    expect(r.err).toEqual([`fintrack: ${LOGIN_MESSAGES.keychainUnavailable}`]);
+    expect(r.err).toEqual([`patty: ${LOGIN_MESSAGES.keychainUnavailable}`]);
     expect(await r.ctx.db.all(sql`SELECT revoked_at IS NOT NULL AS revoked FROM access_tokens`)).toEqual([
       { revoked: 0 },
     ]);
@@ -405,13 +405,13 @@ describe('setup’s optional sign-in step', () => {
     await offerSignIn(r.io, 'default');
     expect(t.asked).toEqual([LOGIN_MESSAGES.offer]);
     expect(t.closed).toHaveBeenCalledOnce();
-    expect(r.storeFor('default').saved()).toMatch(/^ftk_/);
+    expect(r.storeFor('default').saved()).toMatch(/^ptk_/);
   });
 
   it('signs in as the client’s profile', async () => {
     const r = await rig({ terminal: terminalAnswering('y').terminal, whenWaiting: approve() });
     await offerSignIn(r.io, 'work');
-    expect(r.storeFor('work').saved()).toMatch(/^ftk_/);
+    expect(r.storeFor('work').saved()).toMatch(/^ptk_/);
     expect(r.storeFor('default').saved()).toBeNull();
   });
 
@@ -458,19 +458,19 @@ describe('setup’s optional sign-in step', () => {
   });
 });
 
-describe('startSignInServer — where `fintrack login` sends the browser', () => {
+describe('startSignInServer — where `patty login` sends the browser', () => {
   const configFor = async (port: number) => {
-    const env = { ...process.env, DB_PATH: '/tmp/fintrack-never-opened.db', FINTRACK_DB_KEY: 'c'.repeat(64) };
+    const env = { ...process.env, DB_PATH: '/tmp/patty-never-opened.db', PATTY_DB_KEY: 'c'.repeat(64) };
     return {
       ...loadConfig(env),
       HOST: '127.0.0.1',
       PORT: port,
       PUBLIC_URL: undefined,
-      FINTRACK_AUTH: 'required' as const,
+      PATTY_AUTH: 'required' as const,
     };
   };
 
-  it('does not reuse a FinTrack already running on HOST:PORT — it may have opened another database', async () => {
+  it('does not reuse a PATTY already running on HOST:PORT — it may have opened another database', async () => {
     const running = await createApp();
     await running.app.listen({ port: 0, host: '127.0.0.1' });
     const port = (running.app.server.address() as AddressInfo).port;

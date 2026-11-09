@@ -488,7 +488,7 @@
 <header>
             <div class="header-title-area">
                 <h1><i class="fa-solid fa-folder-open"></i> Gerenciamento de Dashboards</h1>
-                <p>Monitore, visualize ou envie novos layouts de dashboards para a plataforma FinTrack</p>
+                <p>Monitore, visualize ou envie novos layouts de dashboards para a plataforma PATTY</p>
             </div>
         </header>
 
@@ -826,7 +826,7 @@
         loadDashboards();
 
 // ADR-027 Live-update listener
-window.fintrackOnDataChanged = function(entities) {
+window.onAppDataChanged = function(entities) {
     var affected = entities.some(function(tag) {
         return ['dashboard'].indexOf(tag) !== -1;
     });

@@ -654,7 +654,7 @@ header, .dashboard-header {
     color: var(--text-muted);
 }
 
-/* --- Connect a client (ADR-034): /ui/connect, the consent page for a stdio / `fintrack login` sign-in --- */
+/* --- Connect a client (ADR-034): /ui/connect, the consent page for a stdio / `patty login` sign-in --- */
 .connect-facts {
     display: grid;
     grid-template-columns: max-content 1fr;

@@ -4,7 +4,7 @@ import type { Principal } from './principal.js';
 import type { TokenAccess } from './token.js';
 
 /**
- * The sign-in protocol, as data (ADR-034): where a stdio session or a `fintrack login` stands (`SignInState`), what it
+ * The sign-in protocol, as data (ADR-034): where a stdio session or a `patty login` stands (`SignInState`), what it
  * has just learned (`SignInObservation`) and what the shell is asked to do about it (`SignInEffect`). The decisions are
  * `logic/auth/sign-in-flow.ts`'s `nextStep`; `src/composition/sign-in/interpreter.ts` only executes effects and reports
  * what happened.
@@ -39,11 +39,11 @@ export type SignInConfig = {
   channel: GrantChannel;
   profile: string;
   client: ClientInfo;
-  /** `false` under an explicit `FINTRACK_AUTH=disabled`: stdio acts as the owner, so there is nothing to sign in to. */
+  /** `false` under an explicit `PATTY_AUTH=disabled`: stdio acts as the owner, so there is nothing to sign in to. */
   authRequired: boolean;
-  /** `FINTRACK_TOKEN`, when the stdio process has one. */
+  /** `PATTY_TOKEN`, when the stdio process has one. */
   envToken?: string | undefined;
-  /** What `fintrack login --scope/--duration` would like pre-selected on the consent page. */
+  /** What `patty login --scope/--duration` would like pre-selected on the consent page. */
   hint?: { access?: TokenAccess | undefined; duration?: SignInDuration | undefined } | undefined;
 };
 
@@ -113,7 +113,7 @@ export type SignInObservation =
   | { kind: typeof ObservationKind.enum.ticked }
   | { kind: typeof ObservationKind.enum.login_requested }
   | { kind: typeof ObservationKind.enum.logout_requested }
-  /** Ctrl-C at `fintrack login`. */
+  /** Ctrl-C at `patty login`. */
   | { kind: typeof ObservationKind.enum.interrupted }
   /** The stdio process is shutting down. */
   | { kind: typeof ObservationKind.enum.closed }
@@ -209,7 +209,7 @@ export const PresentationKind = z.enum([
   'invalid_env_token',
   'cannot_verify',
   'instructions',
-  // `fintrack login` / `logout`.
+  // `patty login` / `logout`.
   'auth_disabled',
   'owner_unclaimed',
   'open',

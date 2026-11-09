@@ -133,7 +133,7 @@ npx @rafaelfcarneiro/fintrack@latest demo [--country br|us|mx|co] [--reset]
 
 An MCP prompt `tour` (no arguments: it reads the demo's country and language from the database), alongside `monthly_review`/`budget_checkup`/`import_statement` (Feature
 Design 019 chose MCP prompts over Claude skills for portability — Claude, Copilot and others all list
-prompts). A thin `skills/fintrack-tour/SKILL.md` points Claude users at the same steps. The steps, in the
+prompts). A thin `skills/patty-tour/SKILL.md` points Claude users at the same steps. The steps, in the
 demo's language:
 
 1. "What are my balances?" — accounts, cards, the converted total.
@@ -216,7 +216,7 @@ Implement this design in phases, one branch each, behind the full gate.
 3. **`feat/demo-command`** — `fintrack demo [--country] [--reset]`, `DEMO_DB_PATH`, `DEMO_PORT`, `DEMO_DB_KEY`,
    auth disabled; `setup <client> --demo` / `--remove-demo`. Safety tests.
 4. **`feat/demo-tour`** — the `tour` MCP prompt with the six steps and a sample statement per country;
-   `skills/fintrack-tour/SKILL.md`; README "Try the demo"; `docs/demo.md`.
+   `skills/patty-tour/SKILL.md`; README "Try the demo"; `docs/demo.md`.
 
 Constraints throughout: no demo-only write path (the seeder calls the real flows); no change to real-install
 defaults (auth required, keychain key, port 51737); the demo never reads or writes the real `DB_PATH`.

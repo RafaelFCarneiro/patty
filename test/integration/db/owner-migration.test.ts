@@ -39,7 +39,7 @@ const journalBeforeAuth = (folder: string): void => {
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
 
-const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
+const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: TEST_KEY });
 
 /** Bootstrap as the pre-auth release did: its migrations, then its seed (bootstrap() seeds for the current schema). */
 const legacyBootstrap = async (db: Db, migrationsFolder: string): Promise<void> => {
@@ -48,8 +48,8 @@ const legacyBootstrap = async (db: Db, migrationsFolder: string): Promise<void> 
 };
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-owner-migration-'));
-  dbPath = join(tmpDir, 'fintrack.db');
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-owner-migration-'));
+  dbPath = join(tmpDir, 'patty.db');
   preAuthFolder = join(tmpDir, 'pre-auth-migrations');
   cpSync(REAL_MIGRATIONS_FOLDER, preAuthFolder, { recursive: true });
   journalBeforeAuth(preAuthFolder);
@@ -158,7 +158,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     const restored = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: backup,
-      FINTRACK_DB_KEY: TEST_KEY,
+      PATTY_DB_KEY: TEST_KEY,
     });
     expect(await restored.all(sql`SELECT name FROM sqlite_master WHERE name = 'users'`)).toEqual([]);
     expect(await domainDump(restored)).toEqual(beforeDump);
@@ -178,7 +178,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     const restored = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: backupPath(dbPath, AUTH_MIGRATION_TAG),
-      FINTRACK_DB_KEY: TEST_KEY,
+      PATTY_DB_KEY: TEST_KEY,
     });
     const ids = await restored.all<{ id: string }>(sql`SELECT id FROM accounts ORDER BY id`);
     expect(ids.map(({ id }) => id)).toEqual(['acc-1', 'acc-2', 'acc-late']);
@@ -244,11 +244,11 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     const restored = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: alone,
-      FINTRACK_DB_KEY: TEST_KEY,
+      PATTY_DB_KEY: TEST_KEY,
     });
     expect((await restored.all(sql`SELECT 1 FROM accounts`)).length).toBe(2);
     await expect(
-      openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: alone, FINTRACK_DB_KEY: 'f'.repeat(64) }).then(
+      openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: alone, PATTY_DB_KEY: 'f'.repeat(64) }).then(
         (db) => db.all(sql`SELECT 1 FROM accounts`),
       ),
     ).rejects.toThrow();
@@ -312,7 +312,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     // must be indistinguishable. A drizzle or @libsql/client bump has to keep it green (docs/releasing.md).
     describe("parity with drizzle-orm/libsql's own migrator", () => {
       const openAt = (path: string) =>
-        openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: path, FINTRACK_DB_KEY: TEST_KEY });
+        openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: path, PATTY_DB_KEY: TEST_KEY });
 
       /** A pre-auth database with the fixture data, at `path`. */
       const preAuthDatabase = async (path: string): Promise<Db> => {
@@ -452,7 +452,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
       await expect(
         applyPendingMigrationsHolding(legacy, REAL_MIGRATIONS_FOLDER, async () => undefined),
-      ).rejects.toThrow(/another FinTrack process is writing/);
+      ).rejects.toThrow(/another PATTY process is writing/);
 
       await writing.rollback();
       expect(await legacy.all(sql`SELECT name FROM sqlite_master WHERE name = 'users'`)).toEqual([]);
@@ -494,7 +494,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     const restored = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: backupPath(dbPath, AUTH_MIGRATION_TAG),
-      FINTRACK_DB_KEY: TEST_KEY,
+      PATTY_DB_KEY: TEST_KEY,
     });
     expect(await restored.all(sql`SELECT name FROM sqlite_master WHERE name = 'users'`)).toEqual([]);
     expect(await domainDump(restored)).toEqual(beforeDump);

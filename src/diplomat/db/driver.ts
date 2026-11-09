@@ -32,11 +32,11 @@ export const BUSY_TIMEOUT_MS = 5000;
 export const assertBusyTimeout = (client: ReturnType<typeof createClient>): Promise<unknown> =>
   client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
 
-type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY' | 'FINTRACK_DB_KEY_FILE' | 'KEY_LOCK_PATH'>;
+type DbConfig = Pick<Config, 'DB_PATH' | 'PATTY_DB_KEY' | 'PATTY_DB_KEY_FILE' | 'KEY_LOCK_PATH'>;
 
 const KEY_GENERATION_HINT =
-  'Generate one with `openssl rand -hex 32` and provide it via FINTRACK_DB_KEY_FILE ' +
-  '(e.g. a Docker secret mounted at /run/secrets/fintrack_db_key) or the FINTRACK_DB_KEY environment variable.';
+  'Generate one with `openssl rand -hex 32` and provide it via PATTY_DB_KEY_FILE ' +
+  '(e.g. a Docker secret mounted at /run/secrets/patty_db_key) or the PATTY_DB_KEY environment variable.';
 
 const readKeyFile = (path: string): string => {
   let contents: string;
@@ -44,14 +44,14 @@ const readKeyFile = (path: string): string => {
     contents = readFileSync(path, 'utf8');
   } catch (cause) {
     throw new Error(
-      `fintrack: cannot read the encryption key file FINTRACK_DB_KEY_FILE (${path}). ${KEY_GENERATION_HINT}`,
+      `patty: cannot read the encryption key file PATTY_DB_KEY_FILE (${path}). ${KEY_GENERATION_HINT}`,
       { cause },
     );
   }
   const parsed = EncryptionKey.safeParse(contents.trim());
   if (!parsed.success) {
     throw new Error(
-      `fintrack: FINTRACK_DB_KEY_FILE (${path}) must contain a 64-character hex key (a trailing newline is fine). ${KEY_GENERATION_HINT}`,
+      `patty: PATTY_DB_KEY_FILE (${path}) must contain a 64-character hex key (a trailing newline is fine). ${KEY_GENERATION_HINT}`,
     );
   }
   return parsed.data;
@@ -67,7 +67,7 @@ const validateStoredKey = (stored: string): string => {
   const parsed = EncryptionKey.safeParse(stored);
   if (!parsed.success) {
     throw new Error(
-      'fintrack: the encryption key stored in the OS keychain is not a 64-character hex key. ' +
+      'patty: the encryption key stored in the OS keychain is not a 64-character hex key. ' +
         `Remove the "${KEYCHAIN_SERVICE}" / "${DB_KEY_KEYCHAIN_ACCOUNT}" keychain entry (this loses access to an existing database ` +
         `encrypted with it), or supply the correct key. ${KEY_GENERATION_HINT}`,
     );
@@ -87,7 +87,7 @@ const inKeychain = async <T>(work: () => T | Promise<T>): Promise<T> => {
     return await work();
   } catch (cause) {
     throw new Error(
-      `fintrack: cannot read or write the database encryption key in the OS keychain, and no key source was configured. ${KEY_GENERATION_HINT}`,
+      `patty: cannot read or write the database encryption key in the OS keychain, and no key source was configured. ${KEY_GENERATION_HINT}`,
       { cause },
     );
   }
@@ -114,15 +114,15 @@ const resolveKeychainKey = async (keyLockPath: string): Promise<string> => {
 };
 
 const configuredKey = (config: DbConfig): string | null => {
-  if (config.FINTRACK_DB_KEY_FILE) {
-    console.warn('fintrack: using the encryption key from FINTRACK_DB_KEY_FILE; OS keychain bypassed.');
-    return readKeyFile(config.FINTRACK_DB_KEY_FILE);
+  if (config.PATTY_DB_KEY_FILE) {
+    console.warn('patty: using the encryption key from PATTY_DB_KEY_FILE; OS keychain bypassed.');
+    return readKeyFile(config.PATTY_DB_KEY_FILE);
   }
   // Env-var override: CI, headless, or manual recovery (ADR-005). We log that we are in
   // env-var mode (never the key value itself) so the weaker posture is visible.
-  if (config.FINTRACK_DB_KEY) {
-    console.warn('fintrack: using FINTRACK_DB_KEY from the environment; OS keychain bypassed.');
-    return config.FINTRACK_DB_KEY;
+  if (config.PATTY_DB_KEY) {
+    console.warn('patty: using PATTY_DB_KEY from the environment; OS keychain bypassed.');
+    return config.PATTY_DB_KEY;
   }
   return null;
 };
@@ -163,7 +163,7 @@ export const enableWal = async (client: ReturnType<typeof createClient>): Promis
     const appliedMode = result.rows[0]?.journal_mode;
     if (typeof appliedMode !== 'string' || appliedMode.toUpperCase() !== JOURNAL_MODE_WAL) {
       console.warn(
-        `fintrack: WAL journal mode was not applied (sqlite reports "${String(appliedMode)}"); ` +
+        `patty: WAL journal mode was not applied (sqlite reports "${String(appliedMode)}"); ` +
           'continuing with busy_timeout + retry only.',
       );
     }
@@ -171,13 +171,13 @@ export const enableWal = async (client: ReturnType<typeof createClient>): Promis
     // Not necessarily a WAL-support gap — could equally be a wrong key or a corrupt file, both of
     // which still surface their own real error on the next query. Worded neutrally rather than
     // diagnosing a cause this catch can't actually distinguish.
-    console.warn('fintrack: could not enable WAL journal mode; continuing with busy_timeout + retry only.', cause);
+    console.warn('patty: could not enable WAL journal mode; continuing with busy_timeout + retry only.', cause);
   }
 };
 
 /**
  * Open the encrypted libSQL database and return a Drizzle client.
- * The encryption key comes from FINTRACK_DB_KEY_FILE, FINTRACK_DB_KEY or the OS keychain (generated
+ * The encryption key comes from PATTY_DB_KEY_FILE, PATTY_DB_KEY or the OS keychain (generated
  * on first run); throws if none is available so the DB is never opened unencrypted.
  */
 export const openDatabase = async (config: DbConfig): Promise<Db> =>

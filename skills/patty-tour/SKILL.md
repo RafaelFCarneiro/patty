@@ -1,11 +1,11 @@
 ---
-name: fintrack-tour
-description: Use when the user wants a tour or walkthrough of the FinTrack demo, asks "show me what FinTrack can do", or is trying the demo (the `fintrack-demo` MCP server). Runs the six-step tour on the demo's sample data; on a real FinTrack it only explains how to start the demo.
+name: patty-tour
+description: Use when the user wants a tour or walkthrough of the PATTY demo, asks "show me what PATTY can do", or is trying the demo (the `patty-demo` MCP server). Runs the six-step tour on the demo's sample data; on a real PATTY it only explains how to start the demo.
 ---
 
-# Touring the FinTrack demo
+# Touring the PATTY demo
 
-The same tour is available as the `tour` MCP prompt on the `fintrack-demo` server (Feature Design 022 §6); this
+The same tour is available as the `tour` MCP prompt on the `patty-demo` server (Feature Design 022 §6); this
 skill is for Claude clients that prefer skills. Do the steps in order, one at a time: run the tools, say what you
 found in a few sentences, and wait for the person before the next step. Answer in the demo's language, and group
 every figure by currency — never sum across currencies.
@@ -14,8 +14,8 @@ every figure by currency — never sum across currencies.
 
 Call `get_status`. If it does not report `demo: true`, **stop**: this server holds real data and the tour would
 write sample rows into it. Tell the person to start the demo with
-`npx @rafaelfcarneiro/fintrack@latest demo` and add it to their client with
-`npx @rafaelfcarneiro/fintrack@latest setup <client> --demo`, then use the `fintrack-demo` server.
+`npx @rfc0/patty@latest demo` and add it to their client with
+`npx @rfc0/patty@latest setup <client> --demo`, then use the `patty-demo` server.
 
 ## The six steps
 
@@ -30,5 +30,5 @@ write sample rows into it. Tell the person to start the demo with
    and descriptions (the destination the `tour` prompt names), create the tag with
    `create_tag`, tag the purchases, then build the dashboard (see the `dashboard-building` skill) and save it with
    `save_dashboard`.
-6. **"Ready for your own data?"** — explain how to install FinTrack for real, that the demo is sample data, and how
-   to remove the demo from the client: `npx @rafaelfcarneiro/fintrack@latest setup <client> --remove-demo`.
+6. **"Ready for your own data?"** — explain how to install PATTY for real, that the demo is sample data, and how
+   to remove the demo from the client: `npx @rfc0/patty@latest setup <client> --remove-demo`.

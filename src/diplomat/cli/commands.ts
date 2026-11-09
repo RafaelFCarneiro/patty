@@ -24,9 +24,9 @@ Commands:
   users <command>  Manage who can sign in: list, invite, reissue, disable, enable, role
   key <command>    Move the database key between installs (export --to <file>, import --from <file>)
   db <command>     Move an encrypted snapshot of the database between installs (export --to, import --from)
-  demo             Try FinTrack on throwaway sample data, on its own port (--country, --reset)
+  demo             Try PATTY on throwaway sample data, on its own port (--country, --reset)
 
-The setup, auth, users, key and db commands print their own help when run with no arguments. With no command at all, FinTrack runs as an MCP server (stdio).
+The setup, auth, users, key and db commands print their own help when run with no arguments. With no command at all, PATTY runs as an MCP server (stdio).
 `.trimStart();
 
 type CommandRunner = (rest: readonly string[], io: CliIo) => Promise<number>;

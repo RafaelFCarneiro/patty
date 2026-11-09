@@ -1,7 +1,7 @@
 export const BEARER_SCHEME = 'Bearer';
 export const BEARER_HEADER = new RegExp(`^${BEARER_SCHEME}[ \\t]+(\\S+)$`, 'i');
 
-export const RESOURCE_NAME = 'FinTrack';
+export const RESOURCE_NAME = 'PATTY';
 export const BEARER_METHOD_HEADER = 'header';
 
 /** The HTTP surfaces a bearer token is accepted on. `/ui` is a browser surface and stays session-only. */

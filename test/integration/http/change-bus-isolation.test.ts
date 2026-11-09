@@ -9,7 +9,7 @@ let ctx: AppContext;
 const reported: unknown[] = [];
 
 beforeAll(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-bus-isolation-test-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-bus-isolation-test-'));
   ctx = await buildApp({ dbPath: join(tmpDir, 'test.db'), onChangeError: (cause) => reported.push(cause) });
   await ctx.app.ready();
 });

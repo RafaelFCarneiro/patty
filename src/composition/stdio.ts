@@ -15,7 +15,7 @@ import type { Runtime } from './runtime.js';
 import { loadHttpModule } from './lazy-modules.js';
 
 const maybeStartSidecar = async (config: Config, runtime: Runtime, auth: HttpAuth): Promise<HttpSidecar | null> => {
-  if (!config.FINTRACK_HTTP) return null;
+  if (!config.PATTY_HTTP) return null;
   const { startHttpSidecar } = await loadHttpModule();
   return startHttpSidecar(runtime, version, config.PORT, config.HOST, { auth, trustProxy: config.TRUST_PROXY });
 };
@@ -25,7 +25,7 @@ const signInLink = (config: Config) => {
   return {
     origin: (): string | null =>
       signInOrigin({
-        httpEnabled: config.FINTRACK_HTTP,
+        httpEnabled: config.PATTY_HTTP,
         publicUrl: config.PUBLIC_URL,
         boundOrigin,
         host: config.HOST,
@@ -40,8 +40,8 @@ const stdioAuthFor = (config: Config, stdio: PreparedAuth['stdio'], linkOrigin: 
   stdio
     ? {
         mode: AuthMode.enum.required,
-        profile: config.FINTRACK_PROFILE,
-        envToken: config.FINTRACK_TOKEN,
+        profile: config.PATTY_PROFILE,
+        envToken: config.PATTY_TOKEN,
         signIn: (profile) => stdio.signIn(profile, linkOrigin),
       }
     : { mode: AuthMode.enum.disabled };

@@ -26,9 +26,9 @@ export type Shell = {
   deps: AuthDeps;
   run: RunEffects;
   close: () => void;
-  /** `false` under an explicit `FINTRACK_AUTH=disabled`: stdio acts as the owner, so there is nothing to sign in to. */
+  /** `false` under an explicit `PATTY_AUTH=disabled`: stdio acts as the owner, so there is nothing to sign in to. */
   authRequired: boolean;
-  /** `FINTRACK_PROFILE` — the profile `login`/`logout` act on unless `--profile` says otherwise. */
+  /** `PATTY_PROFILE` — the profile `login`/`logout` act on unless `--profile` says otherwise. */
   defaultProfile: string;
   /** The origin an invite link names: `PUBLIC_URL`. Null without one: the terminal prints the code and the page path,
    *  never a secret-bearing link to an address it cannot show serves this database. */

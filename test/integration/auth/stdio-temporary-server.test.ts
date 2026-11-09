@@ -67,7 +67,7 @@ describe('StdioSession — a sidecar that is not serving a link of its own', () 
 
     expect(temporary.counts).toEqual({ started: 1, closed: 0 });
     expect(message).toBe(
-      `FinTrack: not signed in. Open ${origin}/ui/connect?code=${code} and confirm the code ${code}.`,
+      `PATTY: not signed in. Open ${origin}/ui/connect?code=${code} and confirm the code ${code}.`,
     );
     expect(await answerAt(origin, code, { decision: 'approve', access: 'write' })).toBe(200);
     const signedIn = await session.resolve();
@@ -180,12 +180,12 @@ describe('StdioSession — when no temporary server is wanted', () => {
     expect(temporary.counts.started).toBe(0);
   });
 
-  it('starts none under FINTRACK_TOKEN, valid or not', async () => {
+  it('starts none under PATTY_TOKEN, valid or not', async () => {
     const ctx = await createApp();
     await claimOwner(ctx);
     const temporary = countedTemporaryServer(ctx);
     const { session } = stdioSessionFor(ctx, {
-      envToken: 'ftk_not-a-real-token',
+      envToken: 'ptk_not-a-real-token',
       origin: null,
       temporaryServer: temporary.start,
     });
@@ -204,7 +204,7 @@ describe('StdioSession — when no temporary server is wanted', () => {
     await session.close();
   });
 
-  it('starts none when HTTP is off (no temporaryServer): the message points to login / FINTRACK_TOKEN', async () => {
+  it('starts none when HTTP is off (no temporaryServer): the message points to login / PATTY_TOKEN', async () => {
     const ctx = await createApp();
     await claimOwner(ctx);
     const { session } = stdioSessionFor(ctx, { origin: null, store: memoryStore() });

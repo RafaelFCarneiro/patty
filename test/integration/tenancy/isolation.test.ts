@@ -506,14 +506,14 @@ const ROUTE_CASES: Record<string, RouteCase | RouteCase[]> = {
 };
 
 const RESOURCE_CASES: Record<string, { contains: string[]; omits: string[] }> = {
-  'fintrack://accounts': { contains: ['ZZ-B Checking'], omits: ['ZZ-A'] },
-  'fintrack://categories': { contains: [FOOD_FOR_B, 'ZZ-B Pets'], omits: ['ZZ-A'] },
-  'fintrack://tags': { contains: ['zz-b-tag'], omits: ['zz-a-'] },
-  'fintrack://credit-cards': { contains: ['ZZ-B Visa'], omits: ['ZZ-A'] },
-  'fintrack://merchants/top': { contains: [], omits: ['ZZ-A', 'zzashop'] },
-  'fintrack://currencies': { contains: ['USD'], omits: ['ZZ-A'] },
-  'fintrack://exchange-rates': { contains: [], omits: ['ZZ-A'] },
-  'fintrack://openapi': { contains: ['/api/accounts'], omits: ['ZZ-A'] },
+  'patty://accounts': { contains: ['ZZ-B Checking'], omits: ['ZZ-A'] },
+  'patty://categories': { contains: [FOOD_FOR_B, 'ZZ-B Pets'], omits: ['ZZ-A'] },
+  'patty://tags': { contains: ['zz-b-tag'], omits: ['zz-a-'] },
+  'patty://credit-cards': { contains: ['ZZ-B Visa'], omits: ['ZZ-A'] },
+  'patty://merchants/top': { contains: [], omits: ['ZZ-A', 'zzashop'] },
+  'patty://currencies': { contains: ['USD'], omits: ['ZZ-A'] },
+  'patty://exchange-rates': { contains: [], omits: ['ZZ-A'] },
+  'patty://openapi': { contains: ['/api/accounts'], omits: ['ZZ-A'] },
 };
 
 /**
@@ -535,7 +535,7 @@ describe.each(SETUPS)('%s', (_setup, seed) => {
 
   /** A fresh app and database holding the two users' worlds. */
   const startHarness = async (): Promise<Harness> => {
-    const dir = mkdtempSync(join(tmpdir(), 'fintrack-isolation-'));
+    const dir = mkdtempSync(join(tmpdir(), 'patty-isolation-'));
     const app = await buildApp({ dbPath: join(dir, 'test.db'), auth: {} });
     await app.app.ready();
     return { ctx: app, ...(await seed(app)), dir };

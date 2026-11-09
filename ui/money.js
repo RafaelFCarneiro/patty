@@ -5,7 +5,7 @@
 // would flatten BTC's precision exactly like the gotcha this file exists to avoid. So the ISO check
 // below is explicit (Intl.supportedValuesOf('currency')) rather than try/catch — a currency missing
 // from that list falls back to its own symbol + decimals from /api/currencies metadata (cached on
-// window.__fintrackCurrencies, populated once at shell boot — see app.js).
+// window.__appCurrencies, populated once at shell boot — see app.js).
 (function () {
   'use strict';
 
@@ -33,7 +33,7 @@
   }
 
   function metaFor(code) {
-    var meta = window.__fintrackCurrencies;
+    var meta = window.__appCurrencies;
     return (meta && meta[code]) || null;
   }
 

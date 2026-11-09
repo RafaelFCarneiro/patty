@@ -52,7 +52,7 @@
     "should_trigger": false
   },
   {
-    "query": "how do I connect FinTrack to Claude Desktop, I keep getting a connection error",
+    "query": "how do I connect PATTY to Claude Desktop, I keep getting a connection error",
     "should_trigger": false
   },
   { "query": "what does the aggregate_spending tool return when I group by month", "should_trigger": false },

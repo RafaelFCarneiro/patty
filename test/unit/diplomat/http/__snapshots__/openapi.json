@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "FinTrack API",
+    "title": "PATTY API",
     "version": "0.0.0-test",
-    "description": "REST contract for the FinTrack HTTP API (ADR-013). MCP (POST /mcp) is the primary surface; this document exists so agent-generated dashboards can call /api with correct request/response shapes."
+    "description": "REST contract for the PATTY HTTP API (ADR-013). MCP (POST /mcp) is the primary surface; this document exists so agent-generated dashboards can call /api with correct request/response shapes."
   },
   "components": {
     "schemas": {},
@@ -66,7 +66,7 @@
                     "name": {
                       "type": "string",
                       "enum": [
-                        "fintrack"
+                        "patty"
                       ]
                     },
                     "version": {

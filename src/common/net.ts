@@ -55,8 +55,8 @@ export const isPortInUse = (e: unknown): e is { code: string; port: number; addr
 /** Fatal (pure http) EADDRINUSE message: the retry command plus the URL the client should use. The
  *  error's own bind `address` names the host actually bound; absent, the default loopback applies. */
 export const portInUseMessage = ({ port, address }: { port: number; address?: string }): string =>
-  `fintrack: ${portInUseReason(port)}.\n` +
-  `Set a different port and retry, e.g. PORT=${port + 1} fintrack\n` +
+  `patty: ${portInUseReason(port)}.\n` +
+  `Set a different port and retry, e.g. PORT=${port + 1} patty\n` +
   `Then point your MCP client at ${httpOrigin(address ?? LOOPBACK_HOST, port + 1)}/mcp`;
 
 /** Shared wording for both the fatal (pure http) and non-fatal (sidecar) EADDRINUSE messages. */

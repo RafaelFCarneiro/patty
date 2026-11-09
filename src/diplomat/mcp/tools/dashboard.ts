@@ -14,7 +14,7 @@ const saveDashboardDescription =
   'Upsert semantics — saving to an existing name replaces it immediately, no rebuild or restart ' +
   'needed. CRITICAL: the fragment must NEVER embed financial data, secrets, or tokens inline — ' +
   'render layout/styling only and fetch data client-side from the documented /api endpoints (read ' +
-  'the fintrack://openapi resource for the contract) on load, so the dashboard is always live and ' +
+  'the patty://openapi resource for the contract) on load, so the dashboard is always live and ' +
   'safe to share. Rejected (validation error) if the content is empty, still carries a full ' +
   '<!doctype>/<html> document root, an external <script src> reference (the shell already loads ' +
   'Chart.js once — a fragment carries zero external references of its own), or an inline <script> ' +

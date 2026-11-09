@@ -73,7 +73,7 @@ describe('registerDefinitions', () => {
     await registry(server)._registeredTools.get_status!.handler({ n: 4 }, extra);
 
     expect(handle).toHaveBeenCalledWith({ n: 4 }, scoped, ctx);
-    expect(Object.fromEntries(toolScopesOf(server))).toEqual({ get_status: 'fintrack:read' });
+    expect(Object.fromEntries(toolScopesOf(server))).toEqual({ get_status: 'patty:read' });
   });
 
   it('takes a tool’s scope from its declared annotation', () => {
@@ -84,7 +84,7 @@ describe('registerDefinitions', () => {
     });
     const server = guardedServer();
     registerDefinitions(server, ctx, { prompts: [], resources: [], tools: [writer] });
-    expect(toolScopesOf(server).get('create_tag')).toBe('fintrack:write');
+    expect(toolScopesOf(server).get('create_tag')).toBe('patty:write');
   });
 
   it('registers a prompt and a resource the same way', async () => {
@@ -97,7 +97,7 @@ describe('registerDefinitions', () => {
     const read = vi.fn(async () => ({ contents: [] }));
     const resource = {
       name: 'r',
-      uri: 'fintrack://r',
+      uri: 'patty://r',
       config: { title: 't', description: 'd', mimeType: 'x/y' },
       read,
     };
@@ -105,10 +105,10 @@ describe('registerDefinitions', () => {
     registerDefinitions(server, ctx, { prompts: [prompt], resources: [resource], tools: [] });
 
     await registry(server)._registeredPrompts.import_statement!.callback({}, extra);
-    await registry(server)._registeredResources['fintrack://r']!.readCallback(new URL('fintrack://r'), extra);
+    await registry(server)._registeredResources['patty://r']!.readCallback(new URL('patty://r'), extra);
 
     expect(handle).toHaveBeenCalledWith({}, scoped, ctx);
-    expect(read).toHaveBeenCalledWith(new URL('fintrack://r'), scoped, ctx);
+    expect(read).toHaveBeenCalledWith(new URL('patty://r'), scoped, ctx);
   });
 
   it('registers a prompt without argsSchema so its callback receives only the request extra', async () => {

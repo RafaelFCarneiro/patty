@@ -1,11 +1,11 @@
 {
-  "name": "@rafaelfcarneiro/fintrack",
+  "name": "@rfc0/patty",
   "version": "0.0.0-development",
   "description": "AI-first personal finance manager — MCP server (local-first, encrypted libSQL).",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "fintrack": "dist/main.js"
+    "patty": "dist/main.js"
   },
   "main": "dist/main.js",
   "files": [
@@ -19,11 +19,15 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/RafaelFCarneiro/fintrack.git"
+    "url": "git+https://github.com/RafaelFCarneiro/patty.git"
+  },
+  "homepage": "https://github.com/RafaelFCarneiro/patty#readme",
+  "bugs": {
+    "url": "https://github.com/RafaelFCarneiro/patty/issues"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   },
   "engines": {
     "node": ">=25 <26",
@@ -48,7 +52,7 @@
   },
   "ntl": {
     "descriptions": {
-      "dev": "Run backend in watch mode (stdio by default; MCP_TRANSPORT=http or FINTRACK_HTTP=true for REST + MCP on :3001)",
+      "dev": "Run backend in watch mode (stdio by default; MCP_TRANSPORT=http or PATTY_HTTP=true for REST + MCP on :3001)",
       "build": "Compile TypeScript to dist/",
       "lint": "Lint src/, test/, scripts/ and ui/ with ESLint (style/quality smell rules — part of the gate)",
       "format": "Format the repository with Prettier",

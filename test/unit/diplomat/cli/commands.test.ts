@@ -62,7 +62,7 @@ describe('a prompt that ends', () => {
     const { io, out, err, shellClosed } = rig(endedTerminal('cancelled'));
     expect(await runCli(['setup', 'claude-code'], io)).toBe(EXIT_FAILURE);
     expect(out).toEqual([]);
-    expect(err).toEqual(['fintrack: cancelled']);
+    expect(err).toEqual(['patty: cancelled']);
     expect(shellClosed()).toBe(true);
   });
 });
@@ -70,7 +70,7 @@ describe('a prompt that ends', () => {
 describe('a prompt that ends in the auth commands', () => {
   it.each([
     ['interrupted', EXIT_INTERRUPTED, []],
-    ['cancelled', EXIT_FAILURE, ['fintrack: cancelled']],
+    ['cancelled', EXIT_FAILURE, ['patty: cancelled']],
   ] as const)('auth setup and auth reset-password: %s → exit %i', async (how, code, expectedErr) => {
     for (const args of [
       ['auth', 'setup'],

@@ -19,11 +19,11 @@ import { Scope } from '../../../../src/models/auth/scope.js';
 import { SESSION_TOUCH_INTERVAL_MS } from '../../../../src/models/auth/session.js';
 import { AccessTokenKind, TokenStatus, type AccessTokenEntity } from '../../../../src/models/auth/token.js';
 
-const READ = Scope.enum['fintrack:read'];
+const READ = Scope.enum['patty:read'];
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
-const WRITE = Scope.enum['fintrack:write'];
+const WRITE = Scope.enum['patty:write'];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -34,8 +34,8 @@ const token = (overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity =>
   clientName: null,
   profile: null,
   name: 'laptop',
-  tokenHash: 'sha(ftk_x)',
-  prefix: 'ftk_abcdef',
+  tokenHash: 'sha(ptk_x)',
+  prefix: 'ptk_abcdef',
   scopes: [READ],
   createdAt: NOW.toISOString(),
   lastUsedAt: null,
@@ -61,10 +61,10 @@ const owner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
 const HOUR_MS = 60 * 60 * 1000;
 
 describe('new tokens', () => {
-  const fields = { id: 't1', userId: OWNER_USER_ID, tokenHash: 'h', prefix: 'ftk_abcdef' };
+  const fields = { id: 't1', userId: OWNER_USER_ID, tokenHash: 'h', prefix: 'ptk_abcdef' };
 
-  it('keeps only ftk_ + the first characters of the random part for display', () => {
-    expect(tokenDisplayPrefix('ftk_abcdefghijklmnop')).toBe('ftk_abcdef');
+  it('keeps only ptk_ + the first characters of the random part for display', () => {
+    expect(tokenDisplayPrefix('ptk_abcdefghijklmnop')).toBe('ptk_abcdef');
   });
 
   it('read access is the read scope; write access includes read', () => {
@@ -112,7 +112,7 @@ describe('tokenStatus and summarizeToken', () => {
     expect(summary).not.toHaveProperty('tokenHash');
     expect(summary).not.toHaveProperty('version');
     expect(JSON.stringify(summary)).not.toContain('sha(');
-    expect(summary).toMatchObject({ id: 't1', name: 'laptop', prefix: 'ftk_abcdef', status: 'active' });
+    expect(summary).toMatchObject({ id: 't1', name: 'laptop', prefix: 'ptk_abcdef', status: 'active' });
   });
 });
 
@@ -166,7 +166,7 @@ describe('who a token may act for', () => {
     profile: 'default',
     name: 'Claude Desktop (default)',
     tokenHash: 'sha(x)',
-    prefix: 'ftk_abcdef',
+    prefix: 'ptk_abcdef',
     scopes: [READ],
     createdAt: NOW.toISOString(),
     lastUsedAt: null,
@@ -227,10 +227,10 @@ describe('who a token may act for', () => {
 });
 
 describe('token shape', () => {
-  it('recognizes an ftk_ token of sane length and nothing else', () => {
-    expect(isTokenShaped('ftk_abcdef')).toBe(true);
-    expect(isTokenShaped('Bearer ftk_abc')).toBe(false);
+  it('recognizes an ptk_ token of sane length and nothing else', () => {
+    expect(isTokenShaped('ptk_abcdef')).toBe(true);
+    expect(isTokenShaped('Bearer ptk_abc')).toBe(false);
     expect(isTokenShaped('sk-secret')).toBe(false);
-    expect(isTokenShaped(`ftk_${'a'.repeat(300)}`)).toBe(false);
+    expect(isTokenShaped(`ptk_${'a'.repeat(300)}`)).toBe(false);
   });
 });

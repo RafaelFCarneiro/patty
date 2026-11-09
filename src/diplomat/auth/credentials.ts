@@ -39,7 +39,7 @@ export const verifyPassword = async (storedHash: string, password: string): Prom
 
 export const randomToken = (): string => randomBytes(TOKEN_BYTES).toString(TOKEN_ENCODING);
 
-/** `ftk_` + 32 random bytes, base64url — the prefix keeps a leaked token greppable (ADR-033 §3). */
+/** `ptk_` + 32 random bytes, base64url — the prefix keeps a leaked token greppable (ADR-033 §3). */
 export const randomAccessToken = (): string => `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString(TOKEN_ENCODING)}`;
 
 const randomCode = (length: number): string =>

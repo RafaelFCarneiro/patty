@@ -21,7 +21,7 @@ export const VSCODE_ENTRY = {
   args: ['-y', PACKAGE_SPEC],
 } as const;
 
-/** A client config entry that signs in as `profile`: `FINTRACK_PROFILE` is added to its `env` only when the profile
+/** A client config entry that signs in as `profile`: `PATTY_PROFILE` is added to its `env` only when the profile
  *  is not the default, so an ordinary install writes exactly the entry it always did (ADR-034 §5.2). */
 export const withProfile = <E extends Record<string, unknown>>(
   entry: E,
@@ -41,7 +41,7 @@ export const withDemo = <E extends Record<string, unknown>>(
 // Pure config merge helpers (testable without FS)
 // ---------------------------------------------------------------------------
 
-export const SERVER_NAME = 'fintrack';
+export const SERVER_NAME = 'patty';
 
 const mergeServer = (
   key: ServersKey,

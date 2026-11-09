@@ -404,7 +404,7 @@ export const setupCodes = sqliteTable('setup_codes', {
   version: integer('version').notNull().default(0),
 });
 
-// ADR-034 §3: a pending/answered stdio (or `fintrack login`) sign-in. Only sha256(device code) is stored — the
+// ADR-034 §3: a pending/answered stdio (or `patty login`) sign-in. Only sha256(device code) is stored — the
 // plaintext lives in the asking process. The user code is unique among PENDING grants only, so a finished one
 // never blocks a fresh code; `user_id` is set by the approval and is whoever approved.
 export const clientGrants = sqliteTable(

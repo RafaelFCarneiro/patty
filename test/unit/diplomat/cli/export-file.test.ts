@@ -18,12 +18,12 @@ const exporterFor = (file: string): Exporter => ({
 });
 
 beforeEach(() => {
-  root = realpathSync(mkdtempSync(join(tmpdir(), 'fintrack-export-file-')));
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'patty-export-file-')));
   dataDirectory = join(root, 'data');
   otherDirectory = join(root, 'compose');
   mkdirSync(join(dataDirectory, 'nested'), { recursive: true });
   mkdirSync(otherDirectory);
-  databaseFile = join(dataDirectory, 'fintrack.db');
+  databaseFile = join(dataDirectory, 'patty.db');
   writeFileSync(databaseFile, '');
 });
 
@@ -33,8 +33,8 @@ describe('keyDestination', () => {
   const resolveKey = (to: string) => keyDestination(exporterFor(databaseFile), to);
 
   it('allows a new file in another directory', () => {
-    expect(resolveKey(join(otherDirectory, 'fintrack_db_key'))._unsafeUnwrap()).toBe(
-      join(otherDirectory, 'fintrack_db_key'),
+    expect(resolveKey(join(otherDirectory, 'patty_db_key'))._unsafeUnwrap()).toBe(
+      join(otherDirectory, 'patty_db_key'),
     );
   });
 
@@ -62,12 +62,12 @@ describe('keyDestination', () => {
   it('follows a symlinked database directory too', () => {
     const linkedData = join(root, 'linked-data');
     symlinkSync(dataDirectory, linkedData);
-    const viaLink = keyDestination(exporterFor(join(linkedData, 'fintrack.db')), join(dataDirectory, 'key'));
+    const viaLink = keyDestination(exporterFor(join(linkedData, 'patty.db')), join(dataDirectory, 'key'));
     expect(viaLink.isErr()).toBe(true);
   });
 
   it('refuses the real database directory when the database file itself is a symlink', () => {
-    const alias = join(otherDirectory, 'fintrack.db');
+    const alias = join(otherDirectory, 'patty.db');
     symlinkSync(databaseFile, alias);
     const viaFileLink = keyDestination(exporterFor(alias), join(dataDirectory, 'key'));
     expect(viaFileLink._unsafeUnwrapErr()).toBe(CLI_MESSAGES.keyBesideData(dataDirectory));
@@ -101,21 +101,21 @@ describe('snapshotDestination', () => {
   const resolveSnapshot = (to: string) => snapshotDestination(exporterFor(databaseFile), to);
 
   it('allows a new file, even in the database directory', () => {
-    expect(resolveSnapshot(join(dataDirectory, 'fintrack.snapshot.db')).isOk()).toBe(true);
-    expect(resolveSnapshot(join(otherDirectory, 'fintrack.snapshot.db')).isOk()).toBe(true);
+    expect(resolveSnapshot(join(dataDirectory, 'patty.snapshot.db')).isOk()).toBe(true);
+    expect(resolveSnapshot(join(otherDirectory, 'patty.snapshot.db')).isOk()).toBe(true);
   });
 
   it('refuses the database itself, however it is spelled', () => {
     expect(resolveSnapshot(databaseFile)._unsafeUnwrapErr()).toBe(CLI_MESSAGES.snapshotIsDatabase(databaseFile));
     const link = join(otherDirectory, 'linked');
     symlinkSync(dataDirectory, link);
-    expect(resolveSnapshot(join(link, 'fintrack.db'))._unsafeUnwrapErr()).toBe(
+    expect(resolveSnapshot(join(link, 'patty.db'))._unsafeUnwrapErr()).toBe(
       CLI_MESSAGES.snapshotIsDatabase(databaseFile),
     );
   });
 
   it('refuses a directory that does not exist', () => {
-    const missing = join(root, 'missing', 'fintrack.snapshot.db');
+    const missing = join(root, 'missing', 'patty.snapshot.db');
     expect(resolveSnapshot(missing)._unsafeUnwrapErr()).toBe(CLI_MESSAGES.destinationDirectoryMissing(missing));
   });
 

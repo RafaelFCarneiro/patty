@@ -141,7 +141,7 @@ const runFragmentScript = (sandbox: Record<string, unknown>) => {
 
 // `fetch` stubbed to a never-resolving promise so the fragment's own async boot chain (checkLocale,
 // loadDashboardData, ...) stays dormant — for tests that drive a function (renderNetWorth,
-// handleFintrackDataChanged) directly rather than exercising initOverview's own async sequencing.
+// handleAppDataChanged) directly rather than exercising initOverview's own async sequencing.
 const loadOverviewSandbox = () => {
   const documentStub = makeStubDocument();
   const sandbox = makeSandboxBase(documentStub, () => new Promise(() => {}));
@@ -208,14 +208,14 @@ const loadOverviewSandboxWithControllableStatus = () => {
 describe("initOverview's boot sequencing (ui/dashboards/overview.html)", () => {
   it('registers the live-update hook once locale detection resolves, fragment still attached', async () => {
     const { sandbox, resolveStatus } = loadOverviewSandboxWithControllableStatus();
-    expect((sandbox.window as Record<string, unknown>).fintrackOnDataChanged).toBeUndefined();
+    expect((sandbox.window as Record<string, unknown>).onAppDataChanged).toBeUndefined();
 
     resolveStatus({ ok: true, json: async () => ({ locale: 'pt' }) });
     await flushMicrotasks();
     await flushMicrotasks();
 
     expect(sandbox.currentLocale).toBe('pt');
-    expect(typeof (sandbox.window as Record<string, unknown>).fintrackOnDataChanged).toBe('function');
+    expect(typeof (sandbox.window as Record<string, unknown>).onAppDataChanged).toBe('function');
   });
 
   it('does not resume — no hook, no reload — if the fragment was navigated away from mid-flight', async () => {
@@ -228,7 +228,7 @@ describe("initOverview's boot sequencing (ui/dashboards/overview.html)", () => {
     await flushMicrotasks();
     await flushMicrotasks();
 
-    expect((sandbox.window as Record<string, unknown>).fintrackOnDataChanged).toBeUndefined();
+    expect((sandbox.window as Record<string, unknown>).onAppDataChanged).toBeUndefined();
   });
 
   it('does not wire up the month/year filter until locale resolves, so a premature change is a no-op', async () => {
@@ -255,14 +255,14 @@ describe("initOverview's boot sequencing (ui/dashboards/overview.html)", () => {
   });
 });
 
-describe('handleFintrackDataChanged (ui/dashboards/overview.html)', () => {
+describe('handleAppDataChanged (ui/dashboards/overview.html)', () => {
   it('refetches on currency_rate and userSettings changes, not just transaction/account/category/recurring', () => {
     const { sandbox } = loadOverviewSandbox();
     let callCount = 0;
     sandbox.loadDashboardData = () => {
       callCount += 1;
     };
-    const handle = sandbox.handleFintrackDataChanged as (entities: string[]) => void;
+    const handle = sandbox.handleAppDataChanged as (entities: string[]) => void;
 
     handle(['currency_rate']);
     handle(['userSettings']);
@@ -277,7 +277,7 @@ describe('handleFintrackDataChanged (ui/dashboards/overview.html)', () => {
     sandbox.loadDashboardData = () => {
       called = true;
     };
-    const handle = sandbox.handleFintrackDataChanged as (entities: string[]) => void;
+    const handle = sandbox.handleAppDataChanged as (entities: string[]) => void;
 
     handle(['budget']);
 

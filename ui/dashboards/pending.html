@@ -2332,7 +2332,7 @@ var TRANSLATIONS = {
         
         // Dashboards Manager Dashboard
         dashboards_title: "Dashboards Monitor",
-        dashboards_subtitle: "List, view source, and upload fintrack dashboards",
+        dashboards_subtitle: "List, view source, and upload patty dashboards",
         col_dashboard: "Dashboard",
         col_last_update: "Last Updated",
         btn_view_source: "View Source",
@@ -2525,7 +2525,7 @@ var TRANSLATIONS = {
         
         // Dashboards Manager Dashboard
         dashboards_title: "Monitor de Dashboards",
-        dashboards_subtitle: "Liste, visualize o código fonte e envie dashboards para o servidor do fintrack",
+        dashboards_subtitle: "Liste, visualize o código fonte e envie dashboards para o servidor do patty",
         col_dashboard: "Dashboard",
         col_last_update: "Última Atualização",
         btn_view_source: "Ver Código",
@@ -2718,7 +2718,7 @@ var TRANSLATIONS = {
         
         // Dashboards Manager Dashboard
         dashboards_title: "Gestor de Dashboards",
-        dashboards_subtitle: "Liste, vea el código fuente y suba dashboards al servidor de fintrack",
+        dashboards_subtitle: "Liste, vea el código fuente y suba dashboards al servidor de patty",
         col_dashboard: "Dashboard",
         col_last_update: "Última Actualización",
         btn_view_source: "Ver Código",
@@ -2960,7 +2960,7 @@ function initCustomSelects() {
             checkLocale();
 
 // ADR-027 Live-update listener
-window.fintrackOnDataChanged = function(entities) {
+window.onAppDataChanged = function(entities) {
     var affected = entities.some(function(tag) {
         return ['transaction', 'recurring'].indexOf(tag) !== -1;
     });

@@ -128,7 +128,7 @@ const configFor = (io: CliIo, shell: Shell, profile: string, hint: SignInConfig[
 /**
  * The browser sign-in from a shell (ADR-034 §3, §6): feed the protocol until it ends, printing what it says. The
  * protocol starts a grant, names the link and code, polls until it is approved, then keeps the result in the keychain
- * profile; the interpreter serves `/ui/connect` itself when no FinTrack server does. The device code and token never
+ * profile; the interpreter serves `/ui/connect` itself when no PATTY server does. The device code and token never
  * reach the output.
  */
 const signIn = async (

@@ -21,7 +21,7 @@ let client: Client;
 let transport: StdioClientTransport;
 
 beforeAll(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-stdio-test-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-stdio-test-'));
   const dbPath = join(tmpDir, 'stdio.db');
 
   transport = new StdioClientTransport({
@@ -34,15 +34,15 @@ beforeAll(async () => {
       // This test only exercises the stdio transport — the HTTP sidecar now defaults to on
       // (ADR-013 Decision 7), so it must be explicitly disabled here to avoid an unrelated,
       // unnecessary port bind in the test suite.
-      FINTRACK_HTTP: 'false',
+      PATTY_HTTP: 'false',
       // Sign-in over stdio is covered by stdio-sign-in.test.ts; this file exercises the tool surface itself.
-      FINTRACK_AUTH: AuthMode.enum.disabled,
+      PATTY_AUTH: AuthMode.enum.disabled,
       DB_PATH: dbPath,
-      FINTRACK_DB_KEY: TEST_KEY,
+      PATTY_DB_KEY: TEST_KEY,
     },
   });
 
-  client = new Client({ name: 'fintrack-stdio-vitest', version: '1.0.0' });
+  client = new Client({ name: 'patty-stdio-vitest', version: '1.0.0' });
   await client.connect(transport);
 });
 

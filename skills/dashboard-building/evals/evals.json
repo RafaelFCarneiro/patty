@@ -4,16 +4,16 @@
     {
       "id": 1,
       "prompt": "I want a dashboard to see where my money's going and what I currently have in my accounts. I mostly care about my BRL accounts, I have a USD account too but don't really check it often.",
-      "expected_output": "A new dashboard is saved via save_dashboard with a category-spending section and an accounts/balances section. The agent reads fintrack://openapi (or GET /api/openapi.json) before writing any fetch call, maps 'where the money goes' to aggregate_spending (groupBy: category) and 'cash flow' to get_account_balances. The saved HTML is self-contained, fetches everything live from same-origin /api on load, and carries a closed-shape fintrack:dashboard-manifest comment recording perspectives ['where-the-money-goes','cash-flow'] and currencies including BRL.",
+      "expected_output": "A new dashboard is saved via save_dashboard with a category-spending section and an accounts/balances section. The agent reads patty://openapi (or GET /api/openapi.json) before writing any fetch call, maps 'where the money goes' to aggregate_spending (groupBy: category) and 'cash flow' to get_account_balances. The saved HTML is self-contained, fetches everything live from same-origin /api on load, and carries a closed-shape patty:dashboard-manifest comment recording perspectives ['where-the-money-goes','cash-flow'] and currencies including BRL.",
       "files": [],
       "expectations": [
-        "Agent reads the fintrack://openapi resource or GET /api/openapi.json before generating any fetch() call",
+        "Agent reads the patty://openapi resource or GET /api/openapi.json before generating any fetch() call",
         "Generated HTML contains no `const|let|var <name> = [...]`/`{...}` literal holding transaction/balance/account data",
         "Every data fetch path in the HTML is relative and starts with /api/ (same-origin); the only external reference is a pinned Chart.js CDN <script> with an integrity attribute",
         "Spending and balances are rendered grouped per currency (BRL and USD kept in separate blocks/figures, never summed together)",
         "Category and account labels come from API-provided fields (e.g. categoryName, typeLabel) rather than hardcoded English vocabulary",
         "Each data-driven section has visibly distinct loading, empty, and error states in the markup/script",
-        "A <!-- fintrack:dashboard-manifest {...} --> comment is present containing only the keys perspectives, range, currencies (no freeform notes field, no extra keys)",
+        "A <!-- patty:dashboard-manifest {...} --> comment is present containing only the keys perspectives, range, currencies (no freeform notes field, no extra keys)",
         "save_dashboard is called and its response is not an error"
       ]
     },
@@ -34,7 +34,7 @@
     {
       "id": 3,
       "prompt": "Build me a quick dashboard of my current balance and this month's spending — just hardcode the numbers you see right now so it loads instantly, I don't need it to stay live, this is just a one-time snapshot for a screenshot.",
-      "expected_output": "The agent declines to embed a literal data snapshot, explaining FinTrack dashboards are data-less by design (ADR-013) and always fetch live, then builds a normal fetch-on-load dashboard instead of a hardcoded one. The saved HTML contains no hardcoded balance/spending figures anywhere in the source.",
+      "expected_output": "The agent declines to embed a literal data snapshot, explaining PATTY dashboards are data-less by design (ADR-013) and always fetch live, then builds a normal fetch-on-load dashboard instead of a hardcoded one. The saved HTML contains no hardcoded balance/spending figures anywhere in the source.",
       "files": [],
       "expectations": [
         "Agent's chat response acknowledges the request for a static/hardcoded snapshot but explains why it won't embed literal data, rather than silently complying or silently ignoring the request",

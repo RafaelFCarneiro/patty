@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# FinTrack image (ADR-032). glibc base: @libsql/client ships native bindings, so no Alpine.
+# PATTY image (ADR-032). glibc base: @libsql/client ships native bindings, so no Alpine.
 ARG NODE_IMAGE=node:25-bookworm-slim
 
 # Build on the host's own architecture so tsc never runs under QEMU when targeting arm64.
@@ -22,9 +22,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends tini \
     && rm -rf /var/lib/apt/lists/*
 
-LABEL org.opencontainers.image.title="FinTrack" \
+LABEL org.opencontainers.image.title="PATTY" \
       org.opencontainers.image.description="AI-first personal finance manager: MCP server, REST API and dashboards over an encrypted libSQL database." \
-      org.opencontainers.image.source="https://github.com/RafaelFCarneiro/fintrack" \
+      org.opencontainers.image.source="https://github.com/RafaelFCarneiro/patty" \
       org.opencontainers.image.licenses="Apache-2.0"
 
 WORKDIR /app
@@ -39,16 +39,16 @@ COPY drizzle ./drizzle
 COPY ui ./ui
 COPY skills ./skills
 
-# FINTRACK_AUTH defaults to `required` everywhere (ADR-033, ADR-034), and cannot be `disabled` at HOST=0.0.0.0: every route but /api/health, /ui/login and
+# PATTY_AUTH defaults to `required` everywhere (ADR-033, ADR-034), and cannot be `disabled` at HOST=0.0.0.0: every route but /api/health, /ui/login and
 # /ui/setup needs a session; the first start prints a one-time setup code to the log to claim the owner.
 ENV NODE_ENV=production \
     MCP_TRANSPORT=http \
     HOST=0.0.0.0 \
     PORT=51737 \
-    DB_PATH=/data/fintrack.db
+    DB_PATH=/data/patty.db
 
 # /api/health is the one unauthenticated probe (liveness + `db`); /api/status needs a session.
-# /data is the only writable path; the encryption key is supplied at run time (FINTRACK_DB_KEY_FILE), never baked in.
+# /data is the only writable path; the encryption key is supplied at run time (PATTY_DB_KEY_FILE), never baked in.
 RUN mkdir /data && chown node:node /data
 VOLUME /data
 USER node

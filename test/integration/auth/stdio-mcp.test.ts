@@ -70,7 +70,7 @@ describe('MCP over stdio — signed out', () => {
     expect(result.isError).toBe(true);
     const code = /code=([0-9A-Z]{4}-[0-9A-Z]{4})/.exec(textOf(result))?.[1];
     expect(textOf(result)).toBe(
-      `FinTrack: not signed in. Open ${SIGN_IN_ORIGIN}/ui/connect?code=${code} and confirm the code ${code}.`,
+      `PATTY: not signed in. Open ${SIGN_IN_ORIGIN}/ui/connect?code=${code} and confirm the code ${code}.`,
     );
   });
 
@@ -116,10 +116,10 @@ describe('MCP over stdio — signed out', () => {
     await claimOwner(ctx);
     const { client } = await connectStdioClient(ctx);
 
-    const failure = await client.readResource({ uri: 'fintrack://accounts' }).catch((error: unknown) => error);
+    const failure = await client.readResource({ uri: 'patty://accounts' }).catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(McpError);
-    expect((failure as McpError).message).toContain('FinTrack: not signed in. Open ');
+    expect((failure as McpError).message).toContain('PATTY: not signed in. Open ');
   });
 
   it('refuses to get a prompt, with the instructions in the error', async () => {
@@ -159,7 +159,7 @@ describe('MCP over stdio — after approval', () => {
     const asked = textOf(await client.callTool({ name: 'get_status', arguments: {} }));
     await answerConnect(ctx, cookie, /code=([0-9A-Z]{4}-[0-9A-Z]{4})/.exec(asked)![1]!, { decision: 'approve' });
 
-    expect((await client.readResource({ uri: 'fintrack://accounts' })).contents).toHaveLength(1);
+    expect((await client.readResource({ uri: 'patty://accounts' })).contents).toHaveLength(1);
     expect((await client.getPrompt({ name: 'monthly_review', arguments: {} })).messages.length).toBeGreaterThan(0);
   });
 
@@ -176,9 +176,9 @@ describe('MCP over stdio — after approval', () => {
     const refused = await client.callTool({ name: 'create_tag', arguments: { name: 'nope' } });
     expect(refused.isError).toBe(true);
     expect(textOf(refused)).toContain('insufficient_scope');
-    expect(textOf(refused)).toContain('fintrack:write');
+    expect(textOf(refused)).toContain('patty:write');
     expect((await client.callTool({ name: 'list_tags', arguments: {} })).isError).toBeFalsy();
-    expect((await client.readResource({ uri: 'fintrack://tags' })).contents).toHaveLength(1);
+    expect((await client.readResource({ uri: 'patty://tags' })).contents).toHaveLength(1);
   });
 
   it('asks again on the next call after the sign-in is revoked', async () => {
@@ -197,13 +197,13 @@ describe('MCP over stdio — after approval', () => {
   });
 });
 
-describe('MCP over stdio — FINTRACK_AUTH=disabled', () => {
+describe('MCP over stdio — PATTY_AUTH=disabled', () => {
   it('acts as the owner, ungated, with no sign-in at all', async () => {
     const ctx = await createApp();
     const { client } = await connectStdioClient(ctx, { owner: true });
 
     expect((await client.callTool({ name: 'create_tag', arguments: { name: 'dev' } })).isError).toBeFalsy();
-    expect((await client.readResource({ uri: 'fintrack://tags' })).contents).toHaveLength(1);
+    expect((await client.readResource({ uri: 'patty://tags' })).contents).toHaveLength(1);
     expect((await client.getPrompt({ name: 'monthly_review', arguments: {} })).messages.length).toBeGreaterThan(0);
   });
 });

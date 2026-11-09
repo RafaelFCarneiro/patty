@@ -22,11 +22,11 @@ let dir = '';
 let db: Db;
 
 beforeEach(async () => {
-  dir = mkdtempSync(join(tmpdir(), 'fintrack-guard-race-'));
+  dir = mkdtempSync(join(tmpdir(), 'patty-guard-race-'));
   db = await openDatabase({
     KEY_LOCK_PATH: keyLockPathForTest(),
-    DB_PATH: join(dir, 'fintrack.db'),
-    FINTRACK_DB_KEY: 'e'.repeat(64),
+    DB_PATH: join(dir, 'patty.db'),
+    PATTY_DB_KEY: 'e'.repeat(64),
   });
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);

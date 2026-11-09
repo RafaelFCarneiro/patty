@@ -18,17 +18,17 @@ export const DEMO_BANNER_COPY = {
   [Locale.enum.en]: {
     label: 'Demo',
     message: 'sample data, not your finances.',
-    linkText: 'Install FinTrack for your own data',
+    linkText: 'Install PATTY for your own data',
   },
   [Locale.enum.pt]: {
     label: 'Demo',
     message: 'dados de exemplo, não as suas finanças.',
-    linkText: 'Instale o FinTrack para usar seus próprios dados',
+    linkText: 'Instale o PATTY para usar seus próprios dados',
   },
   [Locale.enum.es]: {
     label: 'Demo',
     message: 'datos de ejemplo, no tus finanzas.',
-    linkText: 'Instala FinTrack para usar tus propios datos',
+    linkText: 'Instala PATTY para usar tus propios datos',
   },
 } as const satisfies Record<Locale, BannerCopy>;
 

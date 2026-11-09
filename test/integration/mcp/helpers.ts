@@ -33,7 +33,7 @@ export const waitForStderr = async (getStderr: () => string, pattern: RegExp, ti
 };
 
 export const makeClient = () => {
-  const client = new Client({ name: 'fintrack-vitest-integration', version: '1.0.0' });
+  const client = new Client({ name: 'patty-vitest-integration', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(new URL(mcpUrl));
   return { client, transport };
 };

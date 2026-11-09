@@ -33,24 +33,24 @@ describe('CSRF helpers', () => {
   });
 
   it('does not fall back to Referer when an Origin header is present', () => {
-    expect(declaredOrigin('null', 'https://fintrack.example.com/ui')).toBeNull();
+    expect(declaredOrigin('null', 'https://patty.example.com/ui')).toBeNull();
   });
 
   it('matches origins exactly — scheme, host and port', () => {
-    const expected = 'https://fintrack.example.com';
-    expect(isSameOrigin(expected, 'https://fintrack.example.com')).toBe(true);
-    expect(isSameOrigin(expected, 'http://fintrack.example.com')).toBe(false);
-    expect(isSameOrigin(expected, 'https://fintrack.example.com:8443')).toBe(false);
-    expect(isSameOrigin(expected, 'https://fintrack.example.com.evil.example')).toBe(false);
+    const expected = 'https://patty.example.com';
+    expect(isSameOrigin(expected, 'https://patty.example.com')).toBe(true);
+    expect(isSameOrigin(expected, 'http://patty.example.com')).toBe(false);
+    expect(isSameOrigin(expected, 'https://patty.example.com:8443')).toBe(false);
+    expect(isSameOrigin(expected, 'https://patty.example.com.evil.example')).toBe(false);
     expect(isSameOrigin(expected, null)).toBe(false);
   });
 });
 
 describe('allowedOrigins (CSRF)', () => {
-  const PUBLIC = 'https://fintrack.example.com';
+  const PUBLIC = 'https://patty.example.com';
 
   it('is PUBLIC_URL when it is set and the request came in on the public host', () => {
-    expect(allowedOrigins(PUBLIC, 'fintrack.example.com')).toEqual([PUBLIC]);
+    expect(allowedOrigins(PUBLIC, 'patty.example.com')).toEqual([PUBLIC]);
   });
 
   it("also allows the request's own loopback origin (a local operator on the port publish)", () => {
@@ -73,7 +73,7 @@ describe('allowedOrigins (CSRF)', () => {
 });
 
 describe('csrfVerdict — a request that carries the session cookie', () => {
-  const PUBLIC = 'https://fintrack.example.com';
+  const PUBLIC = 'https://patty.example.com';
   const request = (overrides: Partial<Parameters<typeof csrfVerdict>[0]> = {}) => ({
     method: 'POST',
     publicUrl: undefined as string | undefined,
@@ -114,7 +114,7 @@ describe('csrfVerdict — a request that carries the session cookie', () => {
   });
 
   it('answers unknownOrigin when the instance cannot name its own origin (non-loopback Host, no PUBLIC_URL)', () => {
-    expect(csrfVerdict(request({ host: 'fintrack.lan:51737', origin: 'http://fintrack.lan:51737' }))).toEqual(
+    expect(csrfVerdict(request({ host: 'patty.lan:51737', origin: 'http://patty.lan:51737' }))).toEqual(
       authErrors.unknownOrigin,
     );
     expect(csrfVerdict(request({ host: undefined, origin: 'http://127.0.0.1:51737' }))).toEqual(
@@ -123,7 +123,7 @@ describe('csrfVerdict — a request that carries the session cookie', () => {
   });
 
   it('expects PUBLIC_URL when set — and still the loopback host it was reached on', () => {
-    const behindProxy = { publicUrl: PUBLIC, host: 'fintrack.example.com' };
+    const behindProxy = { publicUrl: PUBLIC, host: 'patty.example.com' };
     expect(csrfVerdict(request({ ...behindProxy, origin: PUBLIC }))).toBeNull();
     expect(csrfVerdict(request({ ...behindProxy, origin: 'https://evil.example' }))).toEqual(authErrors.crossOrigin);
     expect(csrfVerdict(request({ publicUrl: PUBLIC, origin: 'http://127.0.0.1:51737' }))).toBeNull();
@@ -249,7 +249,7 @@ describe('signInOrigin — what a stdio link may name from what the process alre
 
   it('names no non-loopback host without PUBLIC_URL — its POSTs would fail the CSRF origin check', () => {
     expect(signInOrigin({ ...base, host: '0.0.0.0', boundOrigin: 'http://127.0.0.1:51737' })).toBeNull();
-    expect(signInOrigin({ ...base, host: 'fintrack.lan', boundOrigin: 'http://fintrack.lan:51737' })).toBeNull();
+    expect(signInOrigin({ ...base, host: 'patty.lan', boundOrigin: 'http://patty.lan:51737' })).toBeNull();
     expect(signInOrigin({ ...base, host: '0.0.0.0', publicUrl: 'https://fin.example.com' })).toBe(
       'https://fin.example.com',
     );

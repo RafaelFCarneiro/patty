@@ -29,7 +29,7 @@ describe('resetPassword (ADR-034 §5)', () => {
       sessions: [sessionRow({ id: 's1' }), sessionRow({ id: 's2', tokenHash: 'sha(OTHER)' })],
       tokens: [
         tokenRow({ id: 't1' }),
-        tokenRow({ id: 't2', tokenHash: 'sha(ftk_T2)', expiresAt: '2030-01-01T00:00:00.000Z' }),
+        tokenRow({ id: 't2', tokenHash: 'sha(ptk_T2)', expiresAt: '2030-01-01T00:00:00.000Z' }),
       ],
     });
     const { persist, response } = await outcomeOf(resetPassword(deps, { password: NEW_PASSWORD }));
@@ -56,7 +56,7 @@ describe('resetPassword (ADR-034 §5)', () => {
     const deps = depsFor({
       users: [claimedOwner(), otherUser()],
       sessions: [sessionRow({ id: 'mine' }), sessionRow({ id: 'theirs', userId: OTHER_USER_ID, tokenHash: 'sha(X)' })],
-      tokens: [tokenRow({ id: 'mine' }), tokenRow({ id: 'theirs', userId: OTHER_USER_ID, tokenHash: 'sha(ftk_X)' })],
+      tokens: [tokenRow({ id: 'mine' }), tokenRow({ id: 'theirs', userId: OTHER_USER_ID, tokenHash: 'sha(ptk_X)' })],
     });
     const { persist, response } = await outcomeOf(resetPassword(deps, { password: NEW_PASSWORD }));
 
@@ -79,7 +79,7 @@ describe('resetPassword (ADR-034 §5)', () => {
 
   it('leaves an already-expired token alone: it is not live, so it is neither revoked nor counted', async () => {
     const expired = tokenRow({ expiresAt: new Date(NOW.getTime() - 1).toISOString() });
-    const live = tokenRow({ id: 't2', tokenHash: 'sha(ftk_T2)', expiresAt: new Date(NOW.getTime() + 1).toISOString() });
+    const live = tokenRow({ id: 't2', tokenHash: 'sha(ptk_T2)', expiresAt: new Date(NOW.getTime() + 1).toISOString() });
     const { persist, response } = await outcomeOf(
       resetPassword(depsFor({ users: [claimedOwner()], tokens: [expired, live] }), { password: NEW_PASSWORD }),
     );

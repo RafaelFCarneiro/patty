@@ -46,7 +46,7 @@ export const snapshotTo = async (db: Db, destination: string): Promise<void> => 
 /** `verify` runs in that same transaction, before it commits. */
 /**
  * Applies `migrate` — taking the safety copy first when a data-rewriting migration is pending. Two layers:
- * the migration lock keeps other FinTrack STARTERS from interleaving their copies (and "is it still pending?" is
+ * the migration lock keeps other PATTY STARTERS from interleaving their copies (and "is it still pending?" is
  * re-asked once it is held, so a late starter never backs up an already-migrated file); and the snapshot is taken
  * while this process holds SQLite's WRITE lock, with the migrations applied in that same transaction, so no
  * other writer — including a process already running on an older release — can commit between the snapshot and
@@ -97,7 +97,7 @@ export const backupBeforeRewriting = async (db: Db, migrationsFolder: string): P
     rmSync(partial, { force: true });
     await snapshotTo(db, partial);
     renameSync(partial, destination);
-    console.error(`fintrack: backed up the database before migration ${tag} → ${destination}`);
+    console.error(`patty: backed up the database before migration ${tag} → ${destination}`);
     copied.push(destination);
   }
   return copied;

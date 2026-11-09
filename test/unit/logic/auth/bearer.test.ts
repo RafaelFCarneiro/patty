@@ -12,17 +12,17 @@ import { ALL_SCOPES, Scope } from '../../../../src/models/auth/scope.js';
 
 const METADATA_URL = 'https://fin.example.com/.well-known/oauth-protected-resource/mcp';
 
-const WRITE = Scope.enum['fintrack:write'];
+const WRITE = Scope.enum['patty:write'];
 
 describe('credentialOf — an Authorization header is authoritative', () => {
   it('is none only when the header is absent', () => {
     expect(credentialOf(undefined)).toEqual({ kind: 'none' });
   });
 
-  it('accepts Bearer ftk_… in any case of the scheme', () => {
-    expect(credentialOf('Bearer ftk_abc')).toEqual({ kind: 'bearer', token: 'ftk_abc' });
-    expect(credentialOf('bearer ftk_abc')).toEqual({ kind: 'bearer', token: 'ftk_abc' });
-    expect(credentialOf('BEARER   ftk_abc')).toEqual({ kind: 'bearer', token: 'ftk_abc' });
+  it('accepts Bearer ptk_… in any case of the scheme', () => {
+    expect(credentialOf('Bearer ptk_abc')).toEqual({ kind: 'bearer', token: 'ptk_abc' });
+    expect(credentialOf('bearer ptk_abc')).toEqual({ kind: 'bearer', token: 'ptk_abc' });
+    expect(credentialOf('BEARER   ptk_abc')).toEqual({ kind: 'bearer', token: 'ptk_abc' });
   });
 
   it.each([
@@ -30,10 +30,10 @@ describe('credentialOf — an Authorization header is authoritative', () => {
     'Bearer',
     'Bearer ',
     'Bearer notours',
-    'Bearer ftk_a b',
+    'Bearer ptk_a b',
     'Basic Zm9vOmJhcg==',
-    'ftk_abc',
-    `Bearer ftk_${'a'.repeat(300)}`,
+    'ptk_abc',
+    `Bearer ptk_${'a'.repeat(300)}`,
   ])('is malformed — never a reason to try the cookie (%j)', (header) => {
     expect(credentialOf(header)).toEqual({ kind: 'malformed' });
   });
@@ -51,7 +51,7 @@ describe('acceptsBearer', () => {
 describe('bearerChallenge (RFC 6750 §3, MCP authorization)', () => {
   it('no credential: resource_metadata and every scope', () => {
     expect(bearerChallenge(authErrors.unauthenticated, METADATA_URL)).toBe(
-      `Bearer resource_metadata="${METADATA_URL}", scope="fintrack:read fintrack:write"`,
+      `Bearer resource_metadata="${METADATA_URL}", scope="patty:read patty:write"`,
     );
   });
 
@@ -63,12 +63,12 @@ describe('bearerChallenge (RFC 6750 §3, MCP authorization)', () => {
 
   it('insufficient scope: error, the scope that was needed, resource_metadata', () => {
     expect(bearerChallenge(authErrors.insufficientScope(WRITE), METADATA_URL)).toBe(
-      `Bearer error="insufficient_scope", scope="fintrack:write", resource_metadata="${METADATA_URL}"`,
+      `Bearer error="insufficient_scope", scope="patty:write", resource_metadata="${METADATA_URL}"`,
     );
   });
 
   it('leaves resource_metadata out when the instance cannot name its origin', () => {
-    expect(bearerChallenge(authErrors.unauthenticated, null)).toBe('Bearer scope="fintrack:read fintrack:write"');
+    expect(bearerChallenge(authErrors.unauthenticated, null)).toBe('Bearer scope="patty:read patty:write"');
     expect(bearerChallenge(authErrors.invalidToken, null)).toBe('Bearer error="invalid_token"');
   });
 
@@ -90,7 +90,7 @@ describe('Protected Resource Metadata (RFC 9728)', () => {
       resource: 'https://fin.example.com/mcp',
       scopes_supported: [...ALL_SCOPES],
       bearer_methods_supported: ['header'],
-      resource_name: 'FinTrack',
+      resource_name: 'PATTY',
     });
     expect(document).not.toHaveProperty('authorization_servers');
     expect(JSON.stringify(document)).not.toContain('offline_access');

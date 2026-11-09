@@ -46,10 +46,10 @@ export type Runtime = Tenancy & {
   changeBus: ChangeBus<ChangeEvent>;
 };
 
-export type RuntimeConfig = Pick<Config, 'FINTRACK_LOCALE' | 'FIAT_RATE_STALE_HOURS' | 'CRYPTO_RATE_STALE_HOURS'>;
+export type RuntimeConfig = Pick<Config, 'PATTY_LOCALE' | 'FIAT_RATE_STALE_HOURS' | 'CRYPTO_RATE_STALE_HOURS'>;
 
 const reportChangeError = (cause: unknown): void => {
-  console.error('[fintrack] change notification failed:', cause);
+  console.error('[patty] change notification failed:', cause);
 };
 
 const applierRegistryFor = (userId: string): ApplierRegistry => ({
@@ -115,7 +115,7 @@ const runnersOn = (
 
 export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOptions = {}): Runtime => {
   const onChangeError = options.onChangeError ?? reportChangeError;
-  const localeResolver = createLocaleResolver(config.FINTRACK_LOCALE);
+  const localeResolver = createLocaleResolver(config.PATTY_LOCALE);
   const changeBus = createChangeBus<ChangeEvent>({ onError: onChangeError });
   const health = healthRepo(db);
   const instance = instanceRepo(db);

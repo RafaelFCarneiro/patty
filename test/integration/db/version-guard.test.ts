@@ -26,7 +26,7 @@ let dbPath: string;
 const opened: Db[] = [];
 
 const open = async (): Promise<Db> => {
-  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: TEST_KEY });
   opened.push(db);
   return db;
 };
@@ -66,8 +66,8 @@ const fileFingerprint = () => {
 };
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-version-guard-'));
-  dbPath = join(tmpDir, 'fintrack.db');
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-version-guard-'));
+  dbPath = join(tmpDir, 'patty.db');
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });

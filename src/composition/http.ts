@@ -106,13 +106,13 @@ export const startHttpSidecar = async (
     const boundPort = (app.server.address() as AddressInfo).port;
     const origin = httpOrigin(host, boundPort);
     console.error(
-      `fintrack: HTTP sidecar up — REST ${origin}/api · MCP ${origin}/mcp · dashboard ${origin}${DASHBOARD_PATH}`,
+      `patty: HTTP sidecar up — REST ${origin}/api · MCP ${origin}/mcp · dashboard ${origin}${DASHBOARD_PATH}`,
     );
     return { app, listening: true };
   } catch (e) {
     const reason = isPortInUse(e) ? portInUseReason(port) : String(e);
     console.error(
-      `fintrack: HTTP sidecar disabled — ${reason}. Dashboards/REST are unavailable this run; MCP over stdio ` +
+      `patty: HTTP sidecar disabled — ${reason}. Dashboards/REST are unavailable this run; MCP over stdio ` +
         `keeps working. Free the port (or set PORT=<other> and restart) to enable it.`,
     );
     return { app, listening: false };
@@ -147,7 +147,7 @@ export const runHttp = (config: Config): ResultAsync<void, StartupRefusal> =>
     const boundPort = (app.server.address() as AddressInfo).port;
     const origin = httpOrigin(config.HOST, boundPort);
     // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe.
-    console.log(`fintrack: REST ${origin}/api · MCP ${origin}/mcp`);
+    console.log(`patty: REST ${origin}/api · MCP ${origin}/mcp`);
     await prepared.issueAndAnnounceSetup(origin);
     return ok(undefined);
   });

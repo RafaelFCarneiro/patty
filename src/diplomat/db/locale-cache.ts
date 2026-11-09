@@ -7,7 +7,7 @@ export type LocaleResolver = {
 };
 
 // resetLocale is shell-only — never a Deps field; a diplomat handler calls it after its own
-// setLocale write commits. configLocale (FINTRACK_LOCALE) always wins, for every user, and is never cached.
+// setLocale write commits. configLocale (PATTY_LOCALE) always wins, for every user, and is never cached.
 // Keyed by user, so one person's language never becomes another's.
 export const createLocaleResolver = (configLocale?: Locale): LocaleResolver => {
   const cachedByUser = new Map<string, Locale>();

@@ -22,18 +22,18 @@ export const KEY_HELP = `
 Usage: ${NPX_COMMAND} key <command>
 
 Commands:
-  export --to <file>     Write the database encryption key to a new file, usable as FINTRACK_DB_KEY_FILE
+  export --to <file>     Write the database encryption key to a new file, usable as PATTY_DB_KEY_FILE
   import --from <file>   Store a key written by \`export\` in the OS keychain, where this install reads it
 
 Export: the file is created owner-only and never overwritten, and must not be in the database's directory. The key is
 written only there: it is never printed. Run it from the terminal that holds the key, before moving the database.
 
-Import: refused when the keychain already holds a key (remove that entry yourself first) and when FINTRACK_DB_KEY_FILE
-or FINTRACK_DB_KEY is set (those installs read the key from there). When a database already exists here, the key must
+Import: refused when the keychain already holds a key (remove that entry yourself first) and when PATTY_DB_KEY_FILE
+or PATTY_DB_KEY is set (those installs read the key from there). When a database already exists here, the key must
 open it. To move to this machine: key import first, then db import, then setup <client>.
 `.trimStart();
 
-/** One line, the key and a newline: what `FINTRACK_DB_KEY_FILE` reads back exactly. A half-written file is removed. */
+/** One line, the key and a newline: what `PATTY_DB_KEY_FILE` reads back exactly. A half-written file is removed. */
 const writeKeyFile = Result.fromThrowable((path: string, key: string): void => {
   const file = openSync(path, EXCLUSIVE_CREATE_FLAG, PRIVATE_FILE_MODE);
   try {

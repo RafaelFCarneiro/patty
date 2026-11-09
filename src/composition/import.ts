@@ -30,8 +30,8 @@ const refuseStaged = (staged: StagedCopy, snapshot: string): Result<StagedCopy, 
 
 const readKeySources = async (): Promise<KeySources> => {
   const config = loadConfig();
-  const keyFileConfigured = Boolean(config.FINTRACK_DB_KEY_FILE);
-  const keyEnvConfigured = Boolean(config.FINTRACK_DB_KEY);
+  const keyFileConfigured = Boolean(config.PATTY_DB_KEY_FILE);
+  const keyEnvConfigured = Boolean(config.PATTY_DB_KEY);
   return {
     keyFileConfigured,
     keyEnvConfigured,

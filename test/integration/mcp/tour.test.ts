@@ -28,7 +28,7 @@ const apps: AppContext[] = [];
 type Marking = { kind: InstanceKind; locale?: Locale; baseCurrency?: CurrencyCode; country?: DemoCountry };
 
 const appOf = async ({ kind, locale, baseCurrency, country }: Marking): Promise<AppContext> => {
-  const dir = mkdtempSync(join(tmpdir(), 'fintrack-tour-'));
+  const dir = mkdtempSync(join(tmpdir(), 'patty-tour-'));
   dirs.push(dir);
   const ctx = await buildApp({ dbPath: join(dir, 'test.db') });
   apps.push(ctx);
@@ -139,17 +139,17 @@ describe('tour prompt on a seeded demo', () => {
   it.each(Object.values(DemoCountry.enum))(
     '%s: the seeded database yields its destination and language',
     async (country) => {
-      const dir = mkdtempSync(join(tmpdir(), 'fintrack-tour-seed-'));
+      const dir = mkdtempSync(join(tmpdir(), 'patty-tour-seed-'));
       dirs.push(dir);
       const db = await openDatabase({
         KEY_LOCK_PATH: keyLockPathForTest(),
         DB_PATH: join(dir, 'demo.db'),
-        FINTRACK_DB_KEY: 'd'.repeat(64),
+        PATTY_DB_KEY: 'd'.repeat(64),
       });
       seeded.push(db);
       await bootstrap(db);
       await seedDemo(db, { country, today: TODAY, config: CONFIG });
-      const runtime = createRuntime(db, { ...CONFIG, FINTRACK_LOCALE: undefined }, { clock: () => TODAY });
+      const runtime = createRuntime(db, { ...CONFIG, PATTY_LOCALE: undefined }, { clock: () => TODAY });
 
       const server = buildMcpServer(runtime, 'test', { gate: ownerGate });
       const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();

@@ -15,8 +15,8 @@ const openapiDescription =
 
 const openApiResource = (openApiDocument: unknown): ResourceDefinition => ({
   name: 'openapi',
-  uri: 'fintrack://openapi',
-  config: { title: 'FinTrack OpenAPI contract', description: openapiDescription, mimeType: 'application/json' },
+  uri: 'patty://openapi',
+  config: { title: 'PATTY OpenAPI contract', description: openapiDescription, mimeType: 'application/json' },
   read: async (uri) => jsonResource(uri, openApiDocument),
 });
 
@@ -27,7 +27,7 @@ const categoriesDescription =
 
 const categoriesResource: ResourceDefinition = {
   name: 'categories',
-  uri: 'fintrack://categories',
+  uri: 'patty://categories',
   config: { title: 'Category taxonomy', description: categoriesDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listCategories(deps)),
 };
@@ -38,7 +38,7 @@ const accountsDescription =
 
 const accountsResource: ResourceDefinition = {
   name: 'accounts',
-  uri: 'fintrack://accounts',
+  uri: 'patty://accounts',
   config: { title: 'Accounts', description: accountsDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listAccounts(deps)),
 };
@@ -50,26 +50,26 @@ const currenciesDescription =
 
 const currenciesResource: ResourceDefinition = {
   name: 'currencies',
-  uri: 'fintrack://currencies',
+  uri: 'patty://currencies',
   config: { title: 'Currencies', description: currenciesDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listCurrencies(deps)),
 };
 
 const exchangeRatesDescription =
   'All cached exchange rates, each with its own as_of — the same data list_exchange_rates returns. ' +
-  'FinTrack never fetches rates itself (local-first, ADR-026); read this to see which pairs are ' +
+  'PATTY never fetches rates itself (local-first, ADR-026); read this to see which pairs are ' +
   'cached and how fresh they are before deciding whether to refresh via set_exchange_rate(s).';
 
 const exchangeRatesResource: ResourceDefinition = {
   name: 'exchange-rates',
-  uri: 'fintrack://exchange-rates',
+  uri: 'patty://exchange-rates',
   config: { title: 'Exchange rates', description: exchangeRatesDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listExchangeRates(deps)),
 };
 
 const tagsResource: ResourceDefinition = {
   name: 'tags',
-  uri: 'fintrack://tags',
+  uri: 'patty://tags',
   config: {
     title: 'Tags',
     description:
@@ -85,7 +85,7 @@ const creditCardsDescription =
 
 const creditCardsResource: ResourceDefinition = {
   name: 'credit-cards',
-  uri: 'fintrack://credit-cards',
+  uri: 'patty://credit-cards',
   config: { title: 'Credit cards', description: creditCardsDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listCreditCards(deps)),
 };
@@ -98,7 +98,7 @@ const merchantsTopDescription =
 
 const merchantsTopResource: ResourceDefinition = {
   name: 'merchants-top',
-  uri: 'fintrack://merchants/top',
+  uri: 'patty://merchants/top',
   config: { title: 'Top merchants', description: merchantsTopDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await topMerchants(deps)),
 };

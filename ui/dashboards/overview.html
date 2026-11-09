@@ -870,7 +870,7 @@
         function formatCurrencyNoSymbol(value, currency) {
             const code = currency || DEFAULT_CURRENCY;
             const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
-            const meta = (window.__fintrackCurrencies && window.__fintrackCurrencies[code]) || null;
+            const meta = (window.__appCurrencies && window.__appCurrencies[code]) || null;
             const decimals = meta ? meta.decimals : 2;
             return new Intl.NumberFormat(loc, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(Number(value) || 0);
         }
@@ -1127,7 +1127,7 @@ var TRANSLATIONS = {
         
         // Dashboards Manager Dashboard
         dashboards_title: "Dashboards Monitor",
-        dashboards_subtitle: "List, view source, and upload fintrack dashboards",
+        dashboards_subtitle: "List, view source, and upload patty dashboards",
         col_dashboard: "Dashboard",
         col_last_update: "Last Updated",
         btn_view_source: "View Source",
@@ -1318,7 +1318,7 @@ var TRANSLATIONS = {
         
         // Dashboards Manager Dashboard
         dashboards_title: "Monitor de Dashboards",
-        dashboards_subtitle: "Liste, visualize o código fonte e envie dashboards para o servidor do fintrack",
+        dashboards_subtitle: "Liste, visualize o código fonte e envie dashboards para o servidor do patty",
         col_dashboard: "Dashboard",
         col_last_update: "Última Atualização",
         btn_view_source: "Ver Código",
@@ -1509,7 +1509,7 @@ var TRANSLATIONS = {
         
         // Dashboards Manager Dashboard
         dashboards_title: "Gestor de Dashboards",
-        dashboards_subtitle: "Liste, vea el código fuente y suba dashboards al servidor de fintrack",
+        dashboards_subtitle: "Liste, vea el código fuente y suba dashboards al servidor de patty",
         col_dashboard: "Dashboard",
         col_last_update: "Última Actualización",
         btn_view_source: "Ver Código",
@@ -1795,7 +1795,7 @@ function initCustomSelects() {
             // different dashboard while checkLocale()'s request is still in flight, this stale
             // continuation can detect it's no longer live (app.js's renderFragment() removes this
             // fragment's DOM on navigation) and bail out — otherwise it would overwrite the new
-            // fragment's own window.fintrackOnDataChanged with overview's, misrouting later SSE events,
+            // fragment's own window.onAppDataChanged with overview's, misrouting later SSE events,
             // and wire up filter listeners against a torn-down fragment.
             // The initial load is kicked off before the hook is registered (not after), matching every
             // other default dashboard's convention: a stray SSE message must never reach a handler
@@ -1807,7 +1807,7 @@ function initCustomSelects() {
                 if (monthSelect) monthSelect.addEventListener('change', handleFilterChange);
                 if (yearSelect) yearSelect.addEventListener('change', handleFilterChange);
                 loadDashboardData();
-                window.fintrackOnDataChanged = handleFintrackDataChanged;
+                window.onAppDataChanged = handleAppDataChanged;
             })();
 
         // Main data loading orchestrator
@@ -2386,9 +2386,9 @@ function initCustomSelects() {
             });
         }
 
-// ADR-027 Live-update listener. Declared here (hoisted) but only wired to window.fintrackOnDataChanged
+// ADR-027 Live-update listener. Declared here (hoisted) but only wired to window.onAppDataChanged
 // once locale detection resolves — see the initOverview IIFE above.
-function handleFintrackDataChanged(entities) {
+function handleAppDataChanged(entities) {
     // currency_rate/userSettings included because the net-worth badge's consolidatedNetWorth is
     // computed from the base currency (user_settings.base_currency) and every stored exchange rate
     // (ADR-026) — omitting them would leave the badge stale after a rate or home-currency update

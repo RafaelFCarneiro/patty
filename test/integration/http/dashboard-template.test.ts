@@ -108,7 +108,7 @@ describe('default dashboard fragments are data-less (ADR-013 Phase B, converted 
     it('registers the live-update hook (ADR-027 Phase 3)', async () => {
       const res = await inject({ method: 'GET', url: `/api/dashboards/${name}` });
       const { html } = res.json() as { html: string };
-      expect(html).toContain('window.fintrackOnDataChanged');
+      expect(html).toContain('window.onAppDataChanged');
     });
 
     // Method-agnostic by design: apiPathsFetchedIn has no way to correlate a matched path string
@@ -145,7 +145,7 @@ describe('default dashboard fragments are data-less (ADR-013 Phase B, converted 
     // rendered yet, so within the initializer the hook must be registered after the initial load call.
     const initialLoadCallIndex = html.indexOf('loadDashboardData();', initializerStart);
     expect(initialLoadCallIndex).toBeGreaterThan(-1);
-    expect(initialLoadCallIndex).toBeLessThan(html.indexOf('window.fintrackOnDataChanged =', initializerStart));
+    expect(initialLoadCallIndex).toBeLessThan(html.indexOf('window.onAppDataChanged =', initializerStart));
   });
 
   it('covers every file-backed default with no drift', async () => {

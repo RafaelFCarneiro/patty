@@ -2,7 +2,7 @@ import { SESSION_ABSOLUTE_MAX_MS } from '../../models/auth/session.js';
 
 /** The browser session cookie (ADR-033 §2). One name, used by the hook that reads it and the routes that
  *  set and clear it. */
-export const SESSION_COOKIE_NAME = 'fintrack_session';
+export const SESSION_COOKIE_NAME = 'patty_session';
 
 const COOKIE_PAIR_SEPARATOR = ';';
 const COOKIE_VALUE_SEPARATOR = '=';

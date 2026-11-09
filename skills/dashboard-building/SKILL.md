@@ -1,14 +1,14 @@
 ---
 name: dashboard-building
-description: Use when the user asks to build, change, extend, or "show me" a dashboard/UI for their FinTrack finances. Guides generating a data-less HTML fragment that fetches live data from the FinTrack API and saving it with save_dashboard.
+description: Use when the user asks to build, change, extend, or "show me" a dashboard/UI for their PATTY finances. Guides generating a data-less HTML fragment that fetches live data from the PATTY API and saving it with save_dashboard.
 ---
 
-# Building a FinTrack dashboard
+# Building a PATTY dashboard
 
-FinTrack dashboards are data-less content **fragments** stored server-side and rendered live inside a shared
+PATTY dashboards are data-less content **fragments** stored server-side and rendered live inside a shared
 app shell at `GET /ui/:name` (ADR-013, fragment model ADR-027). A fragment is `<section>`s + one inline
 `<script>` — no `<!doctype>`, `<html>`, `<head>`, or `<style>` root: the shell (`ui/shell.html` +
-`ui/app.css` + `ui/app.js`, served by the same FinTrack HTTP server) already provides the document, shared
+`ui/app.css` + `ui/app.js`, served by the same PATTY HTTP server) already provides the document, shared
 styling, the menu, and Chart.js. The non-negotiable rule behind everything below: **a dashboard never
 contains data — it fetches it.** The fragment you write is layout, styling, and `fetch()` calls; every
 number, name, or row the user sees comes from a same-origin `/api` response read after the fragment loads,
@@ -22,7 +22,7 @@ dashboard data-less; the save endpoint won't catch a violation for you.
 ## Process
 
 1. **Read the API contract first — never guess a path or field name.**
-   - MCP: read the `fintrack://openapi` resource.
+   - MCP: read the `patty://openapi` resource.
    - REST: `GET /api/openapi.json`.
    This is the source of truth for available routes, query params, and response shapes, including the
    localized labels (`typeLabel`, `categoryName`, `periodLabel`, `accountName`, …) the API already resolves
@@ -88,21 +88,21 @@ dashboard data-less; the save endpoint won't catch a violation for you.
    fine — the hard rules and self-check below fully specify a compliant fragment without it.
 
    **Optional: live update (ADR-027 Phase 3).** The shell opens one `EventSource` to `/ui/events` for the
-   page's whole lifetime and, on every message, calls `window.fintrackOnDataChanged(entities)` if the
+   page's whole lifetime and, on every message, calls `window.onAppDataChanged(entities)` if the
    currently-loaded fragment has defined it — `entities` is an array of changed entity tags (e.g.
    `"transaction"`, `"account"`, `"category"`, `"recurring"`, `"tag"`, `"budget"`). Mirror the baseline
    fragment's pattern: map each section to the loader it already has and the entity tags that feed it, refetch
-   only the affected ones, and assign the function to `window.fintrackOnDataChanged` as the very last line of
+   only the affected ones, and assign the function to `window.onAppDataChanged` as the very last line of
    the script (after the initial `loadAll()`/equivalent). This is optional — a fragment that never sets it
    simply has no live update, same as before this phase — but skipping it means the user has to manually
    reload to see a write reflected.
 5. **Record the user's preferences in the dashboard itself** so the next change doesn't re-interrogate them:
    put a design-manifest comment at the top of the HTML. The manifest is **closed-shape only — no freeform
    text fields**, so it structurally cannot carry financial data:
-   `<!-- fintrack:dashboard-manifest {"perspectives":["expense-income-by-month","cash-flow"],"range":"last-6-months","currencies":["BRL"]} -->`
+   `<!-- patty:dashboard-manifest {"perspectives":["expense-income-by-month","cash-flow"],"range":"last-6-months","currencies":["BRL"]} -->`
 
    For a custom period, `range` takes the object form instead of a token — same key, not an extra one:
-   `"range":{"from":"2026-01-01","to":"2026-06-30"}` (`YYYY-MM-DD`, matching FinTrack's date convention).
+   `"range":{"from":"2026-01-01","to":"2026-06-30"}` (`YYYY-MM-DD`, matching PATTY's date convention).
 
    - `perspectives`: array of tokens from the fixed list in step 2 — `expense-income-by-month`,
      `where-the-money-goes`, `cash-flow`, `projection`, `recurring-obligations`, `credit-card-view`.
@@ -117,19 +117,19 @@ dashboard data-less; the save endpoint won't catch a violation for you.
    the render-ability problem (empty content, a full `<!doctype>`/`<html>` root still present, an external
    `<script src>` reference, or a script syntax error) — fix it and resave; the previously stored dashboard
    is untouched by a rejected save.
-7. **Hand back the URL**: `/ui/<name>` on whatever host/port the user's FinTrack HTTP sidecar is running on
+7. **Hand back the URL**: `/ui/<name>` on whatever host/port the user's PATTY HTTP sidecar is running on
    (see the "Manual config and HTTP mode" section of the project's `README.md` — shipped with this package
    — if unsure which). Tell them to open it in a browser.
 
 ## Hard rules (never violate these)
 
-1. **Data-less.** No amount, name, date, or other fact from FinTrack's data appears literally in the
+1. **Data-less.** No amount, name, date, or other fact from PATTY's data appears literally in the
    HTML/JS source. Every such value is read from a `fetch('/api/...')` response inside a callback, at
    runtime. Config constants (a row limit, a chart color palette, a static section title) are fine; a
    dollar amount, an account name, or a transaction description baked into the source is not.
 2. **No secrets or tokens** of any kind in the file.
 3. **Same-origin `/api` only, for data.** Every data fetch path is relative (`/api/...`) — never an
-   absolute host — because the dashboard is served from the same FinTrack HTTP server it reads from.
+   absolute host — because the dashboard is served from the same PATTY HTTP server it reads from.
 4. **No external references of your own at all.** The shell already loads a pinned Chart.js from a CDN once
    (`ui/shell.html`) — a fragment just uses the global `Chart` it provides; do not add your own
    `<script src="...chart.js...">` or any other external host (fonts, icons, analytics, other CDNs). A
@@ -161,22 +161,22 @@ succeeds, the previous content is gone — if the user is changing a dashboard t
 save under a new name instead of overwriting.
 
 **Before regenerating, fetch the current dashboard (`GET /api/dashboards/:name`) and read its
-`fintrack:dashboard-manifest` comment**: preserve the recorded perspectives/range/currency choices unless
+`patty:dashboard-manifest` comment**: preserve the recorded perspectives/range/currency choices unless
 the user is explicitly changing them, and carry the (updated) manifest into the new fragment. A request like
 "add a projections panel" changes one section — it should not silently lose the perspectives the user
 already chose.
 
 **If you can't fetch it** — the HTTP sidecar is on by default, so this should be the exception rather than the
-norm: it happens when the sidecar was explicitly disabled (`FINTRACK_HTTP=false`) or failed to bind (e.g. the
+norm: it happens when the sidecar was explicitly disabled (`PATTY_HTTP=false`) or failed to bind (e.g. the
 port was already taken). `GET /api/dashboards/:name` is REST-only, there is no MCP tool that reads a
 dashboard's HTML back (`save_dashboard` is write-only, `list_dashboards` omits HTML), so when the sidecar
 isn't reachable there's no other way to read it. Do not silently rebuild from scratch and tell the user you
 "kept everything the same"; that claim would be unverifiable. Say plainly that you can't read the dashboard's
 current contents back, name the reason (sidecar disabled or not running), and either ask the user to start it
 (see `README.md`'s HTTP-mode section) so you can fetch it, or ask what sections/manifest they currently have
-so nothing gets silently dropped. This fallback works regardless of how FinTrack was installed.
+so nothing gets silently dropped. This fallback works regardless of how PATTY was installed.
 
-If you happen to be working from the FinTrack source repository itself (not the published package — you
+If you happen to be working from the PATTY source repository itself (not the published package — you
 have a local `src/`/`ui/` to read) *and* the name is `overview` with no evidence it's been customized since
 the seed, you may additionally treat `ui/dashboards/overview.html` (the file-backed default itself, ADR-027
 Phase 2) as a verified stand-in for "the original" instead of asking: diff your new fragment against that
@@ -196,6 +196,6 @@ specific environment, not the general-purpose fallback.
 - [ ] Every section has a loading, empty, and error branch.
 - [ ] The content is non-empty, does **NOT** start with `<!doctype html>` or have an `<html>` root (the shell
       owns that), and every inline `<script>` is syntactically valid.
-- [ ] The `fintrack:dashboard-manifest` comment is present, reflects the user's chosen perspectives, and
+- [ ] The `patty:dashboard-manifest` comment is present, reflects the user's chosen perspectives, and
       contains ONLY the closed-shape keys (`perspectives` tokens, `range` token or from/to dates,
       `currencies` ISO codes) — no freeform text, no extra keys.

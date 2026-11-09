@@ -7,7 +7,7 @@ import { CURRENCY_RATE_ENTITY_TAG } from '../../../src/models/currency-rate.js';
 /** Dashboards listen for entity tags as plain strings, so a renamed tag silently stops refreshing them. */
 describe('overview.html live-update listener', () => {
   const listener = readFileSync(`${UI_DASHBOARDS_ROOT}/overview.html`, 'utf8').match(
-    /function handleFintrackDataChanged[\s\S]*?\[([^\]]*)\]\.indexOf\(tag\)/,
+    /function handleAppDataChanged[\s\S]*?\[([^\]]*)\]\.indexOf\(tag\)/,
   );
   const tags = (listener?.[1] ?? '').split(',').map((tag) => tag.trim().replace(/^'|'$/g, ''));
 

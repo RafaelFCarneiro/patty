@@ -62,7 +62,7 @@ export const findRowsWithoutKnownUser = async (db: SqlReader): Promise<Record<st
   );
 
 export const tenancyIntegrityMessage = (violations: Record<string, number>): string =>
-  'fintrack: refusing to start — after the tenancy migration some rows belong to no known user (' +
+  'patty: refusing to start — after the tenancy migration some rows belong to no known user (' +
   R.pipe(
     Object.entries(violations),
     R.map(([table, count]) => `${table}: ${count}`),

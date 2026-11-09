@@ -28,7 +28,7 @@ describe('request logging (ADR-033 §2)', () => {
     const output = await captureLog({
       method: 'GET',
       url: '/probe',
-      headers: { cookie: `fintrack_session=${SECRET}`, authorization: `Bearer ${SECRET}` },
+      headers: { cookie: `patty_session=${SECRET}`, authorization: `Bearer ${SECRET}` },
     });
     expect(output).toContain('incoming request');
     expect(output).not.toContain(SECRET);

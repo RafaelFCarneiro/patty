@@ -15,7 +15,7 @@ export const withKeyLock = <T>(
     {
       waitMs,
       retryMs: KEY_LOCK_RETRY_MS,
-      timeoutMessage: `fintrack: another fintrack process is writing the database key (lock ${lockPath}); try again in a moment.`,
+      timeoutMessage: `patty: another patty process is writing the database key (lock ${lockPath}); try again in a moment.`,
     },
     work,
   );

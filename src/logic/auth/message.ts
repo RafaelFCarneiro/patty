@@ -4,7 +4,7 @@ import { connectUrl } from './origin.js';
 export const setupBanner = (fields: { code: string; setupUrl: string; expiresAt: string }): string =>
   [
     '',
-    '┌─ fintrack: first-time setup ─────────────────────────────────────────',
+    '┌─ patty: first-time setup ─────────────────────────────────────────',
     '│ This instance has no login yet. Claim it with this one-time setup code:',
     '│',
     `│     ${fields.code}`,

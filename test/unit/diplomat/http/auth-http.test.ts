@@ -85,16 +85,16 @@ describe('session cookie', () => {
 
 describe('readCookie', () => {
   it('finds a cookie among several', () => {
-    expect(readCookie('a=1; fintrack_session=tok-en_1; b=2', 'fintrack_session')).toBe('tok-en_1');
+    expect(readCookie('a=1; patty_session=tok-en_1; b=2', 'patty_session')).toBe('tok-en_1');
   });
 
   it('is exact on the name — a prefix or suffix lookalike never matches', () => {
-    expect(readCookie('xfintrack_session=evil; fintrack_session_x=evil', 'fintrack_session')).toBeUndefined();
+    expect(readCookie('xpatty_session=evil; patty_session_x=evil', 'patty_session')).toBeUndefined();
   });
 
   it('returns undefined without a header or without the cookie', () => {
-    expect(readCookie(undefined, 'fintrack_session')).toBeUndefined();
-    expect(readCookie('a=1', 'fintrack_session')).toBeUndefined();
+    expect(readCookie(undefined, 'patty_session')).toBeUndefined();
+    expect(readCookie('a=1', 'patty_session')).toBeUndefined();
   });
 
   it('returns the first of a duplicated cookie and keeps "=" inside values intact', () => {

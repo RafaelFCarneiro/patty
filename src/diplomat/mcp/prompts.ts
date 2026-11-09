@@ -139,7 +139,7 @@ const importStatementPrompt = definePrompt({
 const tourPrompt = definePrompt({
   name: PromptName.enum.tour,
   config: {
-    title: 'Tour of the FinTrack demo',
+    title: 'Tour of the PATTY demo',
     description:
       'A six-step guided tour of the demo (balances, last month, budgets, a statement import, tagging the seeded ' +
       'trip and building a dashboard, then installing for real). On a real database it only says how to start the demo.',

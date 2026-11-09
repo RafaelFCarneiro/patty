@@ -11,8 +11,8 @@ import { OWNER_PRINCIPAL, type Principal, PrincipalVia } from '../../../../src/m
 import { Scope } from '../../../../src/models/auth/scope.js';
 import { ToolName } from '../../../../src/diplomat/mcp/tool-name.js';
 
-const READ = Scope.enum['fintrack:read'];
-const WRITE = Scope.enum['fintrack:write'];
+const READ = Scope.enum['patty:read'];
+const WRITE = Scope.enum['patty:write'];
 
 type Registered = Record<string, { handler: (...args: unknown[]) => Promise<{ isError?: boolean; content: unknown }> }>;
 const registeredTools = (server: McpServer): Registered =>
@@ -230,7 +230,7 @@ describe('principalOf — the inverse of authInfoOf', () => {
   it.each([
     { scopes: [READ], extra: undefined },
     { scopes: [READ], extra: { userId: 'u1' } },
-    { scopes: ['fintrack:admin'], extra: { userId: 'u1', role: 'admin', via: 'token' } },
+    { scopes: ['patty:admin'], extra: { userId: 'u1', role: 'admin', via: 'token' } },
     { scopes: [READ], extra: { userId: 'u1', role: 'root', via: 'token' } },
     { scopes: [READ], extra: { userId: '', role: 'admin', via: 'token' } },
   ])('is null for something that is not a whole principal: %j', (authInfo) => {

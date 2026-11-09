@@ -120,13 +120,13 @@ describe('GET /ui/connect', () => {
     expect(radios(body, 'duration').find((r) => r.checked)?.value).toBe('7d');
   });
 
-  it('never offers "this session only" for a sign-in `fintrack login` asked for, and honors its hint', async () => {
+  it('never offers "this session only" for a sign-in `patty login` asked for, and honors its hint', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
     const deps = authDepsOf(ctx);
     const started = await bindAuthRunEffects(ctx.authRunEffects)(() =>
       startGrant(deps, {
-        client: { name: 'fintrack login', version: '0' },
+        client: { name: 'patty login', version: '0' },
         profile: 'work',
         channel: GrantChannel.enum.cli,
         hint: { access: 'write', duration: SignInDuration.enum['30d'] },
@@ -347,7 +347,7 @@ describe('POST /ui/connect', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Approved');
     expect(await ctx.db.all(sql`SELECT status, user_id, scopes, duration FROM client_grants`)).toEqual([
-      { status: 'approved', user_id: 'user-owner', scopes: '["fintrack:read","fintrack:write"]', duration: '7d' },
+      { status: 'approved', user_id: 'user-owner', scopes: '["patty:read","patty:write"]', duration: '7d' },
     ]);
     expect(res.headers['cache-control']).toBe('no-store');
   });
@@ -369,12 +369,12 @@ describe('POST /ui/connect', () => {
     expect(res.body).toContain('Back to the dashboards');
   });
 
-  it('says "close this tab", not a dashboard link, for a `fintrack login` request', async () => {
+  it('says "close this tab", not a dashboard link, for a `patty login` request', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
     const started = await bindAuthRunEffects(ctx.authRunEffects)(() =>
       startGrant(authDepsOf(ctx), {
-        client: { name: 'fintrack login', version: '0' },
+        client: { name: 'patty login', version: '0' },
         profile: 'default',
         channel: GrantChannel.enum.cli,
       }),
@@ -428,12 +428,12 @@ describe('POST /ui/connect', () => {
     expect(await ctx.db.all(sql`SELECT status FROM client_grants`)).toEqual([{ status: 'pending' }]);
   });
 
-  it('refuses "this session only" for a request that came from `fintrack login`', async () => {
+  it('refuses "this session only" for a request that came from `patty login`', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
     const started = await bindAuthRunEffects(ctx.authRunEffects)(() =>
       startGrant(authDepsOf(ctx), {
-        client: { name: 'fintrack login', version: '0' },
+        client: { name: 'patty login', version: '0' },
         profile: 'default',
         channel: GrantChannel.enum.cli,
       }),

@@ -15,7 +15,7 @@ let ctx: AppContext;
 let baseUrl: string;
 
 beforeAll(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sse-auth-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-sse-auth-'));
   ctx = await buildApp({ dbPath: join(tmpDir, 'test.db') });
   await ctx.app.listen({ port: 0, host: LOOPBACK_HOST });
   baseUrl = `http://${LOOPBACK_HOST}:${(ctx.app.server.address() as AddressInfo).port}`;

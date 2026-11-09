@@ -9,7 +9,7 @@ import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 
 const RATE_TOOL_DESCRIPTION_PREFIX =
-  'FinTrack never fetches exchange rates itself (local-first, zero external calls — ADR-026). ' +
+  'PATTY never fetches exchange rates itself (local-first, zero external calls — ADR-026). ' +
   'The AI agent is responsible for sourcing current rates (e.g. PTAX for fiat, a crypto price API) ' +
   'and upserting them here so read-time valuation has data to work with. ';
 

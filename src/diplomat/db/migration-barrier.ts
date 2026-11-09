@@ -67,7 +67,7 @@ const openWriteBarrier = async (client: Client) => {
   } catch (cause) {
     if (!isSqliteBusy(cause)) throw cause;
     throw new Error(
-      'fintrack: cannot start the database upgrade — another FinTrack process is writing to the database. ' +
+      'patty: cannot start the database upgrade — another PATTY process is writing to the database. ' +
         'Stop it (or wait for it to finish) and start again.',
       { cause },
     );

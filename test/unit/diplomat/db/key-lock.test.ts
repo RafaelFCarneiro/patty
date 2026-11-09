@@ -9,7 +9,7 @@ let dir: string;
 let lockPath: string;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'fintrack-key-lock-'));
+  dir = mkdtempSync(join(tmpdir(), 'patty-key-lock-'));
   lockPath = join(dir, 'nested', 'db-key.lock');
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -58,7 +58,7 @@ describe('withKeyLock', () => {
     const held = await tryExclusiveLock(lockPath);
     let ran = false;
     await expect(withKeyLock(async () => void (ran = true), lockPath, 150)).rejects.toThrow(
-      /another fintrack process is writing the database key/,
+      /another patty process is writing the database key/,
     );
     expect(ran).toBe(false);
     await held?.release();

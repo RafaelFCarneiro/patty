@@ -15,11 +15,11 @@ let tmpDir: string;
 let db: Db;
 
 beforeEach(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-subcategories-repo-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-subcategories-repo-'));
   db = await openDatabase({
     KEY_LOCK_PATH: keyLockPathForTest(),
     DB_PATH: join(tmpDir, 'subcategories.db'),
-    FINTRACK_DB_KEY: 'a'.repeat(64),
+    PATTY_DB_KEY: 'a'.repeat(64),
   });
   await bootstrap(db);
   await db
