@@ -21,6 +21,7 @@ import { DemoCountry, DemoSeedStatus } from '../../../src/models/demo/core.js';
 import { InstanceKind } from '../../../src/models/instance.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { TransactionStatus } from '../../../src/models/transaction.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'd'.repeat(64);
 const TODAY = new Date(2026, 9, 26, 9);
@@ -48,7 +49,11 @@ const existingData = async () => ({
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'fintrack-demo-seed-'));
-  db = await openDatabase({ DB_PATH: join(dir, 'demo.db'), FINTRACK_DB_KEY: TEST_KEY });
+  db = await openDatabase({
+    KEY_LOCK_PATH: keyLockPathForTest(),
+    DB_PATH: join(dir, 'demo.db'),
+    FINTRACK_DB_KEY: TEST_KEY,
+  });
   await bootstrap(db);
 });
 

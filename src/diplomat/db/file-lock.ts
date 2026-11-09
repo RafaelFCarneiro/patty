@@ -83,3 +83,12 @@ const acquireWithin = async (lockPath: string, deadline: number, wait: LockWait)
 
 export const waitForExclusiveLock = (lockPath: string, wait: LockWait): Promise<ExclusiveLock> =>
   acquireWithin(lockPath, Date.now() + wait.waitMs, wait);
+
+export const withExclusiveLock = async <T>(lockPath: string, wait: LockWait, work: () => Promise<T>): Promise<T> => {
+  const lock = await waitForExclusiveLock(lockPath, wait);
+  try {
+    return await work();
+  } finally {
+    await lock.release();
+  }
+};

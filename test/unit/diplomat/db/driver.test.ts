@@ -67,13 +67,18 @@ describe('resolveEncryptionKey (ADR-032)', () => {
   };
 
   it('reads the key file (trailing newline trimmed) without loading the keychain module', async () => {
-    const key = await resolveEncryptionKey({ DB_PATH, FINTRACK_DB_KEY_FILE: keyFile(`${FILE_KEY}\n`) });
+    const key = await resolveEncryptionKey({
+      KEY_LOCK_PATH,
+      DB_PATH,
+      FINTRACK_DB_KEY_FILE: keyFile(`${FILE_KEY}\n`),
+    });
     expect(key).toBe(FILE_KEY);
     expect(keychain.loaded).not.toHaveBeenCalled();
   });
 
   it('prefers the key file over the env var', async () => {
     const key = await resolveEncryptionKey({
+      KEY_LOCK_PATH,
       DB_PATH,
       FINTRACK_DB_KEY_FILE: keyFile(FILE_KEY),
       FINTRACK_DB_KEY: ENV_KEY,
@@ -82,14 +87,18 @@ describe('resolveEncryptionKey (ADR-032)', () => {
   });
 
   it('uses the env var when no file is set, without loading the keychain module', async () => {
-    const key = await resolveEncryptionKey({ DB_PATH, FINTRACK_DB_KEY: ENV_KEY });
+    const key = await resolveEncryptionKey({ KEY_LOCK_PATH, DB_PATH, FINTRACK_DB_KEY: ENV_KEY });
     expect(key).toBe(ENV_KEY);
     expect(keychain.loaded).not.toHaveBeenCalled();
   });
 
   it('logs which source was used, never the key', async () => {
-    await resolveEncryptionKey({ DB_PATH, FINTRACK_DB_KEY_FILE: keyFile(FILE_KEY) });
-    await resolveEncryptionKey({ DB_PATH, FINTRACK_DB_KEY: ENV_KEY });
+    await resolveEncryptionKey({
+      KEY_LOCK_PATH,
+      DB_PATH,
+      FINTRACK_DB_KEY_FILE: keyFile(FILE_KEY),
+    });
+    await resolveEncryptionKey({ KEY_LOCK_PATH, DB_PATH, FINTRACK_DB_KEY: ENV_KEY });
     const logged = vi.mocked(console.warn).mock.calls.map(([message]) => String(message));
     expect(logged[0]).toContain('FINTRACK_DB_KEY_FILE');
     expect(logged[1]).toContain('FINTRACK_DB_KEY from the environment');
@@ -98,15 +107,23 @@ describe('resolveEncryptionKey (ADR-032)', () => {
   });
 
   it('rejects invalid key file contents with an actionable error', async () => {
-    await expect(resolveEncryptionKey({ DB_PATH, FINTRACK_DB_KEY_FILE: keyFile('not-a-key') })).rejects.toThrow(
-      /64-character hex.*openssl rand -hex 32/s,
-    );
+    await expect(
+      resolveEncryptionKey({
+        KEY_LOCK_PATH,
+        DB_PATH,
+        FINTRACK_DB_KEY_FILE: keyFile('not-a-key'),
+      }),
+    ).rejects.toThrow(/64-character hex.*openssl rand -hex 32/s);
   });
 
   it('rejects a missing key file with an actionable error', async () => {
-    await expect(resolveEncryptionKey({ DB_PATH, FINTRACK_DB_KEY_FILE: join(tmpDir, 'absent') })).rejects.toThrow(
-      /cannot read.*openssl rand -hex 32/s,
-    );
+    await expect(
+      resolveEncryptionKey({
+        KEY_LOCK_PATH,
+        DB_PATH,
+        FINTRACK_DB_KEY_FILE: join(tmpDir, 'absent'),
+      }),
+    ).rejects.toThrow(/cannot read.*openssl rand -hex 32/s);
   });
 
   it('falls back to the keychain, generating and storing a key on first run', async () => {
@@ -146,9 +163,13 @@ describe('resolveEncryptionKey (ADR-032)', () => {
       throw new Error('no secret service');
     });
 
-    await expect(resolveEncryptionKey({ DB_PATH: join(dataDir, 'fintrack.db') })).rejects.toThrow();
+    await expect(resolveEncryptionKey({ KEY_LOCK_PATH, DB_PATH: join(dataDir, 'fintrack.db') })).rejects.toThrow();
     await expect(
-      resolveEncryptionKey({ DB_PATH: join(dataDir, 'fintrack.db'), FINTRACK_DB_KEY_FILE: join(tmpDir, 'absent') }),
+      resolveEncryptionKey({
+        KEY_LOCK_PATH,
+        DB_PATH: join(dataDir, 'fintrack.db'),
+        FINTRACK_DB_KEY_FILE: join(tmpDir, 'absent'),
+      }),
     ).rejects.toThrow();
 
     expect(readdirSync(dataDir)).toEqual([]);
@@ -232,19 +253,21 @@ describe('the keychain key helpers (key import)', () => {
 
   it('findEncryptionKey answers null for an empty keychain instead of generating a key', async () => {
     keychain.getPassword.mockReturnValue(null);
-    await expect(findEncryptionKey({ DB_PATH })).resolves.toBeNull();
+    await expect(findEncryptionKey({ KEY_LOCK_PATH, DB_PATH })).resolves.toBeNull();
     expect(keychain.setPassword).not.toHaveBeenCalled();
   });
 
   it('findEncryptionKey follows the server order: file, env, keychain', async () => {
     keychain.getPassword.mockReturnValue(FILE_KEY);
-    await expect(findEncryptionKey({ DB_PATH })).resolves.toBe(FILE_KEY);
-    await expect(findEncryptionKey({ DB_PATH, FINTRACK_DB_KEY: ENV_KEY })).resolves.toBe(ENV_KEY);
+    await expect(findEncryptionKey({ KEY_LOCK_PATH, DB_PATH })).resolves.toBe(FILE_KEY);
+    await expect(findEncryptionKey({ KEY_LOCK_PATH, DB_PATH, FINTRACK_DB_KEY: ENV_KEY })).resolves.toBe(ENV_KEY);
   });
 
   it('findEncryptionKey rejects a malformed keychain entry', async () => {
     keychain.getPassword.mockReturnValue('not-a-valid-key');
-    await expect(findEncryptionKey({ DB_PATH })).rejects.toThrow(/keychain is not a 64-character hex key/);
+    await expect(findEncryptionKey({ KEY_LOCK_PATH, DB_PATH })).rejects.toThrow(
+      /keychain is not a 64-character hex key/,
+    );
   });
 });
 

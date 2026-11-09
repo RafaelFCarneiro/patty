@@ -20,6 +20,7 @@ import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { DEMO_PACKS } from '../../../src/diplomat/db/seed/demo/index.js';
 import { buildApp, type AppContext } from '../app-builder.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const dirs: string[] = [];
 const apps: AppContext[] = [];
@@ -140,7 +141,11 @@ describe('tour prompt on a seeded demo', () => {
     async (country) => {
       const dir = mkdtempSync(join(tmpdir(), 'fintrack-tour-seed-'));
       dirs.push(dir);
-      const db = await openDatabase({ DB_PATH: join(dir, 'demo.db'), FINTRACK_DB_KEY: 'd'.repeat(64) });
+      const db = await openDatabase({
+        KEY_LOCK_PATH: keyLockPathForTest(),
+        DB_PATH: join(dir, 'demo.db'),
+        FINTRACK_DB_KEY: 'd'.repeat(64),
+      });
       seeded.push(db);
       await bootstrap(db);
       await seedDemo(db, { country, today: TODAY, config: CONFIG });

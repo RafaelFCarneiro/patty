@@ -24,6 +24,7 @@ import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { PRIVATE_FILE_MODE } from '../../../src/models/export.js';
 import { unusedDemo } from '../../unit/fixtures/demo.js';
 import { unusedImporter } from '../../unit/fixtures/exporter.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 /**
  * `key export` and `db export` against a real encrypted database, in process: the exporter is the production one
@@ -61,7 +62,7 @@ const io = (): CliIo =>
 const run = (...args: string[]) => runCli(args, io());
 
 const seedDatabase = async () => {
-  const db = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
   await bootstrap(db);
   await db
     .insert(accounts)
@@ -84,7 +85,7 @@ const seedDatabase = async () => {
 };
 
 const countRows = async (file: string, key: string) => {
-  const db = await openDatabase({ DB_PATH: file, FINTRACK_DB_KEY: key });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: file, FINTRACK_DB_KEY: key });
   try {
     const [row] = await db.all<{ accounts: number; transactions: number }>(
       sql`SELECT (SELECT count(*) FROM accounts) AS accounts, (SELECT count(*) FROM transactions) AS transactions`,
@@ -127,7 +128,11 @@ describe('fintrack key export', () => {
 
     expect(readFileSync(keyFile, 'utf8')).toBe(`${KEY}\n`);
     expect(modeOf(keyFile)).toBe(PRIVATE_FILE_MODE);
-    const db = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY_FILE: keyFile });
+    const db = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
+      DB_PATH: dbPath,
+      FINTRACK_DB_KEY_FILE: keyFile,
+    });
     expect(await db.all(sql`SELECT count(*) AS n FROM accounts`)).toEqual([{ n: 1 }]);
     closeDatabase(db);
     expect(out.join('\n')).toBe(CLI_MESSAGES.keyExported(keyFile));
@@ -236,7 +241,7 @@ describe('fintrack db export', () => {
   });
 
   it('does not migrate the source: a database with a migration still pending stays that way', async () => {
-    const db = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+    const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
     await db.run(
       sql`DELETE FROM ${sql.identifier(MIGRATIONS_TABLE)} WHERE id = (SELECT max(id) FROM ${sql.identifier(MIGRATIONS_TABLE)})`,
     );
@@ -247,7 +252,7 @@ describe('fintrack db export', () => {
 
     expect(await run('db', 'export', '--to', join(outputDirectory, 'fintrack.snapshot.db'))).toBe(EXIT_OK);
 
-    const after = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+    const after = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
     expect(await after.all(sql`SELECT hash, created_at FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`)).toEqual(
       appliedBefore,
     );

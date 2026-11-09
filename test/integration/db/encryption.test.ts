@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const CORRECT_KEY = 'b'.repeat(64);
 const WRONG_KEY = 'c'.repeat(64);
@@ -25,6 +26,7 @@ describe('openDatabase directory creation', () => {
   it('creates nested parent directories that do not yet exist', async () => {
     const nestedPath = join(tmpDir, 'a', 'b', 'c', 'nested.db');
     const db = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: nestedPath,
       FINTRACK_DB_KEY: CORRECT_KEY,
     });
@@ -35,6 +37,7 @@ describe('openDatabase directory creation', () => {
 describe('encryption at rest', () => {
   it('opens and seeds the DB with the correct key', async () => {
     const db = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: CORRECT_KEY,
     });
@@ -47,6 +50,7 @@ describe('encryption at rest', () => {
   it('fails to open the DB with a wrong key', async () => {
     // Write an encrypted DB with the correct key
     const db = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: CORRECT_KEY,
     });
@@ -54,6 +58,7 @@ describe('encryption at rest', () => {
 
     // Attempt to open the same file with a different key — must throw (wrong key is never silently accepted)
     const wrongDb = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: WRONG_KEY,
     });
@@ -64,6 +69,7 @@ describe('encryption at rest', () => {
 describe('concurrency posture (ADR-024)', () => {
   it('a fresh DB reports journal_mode = wal and a non-zero busy_timeout, with WAL sidecar files on disk', async () => {
     const db = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: CORRECT_KEY,
     });

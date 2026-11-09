@@ -29,6 +29,7 @@ import { PRIVATE_FILE_MODE } from '../../../src/models/export.js';
 import { KeyImportRefusal } from '../../../src/models/key-import.js';
 import type * as KeyLock from '../../../src/diplomat/db/key-lock.js';
 import { unusedDemo } from '../../unit/fixtures/demo.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 /**
  * `key import` and `db import` against real encrypted databases, in process: the importer and exporter are the
@@ -100,7 +101,7 @@ const io = (): CliIo =>
 const run = (...args: string[]) => runCli(args, io());
 
 const seedSource = async () => {
-  const db = await openDatabase({ DB_PATH: sourceDatabase, FINTRACK_DB_KEY: KEY });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: sourceDatabase, FINTRACK_DB_KEY: KEY });
   await bootstrap(db);
   await db
     .insert(accounts)
@@ -189,7 +190,7 @@ describe('fintrack key import', () => {
     expect(await run('key', 'import', '--from', keyFile)).toBe(EXIT_OK);
 
     expect(keychain.stored).toBe(KEY);
-    expect(await countRows({ DB_PATH: installDatabase })).toEqual(COUNTS);
+    expect(await countRows({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: installDatabase })).toEqual(COUNTS);
     expect(out.join('\n')).toBe(CLI_MESSAGES.keyImported());
   });
 
@@ -327,7 +328,7 @@ describe('fintrack db import', () => {
   it('round trip: opens with the imported key, bootstraps on first start, and holds the same data', async () => {
     await run('db', 'import', '--from', snapshot);
 
-    const db = await openDatabase({ DB_PATH: installDatabase });
+    const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: installDatabase });
     await bootstrap(db);
     const migrations = await db.all(sql`SELECT hash FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`);
     const [account] = await db.all<{ name: string }>(sql`SELECT name FROM accounts WHERE id = 'a1'`);
@@ -336,7 +337,11 @@ describe('fintrack db import', () => {
     );
     closeDatabase(db);
 
-    const source = await openDatabase({ DB_PATH: sourceDatabase, FINTRACK_DB_KEY: KEY });
+    const source = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
+      DB_PATH: sourceDatabase,
+      FINTRACK_DB_KEY: KEY,
+    });
     expect(await source.all(sql`SELECT hash FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`)).toEqual(migrations);
     closeDatabase(source);
     expect(account).toEqual({ name: 'Checking' });
@@ -347,7 +352,9 @@ describe('fintrack db import', () => {
     keychain.stored = null;
     vi.stubEnv('FINTRACK_DB_KEY_FILE', keyFile);
     expect(await run('db', 'import', '--from', snapshot)).toBe(EXIT_OK);
-    expect(await countRows({ DB_PATH: installDatabase, FINTRACK_DB_KEY_FILE: keyFile })).toEqual(COUNTS);
+    expect(
+      await countRows({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: installDatabase, FINTRACK_DB_KEY_FILE: keyFile }),
+    ).toEqual(COUNTS);
   });
 
   it('refuses an existing database and leaves it untouched', async () => {
@@ -371,7 +378,7 @@ describe('fintrack db import', () => {
     err = [];
     expect(await run('db', 'import', '--from', installDatabase)).toBe(EXIT_FAILURE);
     expect(err.join('\n')).toContain(CLI_MESSAGES.snapshotIsDatabase(installDatabase));
-    expect(await countRows({ DB_PATH: installDatabase })).toEqual(COUNTS);
+    expect(await countRows({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: installDatabase })).toEqual(COUNTS);
   });
 
   it('refuses the database itself reached through a symlink', async () => {
@@ -379,7 +386,7 @@ describe('fintrack db import', () => {
     const link = join(outputDirectory, 'to-live');
     symlinkSync(installDatabase, link);
     expect(await run('db', 'import', '--from', link)).toBe(EXIT_FAILURE);
-    expect(await countRows({ DB_PATH: installDatabase })).toEqual(COUNTS);
+    expect(await countRows({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: installDatabase })).toEqual(COUNTS);
   });
 
   it('refuses a snapshot that does not open with the resolved key, creating nothing', async () => {
@@ -459,7 +466,7 @@ describe('fintrack db import', () => {
     expect(staged.isOk()).toBe(true);
     const placed = await importer.publishSnapshot(staged._unsafeUnwrap());
     expect(placed.isErr()).toBe(true);
-    expect(await countRows({ DB_PATH: installDatabase })).toEqual(COUNTS);
+    expect(await countRows({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: installDatabase })).toEqual(COUNTS);
   });
 
   it('copies a read-only snapshot to an owner-only file all the same', async () => {

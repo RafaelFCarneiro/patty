@@ -10,6 +10,7 @@ import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { DATA_REWRITING_MIGRATIONS } from '../../../src/diplomat/db/migrations.js';
 import { instanceRepo } from '../../../src/diplomat/db/repos/instance.js';
 import { InstanceKind } from '../../../src/models/instance.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'e'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -29,7 +30,7 @@ const journalBefore = (folder: string): void => {
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
 
-const open = () => openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
+const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-instance-kind-migration-'));

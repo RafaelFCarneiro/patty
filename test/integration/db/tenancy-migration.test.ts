@@ -20,6 +20,7 @@ import {
 import { DefaultCategoryId } from '../../../src/diplomat/db/seed/categories.js';
 import { seedAsBefore } from './legacy-seed.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'e'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -41,7 +42,7 @@ const journalBeforeTenancy = (folder: string): void => {
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
 
-const open = () => openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
+const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-tenancy-migration-'));
@@ -290,7 +291,11 @@ describe('migration 0021 — tenancy data', () => {
     expect(statSync(backup).mode & 0o077).toBe(0);
 
     // The backup is the database as it was: it opens with the same key and has no user_id anywhere.
-    const copy = await openDatabase({ DB_PATH: backup, FINTRACK_DB_KEY: TEST_KEY });
+    const copy = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
+      DB_PATH: backup,
+      FINTRACK_DB_KEY: TEST_KEY,
+    });
     expect(await countOf(copy, 'transactions')).toBe(2);
     expect(await copy.all(sql`SELECT name FROM pragma_table_info('transactions') WHERE name = 'user_id'`)).toEqual([]);
   });

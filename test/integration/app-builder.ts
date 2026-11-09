@@ -19,6 +19,7 @@ import {
   type RunEffectsSequence,
   type Scoped,
 } from '../../src/controllers/deps.js';
+import { keyLockPathForTest } from '../unit/fixtures/key-lock.js';
 
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);
 
@@ -71,6 +72,7 @@ export const buildApp = async (opts?: {
   sessionRecheckMs?: number;
 }): Promise<AppContext> => {
   const db = await openDatabase({
+    KEY_LOCK_PATH: keyLockPathForTest(),
     DB_PATH: opts?.dbPath ?? (inject('DB_PATH' as never) as string),
     FINTRACK_DB_KEY: TEST_ENCRYPTION_KEY,
   });

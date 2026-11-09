@@ -13,6 +13,7 @@ import { DATA_REWRITING_MIGRATIONS } from '../../../src/diplomat/db/migrations.j
 import { applyPendingMigrationsHolding, MIGRATIONS_TABLE } from '../../../src/diplomat/db/migration-barrier.js';
 import { backupPath } from '../../../src/diplomat/db/safety-copy.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'd'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -38,7 +39,7 @@ const journalBeforeAuth = (folder: string): void => {
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
 
-const open = () => openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
+const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
 
 /** Bootstrap as the pre-auth release did: its migrations, then its seed (bootstrap() seeds for the current schema). */
 const legacyBootstrap = async (db: Db, migrationsFolder: string): Promise<void> => {
@@ -154,7 +155,11 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     expect(stderr.mock.calls.flat().join(' ')).not.toContain(TEST_KEY);
 
     // The copy is the pre-migration state: same encrypted file, same key, no auth tables, same data.
-    const restored = await openDatabase({ DB_PATH: backup, FINTRACK_DB_KEY: TEST_KEY });
+    const restored = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
+      DB_PATH: backup,
+      FINTRACK_DB_KEY: TEST_KEY,
+    });
     expect(await restored.all(sql`SELECT name FROM sqlite_master WHERE name = 'users'`)).toEqual([]);
     expect(await domainDump(restored)).toEqual(beforeDump);
   });
@@ -170,7 +175,11 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
     await bootstrap(legacy);
 
-    const restored = await openDatabase({ DB_PATH: backupPath(dbPath, AUTH_MIGRATION_TAG), FINTRACK_DB_KEY: TEST_KEY });
+    const restored = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
+      DB_PATH: backupPath(dbPath, AUTH_MIGRATION_TAG),
+      FINTRACK_DB_KEY: TEST_KEY,
+    });
     const ids = await restored.all<{ id: string }>(sql`SELECT id FROM accounts ORDER BY id`);
     expect(ids.map(({ id }) => id)).toEqual(['acc-1', 'acc-2', 'acc-late']);
   });
@@ -232,11 +241,15 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     expect(existsSync(`${backup}-wal`)).toBe(false);
     const alone = join(tmpDir, 'alone.db');
     cpSync(backup, alone); // the main file only, as an operator restoring it would have
-    const restored = await openDatabase({ DB_PATH: alone, FINTRACK_DB_KEY: TEST_KEY });
+    const restored = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
+      DB_PATH: alone,
+      FINTRACK_DB_KEY: TEST_KEY,
+    });
     expect((await restored.all(sql`SELECT 1 FROM accounts`)).length).toBe(2);
     await expect(
-      openDatabase({ DB_PATH: alone, FINTRACK_DB_KEY: 'f'.repeat(64) }).then((db) =>
-        db.all(sql`SELECT 1 FROM accounts`),
+      openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: alone, FINTRACK_DB_KEY: 'f'.repeat(64) }).then(
+        (db) => db.all(sql`SELECT 1 FROM accounts`),
       ),
     ).rejects.toThrow();
   });
@@ -298,7 +311,8 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     // snapshot. This is the guard against the two drifting apart: the same pre-auth database, migrated each way,
     // must be indistinguishable. A drizzle or @libsql/client bump has to keep it green (docs/releasing.md).
     describe("parity with drizzle-orm/libsql's own migrator", () => {
-      const openAt = (path: string) => openDatabase({ DB_PATH: path, FINTRACK_DB_KEY: TEST_KEY });
+      const openAt = (path: string) =>
+        openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: path, FINTRACK_DB_KEY: TEST_KEY });
 
       /** A pre-auth database with the fixture data, at `path`. */
       const preAuthDatabase = async (path: string): Promise<Db> => {
@@ -477,7 +491,11 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
     expect(await ownerRows(first)).toHaveLength(1);
     // Neither starter copied the other's already-migrated file over the good backup.
-    const restored = await openDatabase({ DB_PATH: backupPath(dbPath, AUTH_MIGRATION_TAG), FINTRACK_DB_KEY: TEST_KEY });
+    const restored = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
+      DB_PATH: backupPath(dbPath, AUTH_MIGRATION_TAG),
+      FINTRACK_DB_KEY: TEST_KEY,
+    });
     expect(await restored.all(sql`SELECT name FROM sqlite_master WHERE name = 'users'`)).toEqual([]);
     expect(await domainDump(restored)).toEqual(beforeDump);
     expect(

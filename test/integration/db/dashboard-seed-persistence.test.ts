@@ -16,6 +16,7 @@ import { conflict } from '../../../src/models/error.js';
 import { Locale } from '../../../src/models/locale.js';
 import { randomUUID } from 'node:crypto';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'e'.repeat(64);
 
@@ -33,6 +34,7 @@ afterEach(() => {
 
 const openOpts = () => ({
   DB_PATH: dbPath,
+  KEY_LOCK_PATH: keyLockPathForTest(),
   FINTRACK_DB_KEY: TEST_KEY,
   PORT: 3001,
   MCP_TRANSPORT: McpTransport.enum.http,

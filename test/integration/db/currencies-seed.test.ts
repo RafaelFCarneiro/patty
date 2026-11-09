@@ -8,6 +8,7 @@ import { type Db, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { currenciesRepo } from '../../../src/diplomat/db/repos/currencies.js';
 import { currencies } from '../../../src/diplomat/db/schema.js';
 import { CurrencyCode } from '../../../src/models/money.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'd'.repeat(64);
 const { BRL, USD, MXN, COP, USDC, BTC } = CurrencyCode.enum;
@@ -17,7 +18,11 @@ let db: Db;
 
 beforeEach(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-currencies-seed-'));
-  db = await openDatabase({ DB_PATH: join(tmpDir, 'seed.db'), FINTRACK_DB_KEY: TEST_KEY });
+  db = await openDatabase({
+    KEY_LOCK_PATH: keyLockPathForTest(),
+    DB_PATH: join(tmpDir, 'seed.db'),
+    FINTRACK_DB_KEY: TEST_KEY,
+  });
 });
 
 afterEach(() => {

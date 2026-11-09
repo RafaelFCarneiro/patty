@@ -32,8 +32,7 @@ export const BUSY_TIMEOUT_MS = 5000;
 export const assertBusyTimeout = (client: ReturnType<typeof createClient>): Promise<unknown> =>
   client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
 
-type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY' | 'FINTRACK_DB_KEY_FILE'> &
-  Partial<Pick<Config, 'KEY_LOCK_PATH'>>;
+type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY' | 'FINTRACK_DB_KEY_FILE' | 'KEY_LOCK_PATH'>;
 
 const KEY_GENERATION_HINT =
   'Generate one with `openssl rand -hex 32` and provide it via FINTRACK_DB_KEY_FILE ' +
@@ -94,9 +93,7 @@ const inKeychain = async <T>(work: () => T | Promise<T>): Promise<T> => {
   }
 };
 
-const generateKeychainKey = (entry: KeychainEntry, keyLockPath: string | undefined): Promise<string> => {
-  if (keyLockPath === undefined)
-    throw new Error('fintrack: generating a database key needs KEY_LOCK_PATH in the config.');
+const generateKeychainKey = (entry: KeychainEntry, keyLockPath: string): Promise<string> => {
   return withKeyLock(
     () =>
       inKeychain(() => {
@@ -110,7 +107,7 @@ const generateKeychainKey = (entry: KeychainEntry, keyLockPath: string | undefin
   );
 };
 
-const resolveKeychainKey = async (keyLockPath: string | undefined): Promise<string> => {
+const resolveKeychainKey = async (keyLockPath: string): Promise<string> => {
   const entry = await inKeychain(keychainEntry);
   const existing = await inKeychain(() => entry.getPassword());
   return existing || generateKeychainKey(entry, keyLockPath);

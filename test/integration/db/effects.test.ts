@@ -82,6 +82,7 @@ import {
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transaction-tag.js';
 import type { TransactionRowEntity } from '../../../src/adapters/transactions.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'e'.repeat(64);
 
@@ -108,6 +109,7 @@ const conflictError = (): AppError => conflict;
 beforeEach(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-uow-'));
   db = await openDatabase({
+    KEY_LOCK_PATH: keyLockPathForTest(),
     DB_PATH: join(tmpDir, 'uow.db'),
     FINTRACK_DB_KEY: TEST_KEY,
   });

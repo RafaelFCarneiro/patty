@@ -17,6 +17,7 @@ import { USAGE } from '../../../src/diplomat/cli/commands.js';
 import { databaseAheadMessage } from '../../../src/models/database.js';
 import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, demoNotReady } from '../../../src/models/demo/core.js';
 import { startupRefusalMessage } from '../../../src/models/startup.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 /**
  * The real binary, as a script or an installer runs it: a child process with a piped (non-TTY) stdin, its own
@@ -52,7 +53,7 @@ const fintrack = (args: string[], stdin = '') => {
 };
 
 const owner = async () => {
-  const db = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
   try {
     const rows = await db.all<{ id: string; username: string | null; password_hash: string | null }>(
       sql`SELECT id, username, password_hash FROM users`,
@@ -225,7 +226,7 @@ describe('an older build against a newer database (the binary)', () => {
   const AHEAD = databaseAheadMessage('0.0.0-development');
 
   const aheadDatabase = async () => {
-    const db = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+    const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
     try {
       await bootstrap(db);
       await db.run(
@@ -285,7 +286,11 @@ describe('a process told to open the demo against a database that is not one (th
   };
 
   it.each(['stdio', 'http'] as const)('%s: prints the refusal, no stack, and exits non-zero', async (transport) => {
-    const db = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: DEMO_DB_KEY });
+    const db = await openDatabase({
+      KEY_LOCK_PATH: keyLockPathForTest(),
+      DB_PATH: dbPath,
+      FINTRACK_DB_KEY: DEMO_DB_KEY,
+    });
     try {
       await bootstrap(db);
     } finally {

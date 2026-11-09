@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { McpTransport } from '../../../src/config.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { currenciesRepo } from '../../../src/diplomat/db/repos/currencies.js';
+import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 const TEST_KEY = 'c'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -46,6 +47,7 @@ afterEach(() => {
 
 const openOpts = () => ({
   DB_PATH: dbPath,
+  KEY_LOCK_PATH: keyLockPathForTest(),
   FINTRACK_DB_KEY: TEST_KEY,
   PORT: 3001,
   MCP_TRANSPORT: McpTransport.enum.http,
