@@ -12,12 +12,29 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+const probed = vi.hoisted(() => ({ files: [] as string[] }));
+
+vi.mock('../../../../src/diplomat/db/export.js', async () => {
+  const { readdirSync: list } = await import('node:fs');
+  const { dirname: directoryOf } = await import('node:path');
+  return {
+    countSnapshotRows: async (copyPath: string) => {
+      probed.files = list(directoryOf(copyPath)).sort();
+      return { accounts: 0, transactions: 0 };
+    },
+  };
+});
+
 import { FILE_EXISTS_CODE } from '../../../../src/models/export.js';
 import {
   acquireDatabaseLock,
   canonicalPath,
-  copyNewPrivateFile,
+  countRowsOnCopy,
+  discardStaged,
+  hasDataBearingCompanion,
+  publishStaged,
+  stagePrivateCopy,
   removeDatabaseFiles,
 } from '../../../../src/diplomat/db/database-files.js';
 
@@ -112,6 +129,9 @@ describe('acquireDatabaseLock', () => {
   });
 });
 
+const copyNewPrivateFile = async (from: string, to: string): Promise<void> =>
+  publishStaged(await stagePrivateCopy(from, to), to);
+
 describe('copyNewPrivateFile', () => {
   it('copies into a new owner-only file', async () => {
     writeFileSync(join(dir, 'from.db'), 'snapshot');
@@ -152,5 +172,58 @@ describe('copyNewPrivateFile', () => {
     const copy = copyNewPrivateFile(join(dir, 'from.db'), join(dir, 'to.db'));
     await expect(copy).rejects.toMatchObject({ code: FILE_EXISTS_CODE });
     expect(existsSync(join(dir, 'future.db'))).toBe(false);
+  });
+});
+
+describe('staged copies', () => {
+  it('stages beside the destination without creating it, and discards on request', async () => {
+    writeFileSync(join(dir, 'from.db'), 'snapshot');
+    const staged = await stagePrivateCopy(join(dir, 'from.db'), join(dir, 'to.db'));
+    expect(existsSync(join(dir, 'to.db'))).toBe(false);
+    expect(readFileSync(staged.path, 'utf8')).toBe('snapshot');
+    discardStaged(staged);
+    expect(readdirSync(dir)).toEqual(['from.db']);
+  });
+
+  it('publishes the bytes that were staged, whatever the source becomes meanwhile', async () => {
+    writeFileSync(join(dir, 'from.db'), 'snapshot');
+    const staged = await stagePrivateCopy(join(dir, 'from.db'), join(dir, 'to.db'));
+    writeFileSync(join(dir, 'from.db'), 'changed');
+    await publishStaged(staged, join(dir, 'to.db'));
+    expect(readFileSync(join(dir, 'to.db'), 'utf8')).toBe('snapshot');
+  });
+
+  it('removes the data directory it created when the staged copy is discarded, and only that', async () => {
+    writeFileSync(join(dir, 'from.db'), 'snapshot');
+    const created = await stagePrivateCopy(join(dir, 'from.db'), join(dir, 'new', 'deep', 'to.db'));
+    discardStaged(created);
+    expect(existsSync(join(dir, 'new'))).toBe(false);
+
+    mkdirSync(join(dir, 'existing'));
+    const reused = await stagePrivateCopy(join(dir, 'from.db'), join(dir, 'existing', 'to.db'));
+    discardStaged(reused);
+    expect(existsSync(join(dir, 'existing'))).toBe(true);
+  });
+
+  it('names a -wal or -journal beside a database as data it would not carry, a dangling link included', () => {
+    expect(hasDataBearingCompanion(join(dir, 'a.db'))).toBe(false);
+    writeFileSync(join(dir, 'a.db-shm'), '');
+    expect(hasDataBearingCompanion(join(dir, 'a.db'))).toBe(false);
+    symlinkSync(join(dir, 'nowhere'), join(dir, 'a.db-wal'));
+    expect(hasDataBearingCompanion(join(dir, 'a.db'))).toBe(true);
+    writeFileSync(join(dir, 'b.db-journal'), '');
+    expect(hasDataBearingCompanion(join(dir, 'b.db'))).toBe(true);
+  });
+});
+
+describe('countRowsOnCopy', () => {
+  it('copies the log that sits beside a symlink’s target, not beside the link', async () => {
+    mkdirSync(join(dir, 'real'));
+    mkdirSync(join(dir, 'linked'));
+    writeFileSync(join(dir, 'real', 'fintrack.db'), 'db');
+    writeFileSync(join(dir, 'real', 'fintrack.db-wal'), 'wal');
+    symlinkSync(join(dir, 'real', 'fintrack.db'), join(dir, 'linked', 'fintrack.db'));
+    await countRowsOnCopy(join(dir, 'linked', 'fintrack.db'), 'k'.repeat(64));
+    expect(probed.files).toEqual(['probe.db', 'probe.db-wal']);
   });
 });

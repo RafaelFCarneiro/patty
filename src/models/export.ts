@@ -15,3 +15,5 @@ export const DATA_BEARING_SUFFIXES = ['-wal', '-journal'] as const;
 export const FILE_EXISTS_CODE = 'EEXIST';
 
 export const PRIVATE_DIRECTORY_MODE = 0o700;
+
+export type StagedCopy = { path: string; source: string; createdDirectory: string | null };

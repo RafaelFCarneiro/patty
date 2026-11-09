@@ -18,5 +18,9 @@ export const unusedImporter: Importer = {
   storeKey: () => Promise.reject(new Error('importer used')),
   resolveKey: () => Promise.reject(new Error('importer used')),
   inspectSnapshot: () => Promise.reject(new Error('importer used')),
-  placeSnapshot: () => Promise.reject(new Error('importer used')),
+  stageSnapshot: () => Promise.reject(new Error('importer used')),
+  publishSnapshot: () => Promise.reject(new Error('importer used')),
+  discardSnapshot: () => {
+    throw new Error('importer used');
+  },
 };

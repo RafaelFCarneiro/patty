@@ -1,4 +1,5 @@
-import { ResultAsync } from 'neverthrow';
+import { errAsync, ResultAsync } from 'neverthrow';
+import type { ExportedRowCounts, StagedCopy } from '../../../models/export.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import {
   DbSubcommand,
@@ -11,7 +12,16 @@ import {
 } from '../../../wire/in/cli.js';
 import { snapshotDestination } from '../export-file.js';
 import { snapshotSource } from '../import-file.js';
-import { EXIT_OK, exitCodeOf, fail, failed, parseFlags, refuseUnknownSubcommand, type CliIo } from '../io.js';
+import {
+  EXIT_OK,
+  exitCodeOf,
+  fail,
+  failed,
+  parseFlags,
+  refuseUnknownSubcommand,
+  type CliIo,
+  type Importer,
+} from '../io.js';
 import { CLI_MESSAGES } from '../messages.js';
 
 export const DB_HELP = `
@@ -42,17 +52,26 @@ const exportSnapshot = async (args: readonly string[], io: CliIo): Promise<numbe
   return EXIT_OK;
 };
 
+const publishChecked = (importer: Importer, staged: StagedCopy, key: string): ResultAsync<ExportedRowCounts, string> =>
+  new ResultAsync(importer.inspectSnapshot(staged, key))
+    .andThen((counts) => new ResultAsync(importer.publishSnapshot(staged)).map(() => counts))
+    .orElse((failure) => {
+      importer.discardSnapshot(staged);
+      return errAsync(failure);
+    });
+
 const importSnapshot = async (args: readonly string[], io: CliIo): Promise<number> => {
   const parsed = parseFlags(args, IMPORT_FLAGS, ImportOptionsSchema, IMPORT_POSITIONALS);
   if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
   const { importer } = io;
-  const imported = await snapshotSource(importer, parsed.options.from).asyncAndThen((snapshot) =>
-    new ResultAsync(importer.resolveKey())
-      .andThen((key) => new ResultAsync(importer.inspectSnapshot(snapshot, key)))
-      .andThen((counts) => new ResultAsync(importer.placeSnapshot(snapshot)).map(() => counts)),
+  const source = snapshotSource(importer, parsed.options.from);
+  if (source.isErr()) return failed(io, source.error);
+  const { file, target } = source.value;
+  const imported = await new ResultAsync(importer.resolveKey()).andThen((key) =>
+    new ResultAsync(importer.stageSnapshot(file)).andThen((staged) => publishChecked(importer, staged, key)),
   );
   if (imported.isErr()) return failed(io, imported.error);
-  io.out(CLI_MESSAGES.snapshotImported(importer.databasePath(), imported.value));
+  io.out(CLI_MESSAGES.snapshotImported(target, imported.value));
   return EXIT_OK;
 };
 

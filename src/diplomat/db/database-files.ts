@@ -10,17 +10,20 @@ import {
   mkdirSync,
   mkdtempSync,
   readlinkSync,
+  rmdirSync,
   realpathSync,
   rmSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { DEMO_DB_KEY, DemoProbeAbsence, type DemoDatabaseLook } from '../../models/demo/core.js';
 import {
+  DATA_BEARING_SUFFIXES,
   DATABASE_COMPANION_SUFFIXES,
   EXCLUSIVE_CREATE_FLAG,
   PRIVATE_DIRECTORY_MODE,
   PRIVATE_FILE_MODE,
   type ExportedRowCounts,
+  type StagedCopy,
 } from '../../models/export.js';
 import { closeDatabase, openDatabaseWithKey } from './driver.js';
 import { countSnapshotRows } from './export.js';
@@ -70,10 +73,11 @@ const PROBE_FILE_SUFFIXES = ['', '-wal', '-journal'] as const;
 /** libSQL has no read-only open and closing can checkpoint a log: probe a copy, never the original. */
 const onCopyOf = async <T>(databasePath: string, look: (copyPath: string) => Promise<T>): Promise<T> => {
   const directory = mkdtempSync(join(tmpdir(), 'fintrack-probe-'));
+  const source = canonicalPath(databasePath) ?? databasePath;
   try {
     PROBE_FILE_SUFFIXES.forEach((suffix) => {
-      if (existsSync(`${databasePath}${suffix}`)) {
-        copyFileSync(`${databasePath}${suffix}`, join(directory, `probe.db${suffix}`));
+      if (existsSync(`${source}${suffix}`)) {
+        copyFileSync(`${source}${suffix}`, join(directory, `probe.db${suffix}`));
       }
     });
     return await look(join(directory, 'probe.db'));
@@ -111,17 +115,54 @@ const copyToStaging = async (from: string, staging: string): Promise<void> => {
   await pipeline(createReadStream(from), destination.createWriteStream());
 };
 
-// Hard link, not rename: link refuses an existing target.
-export const copyNewPrivateFile = async (from: string, to: string): Promise<void> => {
-  mkdirSync(dirname(to), { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
-  const staging = `${to}${IMPORT_STAGING_INFIX}${randomUUID()}`;
+const removeEmptyDirectories = (leaf: string, top: string): void => {
   try {
-    await copyToStaging(from, staging);
-    await link(staging, to);
-  } finally {
-    rmSync(staging, { force: true });
+    rmdirSync(leaf);
+  } catch {
+    return;
+  }
+  if (leaf !== top) removeEmptyDirectories(dirname(leaf), top);
+};
+
+export const discardStaged = ({ path, createdDirectory }: StagedCopy): void => {
+  rmSync(path, { force: true });
+  if (createdDirectory !== null) removeEmptyDirectories(dirname(path), createdDirectory);
+};
+
+export const stagePrivateCopy = async (from: string, to: string): Promise<StagedCopy> => {
+  const createdDirectory = mkdirSync(dirname(to), { recursive: true, mode: PRIVATE_DIRECTORY_MODE }) ?? null;
+  const staged = { path: `${to}${IMPORT_STAGING_INFIX}${randomUUID()}`, source: from, createdDirectory };
+  try {
+    await copyToStaging(from, staged.path);
+  } catch (cause) {
+    discardStaged(staged);
+    throw cause;
+  }
+  return staged;
+};
+
+// Hard link, not rename: link refuses an existing target.
+export const publishStaged = async (staged: StagedCopy, to: string): Promise<void> => {
+  try {
+    await link(staged.path, to);
+  } catch (cause) {
+    discardStaged(staged);
+    throw cause;
+  }
+  rmSync(staged.path, { force: true });
+};
+
+const existsAsLink = (path: string): boolean => {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
   }
 };
+
+export const hasDataBearingCompanion = (databasePath: string): boolean =>
+  DATA_BEARING_SUFFIXES.some((suffix) => existsAsLink(`${databasePath}${suffix}`));
 
 const LOCK_SUFFIX = '.lock';
 

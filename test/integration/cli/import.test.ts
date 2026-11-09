@@ -427,6 +427,21 @@ describe('fintrack db import', () => {
     expect(existsSync(installDirectory)).toBe(false);
   });
 
+  it('refuses, creating nothing, a snapshot that gains a -wal after the standalone check', async () => {
+    writeFileSync(`${snapshot}-wal`, 'late');
+    const staged = await createImporter().stageSnapshot(snapshot);
+    expect(staged._unsafeUnwrapErr()).toBe(CLI_MESSAGES.snapshotNotStandalone(snapshot));
+    expect(existsSync(installDirectory)).toBe(false);
+  });
+
+  it('fails as a CLI failure, not a crash, when the configuration itself is invalid', async () => {
+    vi.stubEnv('FINTRACK_DB_KEY', KEY);
+    vi.stubEnv('FINTRACK_DB_KEY_FILE', keyFile);
+    expect(await run('db', 'import', '--from', snapshot)).toBe(EXIT_FAILURE);
+    expect(err.join('\n')).toContain('FINTRACK_DB_KEY');
+    expect(existsSync(installDatabase)).toBe(false);
+  });
+
   it('refuses a missing source, and needs --from', async () => {
     expect(await run('db', 'import', '--from', join(outputDirectory, 'nope.db'))).toBe(EXIT_FAILURE);
     expect(await run('db', 'import')).toBe(EXIT_FAILURE);
@@ -439,7 +454,10 @@ describe('fintrack db import', () => {
     await run('db', 'import', '--from', snapshot);
     expect(readFileSync(snapshot).equals(before)).toBe(true);
 
-    const placed = await createImporter().placeSnapshot(snapshot);
+    const importer = createImporter();
+    const staged = await importer.stageSnapshot(snapshot);
+    expect(staged.isOk()).toBe(true);
+    const placed = await importer.publishSnapshot(staged._unsafeUnwrap());
     expect(placed.isErr()).toBe(true);
     expect(await countRows({ DB_PATH: installDatabase })).toEqual(COUNTS);
   });

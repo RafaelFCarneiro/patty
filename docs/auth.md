@@ -620,8 +620,10 @@ npx @rafaelfcarneiro/fintrack@latest setup <client>
   Otherwise it copies the snapshot beside `DB_PATH` into a private staging file (`<DB_PATH>.import-<random>`, `0600`;
   the data directory `0700` if it had to be created) and publishes it with a hard link, which is atomic and refuses a
   `DB_PATH` that exists: `DB_PATH` is never visible empty or half-copied, so a client starting meanwhile cannot open it,
-  and an interrupted import leaves at most that staging file, never something at `DB_PATH` that blocks the next one. A killed import can leave a `*.import-*` staging file beside `DB_PATH`; it is safe to delete. It
-  then prints the row counts of the accounts and transactions tables, to compare with what `db export` printed.
+  and an interrupted import leaves at most that staging file, never something at `DB_PATH` that blocks the next one. A
+  killed import can leave a `*.import-*` staging file beside `DB_PATH`; it is safe to delete. The staged file is the one
+  that is checked, counted and published, so the snapshot changing meanwhile cannot install bytes that were not checked;
+  a `-wal` or `-journal` appearing beside the snapshot before the copy ends refuses the import. It then prints the row counts of the accounts and transactions tables, to compare with what `db export` printed.
   The snapshot must be one `db export` wrote: a live database file with a `-wal` beside it would be copied without it.
 
 **Docker to npm.** Stop the container, then export from it and import on the host. The container's key is already on the
@@ -629,11 +631,17 @@ host as `fintrack_db_key`, so only the data needs exporting:
 
 ```bash
 docker compose stop fintrack
-docker compose run --rm --no-deps -T --entrypoint sh fintrack \
-  -c 'umask 077; node dist/main.js db export --to /tmp/back.db >&2 && cat /tmp/back.db' > ./fintrack.snapshot.db
+(umask 077; docker compose run --rm --no-deps -T --entrypoint sh fintrack \
+  -c 'umask 077; node dist/main.js db export --to /tmp/back.db >&2 && cat /tmp/back.db' > ./fintrack.snapshot.db)
+sudo chown "$USER" ./fintrack_db_key   # Linux only, see below
 npx @rafaelfcarneiro/fintrack@latest key import --from ./fintrack_db_key
 npx @rafaelfcarneiro/fintrack@latest db import --from ./fintrack.snapshot.db
 ```
+
+The outer `umask 077` matters: the host shell creates `./fintrack.snapshot.db` for the redirection before Docker starts,
+so the one inside the container does not reach it. On native Linux the move to Docker handed the key file to UID 1000 so
+the container could read it; the `chown` takes it back so `key import` can read it as you (Docker Desktop did not change
+the owner, so skip it there).
 
 `scripts/docker-move-smoke.sh` also runs this direction (with the key supplied as a file, since a CI host has no
 keychain); the key-into-keychain step is covered by the integration tests with an in-memory keychain.

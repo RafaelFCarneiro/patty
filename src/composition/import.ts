@@ -3,10 +3,17 @@ import { err, ok, type Result } from 'neverthrow';
 import { loadConfig } from '../config.js';
 import type { Importer } from '../diplomat/cli/io.js';
 import { CLI_MESSAGES } from '../diplomat/cli/messages.js';
-import { copyNewPrivateFile, countRowsOnCopy } from '../diplomat/db/database-files.js';
+import {
+  countRowsOnCopy,
+  discardStaged,
+  hasDataBearingCompanion,
+  publishStaged,
+  stagePrivateCopy,
+} from '../diplomat/db/database-files.js';
 import { findEncryptionKey, keychainHoldsKey, storeKeychainKeyIfAbsent } from '../diplomat/db/driver.js';
 import { reasonOf } from '../models/error.js';
-import { KeyImportRefusal } from '../models/key-import.js';
+import type { StagedCopy } from '../models/export.js';
+import { KeyImportRefusal, type KeySources } from '../models/key-import.js';
 
 const attempt = async <T>(work: () => Promise<T>, failure: (cause: unknown) => string): Promise<Result<T, string>> => {
   try {
@@ -16,19 +23,25 @@ const attempt = async <T>(work: () => Promise<T>, failure: (cause: unknown) => s
   }
 };
 
+const refuseStaged = (staged: StagedCopy, snapshot: string): Result<StagedCopy, string> => {
+  discardStaged(staged);
+  return err(CLI_MESSAGES.snapshotNotStandalone(snapshot));
+};
+
+const readKeySources = async (): Promise<KeySources> => {
+  const config = loadConfig();
+  const keyFileConfigured = Boolean(config.FINTRACK_DB_KEY_FILE);
+  const keyEnvConfigured = Boolean(config.FINTRACK_DB_KEY);
+  return {
+    keyFileConfigured,
+    keyEnvConfigured,
+    keychainHoldsKey: keyFileConfigured || keyEnvConfigured ? false : await keychainHoldsKey(),
+  };
+};
+
 export const createImporter = (): Importer => ({
   databasePath: () => loadConfig().DB_PATH,
-  keySources: () =>
-    attempt(async () => {
-      const config = loadConfig();
-      const keyFileConfigured = Boolean(config.FINTRACK_DB_KEY_FILE);
-      const keyEnvConfigured = Boolean(config.FINTRACK_DB_KEY);
-      return {
-        keyFileConfigured,
-        keyEnvConfigured,
-        keychainHoldsKey: keyFileConfigured || keyEnvConfigured ? false : await keychainHoldsKey(),
-      };
-    }, reasonOf),
+  keySources: () => attempt(readKeySources, reasonOf),
   proveAgainstDatabase: (key) => {
     const { DB_PATH } = loadConfig();
     if (!existsSync(DB_PATH)) return Promise.resolve(ok(undefined));
@@ -47,10 +60,15 @@ export const createImporter = (): Importer => ({
     const found = await attempt(() => findEncryptionKey(loadConfig()), reasonOf);
     return found.andThen((key) => (key === null ? err(CLI_MESSAGES.noKeyToImport) : ok(key)));
   },
-  inspectSnapshot: (snapshot, key) =>
+  inspectSnapshot: (staged, key) =>
     attempt(
-      () => countRowsOnCopy(snapshot, key),
-      () => CLI_MESSAGES.keyDoesNotOpenSnapshot(snapshot),
+      () => countRowsOnCopy(staged.path, key),
+      () => CLI_MESSAGES.keyDoesNotOpenSnapshot(staged.source),
     ),
-  placeSnapshot: (snapshot) => attempt(() => copyNewPrivateFile(snapshot, loadConfig().DB_PATH), reasonOf),
+  stageSnapshot: async (snapshot) => {
+    const staged = await attempt(() => stagePrivateCopy(snapshot, loadConfig().DB_PATH), reasonOf);
+    return staged.andThen((copy) => (hasDataBearingCompanion(snapshot) ? refuseStaged(copy, snapshot) : ok(copy)));
+  },
+  publishSnapshot: (staged) => attempt(() => publishStaged(staged, loadConfig().DB_PATH), reasonOf),
+  discardSnapshot: discardStaged,
 });

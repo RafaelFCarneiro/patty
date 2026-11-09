@@ -48,8 +48,12 @@ const importRefusal = (file: string, target: string): string | null => {
   return null;
 };
 
-export const snapshotSource = (importer: Importer, from: string): Result<string, string> =>
-  sourceFile(from).andThen((file) => {
-    const refusal = importRefusal(file, importer.databasePath());
-    return refusal === null ? ok(file) : err(refusal);
-  });
+export type SnapshotSource = { file: string; target: string };
+
+export const snapshotSource = (importer: Importer, from: string): Result<SnapshotSource, string> =>
+  sourceFile(from).andThen((file) =>
+    Result.fromThrowable(() => importer.databasePath(), reasonOf)().andThen((target) => {
+      const refusal = importRefusal(file, target);
+      return refusal === null ? ok({ file, target }) : err(refusal);
+    }),
+  );

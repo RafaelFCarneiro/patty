@@ -3,7 +3,7 @@ import type { Result, ResultAsync } from 'neverthrow';
 import type { ZodType, ZodTypeDef } from 'zod';
 import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter } from '../../controllers/deps.js';
 import { reasonOf } from '../../models/error.js';
-import type { ExportedRowCounts } from '../../models/export.js';
+import type { ExportedRowCounts, StagedCopy } from '../../models/export.js';
 import type { KeySources } from '../../models/key-import.js';
 import { databaseAheadMessage, type DatabaseAhead } from '../../models/database.js';
 import type { DemoFailure, DemoPrepared } from '../../models/demo/core.js';
@@ -65,8 +65,10 @@ export type Importer = {
   proveAgainstDatabase: (key: string) => Promise<Result<void, string>>;
   storeKey: (key: string) => Promise<Result<void, string>>;
   resolveKey: () => Promise<Result<string, string>>;
-  inspectSnapshot: (snapshot: string, key: string) => Promise<Result<ExportedRowCounts, string>>;
-  placeSnapshot: (snapshot: string) => Promise<Result<void, string>>;
+  inspectSnapshot: (staged: StagedCopy, key: string) => Promise<Result<ExportedRowCounts, string>>;
+  stageSnapshot: (snapshot: string) => Promise<Result<StagedCopy, string>>;
+  publishSnapshot: (staged: StagedCopy) => Promise<Result<void, string>>;
+  discardSnapshot: (staged: StagedCopy) => void;
 };
 
 export type DemoShell = {
