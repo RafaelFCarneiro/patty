@@ -14,7 +14,7 @@ The `.github/workflows/release.yml` workflow runs on every push to `main`. It:
    - `feat:` → minor (`0.1.0` → `0.2.0`)
    - `feat!:` / `BREAKING CHANGE:` → major (`0.1.0` → `1.0.0`)
    - `docs:` / `chore:` / `refactor:` / `test:` → **no release** (nothing publishes)
-3. If there is a releasable change, semantic-release creates the `vX.Y.Z` tag and the GitHub Release with
+3. If there is a releasable change, semantic-release creates the `patty-vX.Y.Z` tag and the GitHub Release with
    auto-generated notes, and writes the version into `package.json` for this run. Its npm plugin has
    `npmPublish: false`: it versions, it does not publish.
 4. The next step of the same job **stages** the version: `npm install -g npm@latest`, then
@@ -57,7 +57,7 @@ and publishes nothing. To turn releases on: Settings → Secrets and variables �
 ## Container image (GHCR)
 
 The same workflow publishes the container image (ADR-032) right after the release is cut. The `release` job exposes
-two outputs, `released` and `version`, read from the `vX.Y.Z` tag semantic-release creates on `HEAD` (it has no
+two outputs, `released` and `version`, read from the `patty-vX.Y.Z` tag semantic-release creates on `HEAD` (it has no
 `@semantic-release/git`, so `HEAD` is the tagged commit; no tag → `released=false`). The `image` job runs only when
 `released == 'true'`:
 
@@ -202,9 +202,24 @@ How this lands in each HTTP-mode client:
 - **VS Code** `.vscode/mcp.json`: set the `url` to your chosen port, e.g. `http://127.0.0.1:3007/mcp`.
 - **Claude Desktop**: the `mcp-remote` bridge arg is the URL — point it at the same port.
 
-## Cutting a first release
+## Tag format and version line
 
-Versioning starts from `v1.0.0` on the first `feat:`-or-higher commit merged to `main` (semantic-release's
-default for an untagged repo is `1.0.0`). To start lower, push an initial tag before the first release, e.g.
-`git tag v0.1.0 && git push origin v0.1.0`, and the next `feat:` becomes `0.2.0`. Do the one-time setup above first,
-then set `RELEASE_ENABLED`.
+Release tags are `patty-vX.Y.Z` (`tagFormat` in `.releaserc.json`; `release.yml` defines the prefix once as
+`TAG_PREFIX`). `@rfc0/patty` is a new package, so it starts its own version line at `1.0.0` instead of continuing
+FinTrack's `v4.x`. semantic-release finds the previous release from git tags, and no existing tag matches the new
+format. The `v4.x` tags and GitHub Releases are FinTrack history: they stay in the repository and are never deleted.
+npm versions and Docker tags are bare semver (`1.0.0`, `:1.0.0`); only the git tag carries the prefix.
+
+## Cutting the first release (ADR-035 step 7)
+
+With no `patty-v*` tag, the workflow's first run would put the whole history into the release notes, so the first
+version is tagged by hand, in this order:
+
+1. Publish `@rfc0/patty@1.0.0` by hand from a terminal with 2FA (`npm publish --access public`), on the commit to
+   be released (`package.json` carries `0.0.0-development`, so set the version for this publish only, e.g.
+   `npm version 1.0.0 --no-git-tag-version`, and do not commit it).
+2. Push the tag `patty-v1.0.0` on that same commit: `git tag patty-v1.0.0 <commit> && git push origin patty-v1.0.0`.
+3. Create its GitHub Release from that tag with short hand-written notes.
+4. Configure the trusted publisher on npmjs.com and the `release` environment on GitHub (see *One-time setup*).
+5. Set the repository variable `RELEASE_ENABLED` to `true`. The workflow continues from `patty-v1.0.0`
+   (`1.0.1`, `1.1.0`, …).

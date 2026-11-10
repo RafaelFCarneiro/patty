@@ -172,7 +172,7 @@ The history is kept (no fresh repository), subject to the scan.
        workflow of §3 — **switched off** until step 7 (a repository variable gates it), so no merge publishes
        anything before the scan. Gate plus verification subagent; `grep -rni fintrack` outside `docs/adr` and
        `docs/designs` is empty.
-   - [ ] Release-numbering PR (`chore/release-numbering`, §3): tag format `patty-v${version}` in `.releaserc.json`
+   - [x] Release-numbering PR (`chore/release-numbering`, #245, §3): tag format `patty-v${version}` in `.releaserc.json`
          and `release.yml`, `docs/releasing.md` with the first-release procedure. Before step 7.
 4. [ ] Key-export step-up PR (`feat/key-export-step-up`, §2): login password, interactive only, confirmation and
        warning. After the rename, so the rename stays mechanical; before step 7, so the first public version ships

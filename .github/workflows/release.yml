@@ -13,6 +13,10 @@ on:
   push:
     branches: [main]
 
+# Release tags are patty-vX.Y.Z (.releaserc.json tagFormat); the v4.x tags are FinTrack history and never match.
+env:
+  TAG_PREFIX: patty-v
+
 # Avoid overlapping releases if two merges land close together.
 concurrency:
   group: release
@@ -66,7 +70,7 @@ jobs:
       # during this run counts as a release.
       - name: Record tags already on HEAD
         id: tags-before
-        run: echo "tag=$(git tag --points-at HEAD 'v*' | sort -V | tail -n1)" >> "$GITHUB_OUTPUT"
+        run: echo "tag=$(git tag --points-at HEAD "${TAG_PREFIX}*" | sort -V | tail -n1)" >> "$GITHUB_OUTPUT"
 
       - name: semantic-release
         id: semantic-release
@@ -74,17 +78,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # create release + tag, comment
         run: npx semantic-release
 
-      # semantic-release creates the vX.Y.Z tag on HEAD when (and only when) it cuts a release; it has
+      # semantic-release creates the patty-vX.Y.Z tag on HEAD when (and only when) it cuts a release; it has
       # no @semantic-release/git, so HEAD is never moved by a commit.
       - name: Detect released version
         id: version
         env:
           TAG_BEFORE: ${{ steps.tags-before.outputs.tag }}
         run: |
-          tag="$(git tag --points-at HEAD 'v*' | sort -V | tail -n1)"
+          tag="$(git tag --points-at HEAD "${TAG_PREFIX}*" | sort -V | tail -n1)"
           if [ -n "$tag" ] && [ "$tag" != "$TAG_BEFORE" ]; then
             echo "released=true" >> "$GITHUB_OUTPUT"
-            echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+            echo "version=${tag#"$TAG_PREFIX"}" >> "$GITHUB_OUTPUT"
           else
             echo "released=false" >> "$GITHUB_OUTPUT"
             echo "version=" >> "$GITHUB_OUTPUT"
@@ -111,7 +115,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: v${{ needs.release.outputs.version }}
+          ref: ${{ env.TAG_PREFIX }}${{ needs.release.outputs.version }}
 
       - uses: docker/setup-qemu-action@v3
 
