@@ -37,7 +37,7 @@ import { LOG_PREFIX } from '../models/package.js';
  * Lazily imports the credential primitives so `@node-rs/argon2`'s native module is never loaded unless
  * an auth flow can run — an explicit `PATTY_AUTH=disabled` stdio run starts exactly as it did before ADR-033.
  */
-const loadCredentialsModule = () => import('../diplomat/auth/credentials.js');
+export const loadCredentialsModule = () => import('../diplomat/auth/credentials.js');
 
 /** The auth flows touch seven entities (user, session, setup code, access token, client grant, invite, instance
  *  settings) and the shell

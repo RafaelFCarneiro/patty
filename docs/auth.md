@@ -521,11 +521,23 @@ lock everyone out. Prefer a **hop count** (`TRUST_PROXY=1` for one proxy) or the
 
 The data and its encryption key have to travel together, and the key must never sit next to the data. The container
 cannot read your OS keychain, so the key goes to a file it mounts as a secret. Two terminal commands do the exporting
-(`key export` and `db export`; they are not reachable from MCP, HTTP or a token — whoever can run them already holds the key):
+(`key export` and `db export`; they are not reachable from MCP, HTTP or a token):
 
-- `key export --to <file>` writes the database key to a new file usable as `PATTY_DB_KEY_FILE`. It resolves the key the way
-  the server does (file, then env var, then keychain), proves it by opening your database with it and reading once, and
-  only then writes. The file is created owner-only (`0600`), is never overwritten (there is no `--force`), and cannot be in
+- `key export --to <file>` writes the database key to a new file usable as `PATTY_DB_KEY_FILE`. It is a deliberate act
+  (ADR-035 §2): the file is the one thing that lets anyone with a copy of the database read it, and it is easy to forget,
+  sync or back up next to the data. So it is **interactive only** — with no terminal it is refused before the database is
+  opened, and there is no `--password-stdin` (the flag is an unknown-flag error), so it cannot be scripted. A bad
+  destination is refused before anything is asked. It then asks for **an administrator's username and password** (no
+  echo) and checks them against the stored hash like the dashboard's step-up flows do; while the owner is unclaimed
+  there is no password to check, so it points to `auth setup` instead. An unknown user, a wrong password, a member and a
+  disabled user all get the same refusal and each costs one full password check. A fixed delay follows a wrong answer and
+  a run allows three attempts, then exits non-zero having written nothing (a CLI run is its own process, so it cannot
+  share the server's in-memory login limiter). After that it says what the file is — the key that decrypts the database;
+  keep it somewhere safe, never where a backup of the database lives, and delete it once used — and writes only after
+  you type `yes`. Ctrl-C or Ctrl-D at any prompt writes nothing. The administrators are read from the database as it is
+  (nothing is migrated or seeded), so a database older than the users table (migration 0018) cannot be checked: start a
+  current build once to migrate it, then export. It resolves the key the way the server does (file, then env var, then keychain),
+  proves it by opening your database with it and reading once, and only then writes. The file is created owner-only (`0600`), is never overwritten (there is no `--force`), and cannot be in
   the database's own directory or under it (real paths are compared, so a relative path or a symlink does not get around it).
   The key is never printed, logged or put in an error. The check "the keychain is empty" and the store are one step under
   a per-user key lock (`~/.patty/db-key.lock`, held by the OS, so a dead process lets go), the same lock the server
@@ -543,7 +555,8 @@ cannot read your OS keychain, so the key goes to a file it mounts as a secret. T
    image's version is checked in step 4, once the key file exists (compose mounts it as a secret). If the image is older,
    pull or build a newer one first (a too-old image refuses the database at startup and changes nothing).
 2. **Stop every PATTY client** (Claude Desktop/Code, VS Code), so nothing writes after the snapshot.
-3. **Export the key and the data**, in the directory that holds `compose.yaml`:
+3. **Export the key and the data**, in the directory that holds `compose.yaml`. `key export` asks for an administrator's
+   username and password and a confirmation, so run it in a terminal:
 
    ```bash
    (umask 077; npx @rfc0/patty@latest key export --to ./patty_db_key)
@@ -582,7 +595,8 @@ cannot read your OS keychain, so the key goes to a file it mounts as a secret. T
    - Keep the old `~/.patty` (and its keychain entry) until you are satisfied, then delete it yourself. Nothing here deletes it.
 
 `scripts/docker-move-smoke.sh` runs steps 3–7 against an image (an npm-style database with a claimed owner and one account), so
-the commands above are the commands that are tested.
+the commands above are the commands that are tested — except `key export`, which needs a person at a terminal: the script
+writes the same one-line key file itself, and `test/integration/cli/export.test.ts` covers the command.
 
 ## Importing a key and a database
 

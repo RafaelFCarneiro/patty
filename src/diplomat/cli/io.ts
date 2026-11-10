@@ -1,7 +1,8 @@
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import type { Result, ResultAsync } from 'neverthrow';
 import type { ZodType, ZodTypeDef } from 'zod';
-import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter } from '../../controllers/deps.js';
+import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter, StepUpSecrets } from '../../controllers/deps.js';
+import type { UserEntity } from '../../models/auth/owner.js';
 import { reasonOf } from '../../models/error.js';
 import type { ExportedRowCounts, StagedCopy } from '../../models/export.js';
 import type { KeySources } from '../../models/key-import.js';
@@ -40,7 +41,7 @@ export type Shell = {
 
 /**
  * What `key export` and `db export` need from the database and its key, and nothing else. The key never crosses this
- * port except as the value `provenKey` hands the one command that writes it where the person pointed. Neither method
+ * port except as the value `provenKey` hands the one command that writes it where the person pointed. No method
  * migrates or seeds: an export must not upgrade a database as a side effect.
  */
 export type Exporter = {
@@ -52,6 +53,11 @@ export type Exporter = {
   /** Writes a consistent, still-encrypted snapshot to `destination` (created here: new, owner-only) and counts the
    *  rows it holds. A failure leaves nothing at `destination`. */
   writeSnapshot: (destination: string) => Promise<Result<ExportedRowCounts, string>>;
+  /** Every user, read from the database as it is: unmigrated, so `key export` can ask an administrator for a
+   *  password without upgrading the database first. Rows are decoded; the error says why, never carries a key. */
+  users: () => Promise<Result<UserEntity[], string>>;
+  /** The password check `key export` re-asks with; loaded on demand, since the other exports never hash anything. */
+  stepUpSecrets: () => Promise<StepUpSecrets>;
 };
 
 /**

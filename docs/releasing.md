@@ -104,6 +104,10 @@ the `org.opencontainers.image.source` annotation) so `GITHUB_TOKEN` in CI can re
 After the first image release, open the repository's **Packages → patty → Package settings** and set the visibility to
 **public**, so `docker compose up` and `docker pull` work without `docker login ghcr.io`.
 
+In the same place, open **Manage Actions access** and confirm this repository is listed with the **Write** role, adding it
+if not. The first image is pushed by hand, so the package is not yet tied to the workflow: until the repository has
+write access, the workflow's `GITHUB_TOKEN` cannot push the next image. Grant it before the first automated image push.
+
 ## Installing & using the package
 
 The package is public on npmjs.com: no token, no `~/.npmrc` entry.

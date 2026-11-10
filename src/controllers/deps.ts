@@ -1,6 +1,7 @@
 import type { Result, ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import type { FlowOutcome } from '@rfc0/effect-runner';
+import type { UserEntity } from '../models/auth/owner.js';
 import type { Principal } from '../models/auth/principal.js';
 import type { Presentation, SignInConfig, SignInObservation, SignInState } from '../models/auth/sign-in-flow.js';
 import type { ClientConfigFailure } from '../models/client-config.js';
@@ -68,6 +69,17 @@ export type AuthSecrets = {
   randomDeviceCode: () => string;
   hashSecret: (secret: string) => string;
   dummyPasswordHash: string;
+};
+
+/** What re-asking a password needs of the secrets: the check, and the dummy hash that makes an absent user cost
+ *  the same as a wrong password. */
+export type StepUpSecrets = Pick<AuthSecrets, 'verifyPassword' | 'dummyPasswordHash'>;
+
+export type StepUpDeps = { secrets: StepUpSecrets };
+
+/** What authorizing a key export needs: the users of a database as it is (unmigrated) and the password check. */
+export type KeyExportDeps = StepUpDeps & {
+  users: () => Promise<Result<UserEntity[], string>>;
 };
 
 export type SignInStore = {

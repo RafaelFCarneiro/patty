@@ -43,6 +43,17 @@ export const printDiagnostic = (line: string): void => {
 
 export const isInteractive = (): boolean => process.stdin.isTTY === true;
 
+/** Races a question against the prompt ending. A question on a closed interface rejects: that is the prompt having
+ *  ended (Ctrl-C between prompts), not a crash. */
+const answer = (ended: Promise<PromptEnded>, question: () => Promise<string>): ResultAsync<string, PromptEnded> => {
+  const stopped = ended.then((end) => err(end));
+  const pending = Promise.resolve()
+    .then(question)
+    .then((line) => ok(line))
+    .catch(() => stopped);
+  return new ResultAsync(Promise.race([pending, stopped]));
+};
+
 /**
  * Prompts on stderr; a secret answer is swallowed by a muted stream. Ctrl-C ends the prompt as `interrupted`, Ctrl-D
  * as `cancelled`; both are answers, not exceptions. Ctrl-C between prompts takes effect at the next prompt: a step
@@ -68,15 +79,11 @@ export const open = (): Terminal => {
     lines.close();
     process.stderr.write('\n');
   });
-  const answer = (pending: Promise<string>): ResultAsync<string, PromptEnded> =>
-    new ResultAsync(Promise.race([pending.then((line) => ok(line)), ended.then((end) => err(end))]));
-
   return {
-    ask: (question) => answer(lines.question(question)),
+    ask: (question) => answer(ended, () => lines.question(question)),
     askSecret: (question) => {
-      const pending = lines.question(question);
       muted = true;
-      const secret = answer(pending);
+      const secret = answer(ended, () => lines.question(question));
       return new ResultAsync(
         Promise.resolve(secret).finally(() => {
           muted = false;

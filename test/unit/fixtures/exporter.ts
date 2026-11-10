@@ -7,6 +7,8 @@ export const unusedExporter: Exporter = {
   },
   provenKey: () => Promise.reject(new Error('exporter used')),
   writeSnapshot: () => Promise.reject(new Error('exporter used')),
+  users: () => Promise.reject(new Error('exporter used')),
+  stepUpSecrets: () => Promise.reject(new Error('exporter used')),
 };
 
 export const unusedImporter: Importer = {

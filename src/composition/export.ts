@@ -1,12 +1,15 @@
 import { existsSync, rmSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
+import { loadCredentialsModule } from './auth.js';
 import { loadConfig } from '../config.js';
 import type { Exporter } from '../diplomat/cli/io.js';
 import { closeDatabase, openDatabaseWithKey, resolveEncryptionKey, type Db } from '../diplomat/db/driver.js';
 import { countSnapshotRows } from '../diplomat/db/export.js';
+import { usersRepo } from '../diplomat/db/repos/users.js';
 import { snapshotTo } from '../diplomat/db/safety-copy.js';
 import { reasonOf } from '../models/error.js';
+import type { UserEntity } from '../models/auth/owner.js';
 import { FILE_EXISTS_CODE, type ExportedRowCounts } from '../models/export.js';
 
 type KeyedDatabase = { key: string; db: Db };
@@ -45,6 +48,19 @@ const snapshotAndCount = async ({ key, db }: KeyedDatabase, destination: string)
   }
 };
 
+/** Reads the users of the database as it is — no migration, so an older database is read, not upgraded. */
+const readUsers = async (): Promise<Result<UserEntity[], string>> => {
+  const opened = await openKeyed();
+  if (opened.isErr()) return err(opened.error);
+  try {
+    return ok(await usersRepo(opened.value.db).listAll());
+  } catch (cause) {
+    return err(reasonOf(cause));
+  } finally {
+    closeDatabase(opened.value.db);
+  }
+};
+
 export const createExporter = (): Exporter => ({
   databasePath: () => loadConfig().DB_PATH,
   provenKey: async () => {
@@ -53,6 +69,8 @@ export const createExporter = (): Exporter => ({
     closeDatabase(opened.value.db);
     return ok(opened.value.key);
   },
+  users: readUsers,
+  stepUpSecrets: async () => (await loadCredentialsModule()).createSecrets(),
   writeSnapshot: async (destination) => {
     const opened = await openKeyed();
     if (opened.isErr()) return err(opened.error);

@@ -15,6 +15,8 @@ const exporterFor = (file: string): Exporter => ({
   databasePath: () => file,
   provenKey: () => Promise.reject(new Error('unused')),
   writeSnapshot: () => Promise.reject(new Error('unused')),
+  users: () => Promise.reject(new Error('unused')),
+  stepUpSecrets: () => Promise.reject(new Error('unused')),
 });
 
 beforeEach(() => {

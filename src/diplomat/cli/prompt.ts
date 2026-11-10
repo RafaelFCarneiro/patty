@@ -1,7 +1,9 @@
 import { err, errAsync, ok, safeTry, type Result, type ResultAsync } from 'neverthrow';
 import type { ZodType, ZodTypeDef } from 'zod';
 import { PASSWORD_STDIN_FLAG } from '../../wire/in/cli.js';
-import { PasswordSchema, UsernameSchema } from '../../models/auth/password.js';
+import { isExportConfirmation } from '../../logic/auth/key-export.js';
+import { KEY_EXPORT_CONFIRMATION_ANSWER, type AdminCredentials } from '../../models/auth/key-export.js';
+import { normalizeUsername, PasswordSchema, UsernameSchema } from '../../models/auth/password.js';
 import { invalidAnswer, PromptFailureCode, type InvalidAnswer, type PromptEnded, type Terminal } from './terminal.js';
 
 export const MAX_PROMPT_ATTEMPTS = 3;
@@ -10,6 +12,7 @@ export const PROMPT_MESSAGES = {
   username: 'Username: ',
   password: 'Password: ',
   confirmation: 'Confirm password: ',
+  exportConfirmation: `Write the key file? Type ${KEY_EXPORT_CONFIRMATION_ANSWER} to confirm: `,
   passwordsDiffer: 'The two passwords differ.',
   invalidAnswer: 'That is not valid.',
   usernameRequiredWithStdin: `--${PASSWORD_STDIN_FLAG} needs --username <name>: stdin carries only the password.`,
@@ -57,6 +60,19 @@ const withRetries = <T>(terminal: Terminal, attempt: () => Asked<T>, attemptsLef
 
 const askUsername = (terminal: Terminal): Asked<string> =>
   withRetries(terminal, () => terminal.ask(PROMPT_MESSAGES.username).andThen(decodeUsername));
+
+/** An existing administrator's login. Neither answer is format-checked, so a refusal costs and says the same whatever
+ *  was typed (a stored username may predate today's policy); the password is never echoed. */
+export const askAdminCredentials = (terminal: Terminal): Asked<AdminCredentials> =>
+  safeTry(async function* () {
+    const username = yield* terminal.ask(PROMPT_MESSAGES.username).map(normalizeUsername);
+    const password = yield* terminal.askSecret(PROMPT_MESSAGES.password);
+    return ok({ username, password });
+  });
+
+/** Whether the person typed the one confirming answer; anything else is a no. */
+export const askConfirmation = (terminal: Terminal, question: string): Asked<boolean> =>
+  terminal.ask(question).map(isExportConfirmation);
 
 const askNewPassword = (terminal: Terminal): Asked<string> =>
   withRetries(terminal, () =>

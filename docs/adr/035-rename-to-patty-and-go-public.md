@@ -69,7 +69,10 @@ a lost keychain without a copy of the key means the data is unrecoverable. It be
 - **A confirmation and a warning.** Before writing, it says what the file is, to keep it somewhere safe, never in the
   same place as a backup of the database, and to delete it once used; the person confirms.
 - Unchanged: the file is `0600`, created with `wx` (never overwritten), never in the database's directory, and the
-  key is never printed. A wrong password counts toward the same throttle as the other step-ups and writes nothing.
+  key is never printed. Each attempt costs a full password check (an unknown, unclaimed, disabled or non-admin user is
+  checked against a dummy hash and refused in the same words), a fixed delay follows a wrong one, and a run allows at
+  most three attempts, then exits having written nothing. The HTTP throttle is an in-process limiter in the server; a
+  CLI run is its own process, so it cannot share it.
 
 `db export` needs no step-up: the snapshot is encrypted and useless without the key. `key import` and `db import` only
 write into the install and refuse to overwrite anything.
@@ -174,7 +177,7 @@ The history is kept (no fresh repository), subject to the scan.
        `docs/designs` is empty.
    - [x] Release-numbering PR (`chore/release-numbering`, #245, §3): tag format `patty-v${version}` in `.releaserc.json`
          and `release.yml`, `docs/releasing.md` with the first-release procedure. Before step 7.
-4. [ ] Key-export step-up PR (`feat/key-export-step-up`, §2): login password, interactive only, confirmation and
+4. [x] Key-export step-up PR (`feat/key-export-step-up`, #246, §2): login password, interactive only, confirmation and
        warning. After the rename, so the rename stays mechanical; before step 7, so the first public version ships
        with it.
 5. [ ] effect-runner docs PR (§3).
