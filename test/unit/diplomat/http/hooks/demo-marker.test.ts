@@ -13,11 +13,11 @@ import { Locale } from '../../../../../src/models/locale.js';
 const LOCALES = Object.values(Locale.enum);
 
 const PAGE =
-  '<!doctype html><html><head><title>FinTrack — log in</title></head><body class="x"><main>hi</main></body></html>';
+  '<!doctype html><html><head><title>PATTY — log in</title></head><body class="x"><main>hi</main></body></html>';
 
 describe('markDemoPage', () => {
   it.each(LOCALES)('starts the title with [Demo] (%s)', (locale) => {
-    expect(markDemoPage(PAGE, locale)).toContain(`<title>${DEMO_TITLE_PREFIX}FinTrack — log in</title>`);
+    expect(markDemoPage(PAGE, locale)).toContain(`<title>${DEMO_TITLE_PREFIX}PATTY — log in</title>`);
   });
 
   it.each(LOCALES)('puts the %s banner first in <body>, keeping the existing attributes', (locale) => {

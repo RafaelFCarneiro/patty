@@ -1,27 +1,27 @@
-# FinTrack, containerised (ADR-032).
+# PATTY, containerised (ADR-032).
 #
 # One-time setup — the database encryption key lives in a file Docker mounts as a secret
 # (never in an env var: those show up in `docker inspect`):
 #
-#   (umask 077; openssl rand -hex 32 > fintrack_db_key)   # owner-only: never make the key world-readable
-#   sudo chown 1000 fintrack_db_key   # Linux only: the container runs as the unprivileged `node` user
+#   (umask 077; openssl rand -hex 32 > patty_db_key)   # owner-only: never make the key world-readable
+#   sudo chown 1000 patty_db_key   # Linux only: the container runs as the unprivileged `node` user
 #                                     # (uid 1000), so it must own the 0600 file. Docker Desktop maps
 #                                     # file ownership itself — skip this there.
 #   docker compose up -d
-#   docker compose logs fintrack     # the first start prints a one-time setup code (XXXX-XXXX-XXXX-XXXX-XXXX)
+#   docker compose logs patty     # the first start prints a one-time setup code (XXXX-XXXX-XXXX-XXXX-XXXX)
 #
 # Then open http://127.0.0.1:51737/ui/setup, enter the code and choose a username and password: that claims the
-# instance. Everything except /api/health needs that login (the container runs with FINTRACK_AUTH=required).
-# MCP clients and scripts authenticate /mcp and /api with a personal access token (Authorization: Bearer ftk_…)
+# instance. Everything except /api/health needs that login (the container runs with PATTY_AUTH=required).
+# MCP clients and scripts authenticate /mcp and /api with a personal access token (Authorization: Bearer ptk_…)
 # created at /ui/access/tokens — see docs/mcp-clients.md.
 #
 # Moving an existing npm/stdio database into this volume (with its key): docs/auth.md, "Moving an npm install to Docker".
 #
-# Keep the key: without it the database in the fintrack-data volume cannot be decrypted. Back up the key too,
+# Keep the key: without it the database in the patty-data volume cannot be decrypted. Back up the key too,
 # but somewhere other than the volume's backup (with both together, the encryption protects nothing). Run exactly one replica per volume (SQLite, in-process scheduler).
 services:
-  fintrack:
-    image: ghcr.io/rafaelfcarneiro/fintrack:latest
+  patty:
+    image: ghcr.io/rafaelfcarneiro/patty:latest
     build: . # `docker compose up --build` builds from source instead of pulling
     ports:
       # Loopback only. Logins protect the API, but this is plain HTTP: "51737:51737" would send your password and
@@ -29,12 +29,12 @@ services:
       # documented (ADR-033 Phase 3).
       - '127.0.0.1:51737:51737'
     volumes:
-      - fintrack-data:/data
+      - patty-data:/data
     secrets:
-      - fintrack_db_key
+      - patty_db_key
     environment:
-      FINTRACK_DB_KEY_FILE: /run/secrets/fintrack_db_key
-      # FINTRACK_AUTH defaults to `required` (as everywhere) and cannot be `disabled` here (HOST=0.0.0.0). Behind a reverse proxy
+      PATTY_DB_KEY_FILE: /run/secrets/patty_db_key
+      # PATTY_AUTH defaults to `required` (as everywhere) and cannot be `disabled` here (HOST=0.0.0.0). Behind a reverse proxy
       # also set PUBLIC_URL (https://your.host) and TRUST_PROXY — see docs/auth.md.
     restart: unless-stopped
     # Hardening: the only writable paths are /data (volume) and /tmp (tmpfs).
@@ -47,8 +47,8 @@ services:
       - no-new-privileges:true
 
 volumes:
-  fintrack-data:
+  patty-data:
 
 secrets:
-  fintrack_db_key:
-    file: ./fintrack_db_key
+  patty_db_key:
+    file: ./patty_db_key

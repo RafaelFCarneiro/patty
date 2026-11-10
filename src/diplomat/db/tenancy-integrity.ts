@@ -4,6 +4,7 @@ import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import * as R from 'remeda';
 import { DefaultCategoryId } from './seed/categories.js';
 import { z } from 'zod';
+import { LOG_PREFIX } from '../../models/package.js';
 
 export type SqlReader = { execute: (statement: { sql: string; args: InValue[] }) => Promise<{ rows: unknown[] }> };
 
@@ -62,7 +63,7 @@ export const findRowsWithoutKnownUser = async (db: SqlReader): Promise<Record<st
   );
 
 export const tenancyIntegrityMessage = (violations: Record<string, number>): string =>
-  'fintrack: refusing to start — after the tenancy migration some rows belong to no known user (' +
+  `${LOG_PREFIX} refusing to start — after the tenancy migration some rows belong to no known user (` +
   R.pipe(
     Object.entries(violations),
     R.map(([table, count]) => `${table}: ${count}`),

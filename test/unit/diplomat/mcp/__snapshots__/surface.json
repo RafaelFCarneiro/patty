@@ -1274,7 +1274,7 @@
     {
       "name": "set_exchange_rate",
       "title": "Set exchange rate",
-      "description": "FinTrack never fetches exchange rates itself (local-first, zero external calls — ADR-026). The AI agent is responsible for sourcing current rates (e.g. PTAX for fiat, a crypto price API) and upserting them here so read-time valuation has data to work with. Upserts one (from, to) rate: 1 unit of `from` = `rate` units of `to`, as of `asOf`. A pair that already has a stored rate is overwritten (latest wins) — this is not a history log.",
+      "description": "PATTY never fetches exchange rates itself (local-first, zero external calls — ADR-026). The AI agent is responsible for sourcing current rates (e.g. PTAX for fiat, a crypto price API) and upserting them here so read-time valuation has data to work with. Upserts one (from, to) rate: 1 unit of `from` = `rate` units of `to`, as of `asOf`. A pair that already has a stored rate is overwritten (latest wins) — this is not a history log.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1337,7 +1337,7 @@
     {
       "name": "set_exchange_rates",
       "title": "Set exchange rates (bulk)",
-      "description": "FinTrack never fetches exchange rates itself (local-first, zero external calls — ADR-026). The AI agent is responsible for sourcing current rates (e.g. PTAX for fiat, a crypto price API) and upserting them here so read-time valuation has data to work with. Upserts several (from, to) rates in one call, same semantics as set_exchange_rate per item. Partial success: one pair's failure (e.g. from === to) does not block the others — check each item's status in the response.",
+      "description": "PATTY never fetches exchange rates itself (local-first, zero external calls — ADR-026). The AI agent is responsible for sourcing current rates (e.g. PTAX for fiat, a crypto price API) and upserting them here so read-time valuation has data to work with. Upserts several (from, to) rates in one call, same semantics as set_exchange_rate per item. Partial success: one pair's failure (e.g. from === to) does not block the others — check each item's status in the response.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -2171,7 +2171,7 @@
     {
       "name": "save_dashboard",
       "title": "Save dashboard",
-      "description": "Create or override a named dashboard: a content FRAGMENT you author (sections + an inline <script>, no <!doctype>/<html>/<head>/<style> root — the app shell at GET /ui already provides those and is what actually renders it, at GET /ui/:name) (ADR-013, fragment model ADR-027). Upsert semantics — saving to an existing name replaces it immediately, no rebuild or restart needed. CRITICAL: the fragment must NEVER embed financial data, secrets, or tokens inline — render layout/styling only and fetch data client-side from the documented /api endpoints (read the fintrack://openapi resource for the contract) on load, so the dashboard is always live and safe to share. Rejected (validation error) if the content is empty, still carries a full <!doctype>/<html> document root, an external <script src> reference (the shell already loads Chart.js once — a fragment carries zero external references of its own), or an inline <script> has a syntax error — fix the reported issue and save again.",
+      "description": "Create or override a named dashboard: a content FRAGMENT you author (sections + an inline <script>, no <!doctype>/<html>/<head>/<style> root — the app shell at GET /ui already provides those and is what actually renders it, at GET /ui/:name) (ADR-013, fragment model ADR-027). Upsert semantics — saving to an existing name replaces it immediately, no rebuild or restart needed. CRITICAL: the fragment must NEVER embed financial data, secrets, or tokens inline — render layout/styling only and fetch data client-side from the documented /api endpoints (read the patty://openapi resource for the contract) on load, so the dashboard is always live and safe to share. Rejected (validation error) if the content is empty, still carries a full <!doctype>/<html> document root, an external <script src> reference (the shell already loads Chart.js once — a fragment carries zero external references of its own), or an inline <script> has a syntax error — fix the reported issue and save again.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -2581,7 +2581,7 @@
     {
       "name": "get_preferences",
       "title": "Get user preferences",
-      "description": "Returns the stored locale preference, locale_source, and the resolved base currency. Use this to check whether the user set the locale explicitly before attempting an inferred switch. Note: the FINTRACK_LOCALE env var can override the effective display locale used by list_categories; this tool reports the stored preference, not the effective override. base_currency is either an explicit override (set_base_currency) or derived from locale (pt→BRL, en/es→USD) when unset.",
+      "description": "Returns the stored locale preference, locale_source, and the resolved base currency. Use this to check whether the user set the locale explicitly before attempting an inferred switch. Note: the PATTY_LOCALE env var can override the effective display locale used by list_categories; this tool reports the stored preference, not the effective override. base_currency is either an explicit override (set_base_currency) or derived from locale (pt→BRL, en/es→USD) when unset.",
       "inputSchema": {
         "type": "object",
         "properties": {},
@@ -2646,57 +2646,57 @@
   "resources": [
     {
       "name": "openapi",
-      "title": "FinTrack OpenAPI contract",
-      "uri": "fintrack://openapi",
+      "title": "PATTY OpenAPI contract",
+      "uri": "patty://openapi",
       "description": "OpenAPI 3.0 document for the REST API (GET /api/openapi.json mirrors this). Read this before generating fetch() calls against /api endpoints (ADR-013).",
       "mimeType": "application/json"
     },
     {
       "name": "categories",
       "title": "Category taxonomy",
-      "uri": "fintrack://categories",
+      "uri": "patty://categories",
       "description": "Top-level categories with locale-resolved display names and kind (expense/income/both) — the same data list_categories returns. Read this to resolve a category name before classifying a transaction, without a tool round-trip.",
       "mimeType": "application/json"
     },
     {
       "name": "accounts",
       "title": "Accounts",
-      "uri": "fintrack://accounts",
+      "uri": "patty://accounts",
       "description": "All accounts with name, type, and currency — the same data list_accounts returns. Read this to resolve an account name without a tool round-trip.",
       "mimeType": "application/json"
     },
     {
       "name": "currencies",
       "title": "Currencies",
-      "uri": "fintrack://currencies",
+      "uri": "patty://currencies",
       "description": "All currencies (fiat and crypto) with symbol and decimals — the same data GET /api/currencies returns. Read this to format an amount correctly: crypto codes (USDC, BTC) aren't ISO 4217, so a generic currency formatter must use the symbol + decimals given here instead of assuming 2 decimal places.",
       "mimeType": "application/json"
     },
     {
       "name": "exchange-rates",
       "title": "Exchange rates",
-      "uri": "fintrack://exchange-rates",
-      "description": "All cached exchange rates, each with its own as_of — the same data list_exchange_rates returns. FinTrack never fetches rates itself (local-first, ADR-026); read this to see which pairs are cached and how fresh they are before deciding whether to refresh via set_exchange_rate(s).",
+      "uri": "patty://exchange-rates",
+      "description": "All cached exchange rates, each with its own as_of — the same data list_exchange_rates returns. PATTY never fetches rates itself (local-first, ADR-026); read this to see which pairs are cached and how fresh they are before deciding whether to refresh via set_exchange_rate(s).",
       "mimeType": "application/json"
     },
     {
       "name": "tags",
       "title": "Tags",
-      "uri": "fintrack://tags",
+      "uri": "patty://tags",
       "description": "All tags — the same data list_tags returns. Read this to resolve a tag name without a tool round-trip.",
       "mimeType": "application/json"
     },
     {
       "name": "credit-cards",
       "title": "Credit cards",
-      "uri": "fintrack://credit-cards",
+      "uri": "patty://credit-cards",
       "description": "All credit cards — the same data list_credit_cards returns. Read this to resolve a card name without a tool round-trip.",
       "mimeType": "application/json"
     },
     {
       "name": "merchants-top",
       "title": "Top merchants",
-      "uri": "fintrack://merchants/top",
+      "uri": "patty://merchants/top",
       "description": "The 20 merchants with the most effective, non-transfer transactions, each with the category it is most often classified into — the vocabulary of merchants the user actually deals with (e.g. \"iFood → Alimentação\"), by transaction frequency (not spend). Not a money report: no per-currency amounts. categoryName is null for a merchant whose transactions are all uncategorized.",
       "mimeType": "application/json"
     }
@@ -2751,7 +2751,7 @@
     },
     {
       "name": "tour",
-      "title": "Tour of the FinTrack demo",
+      "title": "Tour of the PATTY demo",
       "description": "A six-step guided tour of the demo (balances, last month, budgets, a statement import, tagging the seeded trip and building a dashboard, then installing for real). On a real database it only says how to start the demo."
     }
   ]

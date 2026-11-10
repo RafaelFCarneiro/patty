@@ -94,11 +94,11 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: fintrack:ci
+          tags: patty:ci
           build-args: NODE_IMAGE=${{ steps.base.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Smoke test
         if: steps.changes.outputs.container == 'true'
-        run: scripts/docker-smoke.sh fintrack:ci
+        run: scripts/docker-smoke.sh patty:ci

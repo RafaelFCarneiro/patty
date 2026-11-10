@@ -68,7 +68,7 @@ const harness = (ctx: AppContext, inviteOrigin: string | null = LOOPBACK_ORIGIN)
 const CODE = /Code: ([0-9A-Z]{4}(?:-[0-9A-Z]{4}){4})/;
 const LINK = /Link: (\S+)/;
 
-describe('fintrack users — routed through the command line', () => {
+describe('patty users — routed through the command line', () => {
   it('is a command of the CLI, listed in the usage', async () => {
     const ctx = await createApp();
     const cli = harness(ctx);

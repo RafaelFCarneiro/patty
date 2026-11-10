@@ -25,8 +25,8 @@ import {
 const createApp = useAuthApp();
 
 const HOUR_MS = 60 * 60 * 1000;
-const READ = 'fintrack:read';
-const WRITE = 'fintrack:write';
+const READ = 'patty:read';
+const WRITE = 'patty:write';
 
 afterEach(() => vi.useRealTimers());
 
@@ -75,7 +75,7 @@ describe('StdioSession — not signed in', () => {
     expect(first).toEqual(second);
     const code = userCodeIn(first);
     expect(first).toMatchObject({
-      message: `FinTrack: not signed in. Open ${SIGN_IN_ORIGIN}/ui/connect?code=${code} and confirm the code ${code}.`,
+      message: `PATTY: not signed in. Open ${SIGN_IN_ORIGIN}/ui/connect?code=${code} and confirm the code ${code}.`,
     });
     expect(await grantRows(ctx)).toEqual([
       {
@@ -97,7 +97,7 @@ describe('StdioSession — not signed in', () => {
     const device_code_hash = grant!.device_code_hash;
     const text = JSON.stringify(outcome);
     expect(text).not.toContain(device_code_hash);
-    expect(text).not.toMatch(/ftk_/);
+    expect(text).not.toMatch(/ptk_/);
     expect(text).not.toMatch(/[A-Za-z0-9_-]{43}/);
   });
 
@@ -109,7 +109,7 @@ describe('StdioSession — not signed in', () => {
     expect(JSON.stringify(outcome)).toContain(`Owner not set up yet? Run \`${NPX_COMMAND} auth setup\`.`);
   });
 
-  it('says to use `login` or FINTRACK_TOKEN, with no link and no grant, when there is no HTTP server', async () => {
+  it('says to use `login` or PATTY_TOKEN, with no link and no grant, when there is no HTTP server', async () => {
     const ctx = await createApp();
     await claimOwner(ctx);
     const { session } = stdioSessionFor(ctx, { origin: null });
@@ -160,7 +160,7 @@ describe('StdioSession — signing in', () => {
     expect(await signInVia(ctx, cookie, session, { access: 'write', duration: '24h' })).toEqual([READ, WRITE]);
 
     const saved = store.saved();
-    expect(saved).toMatch(/^ftk_/);
+    expect(saved).toMatch(/^ptk_/);
     expect(store.calls.save).toBe(1);
     const [row, ...others] = await tokenRows(ctx);
     expect(others).toEqual([]);
@@ -206,7 +206,7 @@ describe('StdioSession — signing in', () => {
     await approveConnect(ctx, cookie, code, { duration: '7d' });
 
     await vi.advanceTimersByTimeAsync(GRANT_POLL_INTERVAL_MS);
-    await vi.waitFor(() => expect(store.saved()).toMatch(/^ftk_/));
+    await vi.waitFor(() => expect(store.saved()).toMatch(/^ptk_/));
     expect(vi.getTimerCount()).toBe(0); // polling stopped once signed in
     await session.close();
   });
@@ -307,7 +307,7 @@ describe('StdioSession — "this session only"', () => {
     await session.close();
 
     expect((await tokenRows(ctx))[0]?.revoked_at).toBeNull();
-    expect(store.saved()).toMatch(/^ftk_/);
+    expect(store.saved()).toMatch(/^ptk_/);
   });
 });
 
@@ -356,7 +356,7 @@ describe('StdioSession — restart and the keychain', () => {
   it('deletes a saved credential that turns out invalid, and asks again', async () => {
     const ctx = await createApp();
     await claimOwner(ctx);
-    const store = memoryStore('ftk_not-a-credential-anyone-issued');
+    const store = memoryStore('ptk_not-a-credential-anyone-issued');
     const { session } = stdioSessionFor(ctx, { store });
 
     const outcome = await session.resolve();
@@ -374,7 +374,7 @@ describe('StdioSession — restart and the keychain', () => {
     const [mine1] = await ctx.db.all<{ id: string }>(sql`SELECT id FROM access_tokens`);
     const myTokenId = mine1!.id;
 
-    // `fintrack login` in another terminal saves a fresh, valid sign-in; mine is then revoked.
+    // `patty login` in another terminal saves a fresh, valid sign-in; mine is then revoked.
     const other = stdioSessionFor(ctx, { store: memoryStore() });
     await signInVia(ctx, cookie, other.session, { access: 'write' });
     const theirs = other.store.saved()!;
@@ -393,8 +393,8 @@ describe('StdioSession — restart and the keychain', () => {
   it('does not delete a newer sign-in saved by a concurrent login while the invalid one is checked', async () => {
     const ctx = await createApp();
     await claimOwner(ctx);
-    const newer = 'ftk_saved-by-a-concurrent-login';
-    const store = memoryStore('ftk_not-a-credential-anyone-issued');
+    const newer = 'ptk_saved-by-a-concurrent-login';
+    const store = memoryStore('ptk_not-a-credential-anyone-issued');
     const load = store.load.bind(store);
     let loads = 0;
     store.load = () =>
@@ -475,7 +475,7 @@ describe('StdioSession — restart and the keychain', () => {
   });
 });
 
-describe('StdioSession — FINTRACK_TOKEN', () => {
+describe('StdioSession — PATTY_TOKEN', () => {
   it('signs in with a valid token, with its scopes, and starts no sign-in request', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
@@ -518,12 +518,12 @@ describe('StdioSession — FINTRACK_TOKEN', () => {
     expect((await grantRows(ctx)).map((row) => row.status)).toEqual(['redeemed']); // and no new request began
   });
 
-  it.each(['ftk_totally-made-up', 'not-even-shaped-like-one', `ftk_${'a'.repeat(400)}`])(
+  it.each(['ptk_totally-made-up', 'not-even-shaped-like-one', `ptk_${'a'.repeat(400)}`])(
     'refuses %j with the invalid-token message and never touches the keychain',
     async (envToken) => {
       const ctx = await createApp();
       await claimOwner(ctx);
-      const { session, store } = stdioSessionFor(ctx, { envToken, store: memoryStore('ftk_some-saved-sign-in') });
+      const { session, store } = stdioSessionFor(ctx, { envToken, store: memoryStore('ptk_some-saved-sign-in') });
       expect(await session.resolve()).toEqual({ kind: 'not_signed_in', message: STDIO_MESSAGES.invalidEnvToken });
       expect(store.calls).toEqual({ load: 0, save: 0, clear: 0 });
       expect(await grantRows(ctx)).toEqual([]);
@@ -533,7 +533,7 @@ describe('StdioSession — FINTRACK_TOKEN', () => {
   it('never echoes the token it rejected', async () => {
     const ctx = await createApp();
     await claimOwner(ctx);
-    const { session } = stdioSessionFor(ctx, { envToken: 'ftk_secret-looking-value' });
+    const { session } = stdioSessionFor(ctx, { envToken: 'ptk_secret-looking-value' });
     expect(JSON.stringify(await session.resolve())).not.toContain('secret-looking-value');
   });
 
@@ -558,7 +558,7 @@ describe('StdioSession — an error is not a sign-out', () => {
     const failing = stdioSessionFor(ctx, { store: saved.store, run: (() => errAsync(conflict)) as never });
 
     expect(await failing.session.resolve()).toEqual({ kind: 'not_signed_in', message: STDIO_MESSAGES.cannotVerify });
-    expect(saved.store.saved()).toMatch(/^ftk_/);
+    expect(saved.store.saved()).toMatch(/^ptk_/);
     expect(authDepsOf(ctx)).toBeDefined();
   });
 });

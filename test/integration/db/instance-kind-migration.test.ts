@@ -30,11 +30,11 @@ const journalBefore = (folder: string): void => {
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
 
-const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
+const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: TEST_KEY });
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-instance-kind-migration-'));
-  dbPath = join(tmpDir, 'fintrack.db');
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-instance-kind-migration-'));
+  dbPath = join(tmpDir, 'patty.db');
   beforeFolder = join(tmpDir, 'before-migrations');
   cpSync(REAL_MIGRATIONS_FOLDER, beforeFolder, { recursive: true });
   journalBefore(beforeFolder);

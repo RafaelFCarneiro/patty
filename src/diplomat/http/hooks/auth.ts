@@ -22,7 +22,7 @@ import { resolveBearerPrincipal, resolvePrincipal, type Resolution } from '../se
  *   - auth `disabled` (loopback)  → the owner — but only for a request that names a loopback `Host` (and
  *     `Origin`, if sent): anything else is a DNS-rebound or cross-site page and gets 403 on every route;
  *   - auth `required`             → on `/api` and `/mcp` an `Authorization` header is AUTHORITATIVE: it must be
- *     `Bearer ftk_…` and valid, and the cookie is then ignored — a bad bearer never falls back to a session, and a
+ *     `Bearer ptk_…` and valid, and the cookie is then ignored — a bad bearer never falls back to a session, and a
  *     bearer request carries no ambient credential, so it skips the CSRF check. Otherwise (no header, or a `/ui`
  *     path, where a bearer is never accepted) the session cookie's user. No credential → 401 + a Bearer challenge
  *     (anything not under `/ui`) or a redirect to setup/login (`/ui`). The principal's scopes are then checked

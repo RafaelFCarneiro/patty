@@ -14,7 +14,7 @@ let tmpDir: string;
 let dbPath: string;
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-enc-test-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-enc-test-'));
   dbPath = join(tmpDir, 'enc.db');
 });
 
@@ -28,7 +28,7 @@ describe('openDatabase directory creation', () => {
     const db = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: nestedPath,
-      FINTRACK_DB_KEY: CORRECT_KEY,
+      PATTY_DB_KEY: CORRECT_KEY,
     });
     await bootstrap(db);
   });
@@ -39,7 +39,7 @@ describe('encryption at rest', () => {
     const db = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: dbPath,
-      FINTRACK_DB_KEY: CORRECT_KEY,
+      PATTY_DB_KEY: CORRECT_KEY,
     });
     await bootstrap(db);
 
@@ -52,7 +52,7 @@ describe('encryption at rest', () => {
     const db = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: dbPath,
-      FINTRACK_DB_KEY: CORRECT_KEY,
+      PATTY_DB_KEY: CORRECT_KEY,
     });
     await bootstrap(db);
 
@@ -60,7 +60,7 @@ describe('encryption at rest', () => {
     const wrongDb = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: dbPath,
-      FINTRACK_DB_KEY: WRONG_KEY,
+      PATTY_DB_KEY: WRONG_KEY,
     });
     await expect(wrongDb.query.currencies.findMany()).rejects.toThrow();
   });
@@ -71,7 +71,7 @@ describe('concurrency posture (ADR-024)', () => {
     const db = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: dbPath,
-      FINTRACK_DB_KEY: CORRECT_KEY,
+      PATTY_DB_KEY: CORRECT_KEY,
     });
     await bootstrap(db);
 

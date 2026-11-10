@@ -10,13 +10,13 @@ import { CURRENCIES } from '../../../src/diplomat/db/seed/currencies.js';
 // real file instead of a re-implementation, without needing a browser or bundler in the test run.
 const MONEY_JS_PATH = fileURLToPath(new URL('../../../ui/money.js', import.meta.url));
 
-type Sandbox = { window: { formatMoney: FormatMoney; __fintrackCurrencies?: unknown } };
+type Sandbox = { window: { formatMoney: FormatMoney; __appCurrencies?: unknown } };
 type FormatMoney = (value: number, currencyCode: string, opts?: { locale?: string }) => string;
 
 const loadFormatMoney = (currencies?: unknown): FormatMoney => {
   const source = readFileSync(MONEY_JS_PATH, 'utf-8');
   const window: Sandbox['window'] = { formatMoney: (() => '') as unknown as FormatMoney };
-  if (currencies !== undefined) window.__fintrackCurrencies = currencies;
+  if (currencies !== undefined) window.__appCurrencies = currencies;
   const sandbox = { window, Intl, Number };
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox, { filename: MONEY_JS_PATH });
@@ -273,7 +273,7 @@ type Money = {
 
 const loadMoney = (): Money => {
   const window: Record<string, unknown> = {
-    __fintrackCurrencies: Object.fromEntries(CURRENCIES.map((currency) => [currency.code, currency])),
+    __appCurrencies: Object.fromEntries(CURRENCIES.map((currency) => [currency.code, currency])),
   };
   const sandbox = { window, Intl, Number, Object, Math, Array };
   vm.createContext(sandbox);

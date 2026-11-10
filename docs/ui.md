@@ -1,4 +1,4 @@
-# FinTrack v2 — UI / `/ui` surface (as built)
+# PATTY v2 — UI / `/ui` surface (as built)
 
 > The browser dashboard surface: the app shell, dashboard fragments, the file/inline `source` model, and
 > SSE live-update. Architectural decisions + rationale: **ADR-013** (data-less local dashboards) and
@@ -77,7 +77,7 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   symbol + decimals instead — **not** via try/catch (a syntactically-valid-but-unrecognized 3-letter code like
   `BTC` never throws there; it silently mis-formats with a fiat-shaped 2 decimals and no real symbol), but via
   an explicit `Intl.supportedValuesOf('currency')` membership check. Symbol/decimals come from
-  `window.__fintrackCurrencies`, populated once at shell boot from `GET /api/currencies`
+  `window.__appCurrencies`, populated once at shell boot from `GET /api/currencies`
   (`app.js`'s `bootPromise`, sequenced before the first `loadDashboard()` call so the metadata is never missing
   on first paint). Every fragment that formats money calls this instead of its own `Intl.NumberFormat(...,
   {style:'currency', ...})`. It also exports `window.DEFAULT_CURRENCY` — the user's base currency (`app.js` reads `GET /api/preferences`
@@ -210,7 +210,7 @@ outright instead — so it's never centralized and stays local to `overview.html
 Verified with zero visual regression: for every fragment, `getComputedStyle` was captured (as a single hash
 over the full property set of every one of these selectors) before and after the refactor and confirmed
 byte-for-byte identical — not just spot-checked.
-[#164](https://github.com/RafaelFCarneiro/fintrack/issues/164) tracked this as deferred work when the
+[#164](https://github.com/RafaelFCarneiro/patty/issues/164) tracked this as deferred work when the
 fragments were first converted to files.
 
 ## Routes
@@ -227,7 +227,7 @@ fragments were first converted to files.
   (`GET`/`POST /ui/login` and `/ui/setup`) and `/ui/assets/app.css` are public; `POST /ui/logout` is an
   authenticated route like the rest. All three live in `diplomat/http/routes/auth.ts`; the pages render the standalone
   templates `ui/login.html` / `ui/setup.html` (shell palette via `app.css`, no scripts, no third-party loads,
-  `Content-Security-Policy` locked down). `ui/shell.html` reserves `<!--fintrack:auth-controls-->`: `registerUiRoutes`
+  `Content-Security-Policy` locked down). `ui/shell.html` reserves `<!--patty:auth-controls-->`: `registerUiRoutes`
   replaces it with the access-tokens link and the logout form (bottom of the sidebar) when auth is `required` and with nothing otherwise — the
   shell is the same bytes either way except for that one marker. An open `/ui/events` stream re-checks its session
   every 30 s and closes when the session is gone (logout, expiry, disabled user). **`/ui/access/tokens`** (auth `required` only; `routes/tokens.ts`, templates `ui/tokens.html` / `ui/token-created.html`) lists, creates and revokes personal access tokens — session-only, a bearer token is never accepted on any `/ui` path; the plaintext of a new token appears once, on the response to the create `POST`. See `docs/auth.md`.
@@ -293,7 +293,7 @@ same-origin `/api/*` path when expressed as a literal or template literal (no `/
 asserts `GET /ui` (the shell itself) references no external host outside that same allowlist.
 
 `skills/dashboard-building/SKILL.md` is the guardrail checklist an MCP client follows to build or adapt a
-dashboard: read the contract (`fintrack://openapi`) first, map each section to a real endpoint, start from the
+dashboard: read the contract (`patty://openapi`) first, map each section to a real endpoint, start from the
 baseline fragment, and self-check (fragment not full page; no embedded data; same-origin `/api` only; no own
 `<script src>`; per-currency grouping; localized labels; loading/empty/error states) before calling
 `save_dashboard`. Docs-only — no runtime behavior depends on it — shipped in the npm package.
@@ -311,7 +311,7 @@ in-process bus is the whole mechanism.
 
 **The post-commit publish** is the package's (`runEffects`/`runEffectsSequence` publish the entity tags of a
 committed batch that wrote; see its [change-notification section](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/architecture.md#change-notification)).
-FinTrack only subscribes: the tags in each SSE message are those the engine published.
+PATTY only subscribes: the tags in each SSE message are those the engine published.
 
 **`GET /ui/events`** (`registerUiEventsRoute`) is the shell's `EventSource` target. The handler calls
 `reply.hijack()` (an SSE stream never ends like a normal response), `reply.raw.writeHead()` +
@@ -324,9 +324,12 @@ doesn't hang forever on a long-lived SSE stream at shutdown.
 
 **The shell forwards, the fragment decides.** `ui/app.js` opens exactly one `EventSource('/ui/events')` for the
 page's whole lifetime (fragment swaps never reopen it) and, on each message, calls
-`window.fintrackOnDataChanged(entities)` if the loaded fragment defined it — the shell knows nothing of a
+`window.onAppDataChanged(entities)` if the loaded fragment defined it — the shell knows nothing of a
 fragment's internal sections, only this one well-known global slot. `renderFragment` resets the slot to `null`
 before tearing down the outgoing fragment (never after injecting the new one), so a stale closure can't fire.
+The two globals a dashboard may touch, `window.onAppDataChanged` and `window.__appCurrencies`, are deliberately
+brand-neutral: dashboards are stored in the database and call them, so a future rename of the product can never break
+a saved dashboard. A dashboard saved before the rename (ADR-035) used differently named globals and is re-saved once.
 The baseline `overview.html` implements the contract: a `SECTION_ENTITY_DEPENDENCIES` map declares which entity
 tags feed each section loader, and `onDataChanged` refetches only the sections whose dependencies intersect the
 published entities. A fragment that never sets the hook simply has no live update, same as before this phase.
@@ -342,5 +345,5 @@ period's data: the KPI cards show it first and every other currency as a seconda
 top-5 charts show one currency at a time — the primary by default, with a currency selector (hidden when the
 period has expenses in a single currency) to switch; the chart titles interpolate the selected code
 (`{currency}` in the `pending_chart_*` translations). `cards.html` builds its add/edit currency `<select>`s
-from `window.__fintrackCurrencies` (sorted, code plus symbol): the add form preselects `DEFAULT_CURRENCY`, the
+from `window.__appCurrencies` (sorted, code plus symbol): the add form preselects `DEFAULT_CURRENCY`, the
 edit form (read-only) shows the card's own currency, and every fallback is `DEFAULT_CURRENCY`.

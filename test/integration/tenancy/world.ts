@@ -251,7 +251,7 @@ export type Actor = {
 };
 
 export const mintTokenFor = async (ctx: AppContext, world: World): Promise<string> => {
-  const token = `ftk_${world.label}${'x'.repeat(40)}`;
+  const token = `ptk_${world.label}${'x'.repeat(40)}`;
   await ctx.db.insert(accessTokens).values({
     id: `pat-${world.label}`,
     userId: world.userId,

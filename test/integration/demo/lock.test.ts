@@ -13,7 +13,7 @@ let dir: string;
 let databasePath: string;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'fintrack-lock-'));
+  dir = mkdtempSync(join(tmpdir(), 'patty-lock-'));
   databasePath = join(dir, 'demo.db');
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));

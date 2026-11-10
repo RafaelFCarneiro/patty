@@ -25,7 +25,7 @@ let ctx: AppContext;
 let port: number;
 
 beforeAll(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-loopback-guard-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-loopback-guard-'));
   ctx = await buildApp({ dbPath: join(tmpDir, 'test.db') }); // no `auth` option: disabled mode
   await ctx.app.listen({ port: 0, host: LOOPBACK_HOST });
   port = (ctx.app.server.address() as AddressInfo).port;

@@ -33,36 +33,36 @@ describe('MCP reference resources (Feature Design 018)', () => {
     const uris = resources.map((r) => r.uri);
     expect(uris).toEqual(
       expect.arrayContaining([
-        'fintrack://openapi',
-        'fintrack://categories',
-        'fintrack://accounts',
-        'fintrack://currencies',
-        'fintrack://exchange-rates',
-        'fintrack://tags',
-        'fintrack://credit-cards',
-        'fintrack://merchants/top',
+        'patty://openapi',
+        'patty://categories',
+        'patty://accounts',
+        'patty://currencies',
+        'patty://exchange-rates',
+        'patty://tags',
+        'patty://credit-cards',
+        'patty://merchants/top',
       ]),
     );
   });
 
-  it('fintrack://categories returns the same data as list_categories', async () => {
+  it('patty://categories returns the same data as list_categories', async () => {
     const [resource, tool] = await Promise.all([
-      readResourceJson(client, 'fintrack://categories'),
+      readResourceJson(client, 'patty://categories'),
       callTool(client, { name: 'list_categories' }),
     ]);
     expect(resource).toEqual(tool);
   });
 
-  it('fintrack://accounts returns the same data as list_accounts', async () => {
+  it('patty://accounts returns the same data as list_accounts', async () => {
     const [resource, tool] = await Promise.all([
-      readResourceJson(client, 'fintrack://accounts'),
+      readResourceJson(client, 'patty://accounts'),
       callTool(client, { name: 'list_accounts' }),
     ]);
     expect(resource).toEqual(tool);
   });
 
-  it('fintrack://currencies returns fiat and crypto with symbol/decimals (ADR-026)', async () => {
-    const currencies = (await readResourceJson(client, 'fintrack://currencies')) as Array<{
+  it('patty://currencies returns fiat and crypto with symbol/decimals (ADR-026)', async () => {
+    const currencies = (await readResourceJson(client, 'patty://currencies')) as Array<{
       code: string;
       symbol: string;
       decimals: number;
@@ -74,36 +74,36 @@ describe('MCP reference resources (Feature Design 018)', () => {
     expect(byCode.USDC).toMatchObject({ decimals: 6 });
   });
 
-  it('fintrack://exchange-rates returns the same data as list_exchange_rates (ADR-026)', async () => {
+  it('patty://exchange-rates returns the same data as list_exchange_rates (ADR-026)', async () => {
     await callTool(client, {
       name: 'set_exchange_rate',
       args: { from: 'USD', to: 'BRL', rate: 5.2, asOf: '2026-08-10T10:00:00.000Z' },
     });
     const [resource, tool] = await Promise.all([
-      readResourceJson(client, 'fintrack://exchange-rates'),
+      readResourceJson(client, 'patty://exchange-rates'),
       callTool(client, { name: 'list_exchange_rates' }),
     ]);
     expect(resource).toEqual(tool);
   });
 
-  it('fintrack://tags returns the same data as list_tags', async () => {
+  it('patty://tags returns the same data as list_tags', async () => {
     const [resource, tool] = await Promise.all([
-      readResourceJson(client, 'fintrack://tags'),
+      readResourceJson(client, 'patty://tags'),
       callTool(client, { name: 'list_tags' }),
     ]);
     expect(resource).toEqual(tool);
   });
 
-  it('fintrack://credit-cards returns the same data as list_credit_cards', async () => {
+  it('patty://credit-cards returns the same data as list_credit_cards', async () => {
     const [resource, tool] = await Promise.all([
-      readResourceJson(client, 'fintrack://credit-cards'),
+      readResourceJson(client, 'patty://credit-cards'),
       callTool(client, { name: 'list_credit_cards' }),
     ]);
     expect(resource).toEqual(tool);
   });
 
-  it('fintrack://merchants/top returns at most 20 merchants, ordered by transactionCount descending', async () => {
-    const merchants = (await readResourceJson(client, 'fintrack://merchants/top')) as MerchantSummary[];
+  it('patty://merchants/top returns at most 20 merchants, ordered by transactionCount descending', async () => {
+    const merchants = (await readResourceJson(client, 'patty://merchants/top')) as MerchantSummary[];
     expect(Array.isArray(merchants)).toBe(true);
     expect(merchants.length).toBeLessThanOrEqual(DEFAULT_TOP_MERCHANTS_LIMIT);
     for (const entry of merchants) {

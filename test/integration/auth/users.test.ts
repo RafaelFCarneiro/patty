@@ -1335,7 +1335,7 @@ describe('the claim page', () => {
     const dashboard = await get(ctx, owner, '/ui/invite');
     expect(dashboard.statusCode).toBe(200);
     // The dashboard shell, not the claim page (the dashboard's own HTML is loaded into the shell afterwards).
-    expect(dashboard.body).toContain('<title>FinTrack</title>');
+    expect(dashboard.body).toContain('<title>PATTY</title>');
     expect(dashboard.body).not.toContain('Accept your invite');
 
     const claimPage = await ctx.app.inject({
@@ -1452,7 +1452,7 @@ describe('a member’s stdio sign-in is the member’s', () => {
     expect(outcome.kind === 'granted' && outcome.principal).toMatchObject({
       userId: ana.userId,
       role: 'member',
-      scopes: ['fintrack:read'],
+      scopes: ['patty:read'],
       via: 'stdio',
     });
     expect(await ctx.db.all(sql`SELECT user_id FROM access_tokens WHERE kind = 'stdio'`)).toEqual([

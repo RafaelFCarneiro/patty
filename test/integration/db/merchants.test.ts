@@ -24,11 +24,11 @@ let db: Db;
 let repo: MerchantsRepo;
 
 beforeEach(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-merchants-top-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-merchants-top-'));
   db = await openDatabase({
     KEY_LOCK_PATH: keyLockPathForTest(),
     DB_PATH: join(tmpDir, 'merchants-top.db'),
-    FINTRACK_DB_KEY: TEST_KEY,
+    PATTY_DB_KEY: TEST_KEY,
   });
   await bootstrap(db);
   repo = merchantsRepo(db, OWNER_USER_ID);

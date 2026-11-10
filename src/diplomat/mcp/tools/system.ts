@@ -39,7 +39,7 @@ const setLocaleTool = defineTool({
 const getPreferencesDescription =
   'Returns the stored locale preference, locale_source, and the resolved base currency. Use this to ' +
   'check whether the user set the locale explicitly before attempting an inferred switch. Note: the ' +
-  'FINTRACK_LOCALE env var can override the effective display locale used by list_categories; ' +
+  'PATTY_LOCALE env var can override the effective display locale used by list_categories; ' +
   'this tool reports the stored preference, not the effective override. base_currency is either an ' +
   'explicit override (set_base_currency) or derived from locale (pt→BRL, en/es→USD) when unset.';
 

@@ -94,10 +94,10 @@ const loadOverviewSandbox = () => {
   (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
     `${currency} ${value}`;
   // formatCurrencyNoSymbol (the calendar cell's own formatter) reads currency metadata directly
-  // off window.__fintrackCurrencies rather than through formatMoney — BTC's real 8 decimals here
+  // off window.__appCurrencies rather than through formatMoney — BTC's real 8 decimals here
   // is what lets the tests below tell "this flow correctly resolved to BTC" apart from "it fell
   // back to some other currency's 2-decimal formatting".
-  (sandbox.window as Record<string, unknown>).__fintrackCurrencies = {
+  (sandbox.window as Record<string, unknown>).__appCurrencies = {
     BTC: { code: 'BTC', symbol: '₿', name: 'Bitcoin', decimals: 8 },
   };
 

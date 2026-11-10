@@ -6,6 +6,7 @@ import { ImportStatementSource, PromptName } from '../../models/prompts.js';
 import { definePrompt, type PromptDefinition } from './definition.js';
 import { tourPromptText } from './tour.js';
 import { ToolName } from './tool-name.js';
+import { PRODUCT_NAME } from '../../models/package.js';
 
 const T = ToolName.enum;
 
@@ -139,7 +140,7 @@ const importStatementPrompt = definePrompt({
 const tourPrompt = definePrompt({
   name: PromptName.enum.tour,
   config: {
-    title: 'Tour of the FinTrack demo',
+    title: `Tour of the ${PRODUCT_NAME} demo`,
     description:
       'A six-step guided tour of the demo (balances, last month, budgets, a statement import, tagging the seeded ' +
       'trip and building a dashboard, then installing for real). On a real database it only says how to start the demo.',

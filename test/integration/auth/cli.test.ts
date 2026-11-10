@@ -89,7 +89,7 @@ const login = (ctx: AppContext, username: string, password: string) =>
 const status = (ctx: AppContext, headers: Record<string, string>) =>
   ctx.app.inject({ method: 'GET', url: '/api/status', headers: { host: LOOPBACK_HOST, ...headers } });
 
-describe('fintrack auth setup', () => {
+describe('patty auth setup', () => {
   it('claims the existing owner from a piped password: same row, no new user, no session', async () => {
     const ctx = await createApp();
     const { run, out, err } = harness(ctx, { stdin: PASSWORD });
@@ -188,7 +188,7 @@ describe('fintrack auth setup', () => {
   });
 });
 
-describe('fintrack auth reset-password', () => {
+describe('patty auth reset-password', () => {
   /** An owner with a live session, a live token, plus a second user (no flow creates one yet) with the same. */
   const world = async () => {
     const ctx = await createApp();
@@ -215,8 +215,8 @@ describe('fintrack auth reset-password', () => {
       userId: 'user-ana',
       name: 'ana script',
       tokenHash: 'ana-token-hash',
-      prefix: 'ftk_ana',
-      scopes: ['fintrack:read'],
+      prefix: 'ptk_ana',
+      scopes: ['patty:read'],
       createdAt: now,
     });
     return { ctx, cookie, token, tokenId };
@@ -310,7 +310,7 @@ describe('fintrack auth reset-password', () => {
   });
 });
 
-describe('fintrack auth setup (a lost race)', () => {
+describe('patty auth setup (a lost race)', () => {
   it('reports the failure, not silence, when the owner cannot be claimed and nobody holds the login', async () => {
     const ctx = await createApp();
     await ctx.db.run(sql`DELETE FROM setup_codes`);
@@ -322,7 +322,7 @@ describe('fintrack auth setup (a lost race)', () => {
   });
 });
 
-describe('fintrack auth (arguments)', () => {
+describe('patty auth (arguments)', () => {
   it('prints the help for no subcommand and exits 0', async () => {
     const ctx = await createApp();
     const { run, out } = harness(ctx);
@@ -375,7 +375,7 @@ describe('no flow can create a user', () => {
   });
 });
 
-describe('fintrack auth — the world changing between planning and writing', () => {
+describe('patty auth — the world changing between planning and writing', () => {
   /** The CLI's shell, with `beforeWrite` running right before the first flow it executes (after the plan was made). */
   const racing = (ctx: AppContext, input: { stdin: string }, beforeWrite: () => Promise<void>) => {
     const { io, out, err } = harness(ctx, input);

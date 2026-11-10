@@ -3,7 +3,7 @@ import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { makeClient, mcpUrl } from './helpers.js';
 
-describe('MCP resource > fintrack://openapi', () => {
+describe('MCP resource > patty://openapi', () => {
   let client: Client;
   let transport: StreamableHTTPClientTransport;
 
@@ -20,11 +20,11 @@ describe('MCP resource > fintrack://openapi', () => {
 
   it('is listed among available resources', async () => {
     const { resources } = await client.listResources();
-    expect(resources.map((r) => r.uri)).toContain('fintrack://openapi');
+    expect(resources.map((r) => r.uri)).toContain('patty://openapi');
   });
 
   it('returns the same OpenAPI document served at GET /api/openapi.json', async () => {
-    const { contents } = await client.readResource({ uri: 'fintrack://openapi' });
+    const { contents } = await client.readResource({ uri: 'patty://openapi' });
     expect(contents).toHaveLength(1);
     expect(contents[0]?.mimeType).toBe('application/json');
 

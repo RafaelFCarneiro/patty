@@ -1,10 +1,11 @@
 import { STDIO_MESSAGES, TERMINAL_SETUP_HINT } from '../../models/auth/message.js';
+import { LOG_PREFIX } from '../../models/package.js';
 import { connectUrl } from './origin.js';
 
 export const setupBanner = (fields: { code: string; setupUrl: string; expiresAt: string }): string =>
   [
     '',
-    '┌─ fintrack: first-time setup ─────────────────────────────────────────',
+    `┌─ ${LOG_PREFIX} first-time setup ─────────────────────────────────────────`,
     '│ This instance has no login yet. Claim it with this one-time setup code:',
     '│',
     `│     ${fields.code}`,

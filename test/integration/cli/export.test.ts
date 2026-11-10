@@ -62,7 +62,7 @@ const io = (): CliIo =>
 const run = (...args: string[]) => runCli(args, io());
 
 const seedDatabase = async () => {
-  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: KEY });
   await bootstrap(db);
   await db
     .insert(accounts)
@@ -85,7 +85,7 @@ const seedDatabase = async () => {
 };
 
 const countRows = async (file: string, key: string) => {
-  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: file, FINTRACK_DB_KEY: key });
+  const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: file, PATTY_DB_KEY: key });
   try {
     const [row] = await db.all<{ accounts: number; transactions: number }>(
       sql`SELECT (SELECT count(*) FROM accounts) AS accounts, (SELECT count(*) FROM transactions) AS transactions`,
@@ -100,17 +100,17 @@ const modeOf = (file: string) => statSync(file).mode & 0o777;
 const everythingPrinted = () => JSON.stringify([out, err, warnings]);
 
 beforeEach(async () => {
-  root = realpathSync(mkdtempSync(join(tmpdir(), 'fintrack-export-')));
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'patty-export-')));
   dataDirectory = join(root, 'data');
   outputDirectory = join(root, 'compose');
   mkdirSync(outputDirectory);
-  dbPath = join(dataDirectory, 'fintrack.db');
+  dbPath = join(dataDirectory, 'patty.db');
   out = [];
   err = [];
   warnings = [];
   vi.stubEnv('DB_PATH', dbPath);
-  vi.stubEnv('FINTRACK_DB_KEY', KEY);
-  vi.stubEnv('FINTRACK_DB_KEY_FILE', undefined);
+  vi.stubEnv('PATTY_DB_KEY', KEY);
+  vi.stubEnv('PATTY_DB_KEY_FILE', undefined);
   vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => void warnings.push(args));
   await seedDatabase();
 });
@@ -121,9 +121,9 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe('fintrack key export', () => {
-  it('writes exactly the key, owner-only, and the file opens the database as FINTRACK_DB_KEY_FILE', async () => {
-    const keyFile = join(outputDirectory, 'fintrack_db_key');
+describe('patty key export', () => {
+  it('writes exactly the key, owner-only, and the file opens the database as PATTY_DB_KEY_FILE', async () => {
+    const keyFile = join(outputDirectory, 'patty_db_key');
     expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_OK);
 
     expect(readFileSync(keyFile, 'utf8')).toBe(`${KEY}\n`);
@@ -131,7 +131,7 @@ describe('fintrack key export', () => {
     const db = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: dbPath,
-      FINTRACK_DB_KEY_FILE: keyFile,
+      PATTY_DB_KEY_FILE: keyFile,
     });
     expect(await db.all(sql`SELECT count(*) AS n FROM accounts`)).toEqual([{ n: 1 }]);
     closeDatabase(db);
@@ -139,14 +139,14 @@ describe('fintrack key export', () => {
   });
 
   it('prints the key nowhere: not on stdout, stderr or the log', async () => {
-    await run('key', 'export', '--to', join(outputDirectory, 'fintrack_db_key'));
-    await run('key', 'export', '--to', join(outputDirectory, 'fintrack_db_key')); // the refusal says nothing either
-    await run('key', 'export', '--to', join(dataDirectory, 'fintrack_db_key'));
+    await run('key', 'export', '--to', join(outputDirectory, 'patty_db_key'));
+    await run('key', 'export', '--to', join(outputDirectory, 'patty_db_key')); // the refusal says nothing either
+    await run('key', 'export', '--to', join(dataDirectory, 'patty_db_key'));
     expect(everythingPrinted()).not.toContain(KEY);
   });
 
   it('refuses an existing file and leaves it untouched', async () => {
-    const keyFile = join(outputDirectory, 'fintrack_db_key');
+    const keyFile = join(outputDirectory, 'patty_db_key');
     writeFileSync(keyFile, 'precious');
     expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
     expect(readFileSync(keyFile, 'utf8')).toBe('precious');
@@ -154,15 +154,15 @@ describe('fintrack key export', () => {
   });
 
   it('refuses the database directory and writes nothing there', async () => {
-    const keyFile = join(dataDirectory, 'fintrack_db_key');
+    const keyFile = join(dataDirectory, 'patty_db_key');
     expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
     expect(existsSync(keyFile)).toBe(false);
     expect(err.join('\n')).toContain('never sit next to the data');
   });
 
   it('refuses, writing nothing, when the key does not open the database', async () => {
-    vi.stubEnv('FINTRACK_DB_KEY', OTHER_KEY);
-    const keyFile = join(outputDirectory, 'fintrack_db_key');
+    vi.stubEnv('PATTY_DB_KEY', OTHER_KEY);
+    const keyFile = join(outputDirectory, 'patty_db_key');
     expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
     expect(existsSync(keyFile)).toBe(false);
     expect(everythingPrinted()).not.toContain(OTHER_KEY);
@@ -170,7 +170,7 @@ describe('fintrack key export', () => {
 
   it('refuses, writing nothing, when there is no database', async () => {
     vi.stubEnv('DB_PATH', join(dataDirectory, 'missing.db'));
-    const keyFile = join(outputDirectory, 'fintrack_db_key');
+    const keyFile = join(outputDirectory, 'patty_db_key');
     expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
     expect(existsSync(keyFile)).toBe(false);
     expect(err.join('\n')).toContain('there is no database at');
@@ -184,9 +184,9 @@ describe('fintrack key export', () => {
   });
 });
 
-describe('fintrack db export', () => {
+describe('patty db export', () => {
   it('writes a snapshot that opens with the same key and holds the same rows, owner-only', async () => {
-    const snapshot = join(outputDirectory, 'fintrack.snapshot.db');
+    const snapshot = join(outputDirectory, 'patty.snapshot.db');
     expect(await run('db', 'export', '--to', snapshot)).toBe(EXIT_OK);
 
     expect(modeOf(snapshot)).toBe(PRIVATE_FILE_MODE);
@@ -197,13 +197,13 @@ describe('fintrack db export', () => {
   });
 
   it('is encrypted: the wrong key cannot read it', async () => {
-    const snapshot = join(outputDirectory, 'fintrack.snapshot.db');
+    const snapshot = join(outputDirectory, 'patty.snapshot.db');
     await run('db', 'export', '--to', snapshot);
     await expect(countRows(snapshot, OTHER_KEY)).rejects.toThrow();
   });
 
   it('refuses an existing file and leaves it untouched', async () => {
-    const snapshot = join(outputDirectory, 'fintrack.snapshot.db');
+    const snapshot = join(outputDirectory, 'patty.snapshot.db');
     writeFileSync(snapshot, 'precious');
     expect(await run('db', 'export', '--to', snapshot)).toBe(EXIT_FAILURE);
     expect(readFileSync(snapshot, 'utf8')).toBe('precious');
@@ -216,14 +216,14 @@ describe('fintrack db export', () => {
   });
 
   it('never removes a file that was already there when the copy is refused', async () => {
-    const snapshot = join(outputDirectory, 'fintrack.snapshot.db');
+    const snapshot = join(outputDirectory, 'patty.snapshot.db');
     writeFileSync(snapshot, 'precious');
     expect((await createExporter().writeSnapshot(snapshot)).isErr()).toBe(true);
     expect(readFileSync(snapshot, 'utf8')).toBe('precious');
   });
 
   it('fails cleanly, creating nothing, when the destination directory is missing', async () => {
-    const snapshot = join(outputDirectory, 'missing', 'fintrack.snapshot.db');
+    const snapshot = join(outputDirectory, 'missing', 'patty.snapshot.db');
     expect(await run('db', 'export', '--to', snapshot)).toBe(EXIT_FAILURE);
     expect(existsSync(snapshot)).toBe(false);
   });
@@ -234,14 +234,14 @@ describe('fintrack db export', () => {
   });
 
   it('leaves nothing behind when the key does not open the database', async () => {
-    vi.stubEnv('FINTRACK_DB_KEY', OTHER_KEY);
-    const snapshot = join(outputDirectory, 'fintrack.snapshot.db');
+    vi.stubEnv('PATTY_DB_KEY', OTHER_KEY);
+    const snapshot = join(outputDirectory, 'patty.snapshot.db');
     expect(await run('db', 'export', '--to', snapshot)).toBe(EXIT_FAILURE);
     expect(existsSync(snapshot)).toBe(false);
   });
 
   it('does not migrate the source: a database with a migration still pending stays that way', async () => {
-    const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+    const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: KEY });
     await db.run(
       sql`DELETE FROM ${sql.identifier(MIGRATIONS_TABLE)} WHERE id = (SELECT max(id) FROM ${sql.identifier(MIGRATIONS_TABLE)})`,
     );
@@ -250,9 +250,9 @@ describe('fintrack db export', () => {
     );
     closeDatabase(db);
 
-    expect(await run('db', 'export', '--to', join(outputDirectory, 'fintrack.snapshot.db'))).toBe(EXIT_OK);
+    expect(await run('db', 'export', '--to', join(outputDirectory, 'patty.snapshot.db'))).toBe(EXIT_OK);
 
-    const after = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+    const after = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: KEY });
     expect(await after.all(sql`SELECT hash, created_at FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`)).toEqual(
       appliedBefore,
     );

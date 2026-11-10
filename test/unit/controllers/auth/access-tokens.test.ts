@@ -18,9 +18,9 @@ import { type SessionEntity, SESSION_TOUCH_INTERVAL_MS } from '../../../../src/m
 import { type AccessTokenEntity, AccessTokenKind } from '../../../../src/models/auth/token.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
-const READ = Scope.enum['fintrack:read'];
-const WRITE = Scope.enum['fintrack:write'];
-const PLAINTEXT = 'ftk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcdefg';
+const READ = Scope.enum['patty:read'];
+const WRITE = Scope.enum['patty:write'];
+const PLAINTEXT = 'ptk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcdefg';
 
 // Deterministic, and it does not embed the plaintext, so "the hash is stored, not the token" is assertable.
 const fakeHash = (secret: string): string => `sha:${Buffer.from(secret).toString('base64')}`;
@@ -53,7 +53,7 @@ const tokenRow = (overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity
   profile: null,
   name: 'laptop',
   tokenHash: fakeHash(PLAINTEXT),
-  prefix: 'ftk_AbCdEf',
+  prefix: 'ptk_AbCdEf',
   scopes: [READ],
   createdAt: NOW.toISOString(),
   lastUsedAt: null,
@@ -139,14 +139,14 @@ describe('createToken', () => {
       userId: OWNER_USER_ID,
       name: 'laptop',
       tokenHash: fakeHash(PLAINTEXT),
-      prefix: 'ftk_AbCdEf',
+      prefix: 'ptk_AbCdEf',
       scopes: [READ, WRITE],
       lastUsedAt: null,
       revokedAt: null,
     });
     expect(JSON.stringify(persist)).not.toContain(PLAINTEXT);
     expect(JSON.stringify(response.summary)).not.toContain(PLAINTEXT);
-    expect(response.summary).toMatchObject({ id: 'new-id', status: 'active', prefix: 'ftk_AbCdEf' });
+    expect(response.summary).toMatchObject({ id: 'new-id', status: 'active', prefix: 'ptk_AbCdEf' });
   });
 
   it('gives a read-only token only the read scope, and every new token an expiry', async () => {
@@ -289,7 +289,7 @@ describe('authenticateToken', () => {
   });
 
   it.each([
-    ['an unknown token', {}, fakeHash('ftk_other')],
+    ['an unknown token', {}, fakeHash('ptk_other')],
     ['a revoked token', { tokens: [tokenRow({ revokedAt: NOW.toISOString() })] }, hash],
     ['an expired token', { tokens: [tokenRow({ expiresAt: NOW.toISOString() })] }, hash],
     [

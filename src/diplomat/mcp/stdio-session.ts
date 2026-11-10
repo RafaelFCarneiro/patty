@@ -19,7 +19,7 @@ import { GateKind, type GateOutcome } from './gate.js';
 /**
  * The stdio channel's identity (ADR-034 §2, §4). A stdio process is spawned by whichever program the user pointed at
  * it, so it acts as nobody until it holds a credential, and it holds exactly one, found in this order:
- *   1. `FINTRACK_TOKEN` from the environment — a failure here is an error, never a reason to try the next source;
+ *   1. `PATTY_TOKEN` from the environment — a failure here is an error, never a reason to try the next source;
  *   2. the sign-in saved in the OS keychain for this profile and database;
  *   3. none: it asks for one (a pending grant the person approves in the browser) and answers every gated request
  *      with the instructions to do so.

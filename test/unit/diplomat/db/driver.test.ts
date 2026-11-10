@@ -40,14 +40,14 @@ vi.mock('../../../../src/diplomat/db/key-lock.js', async (importOriginal) => {
 
 const FILE_KEY = 'a'.repeat(64);
 const ENV_KEY = 'b'.repeat(64);
-const DB_PATH = '/unused/fintrack.db';
+const DB_PATH = '/unused/patty.db';
 const KEY_LOCK_PATH = keyLockPathForTest();
 
 describe('resolveEncryptionKey (ADR-032)', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-key-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'patty-key-'));
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     keychain.loaded.mockClear();
     vi.resetModules();
@@ -70,7 +70,7 @@ describe('resolveEncryptionKey (ADR-032)', () => {
     const key = await resolveEncryptionKey({
       KEY_LOCK_PATH,
       DB_PATH,
-      FINTRACK_DB_KEY_FILE: keyFile(`${FILE_KEY}\n`),
+      PATTY_DB_KEY_FILE: keyFile(`${FILE_KEY}\n`),
     });
     expect(key).toBe(FILE_KEY);
     expect(keychain.loaded).not.toHaveBeenCalled();
@@ -80,14 +80,14 @@ describe('resolveEncryptionKey (ADR-032)', () => {
     const key = await resolveEncryptionKey({
       KEY_LOCK_PATH,
       DB_PATH,
-      FINTRACK_DB_KEY_FILE: keyFile(FILE_KEY),
-      FINTRACK_DB_KEY: ENV_KEY,
+      PATTY_DB_KEY_FILE: keyFile(FILE_KEY),
+      PATTY_DB_KEY: ENV_KEY,
     });
     expect(key).toBe(FILE_KEY);
   });
 
   it('uses the env var when no file is set, without loading the keychain module', async () => {
-    const key = await resolveEncryptionKey({ KEY_LOCK_PATH, DB_PATH, FINTRACK_DB_KEY: ENV_KEY });
+    const key = await resolveEncryptionKey({ KEY_LOCK_PATH, DB_PATH, PATTY_DB_KEY: ENV_KEY });
     expect(key).toBe(ENV_KEY);
     expect(keychain.loaded).not.toHaveBeenCalled();
   });
@@ -96,12 +96,12 @@ describe('resolveEncryptionKey (ADR-032)', () => {
     await resolveEncryptionKey({
       KEY_LOCK_PATH,
       DB_PATH,
-      FINTRACK_DB_KEY_FILE: keyFile(FILE_KEY),
+      PATTY_DB_KEY_FILE: keyFile(FILE_KEY),
     });
-    await resolveEncryptionKey({ KEY_LOCK_PATH, DB_PATH, FINTRACK_DB_KEY: ENV_KEY });
+    await resolveEncryptionKey({ KEY_LOCK_PATH, DB_PATH, PATTY_DB_KEY: ENV_KEY });
     const logged = vi.mocked(console.warn).mock.calls.map(([message]) => String(message));
-    expect(logged[0]).toContain('FINTRACK_DB_KEY_FILE');
-    expect(logged[1]).toContain('FINTRACK_DB_KEY from the environment');
+    expect(logged[0]).toContain('PATTY_DB_KEY_FILE');
+    expect(logged[1]).toContain('PATTY_DB_KEY from the environment');
     expect(logged.join()).not.toContain(FILE_KEY);
     expect(logged.join()).not.toContain(ENV_KEY);
   });
@@ -111,7 +111,7 @@ describe('resolveEncryptionKey (ADR-032)', () => {
       resolveEncryptionKey({
         KEY_LOCK_PATH,
         DB_PATH,
-        FINTRACK_DB_KEY_FILE: keyFile('not-a-key'),
+        PATTY_DB_KEY_FILE: keyFile('not-a-key'),
       }),
     ).rejects.toThrow(/64-character hex.*openssl rand -hex 32/s);
   });
@@ -121,7 +121,7 @@ describe('resolveEncryptionKey (ADR-032)', () => {
       resolveEncryptionKey({
         KEY_LOCK_PATH,
         DB_PATH,
-        FINTRACK_DB_KEY_FILE: join(tmpDir, 'absent'),
+        PATTY_DB_KEY_FILE: join(tmpDir, 'absent'),
       }),
     ).rejects.toThrow(/cannot read.*openssl rand -hex 32/s);
   });
@@ -151,7 +151,7 @@ describe('resolveEncryptionKey (ADR-032)', () => {
       throw new Error('no secret service');
     });
     await expect(resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH })).rejects.toThrow(
-      /keychain.*openssl rand -hex 32.*FINTRACK_DB_KEY_FILE.*FINTRACK_DB_KEY/s,
+      /keychain.*openssl rand -hex 32.*PATTY_DB_KEY_FILE.*PATTY_DB_KEY/s,
     );
     expect(keychain.setPassword).not.toHaveBeenCalled();
   });
@@ -163,12 +163,12 @@ describe('resolveEncryptionKey (ADR-032)', () => {
       throw new Error('no secret service');
     });
 
-    await expect(resolveEncryptionKey({ KEY_LOCK_PATH, DB_PATH: join(dataDir, 'fintrack.db') })).rejects.toThrow();
+    await expect(resolveEncryptionKey({ KEY_LOCK_PATH, DB_PATH: join(dataDir, 'patty.db') })).rejects.toThrow();
     await expect(
       resolveEncryptionKey({
         KEY_LOCK_PATH,
-        DB_PATH: join(dataDir, 'fintrack.db'),
-        FINTRACK_DB_KEY_FILE: join(tmpDir, 'absent'),
+        DB_PATH: join(dataDir, 'patty.db'),
+        PATTY_DB_KEY_FILE: join(tmpDir, 'absent'),
       }),
     ).rejects.toThrow();
 
@@ -230,7 +230,7 @@ describe('the keychain key helpers (key import)', () => {
     keychain.getPassword.mockReturnValue(null);
     const held = await acquireKeyLockForTest();
     const resolving = resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH });
-    await expect(resolving).rejects.toThrow(/another fintrack process is writing the database key/);
+    await expect(resolving).rejects.toThrow(/another patty process is writing the database key/);
     await expect(resolving).rejects.not.toThrow(/OS keychain/);
     await held.release();
   });
@@ -260,7 +260,7 @@ describe('the keychain key helpers (key import)', () => {
   it('findEncryptionKey follows the server order: file, env, keychain', async () => {
     keychain.getPassword.mockReturnValue(FILE_KEY);
     await expect(findEncryptionKey({ KEY_LOCK_PATH, DB_PATH })).resolves.toBe(FILE_KEY);
-    await expect(findEncryptionKey({ KEY_LOCK_PATH, DB_PATH, FINTRACK_DB_KEY: ENV_KEY })).resolves.toBe(ENV_KEY);
+    await expect(findEncryptionKey({ KEY_LOCK_PATH, DB_PATH, PATTY_DB_KEY: ENV_KEY })).resolves.toBe(ENV_KEY);
   });
 
   it('findEncryptionKey rejects a malformed keychain entry', async () => {
@@ -295,7 +295,7 @@ describe('enableWal (ADR-024)', () => {
 
   it('does not warn when WAL is actually applied', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-wal-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'patty-wal-'));
     const client = createClient({ url: `file:${join(tmpDir, 'wal.db')}` });
 
     await enableWal(client);

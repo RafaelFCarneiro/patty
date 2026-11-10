@@ -16,11 +16,11 @@ import { createRuntime } from './runtime.js';
 export const boot = (config: Config) =>
   safeTry(async function* () {
     // Never create a file (least of all the real database's) just to look.
-    if (config.FINTRACK_DEMO && !databaseExists(config.DB_PATH)) return err(demoNotReady(config.DB_PATH));
+    if (config.PATTY_DEMO && !databaseExists(config.DB_PATH)) return err(demoNotReady(config.DB_PATH));
     const db = await openDatabase(config);
     yield* bootstrap(db);
     const runtime = createRuntime(db, config);
-    if (config.FINTRACK_DEMO && !isDemoInstance(await runtime.instanceKind())) {
+    if (config.PATTY_DEMO && !isDemoInstance(await runtime.instanceKind())) {
       closeDatabase(db);
       return err(demoNotReady(config.DB_PATH));
     }

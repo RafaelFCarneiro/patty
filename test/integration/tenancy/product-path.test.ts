@@ -20,7 +20,7 @@ let b: Actor;
 let close: (() => Promise<void>) | undefined;
 
 beforeAll(async () => {
-  dir = mkdtempSync(join(tmpdir(), 'fintrack-product-path-'));
+  dir = mkdtempSync(join(tmpdir(), 'patty-product-path-'));
   ctx = await buildApp({ dbPath: join(dir, 'test.db'), auth: {} });
   await ctx.app.ready();
   ({ a, b, close } = await seedProductPath(ctx));
@@ -52,7 +52,7 @@ describe('B, created through the product path', () => {
       sql`SELECT user_id, scopes, client_name FROM access_tokens WHERE kind = 'stdio'`,
     );
     expect(signIns).toEqual([
-      { user_id: b.world.userId, scopes: '["fintrack:read","fintrack:write"]', client_name: 'Claude Desktop' },
+      { user_id: b.world.userId, scopes: '["patty:read","patty:write"]', client_name: 'Claude Desktop' },
     ]);
   });
 

@@ -31,10 +31,11 @@ import {
   USER_ENTITY_TAG,
 } from '../models/auth/entity.js';
 import { AuthMode } from '../models/auth/mode.js';
+import { LOG_PREFIX } from '../models/package.js';
 
 /**
  * Lazily imports the credential primitives so `@node-rs/argon2`'s native module is never loaded unless
- * an auth flow can run — an explicit `FINTRACK_AUTH=disabled` stdio run starts exactly as it did before ADR-033.
+ * an auth flow can run — an explicit `PATTY_AUTH=disabled` stdio run starts exactly as it did before ADR-033.
  */
 const loadCredentialsModule = () => import('../diplomat/auth/credentials.js');
 
@@ -78,20 +79,20 @@ const isSecureOrigin = (publicUrl: string | undefined): boolean => publicUrl?.st
 /** What auth needs of the config — including what a sign-in needs to serve its temporary page on this database. */
 export type AuthConfig = Pick<
   Config,
-  | 'FINTRACK_AUTH'
+  | 'PATTY_AUTH'
   | 'PUBLIC_URL'
   | 'HOST'
   | 'PORT'
   | 'MCP_TRANSPORT'
-  | 'FINTRACK_HTTP'
+  | 'PATTY_HTTP'
   | 'DB_PATH'
   | 'TRUST_PROXY'
   | keyof RuntimeConfig
 >;
 
 /** Whether anything will serve HTTP in this run — sessions only matter if so. */
-export const httpSurfaceEnabled = (config: Pick<AuthConfig, 'MCP_TRANSPORT' | 'FINTRACK_HTTP'>): boolean =>
-  config.MCP_TRANSPORT === McpTransport.enum.http || config.FINTRACK_HTTP;
+export const httpSurfaceEnabled = (config: Pick<AuthConfig, 'MCP_TRANSPORT' | 'PATTY_HTTP'>): boolean =>
+  config.MCP_TRANSPORT === McpTransport.enum.http || config.PATTY_HTTP;
 
 /**
  * Composition-root step between `bootstrap` and the first listener (ADR-033, ADR-034): decides whether anything
@@ -105,7 +106,7 @@ export type PreparedAuth = {
   auth: HttpAuth;
   /** What the stdio channel signs in with: the sign-in interpreter of a profile, given the origin of the page this
    *  process can name (the bound sidecar's, or none). Present whenever authentication is required and the
-   *  transport is stdio — even with `FINTRACK_HTTP=false`, where there is no HTTP surface but the stdio session
+   *  transport is stdio — even with `PATTY_HTTP=false`, where there is no HTTP surface but the stdio session
    *  still needs a login. */
   stdio: { signIn: (profile: string, origin: () => string | null) => SignInInterpreter } | null;
   /** While the owner is unclaimed, issue a fresh setup code and print it to STDERR (stdout carries stdio MCP),
@@ -118,15 +119,17 @@ const NO_SETUP_TO_ISSUE: PreparedAuth['issueAndAnnounceSetup'] = async () => und
 const housekeeping = async (run: RunEffects, deps: AuthDeps): Promise<void> => {
   const sessions = await run(() => pruneExpiredSessions(deps));
   if (sessions.isErr())
-    throw new Error(`fintrack: could not prune expired sessions — ${formatAppError(sessions.error)}`);
+    throw new Error(`${LOG_PREFIX} could not prune expired sessions — ${formatAppError(sessions.error)}`);
   const grants = await run(() => pruneExpiredGrants(deps));
-  if (grants.isErr()) throw new Error(`fintrack: could not prune expired sign-ins — ${formatAppError(grants.error)}`);
+  if (grants.isErr())
+    throw new Error(`${LOG_PREFIX} could not prune expired sign-ins — ${formatAppError(grants.error)}`);
   const invites = await run(() => pruneExpiredInvites(deps));
-  if (invites.isErr()) throw new Error(`fintrack: could not prune expired invites — ${formatAppError(invites.error)}`);
+  if (invites.isErr())
+    throw new Error(`${LOG_PREFIX} could not prune expired invites — ${formatAppError(invites.error)}`);
 };
 
 export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEffects): Promise<PreparedAuth> => {
-  if (config.FINTRACK_AUTH === AuthMode.enum.disabled) {
+  if (config.PATTY_AUTH === AuthMode.enum.disabled) {
     return { auth: DISABLED_AUTH, stdio: null, issueAndAnnounceSetup: NO_SETUP_TO_ISSUE };
   }
 
@@ -138,7 +141,7 @@ export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEff
     config.MCP_TRANSPORT === McpTransport.enum.stdio
       ? {
           signIn: (profile, origin) =>
-            createSignInFor({ config, db, deps, run }, { profile, origin, canServePage: config.FINTRACK_HTTP }),
+            createSignInFor({ config, db, deps, run }, { profile, origin, canServePage: config.PATTY_HTTP }),
         }
       : null;
   if (!httpSurfaceEnabled(config)) return { auth: DISABLED_AUTH, stdio, issueAndAnnounceSetup: NO_SETUP_TO_ISSUE };
@@ -153,8 +156,9 @@ export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEff
     },
     stdio,
     issueAndAnnounceSetup: async (boundOrigin, announce = console.error) => {
-      const issued = await run(() => issueSetupCode(deps, config.FINTRACK_AUTH));
-      if (issued.isErr()) throw new Error(`fintrack: could not issue a setup code — ${formatAppError(issued.error)}`);
+      const issued = await run(() => issueSetupCode(deps, config.PATTY_AUTH));
+      if (issued.isErr())
+        throw new Error(`${LOG_PREFIX} could not issue a setup code — ${formatAppError(issued.error)}`);
       const code = issued.value;
       if (!code) return;
       const origin = config.PUBLIC_URL ?? boundOrigin;

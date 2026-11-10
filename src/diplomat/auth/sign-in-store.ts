@@ -1,6 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import type { SignInStore } from '../../controllers/deps.js';
 import { KEYCHAIN_SERVICE, keychainFailures, type KeychainFailure } from '../../models/auth/sign-in.js';
+import { LOG_PREFIX } from '../../models/package.js';
 
 /** The OS keychain, one entry per profile and database (ADR-034 §2). */
 
@@ -27,7 +28,9 @@ export const keychainSignInStore = (
     useEntry(account, (entry) => entry.setPassword(token)).match(
       () => true,
       () => {
-        report('fintrack: could not save the sign-in to the OS keychain; it will last only until this process exits.');
+        report(
+          `${LOG_PREFIX} could not save the sign-in to the OS keychain; it will last only until this process exits.`,
+        );
         return false;
       },
     ),

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { defaultScopeForMethod, hasScope, requiredMcpScope, scopeOfTool } from '../../../../src/logic/auth/scope.js';
 import { Scope } from '../../../../src/models/auth/scope.js';
 
-const WRITE = Scope.enum['fintrack:write'];
+const WRITE = Scope.enum['patty:write'];
 
-const READ = Scope.enum['fintrack:read'];
+const READ = Scope.enum['patty:read'];
 
 describe('hasScope', () => {
   it('lets write imply read, and nothing imply write', () => {

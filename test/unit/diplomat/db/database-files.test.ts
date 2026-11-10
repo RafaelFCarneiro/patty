@@ -41,7 +41,7 @@ import {
 let dir: string;
 
 beforeEach(() => {
-  dir = realpathSync(mkdtempSync(join(tmpdir(), 'fintrack-db-files-')));
+  dir = realpathSync(mkdtempSync(join(tmpdir(), 'patty-db-files-')));
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -220,10 +220,10 @@ describe('countRowsOnCopy', () => {
   it('copies the log that sits beside a symlink’s target, not beside the link', async () => {
     mkdirSync(join(dir, 'real'));
     mkdirSync(join(dir, 'linked'));
-    writeFileSync(join(dir, 'real', 'fintrack.db'), 'db');
-    writeFileSync(join(dir, 'real', 'fintrack.db-wal'), 'wal');
-    symlinkSync(join(dir, 'real', 'fintrack.db'), join(dir, 'linked', 'fintrack.db'));
-    await countRowsOnCopy(join(dir, 'linked', 'fintrack.db'), 'k'.repeat(64));
+    writeFileSync(join(dir, 'real', 'patty.db'), 'db');
+    writeFileSync(join(dir, 'real', 'patty.db-wal'), 'wal');
+    symlinkSync(join(dir, 'real', 'patty.db'), join(dir, 'linked', 'patty.db'));
+    await countRowsOnCopy(join(dir, 'linked', 'patty.db'), 'k'.repeat(64));
     expect(probed.files).toEqual(['probe.db', 'probe.db-wal']);
   });
 });

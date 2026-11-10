@@ -845,13 +845,13 @@ function translatePage() {
     }
 }
 
-// window.__fintrackCurrencies is populated by the shell (ui/app.js) before this script runs.
+// window.__appCurrencies is populated by the shell (ui/app.js) before this script runs.
 // Defaults the selection to the base currency so the converted total shows without an extra click.
 async function initCurrencySelector() {
     const select = document.getElementById('currency-select');
     if (!select) return;
 
-    const codes = Object.keys(window.__fintrackCurrencies || {}).sort();
+    const codes = Object.keys(window.__appCurrencies || {}).sort();
     codes.forEach(code => {
         const opt = document.createElement('option');
         opt.value = code;
@@ -1703,7 +1703,7 @@ function escapeHtml(str) {
 })();
 
 // ADR-027 Live-update listener
-window.fintrackOnDataChanged = function(entities) {
+window.onAppDataChanged = function(entities) {
     var affected = entities.some(function(tag) {
         return ['budget', 'transaction', 'category', 'recurring'].indexOf(tag) !== -1;
     });

@@ -109,7 +109,7 @@ const runPlan = async (
 
 export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result<DemoSeedReport, AppError>> => {
   const clock = { now: options.today };
-  const runtime = createRuntime(db, { ...options.config, FINTRACK_LOCALE: undefined }, { clock: () => clock.now });
+  const runtime = createRuntime(db, { ...options.config, PATTY_LOCALE: undefined }, { clock: () => clock.now });
   const scoped = scopedFor(runtime, OWNER_PRINCIPAL);
   const instanceSettings = instanceSettingsRepo(db);
 

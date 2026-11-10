@@ -7,7 +7,7 @@ import {
   type DemoFailure,
   type DemoPrepared,
 } from '../../../models/demo/core.js';
-import { NPX_COMMAND } from '../../../models/package.js';
+import { NPX_COMMAND, PRODUCT_NAME } from '../../../models/package.js';
 import { DEMO_FLAG, DEMO_POSITIONALS, DemoOptionsSchema } from '../../../wire/in/cli.js';
 import { EXIT_OK, exitCodeOf, fail, parseFlags, type CliIo } from '../io.js';
 
@@ -22,7 +22,7 @@ export const DEMO_HELP = `
 Usage: ${NPX_COMMAND} demo [--${COUNTRY_FLAG} ${DemoCountry.options.join('|')}] [--${RESET_FLAG}]
 
 Seeds a throwaway demo database — sample data, never your finances — and serves its dashboards on port ${DEMO_PORT}
-(your real FinTrack keeps its own database and port). No login: the demo is loopback-only and its key is public.
+(your real ${PRODUCT_NAME} keeps its own database and port). No login: the demo is loopback-only and its key is public.
 
 Options:
   --${COUNTRY_FLAG} <code>  the data set, and with it the language and currency: ${DemoCountry.options.join(', ')}
@@ -37,7 +37,7 @@ const FAILURE_MESSAGES = {
     'the demo database path is the real database (DB_PATH), or cannot be resolved to a file — the demo never touches it',
   [DemoFailureCode.enum.not_demo]: () =>
     'the file at the demo database path is not a demo database (or does not open with the demo key), so it is left ' +
-    "alone. If a FinTrack demo is running (an AI client's fintrack-demo server), stop it and retry. " +
+    `alone. If a ${PRODUCT_NAME} demo is running (an AI client's patty-demo server), stop it and retry. ` +
     'Move the file away if it is yours to remove',
   [DemoFailureCode.enum.interrupted]: () =>
     `the demo was not fully seeded (an earlier run stopped partway). Start it over with: ${RESET_HINT}`,
@@ -48,7 +48,7 @@ const FAILURE_MESSAGES = {
     'another demo run is preparing the same database right now (or died holding its lock file, which is cleared once ' +
     'that process is gone). Wait for it, then run this again',
   [DemoFailureCode.enum.port_in_use]: () =>
-    `port ${DEMO_PORT} is already in use. If the demo is already running (an AI client's fintrack-demo server, or ` +
+    `port ${DEMO_PORT} is already in use. If the demo is already running (an AI client's patty-demo server, or ` +
     `another "demo"), open ${dashboardUrl()}`,
 } as const satisfies Record<DemoFailureCode, (failure: DemoFailure) => string>;
 
@@ -62,7 +62,7 @@ const seededNote = (prepared: DemoPrepared): string =>
 export const DEMO_MESSAGES = {
   ready: (prepared: DemoPrepared): string =>
     [
-      'FinTrack demo — sample data, not your finances. Do not enter real data here.',
+      `${PRODUCT_NAME} demo — sample data, not your finances. Do not enter real data here.`,
       seededNote(prepared),
       `  Database:   ${prepared.databasePath} (encrypted with the published demo key)`,
       `  Dashboards: ${dashboardUrl()}   (Ctrl-C to stop)`,

@@ -6,7 +6,7 @@ import type { TestProject } from 'vitest/node';
 let tmpDir: string;
 
 export const setup = (ctx: TestProject) => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-test-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-test-'));
   ctx.provide('DB_PATH' as never, join(tmpDir, 'test.db') as never);
 };
 

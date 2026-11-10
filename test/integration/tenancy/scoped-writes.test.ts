@@ -29,7 +29,7 @@ let tmpDir: string;
 let ctx: AppContext;
 
 beforeAll(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-scoped-writes-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-scoped-writes-'));
   ctx = await buildApp({ dbPath: join(tmpDir, 'test.db'), auth: {} });
   await ctx.app.ready();
   await seedTwoUsers(ctx);
@@ -264,7 +264,7 @@ describe('a scoped runner writes only its own user’s rows', () => {
     const aBefore = await dumpOf(ctx.db, A.userId);
     const sharedBefore = await sharedDump(ctx.db);
 
-    // B teaches FinTrack the same (merchant, category) A taught it: a separate edge of B's own, not A's reinforced.
+    // B teaches PATTY the same (merchant, category) A taught it: a separate edge of B's own, not A's reinforced.
     const result = await runAs(B.userId, [
       insert(MERCHANT_ENTITY_TAG, { key: A.merchantKey }),
       insert(MERCHANT_CATEGORY_ENTITY_TAG, {

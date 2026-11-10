@@ -21,9 +21,9 @@ engine wiring, appliers, outcomes, and the per-flow notes.
 > bounded retry loop, idempotency, `runEffectsSequence`, change publication) are specified in its
 > [architecture doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/architecture.md), with its principle in its
 > [FC/IS doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/functional-core-imperative-shell.md). The package docs are not in the npm tarball — read them
-> on GitHub. **This file covers FinTrack's side only**: the SQLite adapter, the composition-root wiring, and the
-> per-flow notes. The package's public API (every `src/index.ts` export) is semver-governed
-> ([ADR 0001](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/adr/0001-extracted-from-fintrack.md)); a port change lands there first.
+> on GitHub. **This file covers PATTY's side only**: the SQLite adapter, the composition-root wiring, and the
+> per-flow notes. The package's public API (every `src/index.ts` export) is semver-governed;
+> a port change lands there first.
 
 ### The core's contract — what a controller returns
 
@@ -31,7 +31,7 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   `ResultAsync<T>`), composed with `safeTry` as before — it just builds `Persistable`s instead of calling
   `deps.<x>.create`. Builders: `logic/persistence.ts`'s `insert`/`update`/`remove`.
 - **`Persistable` / `PersistOp`** come from `@rfc0/effect-runner` (see its architecture doc for the shapes).
-  Each FinTrack entity module owns its own tag constant (e.g. `models/account.ts`'s `ACCOUNT_ENTITY_TAG`).
+  Each PATTY entity module owns its own tag constant (e.g. `models/account.ts`'s `ACCOUNT_ENTITY_TAG`).
 - **`version`** — every mutable table carries `version INTEGER NOT NULL DEFAULT 0` (§ Relational schema): an
   optimistic-concurrency token, persistence-side only, never on the public model/wire shape. An `insert`
   `Persistable`'s model omits it (a new row is always `INITIAL_VERSION`, `@rfc0/effect-runner`); only
@@ -106,21 +106,21 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   Every auth call site then holds that bound runner, never the raw one. Still exactly once, still outside
   `diplomat/db`; the controllers are unchanged (`{ persist, response }`).
 
-### The effect runner — FinTrack's wiring
+### The effect runner — PATTY's wiring
 
 The engine's behavior (retry, version guard, idempotency, empty batches, `runEffectsSequence`, change publication
-and its failure isolation) is the package's to document — see the pointer above. FinTrack only does the following:
+and its failure isolation) is the package's to document — see the pointer above. PATTY only does the following:
 
 - **Composition-root binding** (`composition/runtime.ts`, `test/integration/app-builder.ts`). The `EngineContext` is bound to the
-  SQLite adapter and FinTrack's own error: `diplomat/db/driver.ts`'s `createTransactionRunner(db)` is `runner`,
+  SQLite adapter and PATTY's own error: `diplomat/db/driver.ts`'s `createTransactionRunner(db)` is `runner`,
   `diplomat/db/sqlite-errors.ts`'s `isSqliteBusy` is `isTransientContention` (`SQLITE_BUSY` and
   `SQLITE_BUSY_SNAPSHOT`, matched on the driver error's base `.code`; `busy_timeout` in `driver.ts` absorbs the
   common case, ADR-024), and `() => conflict` (`models/error.ts`) is `conflictError`. `E` is `AppError`.
-- **The `ApplierRegistry`** is assembled once there, one `EntityApplier` per FinTrack entity tag.
+- **The `ApplierRegistry`** is assembled once there, one `EntityApplier` per PATTY entity tag.
 - **Typed `Tx`.** `diplomat/db/effects.ts` re-exports the package's `EntityApplier`/`ApplierRegistry`/`ReadBack`
-  specialized with FinTrack's own `Tx`.
+  specialized with PATTY's own `Tx`.
 - **Change bus.** `composition/runtime.ts` calls the package's `createChangeBus<ChangeEvent>({ onError })` once and gives each
-  runner `publishFor(userId)` = `(entities) => bus.publish({ userId, entities })` — the only FinTrack code on the bus — so every event says whose change it is (`null` for the identity runner). It hands `changeBus.subscribe`
+  runner `publishFor(userId)` = `(entities) => bus.publish({ userId, entities })` — the only PATTY code on the bus — so every event says whose change it is (`null` for the identity runner). It hands `changeBus.subscribe`
   to the HTTP sidecar (SSE, `docs/ui.md`, which forwards only the stream's own user's events), and wires one shared
   stderr reporter (`reportChangeError`) as both the bus `onError` and the context's `onPublishError`. stderr only —
   stdout carries the stdio MCP protocol (ADR-007).

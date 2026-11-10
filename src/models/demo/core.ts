@@ -9,7 +9,7 @@ import type { Locale, SetBaseCurrencyInput, SetLocaleInput } from '../locale.js'
 import type { CurrencyCode } from '../money.js';
 import type { CreateRecurring } from '../recurring.js';
 import { validation, type ValidationError } from '../error.js';
-import { NPX_COMMAND } from '../package.js';
+import { LOG_PREFIX, NPX_COMMAND } from '../package.js';
 
 /** The four data sets a demo can be generated for. A language alone cannot choose: Spanish has two. */
 export const DemoCountry = z.enum(['br', 'us', 'mx', 'co']);
@@ -21,9 +21,9 @@ export const DEMO_DB_KEY = '0123456789abcdef'.repeat(4);
 
 export const DEMO_PORT = 51738;
 
-export const DEMO_SERVER_NAME = 'fintrack-demo';
+export const DEMO_SERVER_NAME = 'patty-demo';
 
-export const DEMO_ENV_VAR = 'FINTRACK_DEMO';
+export const DEMO_ENV_VAR = 'PATTY_DEMO';
 export const DEMO_ENV_ON = '1';
 
 export const DemoNotReadyCode = z.enum(['demo_not_ready']);
@@ -35,7 +35,7 @@ export const demoNotReady = (databasePath: string): DemoNotReady => ({
 });
 
 export const demoNotReadyMessage = ({ databasePath }: DemoNotReady): string =>
-  `fintrack: ${DEMO_ENV_VAR} is set, but ${databasePath} is not a demo database. Create it with: ${NPX_COMMAND} demo`;
+  `${LOG_PREFIX} ${DEMO_ENV_VAR} is set, but ${databasePath} is not a demo database. Create it with: ${NPX_COMMAND} demo`;
 
 /** Where a generated purchase comes from. The pack names the accounts and cards; the generator maps these to them. */
 export const DemoFunding = z.enum(['checking', 'wallet', 'primaryCard', 'secondaryCard', 'global']);

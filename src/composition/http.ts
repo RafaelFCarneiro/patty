@@ -16,6 +16,7 @@ import { registerAuthHook } from '../diplomat/http/hooks/auth.js';
 import { registerDemoMarkerHook } from '../diplomat/http/hooks/demo-marker.js';
 import { registerRoutes } from '../diplomat/http/routes.js';
 import { registerMcpRoute } from '../diplomat/mcp/route.js';
+import { LOG_PREFIX } from '../models/package.js';
 
 // Cookies and bearer credentials must never reach a log line (ADR-033 §2), whatever a serializer adds.
 const REDACTED_LOG_PATHS = ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'];
@@ -106,13 +107,13 @@ export const startHttpSidecar = async (
     const boundPort = (app.server.address() as AddressInfo).port;
     const origin = httpOrigin(host, boundPort);
     console.error(
-      `fintrack: HTTP sidecar up — REST ${origin}/api · MCP ${origin}/mcp · dashboard ${origin}${DASHBOARD_PATH}`,
+      `${LOG_PREFIX} HTTP sidecar up — REST ${origin}/api · MCP ${origin}/mcp · dashboard ${origin}${DASHBOARD_PATH}`,
     );
     return { app, listening: true };
   } catch (e) {
     const reason = isPortInUse(e) ? portInUseReason(port) : String(e);
     console.error(
-      `fintrack: HTTP sidecar disabled — ${reason}. Dashboards/REST are unavailable this run; MCP over stdio ` +
+      `${LOG_PREFIX} HTTP sidecar disabled — ${reason}. Dashboards/REST are unavailable this run; MCP over stdio ` +
         `keeps working. Free the port (or set PORT=<other> and restart) to enable it.`,
     );
     return { app, listening: false };
@@ -147,7 +148,7 @@ export const runHttp = (config: Config): ResultAsync<void, StartupRefusal> =>
     const boundPort = (app.server.address() as AddressInfo).port;
     const origin = httpOrigin(config.HOST, boundPort);
     // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe.
-    console.log(`fintrack: REST ${origin}/api · MCP ${origin}/mcp`);
+    console.log(`${LOG_PREFIX} REST ${origin}/api · MCP ${origin}/mcp`);
     await prepared.issueAndAnnounceSetup(origin);
     return ok(undefined);
   });

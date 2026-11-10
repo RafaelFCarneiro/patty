@@ -40,8 +40,8 @@ const P = PresentationKind.enum;
 const CHECK = CheckKind.enum;
 const SOURCE = CredentialSource.enum;
 
-const READ = 'fintrack:read' as const;
-const WRITE = 'fintrack:write' as const;
+const READ = 'patty:read' as const;
+const WRITE = 'patty:write' as const;
 
 const principal: Principal = {
   userId: OWNER_USER_ID,
@@ -58,18 +58,18 @@ const stdio: SignInConfig = {
   client: CLIENT,
   authRequired: true,
 };
-const stdioWithEnv: SignInConfig = { ...stdio, envToken: 'ftk_from-the-environment' };
+const stdioWithEnv: SignInConfig = { ...stdio, envToken: 'ptk_from-the-environment' };
 const cli: SignInConfig = {
   channel: GrantChannel.enum.cli,
   profile: 'work',
-  client: { name: 'fintrack login', version: '9.9.9' },
+  client: { name: 'patty login', version: '9.9.9' },
   authRequired: true,
   hint: { access: TokenAccess.enum.write, duration: SignInDuration.enum['7d'] },
 };
 
 const request: PendingSignIn = { deviceCode: 'device-secret', userCode: 'ABCD-EFGH' };
 const held = (overrides: Partial<HeldSignIn> = {}): HeldSignIn => ({
-  token: 'ftk_held',
+  token: 'ptk_held',
   principal,
   ephemeral: false,
   ...overrides,
@@ -83,7 +83,7 @@ const signedIn = (overrides: Partial<HeldSignIn> = {}, open: PendingSignIn | nul
 });
 
 const redeemedAs = (duration: SignInDuration, scopes: SignedIn['scopes'] = [READ]): SignedIn => ({
-  token: 'ftk_new',
+  token: 'ptk_new',
   tokenId: 't-new',
   scopes,
   principal,
@@ -153,7 +153,7 @@ describe('a gated stdio request', () => {
       stdioWithEnv,
       {
         state: signedIn(),
-        effects: [{ kind: E.check_credential, source: SOURCE.env, token: 'ftk_from-the-environment' }],
+        effects: [{ kind: E.check_credential, source: SOURCE.env, token: 'ptk_from-the-environment' }],
       },
     ),
     row(
@@ -176,7 +176,7 @@ describe('a gated stdio request', () => {
     }),
     row('re-validates what it holds on every request', signedIn(), { kind: O.requested }, stdio, {
       state: signedIn(),
-      effects: [{ kind: E.check_credential, source: SOURCE.held, token: 'ftk_held' }],
+      effects: [{ kind: E.check_credential, source: SOURCE.held, token: 'ptk_held' }],
     }),
   ];
   it.each(rows)('$name', ({ state, observation, config, expected }) => {
@@ -187,33 +187,33 @@ describe('a gated stdio request', () => {
 describe('what a credential check came to', () => {
   const rows: Row[] = [
     // The environment's token is the only credential: it never falls back to anything.
-    row('env ok → granted, state untouched', IDLE, checked(SOURCE.env, 'ftk_e', ok), stdioWithEnv, {
+    row('env ok → granted, state untouched', IDLE, checked(SOURCE.env, 'ptk_e', ok), stdioWithEnv, {
       state: IDLE,
       effects: [present({ kind: P.granted, principal: refreshed })],
     }),
     row(
       'env invalid → the invalid-token message, nothing forgotten, no fallback',
       signedIn(),
-      checked(SOURCE.env, 'ftk_e', invalid),
+      checked(SOURCE.env, 'ptk_e', invalid),
       stdioWithEnv,
       {
         state: signedIn(),
         effects: [present({ kind: P.invalid_env_token })],
       },
     ),
-    row('env failure → "could not check", not a sign-out', IDLE, checked(SOURCE.env, 'ftk_e', failure), stdioWithEnv, {
+    row('env failure → "could not check", not a sign-out', IDLE, checked(SOURCE.env, 'ptk_e', failure), stdioWithEnv, {
       state: IDLE,
       effects: [present({ kind: P.cannot_verify })],
     }),
 
-    row('held ok → granted with the principal as it is now', signedIn(), checked(SOURCE.held, 'ftk_held', ok), stdio, {
+    row('held ok → granted with the principal as it is now', signedIn(), checked(SOURCE.held, 'ptk_held', ok), stdio, {
       state: signedIn({ principal: refreshed }),
       effects: [present({ kind: P.granted, principal: refreshed })],
     }),
     row(
       'held failure → "could not check", the credential is kept',
       signedIn(),
-      checked(SOURCE.held, 'ftk_held', failure),
+      checked(SOURCE.held, 'ptk_held', failure),
       stdio,
       {
         state: signedIn(),
@@ -223,17 +223,17 @@ describe('what a credential check came to', () => {
     row(
       'held invalid, saved → forgotten, and cleared from the keychain only if it still holds it',
       signedIn(),
-      checked(SOURCE.held, 'ftk_held', invalid),
+      checked(SOURCE.held, 'ptk_held', invalid),
       stdio,
       {
         state: IDLE,
-        effects: [clearIf('ftk_held', ClearNext.enum.load_saved)],
+        effects: [clearIf('ptk_held', ClearNext.enum.load_saved)],
       },
     ),
     row(
       'held invalid, memory only → forgotten, the keychain is never touched',
       signedIn({ ephemeral: true }),
-      checked(SOURCE.held, 'ftk_held', invalid),
+      checked(SOURCE.held, 'ptk_held', invalid),
       stdio,
       {
         state: IDLE,
@@ -243,26 +243,26 @@ describe('what a credential check came to', () => {
     row(
       'held invalid with a request still open → only the request remains',
       signedIn({}, request),
-      checked(SOURCE.held, 'ftk_held', invalid),
+      checked(SOURCE.held, 'ptk_held', invalid),
       stdio,
       {
         state: pending,
-        effects: [clearIf('ftk_held', ClearNext.enum.load_saved)],
+        effects: [clearIf('ptk_held', ClearNext.enum.load_saved)],
       },
     ),
 
-    row('saved ok → held (saved, not ephemeral) and granted', IDLE, checked(SOURCE.saved, 'ftk_saved', ok), stdio, {
-      state: signedIn({ token: 'ftk_saved', principal: refreshed }),
+    row('saved ok → held (saved, not ephemeral) and granted', IDLE, checked(SOURCE.saved, 'ptk_saved', ok), stdio, {
+      state: signedIn({ token: 'ptk_saved', principal: refreshed }),
       effects: [present({ kind: P.granted, principal: refreshed })],
     }),
-    row('saved ok keeps the request open behind it', pending, checked(SOURCE.saved, 'ftk_saved', ok), stdio, {
-      state: signedIn({ token: 'ftk_saved', principal: refreshed }, request),
+    row('saved ok keeps the request open behind it', pending, checked(SOURCE.saved, 'ptk_saved', ok), stdio, {
+      state: signedIn({ token: 'ptk_saved', principal: refreshed }, request),
       effects: [present({ kind: P.granted, principal: refreshed })],
     }),
     row(
       'saved failure → "could not check", nothing cleared',
       pending,
-      checked(SOURCE.saved, 'ftk_saved', failure),
+      checked(SOURCE.saved, 'ptk_saved', failure),
       stdio,
       {
         state: pending,
@@ -272,11 +272,11 @@ describe('what a credential check came to', () => {
     row(
       'saved invalid → cleared only if still the same one, then ask in the browser',
       IDLE,
-      checked(SOURCE.saved, 'ftk_saved', invalid),
+      checked(SOURCE.saved, 'ptk_saved', invalid),
       stdio,
       {
         state: IDLE,
-        effects: [clearIf('ftk_saved', ClearNext.enum.ask)],
+        effects: [clearIf('ptk_saved', ClearNext.enum.ask)],
       },
     ),
   ];
@@ -285,7 +285,7 @@ describe('what a credential check came to', () => {
   });
 
   it('a held-credential answer with nothing held changes nothing', () => {
-    expect(nextStep(IDLE, checked(SOURCE.held, 'ftk_held', ok), stdio)).toEqual({ state: IDLE, effects: [] });
+    expect(nextStep(IDLE, checked(SOURCE.held, 'ptk_held', ok), stdio)).toEqual({ state: IDLE, effects: [] });
   });
 });
 
@@ -294,11 +294,11 @@ describe('the keychain, and what to do once it has been looked at', () => {
     row(
       'a saved sign-in is checked before it is believed',
       IDLE,
-      { kind: O.saved_loaded, purpose: LoadPurpose.enum.resolve, token: 'ftk_saved' },
+      { kind: O.saved_loaded, purpose: LoadPurpose.enum.resolve, token: 'ptk_saved' },
       stdio,
       {
         state: IDLE,
-        effects: [{ kind: E.check_credential, source: SOURCE.saved, token: 'ftk_saved' }],
+        effects: [{ kind: E.check_credential, source: SOURCE.saved, token: 'ptk_saved' }],
       },
     ),
     row(
@@ -334,11 +334,11 @@ describe('the keychain, and what to do once it has been looked at', () => {
     row(
       'logout with a saved sign-in revokes it first',
       IDLE,
-      { kind: O.saved_loaded, purpose: LoadPurpose.enum.logout, token: 'ftk_saved' },
+      { kind: O.saved_loaded, purpose: LoadPurpose.enum.logout, token: 'ptk_saved' },
       cli,
       {
         state: IDLE,
-        effects: [{ kind: E.revoke_credential, token: 'ftk_saved', reason: RevokeReason.enum.logout }],
+        effects: [{ kind: E.revoke_credential, token: 'ptk_saved', reason: RevokeReason.enum.logout }],
       },
     ),
     row(
@@ -801,7 +801,7 @@ describe('the answer to a request', () => {
       cli,
       {
         state: pending,
-        effects: [{ kind: E.revoke_credential, token: 'ftk_new', reason: RevokeReason.enum.keychain_refused }],
+        effects: [{ kind: E.revoke_credential, token: 'ptk_new', reason: RevokeReason.enum.keychain_refused }],
       },
     ),
   ];
@@ -815,7 +815,7 @@ describe('revoking', () => {
     row(
       'a refusing keychain, sign-in revoked → say it was taken back',
       pending,
-      { kind: O.revoked, reason: RevokeReason.enum.keychain_refused, token: 'ftk_new', ok: true, error: null },
+      { kind: O.revoked, reason: RevokeReason.enum.keychain_refused, token: 'ptk_new', ok: true, error: null },
       cli,
       {
         state: { kind: S.failed },
@@ -825,7 +825,7 @@ describe('revoking', () => {
     row(
       'a refusing keychain, revocation failed → say it is still active',
       pending,
-      { kind: O.revoked, reason: RevokeReason.enum.keychain_refused, token: 'ftk_new', ok: false, error: 'conflict' },
+      { kind: O.revoked, reason: RevokeReason.enum.keychain_refused, token: 'ptk_new', ok: false, error: 'conflict' },
       cli,
       {
         state: { kind: S.failed },
@@ -835,17 +835,17 @@ describe('revoking', () => {
     row(
       'logout: revoked → clear the keychain entry, but only if it is still that one',
       IDLE,
-      { kind: O.revoked, reason: RevokeReason.enum.logout, token: 'ftk_saved', ok: true, error: null },
+      { kind: O.revoked, reason: RevokeReason.enum.logout, token: 'ptk_saved', ok: true, error: null },
       cli,
       {
         state: IDLE,
-        effects: [clearIf('ftk_saved', ClearNext.enum.signed_out, false)],
+        effects: [clearIf('ptk_saved', ClearNext.enum.signed_out, false)],
       },
     ),
     row(
       'logout: not revoked → fail and leave the entry alone',
       IDLE,
-      { kind: O.revoked, reason: RevokeReason.enum.logout, token: 'ftk_saved', ok: false, error: 'conflict' },
+      { kind: O.revoked, reason: RevokeReason.enum.logout, token: 'ptk_saved', ok: false, error: 'conflict' },
       cli,
       {
         state: { kind: S.failed },
@@ -855,7 +855,7 @@ describe('revoking', () => {
     row(
       'close: the answer changes nothing',
       IDLE,
-      { kind: O.revoked, reason: RevokeReason.enum.close, token: 'ftk_held', ok: false, error: 'conflict' },
+      { kind: O.revoked, reason: RevokeReason.enum.close, token: 'ptk_held', ok: false, error: 'conflict' },
       stdio,
       {
         state: IDLE,
@@ -931,7 +931,7 @@ describe('what an edge feeds', () => {
     ),
     row('close: a memory-only credential is revoked', signedIn({ ephemeral: true }), { kind: O.closed }, stdio, {
       state: IDLE,
-      effects: [closePage, { kind: E.revoke_credential, token: 'ftk_held', reason: RevokeReason.enum.close }],
+      effects: [closePage, { kind: E.revoke_credential, token: 'ptk_held', reason: RevokeReason.enum.close }],
     }),
     row('close: nothing held → just the page', IDLE, { kind: O.closed }, stdio, { state: IDLE, effects: [closePage] }),
 
@@ -980,9 +980,9 @@ describe('the shape every step keeps', () => {
     { kind: O.closed },
     { kind: O.errored },
     { kind: O.saved_unreadable },
-    ...Object.values(SOURCE).flatMap((source) => results.map((result) => checked(source, 'ftk_x', result))),
+    ...Object.values(SOURCE).flatMap((source) => results.map((result) => checked(source, 'ptk_x', result))),
     ...Object.values(LoadPurpose.enum).flatMap((purpose) =>
-      ['ftk_x', null].map((token) => ({ kind: O.saved_loaded, purpose, token }) as SignInObservation),
+      ['ptk_x', null].map((token) => ({ kind: O.saved_loaded, purpose, token }) as SignInObservation),
     ),
     ...Object.values(ClearNext.enum).map((next) => ({ kind: O.saved_cleared, next }) as SignInObservation),
     ...Object.values(OwnerPurpose.enum).flatMap((purpose) =>
@@ -1011,7 +1011,7 @@ describe('the shape every step keeps', () => {
           ({
             kind: O.revoked,
             reason,
-            token: 'ftk_x',
+            token: 'ptk_x',
             ok: okRevoked,
             error: okRevoked ? null : 'x',
           }) as SignInObservation,
@@ -1046,7 +1046,7 @@ describe('the shape every step keeps', () => {
         .forEach((presentation) => {
           const text = JSON.stringify(presentation);
           expect(text).not.toContain('device-secret');
-          expect(text).not.toContain('ftk_new');
+          expect(text).not.toContain('ptk_new');
         });
     });
   });

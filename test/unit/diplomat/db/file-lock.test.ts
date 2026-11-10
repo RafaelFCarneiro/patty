@@ -65,7 +65,7 @@ describe('withMigrationLock on the shared helper', () => {
     execute.mockImplementation(async (sql: string) => {
       if (sql === 'BEGIN EXCLUSIVE') throw busy;
     });
-    const outcome = withMigrationLock('/data/fintrack.db', vi.fn()).then(
+    const outcome = withMigrationLock('/data/patty.db', vi.fn()).then(
       () => undefined,
       (cause: Error) => cause,
     );
@@ -79,7 +79,7 @@ describe('withMigrationLock on the shared helper', () => {
       if (sql === 'ROLLBACK') throw new Error('rollback failed');
     });
     await expect(
-      withMigrationLock('/data/fintrack.db', async () => {
+      withMigrationLock('/data/patty.db', async () => {
         throw failure;
       }),
     ).rejects.toBe(failure);

@@ -11,7 +11,7 @@ export const PROFILE_MAX_LENGTH = 64;
 export const DEFAULT_PROFILE = 'default';
 export const UNKNOWN_CLIENT_NAME = 'Unknown MCP client';
 export const UNKNOWN_CLIENT_VERSION = 'unknown';
-export const CLI_CLIENT_NAME = 'fintrack login';
+export const CLI_CLIENT_NAME = 'patty login';
 
 /** The consent page's wording for the memory-only duration: it names the client that asked, if it said who it was. */
 export const SESSION_ONLY_LABEL = {
@@ -19,7 +19,7 @@ export const SESSION_ONLY_LABEL = {
   unnamed: 'This session only',
 } as const;
 
-/** `FINTRACK_PROFILE` names which saved sign-in a stdio process uses; it ends up in a keychain account name. */
+/** `PATTY_PROFILE` names which saved sign-in a stdio process uses; it ends up in a keychain account name. */
 export const ProfileSchema = z
   .string()
   .trim()
@@ -27,12 +27,12 @@ export const ProfileSchema = z
   .max(PROFILE_MAX_LENGTH)
   .regex(/^[A-Za-z0-9._-]+$/, 'profile may contain letters, digits and . _ -');
 
-export const TOKEN_ENV_VAR = 'FINTRACK_TOKEN';
-export const PROFILE_ENV_VAR = 'FINTRACK_PROFILE';
+export const TOKEN_ENV_VAR = 'PATTY_TOKEN';
+export const PROFILE_ENV_VAR = 'PATTY_PROFILE';
 
-/** The OS keychain entry of a saved sign-in: service `fintrack` (shared with the database key), account
+/** The OS keychain entry of a saved sign-in: service `patty` (shared with the database key), account
  *  `signin:<profile>:<dbId>` — `dbId` makes a development database and a production one keep apart. */
-export const KEYCHAIN_SERVICE = 'fintrack';
+export const KEYCHAIN_SERVICE = 'patty';
 
 export const DB_KEY_KEYCHAIN_ACCOUNT = 'db-encryption-key';
 export const SIGN_IN_ACCOUNT_PREFIX = 'signin';

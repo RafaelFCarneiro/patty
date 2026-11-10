@@ -1,4 +1,4 @@
-import { NPX_COMMAND } from '../package.js';
+import { NPX_COMMAND, PRODUCT_NAME } from '../package.js';
 import { TOKEN_ENV_VAR } from './sign-in.js';
 
 /** The terminal route to the same owner claim as `/ui/setup` — shown wherever the setup code is. */
@@ -7,7 +7,7 @@ export const TERMINAL_SETUP_HINT = `or run \`${TERMINAL_SETUP_COMMAND}\` in a te
 
 export const AUTH_MESSAGES = {
   invalidCredentials: 'Invalid username or password.',
-  invalidSetupCode: 'That setup code is not valid or has expired. Restart FinTrack to get a new one.',
+  invalidSetupCode: `That setup code is not valid or has expired. Restart ${PRODUCT_NAME} to get a new one.`,
   setupUnavailable: 'Setup has already been completed. Log in instead.',
   unknownUser: 'No such user.',
   ownerUnclaimed: `The owner has no login yet. Run \`${TERMINAL_SETUP_COMMAND}\` first.`,
@@ -33,19 +33,19 @@ export const AUTH_MESSAGES = {
     'This instance cannot say what its own origin is — set PUBLIC_URL to its external URL to publish its ' +
     'Protected Resource Metadata.',
   nonLoopbackRequest:
-    'Request host/origin is not loopback — FinTrack without authentication only answers 127.0.0.1, localhost or ' +
+    `Request host/origin is not loopback — ${PRODUCT_NAME} without authentication only answers 127.0.0.1, localhost or ` +
     '::1. To use another hostname, set PUBLIC_URL (which turns authentication on).',
 } as const;
 
 /** The headings of the user-management result pages. */
 export const USER_PAGE_HEADINGS = { inviteCreated: 'Invite created', newInvite: 'New invite' } as const;
 
-export const HTTP_ENV_VAR = 'FINTRACK_HTTP';
+export const HTTP_ENV_VAR = 'PATTY_HTTP';
 
 /** What a stdio session says when it cannot act as anyone (ADR-034 §2). One template per situation, built here so
  *  the wording — and the pinned command in it — exists once. None of them may carry a secret: the link holds the
- *  user code only, and a rejected `FINTRACK_TOKEN` is never echoed. */
-const SIGN_IN_PREFIX = 'FinTrack:';
+ *  user code only, and a rejected `PATTY_TOKEN` is never echoed. */
+const SIGN_IN_PREFIX = `${PRODUCT_NAME}:`;
 
 export const STDIO_MESSAGES = {
   notSignedIn: (connectUrl: string, userCode: string) =>

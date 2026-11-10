@@ -1,4 +1,5 @@
 import { withExclusiveLock } from './file-lock.js';
+import { LOG_PREFIX, PRODUCT_NAME } from '../../models/package.js';
 
 const LOCK_SUFFIX = '.migrate.lock';
 const POLL_INTERVAL_MS = 100;
@@ -14,7 +15,7 @@ export const withMigrationLock = <T>(dbFile: string, work: () => Promise<T>): Pr
       waitMs: WAIT_LIMIT_MS,
       retryMs: POLL_INTERVAL_MS,
       timeoutMessage:
-        `fintrack: another FinTrack process has held the migration lock (${path}) for over ` +
+        `${LOG_PREFIX} another ${PRODUCT_NAME} process has held the migration lock (${path}) for over ` +
         `${WAIT_LIMIT_MS / 1000}s. Stop it and retry.`,
     },
     work,

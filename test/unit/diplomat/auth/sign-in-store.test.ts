@@ -37,20 +37,20 @@ beforeEach(() => {
 });
 
 describe('keychainSignInStore', () => {
-  it('keeps a sign-in under service "fintrack" and the given account, and reads it back', async () => {
+  it('keeps a sign-in under service "patty" and the given account, and reads it back', async () => {
     const store = keychainSignInStore(ACCOUNT, () => undefined);
     expect((await store.load())._unsafeUnwrap()).toBeNull();
-    expect(await store.save('ftk_secret')).toBe(true);
-    expect((await store.load())._unsafeUnwrap()).toBe('ftk_secret');
+    expect(await store.save('ptk_secret')).toBe(true);
+    expect((await store.load())._unsafeUnwrap()).toBe('ptk_secret');
     expect(new Set(keyring.state.constructed.map(([service, account]) => `${service}|${account}`))).toEqual(
       new Set([`${KEYCHAIN_SERVICE}|${ACCOUNT}`]),
     );
-    expect(KEYCHAIN_SERVICE).toBe('fintrack');
+    expect(KEYCHAIN_SERVICE).toBe('patty');
   });
 
   it('forgets it on clear, and clearing nothing is harmless', async () => {
     const store = keychainSignInStore(ACCOUNT, () => undefined);
-    await store.save('ftk_secret');
+    await store.save('ptk_secret');
     await store.clear();
     expect((await store.load())._unsafeUnwrap()).toBeNull();
     await expect(store.clear()).resolves.toBeUndefined();
@@ -66,10 +66,10 @@ describe('keychainSignInStore', () => {
   it('reports a keychain that refuses a write — without the secret — and says it did not save', async () => {
     keyring.state.failing = true;
     const reported: string[] = [];
-    const saved = await keychainSignInStore(ACCOUNT, (message) => reported.push(message)).save('ftk_secret');
+    const saved = await keychainSignInStore(ACCOUNT, (message) => reported.push(message)).save('ptk_secret');
     expect(saved).toBe(false);
     expect(reported).toHaveLength(1);
-    expect(reported[0]).not.toContain('ftk_secret');
+    expect(reported[0]).not.toContain('ptk_secret');
   });
 
   it('survives a failing clear', async () => {

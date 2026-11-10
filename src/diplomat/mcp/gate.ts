@@ -11,7 +11,7 @@ export const GateKind = z.enum(['granted', 'refused', 'not_signed_in']);
  * `PrincipalGate` once per request and never learns how the answer was reached:
  *   - HTTP rebuilds the principal the edge attached (`extra.authInfo`), failing closed when it is absent or malformed;
  *   - stdio asks its `StdioSession`, which re-validates the saved credential on every call;
- *   - an explicit `FINTRACK_AUTH=disabled` run is the trusted owner.
+ *   - an explicit `PATTY_AUTH=disabled` run is the trusted owner.
  * A grant carries the WHOLE principal (user, role, scopes, how it authenticated), on every transport, so a handler
  * that needs to know who is calling (per-user data, ADR-033 Phase 4) can read it from one place.
  */
@@ -35,5 +35,5 @@ export const authInfoGate: PrincipalGate = async (extra) => {
     : { kind: GateKind.enum.granted, principal };
 };
 
-/** `FINTRACK_AUTH=disabled`: every request is the owner, holding every scope. */
+/** `PATTY_AUTH=disabled`: every request is the owner, holding every scope. */
 export const ownerGate: PrincipalGate = async () => ({ kind: GateKind.enum.granted, principal: OWNER_PRINCIPAL });

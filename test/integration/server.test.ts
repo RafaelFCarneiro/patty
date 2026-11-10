@@ -13,7 +13,7 @@ let runtime: Runtime;
 let version: string;
 
 beforeAll(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sidecar-test-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-sidecar-test-'));
   const ctx = await buildApp({ dbPath: join(tmpDir, 'test.db') });
   runtime = ctx.runtime;
   version = ctx.version;

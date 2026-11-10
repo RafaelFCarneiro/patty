@@ -79,7 +79,7 @@ const pendingGrant = (): ClientGrantEntity => ({
 const SESSION_PRINCIPAL: Principal = {
   userId: OWNER_USER_ID,
   role: UserRole.enum.admin,
-  scopes: [Scope.enum['fintrack:read'], Scope.enum['fintrack:write']],
+  scopes: [Scope.enum['patty:read'], Scope.enum['patty:write']],
   via: PrincipalVia.enum.session,
   sessionId: SESSION_ID,
 };

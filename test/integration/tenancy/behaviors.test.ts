@@ -19,7 +19,7 @@ let a: Actor;
 let b: Actor;
 
 beforeAll(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-tenancy-behaviors-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-tenancy-behaviors-'));
   ctx = await buildApp({ dbPath: join(tmpDir, 'test.db'), auth: {} });
   await ctx.app.ready();
   ({ a, b } = await seedTwoUsers(ctx));
@@ -73,7 +73,7 @@ describe('the same statement imported by two users', () => {
   });
 });
 
-describe('what FinTrack has learned is the learner’s own', () => {
+describe('what PATTY has learned is the learner’s own', () => {
   it('classifies by the shared rules and the caller’s own history — never another user’s', async () => {
     // A's merchant edge ("zzashop" → A's own category) exists only for A.
     const forA = await callTool(ctx.app, a, 'add_account_expense', {

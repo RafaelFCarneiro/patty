@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isBesideData, isDatabaseFile } from '../../../src/logic/export-destination.js';
 
 describe('isBesideData', () => {
-  const DATA = '/home/me/.fintrack';
+  const DATA = '/home/me/.patty';
 
   it('is true for the database directory itself', () => {
     expect(isBesideData(DATA, DATA)).toBe(true);
@@ -28,7 +28,7 @@ describe('isBesideData', () => {
 
 describe('isDatabaseFile', () => {
   it('is true only for the same file', () => {
-    expect(isDatabaseFile('/data/fintrack.db', '/data/fintrack.db')).toBe(true);
-    expect(isDatabaseFile('/data/fintrack.db', '/data/fintrack.snapshot.db')).toBe(false);
+    expect(isDatabaseFile('/data/patty.db', '/data/patty.db')).toBe(true);
+    expect(isDatabaseFile('/data/patty.db', '/data/patty.snapshot.db')).toBe(false);
   });
 });

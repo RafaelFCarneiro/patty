@@ -88,7 +88,7 @@ export const DemoOptionsSchema = z.object({
 });
 export type DemoOptions = z.infer<typeof DemoOptionsSchema>;
 
-/** `login`: `profile` falls back to `FINTRACK_PROFILE` (the shell decides); `duration`/`scope` only pre-select the
+/** `login`: `profile` falls back to `PATTY_PROFILE` (the shell decides); `duration`/`scope` only pre-select the
  *  consent page — the person approving still chooses. */
 export const LoginOptionsSchema = z.object({
   profile: ProfileSchema.optional(),

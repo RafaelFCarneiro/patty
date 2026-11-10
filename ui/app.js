@@ -1,9 +1,9 @@
-// FinTrack app shell client (ADR-027 Phase 1) — vanilla JS, no build step. Renders the dashboard
+// PATTY app shell client (ADR-027 Phase 1) — vanilla JS, no build step. Renders the dashboard
 // menu from GET /api/dashboards, loads the selected dashboard's fragment from
 // GET /api/dashboards/:name, and injects it into #content. Client-side navigation between
 // dashboards never reloads the page. ADR-027 Phase 3 adds live update: one EventSource for the
 // life of the page (fragment swaps never reopen it), forwarding each message to whichever
-// fragment is currently loaded via the window.fintrackOnDataChanged contract (see connectEvents
+// fragment is currently loaded via the window.onAppDataChanged contract (see connectEvents
 // below) — the shell knows nothing about a fragment's own sections, only that one may want to
 // know when data changed.
 (function () {
@@ -216,7 +216,7 @@
     // stale closure referencing already-removed elements must never fire again, and a fragment
     // whose own script errors before reaching its own registration simply gets no live update
     // rather than the previous fragment's.
-    window.fintrackOnDataChanged = null;
+    window.onAppDataChanged = null;
     clearNode(container);
     var temp = document.createElement('div');
     temp.innerHTML = html;
@@ -234,7 +234,7 @@
     setLoading(container, 'Loading dashboard…');
     return fetchJson(Api.dashboard(name) + '?t=' + Date.now())
       .then(function (dashboard) {
-        document.title = demoTitlePrefix() + 'FinTrack — ' + dashboard.name;
+        document.title = demoTitlePrefix() + 'PATTY — ' + dashboard.name;
         renderFragment(container, dashboard.html);
       })
       .catch(function (err) {
@@ -357,7 +357,7 @@
 
   // ADR-027 Phase 3 — live update. Opened once, for the page's whole lifetime; fragment swaps
   // (navigate/renderFragment above) never touch this connection, only the
-  // window.fintrackOnDataChanged slot it delivers into. EventSource reconnects on its own after a
+  // window.onAppDataChanged slot it delivers into. EventSource reconnects on its own after a
   // drop (the browser's built-in retry), so no reconnect logic is needed here; a message that
   // arrives with no fragment currently registered (or between "torn down" and "registered again")
   // is simply dropped — the next live-relevant fetch a user triggers (period change, manual
@@ -374,7 +374,7 @@
       }
       if (!Array.isArray(payload.entities)) return;
       var forward = function () {
-        if (typeof window.fintrackOnDataChanged === 'function') window.fintrackOnDataChanged(payload.entities);
+        if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(payload.entities);
       };
       if (payload.entities.indexOf('userSettings') === -1) return forward();
       // A base-currency change updates the default before the fragment re-renders with it.
@@ -445,14 +445,14 @@
         return fetchJson(Api.currencies);
       })
       .then(function (currencies) {
-        window.__fintrackCurrencies = indexCurrenciesByCode(currencies);
+        window.__appCurrencies = indexCurrenciesByCode(currencies);
       })
       .catch(function (err) {
         // Fiat (BRL/USD) is unaffected — formatMoney's ISO path never reads this metadata. A
         // crypto amount (BTC/USDC) would silently degrade to fiat-shaped 2-decimal precision and
         // no real symbol without it, which is exactly the wrong-precision-with-no-signal gotcha
         // this file exists to avoid — so surface it loudly instead of proceeding silently.
-        window.__fintrackCurrencies = window.__fintrackCurrencies || {};
+        window.__appCurrencies = window.__appCurrencies || {};
         showDiagnosticError(
           'Could not load currency metadata: ' +
             err.message +

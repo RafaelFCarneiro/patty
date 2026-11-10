@@ -7,4 +7,5 @@
 export const DATA_REWRITING_MIGRATIONS: readonly string[] = [
   '0018_auth_identity', // inserts the owner user (ADR-033 Phase 1)
   '0021_tenancy_data', // rebuilds every user-owned table with user_id, backfilled to the owner
+  '0028_reset_sign_ins', // empties access_tokens and client_grants: every sign-in is reissued once (ADR-035)
 ];

@@ -58,7 +58,7 @@ describe('no credential on /api or /mcp', () => {
       });
       expect(res.statusCode, url).toBe(401);
       expect(res.json()).toEqual({ error: { code: 'unauthenticated' } });
-      expect(challengeOf(res)).toBe(`Bearer resource_metadata="${METADATA_URL}", scope="fintrack:read fintrack:write"`);
+      expect(challengeOf(res)).toBe(`Bearer resource_metadata="${METADATA_URL}", scope="patty:read patty:write"`);
     }
   });
 
@@ -86,7 +86,7 @@ describe('no credential on /api or /mcp', () => {
     const ctx = await createApp();
     const res = await ctx.app.inject({ method: 'GET', url: '/api/status', headers: { host: 'fin.lan:51737' } });
     expect(res.statusCode).toBe(401);
-    expect(challengeOf(res)).toBe('Bearer scope="fintrack:read fintrack:write"');
+    expect(challengeOf(res)).toBe('Bearer scope="patty:read patty:write"');
   });
 });
 
@@ -106,16 +106,16 @@ describe('credential precedence on /api and /mcp', () => {
     const res = await ctx.app.inject({
       method: 'GET',
       url: '/api/status',
-      headers: { ...BASE_HEADERS, ...bearer(writer.token), cookie: 'fintrack_session=garbage' },
+      headers: { ...BASE_HEADERS, ...bearer(writer.token), cookie: 'patty_session=garbage' },
     });
     expect(res.statusCode).toBe(200);
   });
 
   it.each([
-    ['an unknown token', 'Bearer ftk_unknownunknownunknownunknownunknownunknown1'],
+    ['an unknown token', 'Bearer ptk_unknownunknownunknownunknownunknownunknown1'],
     ['a malformed header', 'Basic Zm9vOmJhcg=='],
     ['an empty bearer', 'Bearer '],
-    ['a bearer that is not ours', 'Bearer not-an-ftk-token'],
+    ['a bearer that is not ours', 'Bearer not-a-ptk-token'],
   ])('%s is 401 invalid_token — and a valid session cookie is NOT used instead', async (_label, authorization) => {
     const { ctx, cookie } = await world();
     for (const [method, url] of [
@@ -270,9 +270,9 @@ describe('REST scopes', () => {
 
     const write = await ctx.app.inject({ method: 'POST', url: '/api/accounts', headers, payload: ACCOUNT });
     expect(write.statusCode).toBe(403);
-    expect(write.json()).toEqual({ error: { code: 'insufficient_scope', scope: 'fintrack:write' } });
+    expect(write.json()).toEqual({ error: { code: 'insufficient_scope', scope: 'patty:write' } });
     expect(challengeOf(write)).toBe(
-      `Bearer error="insufficient_scope", scope="fintrack:write", resource_metadata="${METADATA_URL}"`,
+      `Bearer error="insufficient_scope", scope="patty:write", resource_metadata="${METADATA_URL}"`,
     );
     expect(((await ctx.app.inject({ method: 'GET', url: '/api/accounts', headers })).json() as unknown[]).length).toBe(
       0,
@@ -335,7 +335,7 @@ describe('MCP scopes over HTTP', () => {
     return ((await res.json()) as { name: string }[]).map(({ name }) => name);
   };
   const insufficient = (base: string) =>
-    `Bearer error="insufficient_scope", scope="fintrack:write", resource_metadata="${base}${MCP_PRM_PATH}"`;
+    `Bearer error="insufficient_scope", scope="patty:write", resource_metadata="${base}${MCP_PRM_PATH}"`;
 
   it('a read token can initialize and call a read tool', async () => {
     const { ctx, reader } = await world();
@@ -404,7 +404,7 @@ describe('MCP scopes over HTTP', () => {
     const { ctx, reader, writer } = await world();
     const base = await serve(ctx);
     const connect = async (token: string) => {
-      const client = new Client({ name: 'fintrack-test', version: '0' });
+      const client = new Client({ name: 'patty-test', version: '0' });
       await client.connect(
         new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
           requestInit: { headers: { authorization: `Bearer ${token}` } },
@@ -432,8 +432,8 @@ describe('MCP scopes over HTTP', () => {
 
 describe('auth disabled (the npm loopback default)', () => {
   it('ignores an Authorization header entirely and acts as the owner', async () => {
-    const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
-    for (const authorization of ['Bearer ftk_whatever', 'Bearer garbage', 'Basic Zm9v', '']) {
+    const ctx = await createApp({ auth: { PATTY_AUTH: AuthMode.enum.disabled } });
+    for (const authorization of ['Bearer ptk_whatever', 'Bearer garbage', 'Basic Zm9v', '']) {
       const res = await ctx.app.inject({
         method: 'GET',
         url: '/api/status',
@@ -444,14 +444,14 @@ describe('auth disabled (the npm loopback default)', () => {
     const write = await ctx.app.inject({
       method: 'POST',
       url: '/api/accounts',
-      headers: { ...BASE_HEADERS, authorization: 'Bearer ftk_nope', 'content-type': 'application/json' },
+      headers: { ...BASE_HEADERS, authorization: 'Bearer ptk_nope', 'content-type': 'application/json' },
       payload: ACCOUNT,
     });
     expect(write.statusCode).toBe(201);
   });
 
   it('serves no token pages and no resource metadata', async () => {
-    const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
+    const ctx = await createApp({ auth: { PATTY_AUTH: AuthMode.enum.disabled } });
     expect((await ctx.app.inject({ method: 'POST', url: '/ui/access/tokens', headers: BASE_HEADERS })).statusCode).toBe(
       404,
     );
@@ -461,12 +461,12 @@ describe('auth disabled (the npm loopback default)', () => {
   });
 
   it('lets an MCP tool call through as the owner, with every scope', async () => {
-    const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
+    const ctx = await createApp({ auth: { PATTY_AUTH: AuthMode.enum.disabled } });
     await ctx.app.listen({ port: 0, host: '127.0.0.1' });
     const base = `http://127.0.0.1:${(ctx.app.server.address() as AddressInfo).port}`;
     const res = await fetch(`${base}/mcp`, {
       method: 'POST',
-      headers: { ...MCP_HEADERS, authorization: 'Bearer ftk_ignored' },
+      headers: { ...MCP_HEADERS, authorization: 'Bearer ptk_ignored' },
       body: JSON.stringify(toolCall('create_account', ACCOUNT)),
     });
     expect(res.status).toBe(200);

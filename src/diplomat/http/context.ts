@@ -1,5 +1,6 @@
 import { AuthMode } from '../../models/auth/mode.js';
 import type { AuthDeps, Deps, RunEffects, Tenancy } from '../../controllers/deps.js';
+import { LOG_PREFIX } from '../../models/package.js';
 
 /** Shared HTTP edge context, built once in `routes.ts`; per-user dependencies are asked for per request instead. */
 export type HttpContext = Tenancy & {
@@ -8,7 +9,7 @@ export type HttpContext = Tenancy & {
 };
 
 const DOCUMENTATION_ONLY = (): never => {
-  throw new Error('fintrack: this HTTP context only documents the routes (OpenAPI) — it serves none');
+  throw new Error(`${LOG_PREFIX} this HTTP context only documents the routes (OpenAPI) — it serves none`);
 };
 
 /** Builds the route list for documentation only (no request, no principal); handlers must never run. */

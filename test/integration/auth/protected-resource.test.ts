@@ -21,7 +21,7 @@ describe('Protected Resource Metadata (RFC 9728)', () => {
       resource: `${PUBLIC_URL}/mcp`,
       scopes_supported: [...ALL_SCOPES],
       bearer_methods_supported: ['header'],
-      resource_name: 'FinTrack',
+      resource_name: 'PATTY',
     });
   });
 
@@ -69,7 +69,7 @@ describe('Protected Resource Metadata (RFC 9728)', () => {
   );
 
   it('is not served when auth is disabled — there is no authorization to describe', async () => {
-    const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
+    const ctx = await createApp({ auth: { PATTY_AUTH: AuthMode.enum.disabled } });
     for (const url of BOTH_PATHS) {
       expect((await ctx.app.inject({ method: 'GET', url, headers: { host: LOOPBACK_HOST } })).statusCode, url).toBe(
         404,

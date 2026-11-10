@@ -1,7 +1,7 @@
 import { ClientConfigFailureCode, type ClientConfigFailure } from '../../../models/client-config.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/sign-in.js';
 import { DEMO_SERVER_NAME } from '../../../models/demo/core.js';
-import { NPX_COMMAND } from '../../../models/package.js';
+import { NPX_COMMAND, PRODUCT_NAME } from '../../../models/package.js';
 import {
   DEMO_FLAG,
   DemoEntryChange,
@@ -27,7 +27,7 @@ const CONFIG_FAILURE_VERB: Readonly<Record<ClientConfigFailureCode, string>> = {
   [ClientConfigFailureCode.enum.write_failed]: 'write',
 };
 
-/** What `setup` says. The help text is also printed for `fintrack setup` with no tool. */
+/** What `setup` says. The help text is also printed for `patty setup` with no tool. */
 export const SETUP_MESSAGES = {
   help: `
 Usage: ${NPX_COMMAND} setup <tool> [--username <name>] [--${PASSWORD_STDIN_FLAG}] [--profile <name>]
@@ -41,7 +41,7 @@ Available tools:
   antigravity      Google Antigravity   (~/.gemini/config/mcp_config.json)
   codex            OpenAI Codex         (prints the config snippet to paste)
 
-FinTrack requires a login. The first time, setup asks you to choose the owner's username and password
+${PRODUCT_NAME} requires a login. The first time, setup asks you to choose the owner's username and password
 (typed twice, never echoed), writes the client's config, then offers to sign that client in. Re-running it is safe: an
 owner that already has a login is left alone.
 
@@ -50,7 +50,7 @@ Options:
   --${PASSWORD_STDIN_FLAG}   read the password from stdin instead of asking — for scripted installs
   --profile <name>   sign this client in as a separate profile (adds ${PROFILE_ENV_VAR} to its config); default: ${DEFAULT_PROFILE}
   --${DEMO_FLAG}           add a second MCP entry, ${DEMO_SERVER_NAME}, that runs on the demo database (see: ${NPX_COMMAND} demo);
-                     the fintrack entry is never touched, and no login is needed
+                     the patty entry is never touched, and no login is needed
   --${REMOVE_DEMO_FLAG}    remove only the ${DEMO_SERVER_NAME} entry
 
 Examples:
@@ -59,16 +59,15 @@ Examples:
   ${NPX_COMMAND} setup vscode
   ${NPX_COMMAND} setup antigravity
 `.trimStart(),
-  unknownTool: (tool: string) =>
-    `fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`,
-  settingUp: (label: string) => `Setting up FinTrack MCP for ${label}...`,
+  unknownTool: (tool: string) => `patty setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`,
+  settingUp: (label: string) => `Setting up ${PRODUCT_NAME} MCP for ${label}...`,
   settingUpDemo: (change: DemoEntryChange, label: string) =>
     `${change === DemoEntryChange.enum.add ? 'Adding' : 'Removing'} the ${DEMO_SERVER_NAME} MCP entry for ${label}...`,
   demoNotCreated: `  Run \`${NPX_COMMAND} demo\` once to create the demo data.`,
   done: 'Done.',
   /** Said when a client's configuration file could not be used: the same words whichever file it was. */
   configFailure: (failure: ClientConfigFailure) =>
-    `fintrack setup: failed to ${CONFIG_FAILURE_VERB[failure.code]} ${failure.path}: ${failure.reason}`,
+    `patty setup: failed to ${CONFIG_FAILURE_VERB[failure.code]} ${failure.path}: ${failure.reason}`,
 } as const;
 
 /** What `setup` needs of the I/O: where to print, and the client config files. */

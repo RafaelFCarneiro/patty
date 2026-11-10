@@ -24,7 +24,7 @@ describe('HTTP sidecar defaults to on under stdio (ADR-013 Decision 7)', () => {
   let stderr = '';
 
   beforeAll(async () => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sidecar-default-on-test-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'patty-sidecar-default-on-test-'));
     const dbPath = join(tmpDir, 'default-on.db');
 
     transport = new StdioClientTransport({
@@ -34,19 +34,19 @@ describe('HTTP sidecar defaults to on under stdio (ADR-013 Decision 7)', () => {
       env: {
         ...process.env,
         MCP_TRANSPORT: McpTransport.enum.stdio,
-        // FINTRACK_HTTP intentionally omitted — this is the point of the test: the sidecar
+        // PATTY_HTTP intentionally omitted — this is the point of the test: the sidecar
         // must start without any opt-in env var. PORT=0 lets the OS assign a free port so this
-        // test never collides with a real, already-running fintrack instance.
+        // test never collides with a real, already-running patty instance.
         PORT: '0',
         DB_PATH: dbPath,
-        FINTRACK_DB_KEY: TEST_KEY,
+        PATTY_DB_KEY: TEST_KEY,
       },
     });
     transport.stderr?.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
     });
 
-    client = new Client({ name: 'fintrack-sidecar-default-on-vitest', version: '1.0.0' });
+    client = new Client({ name: 'patty-sidecar-default-on-vitest', version: '1.0.0' });
     await client.connect(transport);
   });
 
@@ -55,7 +55,7 @@ describe('HTTP sidecar defaults to on under stdio (ADR-013 Decision 7)', () => {
     if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('starts the sidecar without FINTRACK_HTTP set, and stdio MCP stays responsive', async () => {
+  it('starts the sidecar without PATTY_HTTP set, and stdio MCP stays responsive', async () => {
     const result = await client.request({ method: 'tools/list', params: {} }, ListToolsResultSchema);
     expect(result.tools.length).toBeGreaterThan(10);
   });
@@ -74,7 +74,7 @@ describe('HTTP sidecar defaults to on under stdio (ADR-013 Decision 7)', () => {
   });
 });
 
-describe('HTTP sidecar opt-out via FINTRACK_HTTP=false (ADR-013 Decision 7)', () => {
+describe('HTTP sidecar opt-out via PATTY_HTTP=false (ADR-013 Decision 7)', () => {
   // Fixed 64-char hex key — never touches the OS keychain
   const TEST_KEY = 'c'.repeat(64);
   let tmpDir: string;
@@ -83,7 +83,7 @@ describe('HTTP sidecar opt-out via FINTRACK_HTTP=false (ADR-013 Decision 7)', ()
   let reservedPort: number;
 
   beforeAll(async () => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sidecar-opt-out-test-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'patty-sidecar-opt-out-test-'));
     const dbPath = join(tmpDir, 'opt-out.db');
 
     // Reserve a specific free port, then release it immediately so the spawned process is
@@ -100,14 +100,14 @@ describe('HTTP sidecar opt-out via FINTRACK_HTTP=false (ADR-013 Decision 7)', ()
       env: {
         ...process.env,
         MCP_TRANSPORT: McpTransport.enum.stdio,
-        FINTRACK_HTTP: 'false',
+        PATTY_HTTP: 'false',
         PORT: String(reservedPort),
         DB_PATH: dbPath,
-        FINTRACK_DB_KEY: TEST_KEY,
+        PATTY_DB_KEY: TEST_KEY,
       },
     });
 
-    client = new Client({ name: 'fintrack-sidecar-opt-out-vitest', version: '1.0.0' });
+    client = new Client({ name: 'patty-sidecar-opt-out-vitest', version: '1.0.0' });
     await client.connect(transport);
   });
 
@@ -116,13 +116,13 @@ describe('HTTP sidecar opt-out via FINTRACK_HTTP=false (ADR-013 Decision 7)', ()
     if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('keeps stdio MCP responsive with FINTRACK_HTTP=false', async () => {
+  it('keeps stdio MCP responsive with PATTY_HTTP=false', async () => {
     const result = await client.request({ method: 'tools/list', params: {} }, ListToolsResultSchema);
     expect(result.tools.length).toBeGreaterThan(10);
   });
 
   it('never binds the sidecar port — this process can still bind it itself', async () => {
-    // If the sidecar had started despite FINTRACK_HTTP=false, this port would already be
+    // If the sidecar had started despite PATTY_HTTP=false, this port would already be
     // taken and the listen() call below would fail with EADDRINUSE.
     const verifier: Server = createServer();
     await new Promise<void>((resolve, reject) => {

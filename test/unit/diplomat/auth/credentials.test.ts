@@ -77,7 +77,7 @@ describe('tokens and codes', () => {
 });
 
 describe('randomAccessToken', () => {
-  it('is ftk_ + 32 random bytes, base64url — greppable and unguessable', () => {
+  it('is ptk_ + 32 random bytes, base64url — greppable and unguessable', () => {
     const token = randomAccessToken();
     expect(token.startsWith(TOKEN_PREFIX)).toBe(true);
     expect(token.slice(TOKEN_PREFIX.length)).toMatch(/^[A-Za-z0-9_-]{43}$/); // 32 bytes → 43 base64url chars

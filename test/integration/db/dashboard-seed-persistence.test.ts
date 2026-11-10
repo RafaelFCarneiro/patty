@@ -24,7 +24,7 @@ let tmpDir: string;
 let dbPath: string;
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-dashboard-seed-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-dashboard-seed-'));
   dbPath = join(tmpDir, 'seed.db');
 });
 
@@ -35,10 +35,10 @@ afterEach(() => {
 const openOpts = () => ({
   DB_PATH: dbPath,
   KEY_LOCK_PATH: keyLockPathForTest(),
-  FINTRACK_DB_KEY: TEST_KEY,
+  PATTY_DB_KEY: TEST_KEY,
   PORT: 3001,
   MCP_TRANSPORT: McpTransport.enum.http,
-  FINTRACK_HTTP: true,
+  PATTY_HTTP: true,
 });
 
 describe('dashboard seed persistence across restart (ADR-008 onConflictDoNothing)', () => {

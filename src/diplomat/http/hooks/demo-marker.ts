@@ -3,7 +3,7 @@ import type { Tenancy } from '../../../controllers/deps.js';
 import { instanceFactsOf } from '../../../controllers/instance.js';
 import { InstanceKind, isDemoInstance } from '../../../models/instance.js';
 import { Locale } from '../../../models/locale.js';
-import { REPOSITORY_URL } from '../../../models/package.js';
+import { PRODUCT_NAME, REPOSITORY_URL } from '../../../models/package.js';
 import { escapeHtml } from '../auth-pages.js';
 import { HTML_CONTENT_TYPE } from '../ui-files.js';
 
@@ -18,17 +18,17 @@ export const DEMO_BANNER_COPY = {
   [Locale.enum.en]: {
     label: 'Demo',
     message: 'sample data, not your finances.',
-    linkText: 'Install FinTrack for your own data',
+    linkText: `Install ${PRODUCT_NAME} for your own data`,
   },
   [Locale.enum.pt]: {
     label: 'Demo',
     message: 'dados de exemplo, não as suas finanças.',
-    linkText: 'Instale o FinTrack para usar seus próprios dados',
+    linkText: `Instale o ${PRODUCT_NAME} para usar seus próprios dados`,
   },
   [Locale.enum.es]: {
     label: 'Demo',
     message: 'datos de ejemplo, no tus finanzas.',
-    linkText: 'Instala FinTrack para usar tus propios datos',
+    linkText: `Instala ${PRODUCT_NAME} para usar tus propios datos`,
   },
 } as const satisfies Record<Locale, BannerCopy>;
 

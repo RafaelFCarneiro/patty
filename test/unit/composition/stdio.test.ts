@@ -16,13 +16,13 @@ const { runStdio } = await import('../../../src/composition/stdio.js');
 
 const configWith = (overrides: Partial<Config> = {}): Config =>
   ({
-    FINTRACK_HTTP: false,
+    PATTY_HTTP: false,
     PUBLIC_URL: undefined,
     HOST: '127.0.0.1',
     PORT: 3001,
     TRUST_PROXY: false,
-    FINTRACK_PROFILE: 'work',
-    FINTRACK_TOKEN: 'ftk_env',
+    PATTY_PROFILE: 'work',
+    PATTY_TOKEN: 'ptk_env',
     ...overrides,
   }) as Config;
 
@@ -81,7 +81,7 @@ afterEach(() => {
 });
 
 describe('runStdio — startup', () => {
-  it('under FINTRACK_AUTH=disabled connects as the owner, binds no sidecar and announces nothing', async () => {
+  it('under PATTY_AUTH=disabled connects as the owner, binds no sidecar and announces nothing', async () => {
     const announce = booted(undefined);
     connection();
 
@@ -99,10 +99,10 @@ describe('runStdio — startup', () => {
     connection();
     sidecar(false);
 
-    await runStdio(configWith({ PUBLIC_URL: 'https://fin.example', FINTRACK_HTTP: true }));
+    await runStdio(configWith({ PUBLIC_URL: 'https://fin.example', PATTY_HTTP: true }));
     const auth = mocks.connectStdio.mock.calls[0]?.[2] as { signIn: (profile: string) => unknown };
 
-    expect(auth).toMatchObject({ mode: 'required', profile: 'work', envToken: 'ftk_env' });
+    expect(auth).toMatchObject({ mode: 'required', profile: 'work', envToken: 'ptk_env' });
     expect(auth.signIn('work')).toBe('interpreter');
     expect(signIn).toHaveBeenCalledWith('work', expect.any(Function));
     expect((signIn.mock.calls[0]?.[1] as () => string)()).toBe('https://fin.example');
@@ -113,7 +113,7 @@ describe('runStdio — startup', () => {
     connection();
     sidecar(true, 51737);
 
-    await runStdio(configWith({ FINTRACK_HTTP: true, PORT: 51737 }));
+    await runStdio(configWith({ PATTY_HTTP: true, PORT: 51737 }));
 
     expect(mocks.startHttpSidecar).toHaveBeenCalledWith({ tag: 'runtime' }, expect.any(String), 51737, '127.0.0.1', {
       auth: { tag: 'auth' },
@@ -128,7 +128,7 @@ describe('runStdio — startup', () => {
     connection();
     sidecar(true, 4242);
 
-    await runStdio(configWith({ FINTRACK_HTTP: true }));
+    await runStdio(configWith({ PATTY_HTTP: true }));
     (mocks.connectStdio.mock.calls[0]?.[2] as { signIn: (profile: string) => unknown }).signIn('work');
 
     expect((signIn.mock.calls[0]?.[1] as () => string)()).toBe('http://127.0.0.1:4242');
@@ -139,7 +139,7 @@ describe('runStdio — startup', () => {
     connection();
     sidecar(false);
 
-    await runStdio(configWith({ FINTRACK_HTTP: true }));
+    await runStdio(configWith({ PATTY_HTTP: true }));
 
     expect(announce).not.toHaveBeenCalled();
   });
@@ -160,7 +160,7 @@ describe('runStdio — shutdown', () => {
     const serverClosed = deferred();
     const { server, session } = connection({ server: serverClosed.promise });
     const app = sidecar(true);
-    await runStdio(configWith({ FINTRACK_HTTP: true }));
+    await runStdio(configWith({ PATTY_HTTP: true }));
 
     handlers['stdin:end']?.();
 
@@ -193,7 +193,7 @@ describe('runStdio — shutdown', () => {
     const { server } = connection();
     mocks.connectStdio.mockResolvedValue({ server, session: undefined });
     const app = sidecar(false);
-    await runStdio(configWith({ FINTRACK_HTTP: true }));
+    await runStdio(configWith({ PATTY_HTTP: true }));
 
     handlers['process:SIGINT']?.();
 

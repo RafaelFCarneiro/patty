@@ -72,7 +72,7 @@ const PROBE_FILE_SUFFIXES = ['', '-wal', '-journal'] as const;
 
 /** libSQL has no read-only open and closing can checkpoint a log: probe a copy, never the original. */
 const onCopyOf = async <T>(databasePath: string, look: (copyPath: string) => Promise<T>): Promise<T> => {
-  const directory = mkdtempSync(join(tmpdir(), 'fintrack-probe-'));
+  const directory = mkdtempSync(join(tmpdir(), 'patty-probe-'));
   const source = canonicalPath(databasePath) ?? databasePath;
   try {
     PROBE_FILE_SUFFIXES.forEach((suffix) => {

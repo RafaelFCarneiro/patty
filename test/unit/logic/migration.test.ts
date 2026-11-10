@@ -28,11 +28,11 @@ describe('databaseAheadMessage', () => {
 
   it('names the build, says why it stopped, and gives both remedies with pinned commands', () => {
     expect(message).toBe(
-      "fintrack: this build (v1.2.3) is older than your database (it has migrations this version doesn't know). " +
+      "patty: this build (v1.2.3) is older than your database (it has migrations this version doesn't know). " +
         `Update with \`${NPX_COMMAND}\`, or check for a stale global install: \`npm ls -g ${PACKAGE_NAME}\`.`,
     );
-    expect(NPX_COMMAND).toBe('npx @rafaelfcarneiro/fintrack@latest');
-    expect(STALE_GLOBAL_CHECK_COMMAND).toBe('npm ls -g @rafaelfcarneiro/fintrack');
+    expect(NPX_COMMAND).toBe('npx @rfc0/patty@latest');
+    expect(STALE_GLOBAL_CHECK_COMMAND).toBe('npm ls -g @rfc0/patty');
   });
 
   it('carries no path and no key', () => {

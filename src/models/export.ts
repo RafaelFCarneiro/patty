@@ -1,4 +1,4 @@
-/** Every file FinTrack writes for the person to carry elsewhere (the safety copy, `key export`, `db export`) is
+/** Every file PATTY writes for the person to carry elsewhere (the safety copy, `key export`, `db export`) is
  *  created owner-only and never over an existing file. */
 export const PRIVATE_FILE_MODE = 0o600;
 

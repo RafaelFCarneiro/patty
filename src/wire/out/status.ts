@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { Locale } from '../../models/locale.js';
 
 export const StatusOut = z.object({
-  name: z.literal('fintrack'),
+  name: z.literal('patty'),
   version: z.string(),
   db: z.enum(['ok', 'error']),
   locale: Locale,

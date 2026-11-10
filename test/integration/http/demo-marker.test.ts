@@ -13,7 +13,7 @@ const dirs: string[] = [];
 const apps: AppContext[] = [];
 
 const appOf = async (kind: InstanceKind, auth?: Parameters<typeof buildApp>[0] extends infer O ? O : never) => {
-  const dir = mkdtempSync(join(tmpdir(), 'fintrack-demo-marker-'));
+  const dir = mkdtempSync(join(tmpdir(), 'patty-demo-marker-'));
   dirs.push(dir);
   const ctx = await buildApp({ dbPath: join(dir, 'test.db'), ...auth });
   apps.push(ctx);

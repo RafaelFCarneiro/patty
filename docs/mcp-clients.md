@@ -1,8 +1,8 @@
-# Connecting FinTrack's MCP to AI clients
+# Connecting PATTY's MCP to AI clients
 
-FinTrack runs as a **stdio MCP server** by default — the client launches it as a subprocess and speaks JSON-RPC over stdin/stdout. No port, no URL, no bridge needed for chat itself. This is the recommended path for all local MCP clients.
+PATTY runs as a **stdio MCP server** by default — the client launches it as a subprocess and speaks JSON-RPC over stdin/stdout. No port, no URL, no bridge needed for chat itself. This is the recommended path for all local MCP clients.
 
-Alongside that, the **HTTP sidecar** (`/api` + `/ui` dashboards) starts automatically by default — the dashboard experience is a core feature, not something you have to opt into (ADR-013 Decision 7). Set `FINTRACK_HTTP=false` to disable it and stay stdio-only with zero ports bound. See "HTTP sidecar (alongside stdio)" below. Separately, `MCP_TRANSPORT=http` switches the *transport itself* to HTTP, for multi-client access, REST consumers, or debugging — see the HTTP sections below. Tool contract: `docs/mcp-tools.md`.
+Alongside that, the **HTTP sidecar** (`/api` + `/ui` dashboards) starts automatically by default — the dashboard experience is a core feature, not something you have to opt into (ADR-013 Decision 7). Set `PATTY_HTTP=false` to disable it and stay stdio-only with zero ports bound. See "HTTP sidecar (alongside stdio)" below. Separately, `MCP_TRANSPORT=http` switches the *transport itself* to HTTP, for multi-client access, REST consumers, or debugging — see the HTTP sections below. Tool contract: `docs/mcp-tools.md`.
 
 ---
 
@@ -11,7 +11,7 @@ Alongside that, the **HTTP sidecar** (`/api` + `/ui` dashboards) starts automati
 The `setup` subcommand writes the correct config for your agent automatically. It merges idempotently — safe to re-run, existing keys are preserved.
 
 ```bash
-npx @rafaelfcarneiro/fintrack@latest setup <tool>
+npx @rfc0/patty@latest setup <tool>
 ```
 
 | Tool argument | Client | Config file written |
@@ -25,47 +25,47 @@ npx @rafaelfcarneiro/fintrack@latest setup <tool>
 Run without arguments for usage and paths:
 
 ```bash
-npx @rafaelfcarneiro/fintrack@latest setup
+npx @rfc0/patty@latest setup
 ```
 
 ---
 
 ## Direct stdio (recommended — default)
 
-The client spawns FinTrack directly. No server to start separately; no port conflicts.
+The client spawns PATTY directly. No server to start separately; no port conflicts.
 
 ### What you see on the first call (signing in)
 
-FinTrack requires a login, and a stdio session signs in too. Right after `setup` (which offers to do it) or after you restart the client,
+PATTY requires a login, and a stdio session signs in too. Right after `setup` (which offers to do it) or after you restart the client,
 the first tool call answers with an ordinary error that holds a link and a code:
 
-> FinTrack: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.
+> PATTY: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.
 
 Open the link (log in first if asked), check the code matches, choose read-only or read-and-write and **how long** — this session only (worded after the client, e.g. "This Claude Desktop session only"),
 24 hours (the default), 7 days or 30 days — and approve. Claude's next call goes through, and a restart of the client needs no new approval while a **saved** sign-in (24 hours, 7 days, 30 days) is
 still valid and not revoked (`/ui/access/tokens`); "this session only" lives in memory, ends with the process, and asks again on the next start. Tool, resource and prompt **lists** work before you sign in, so the client can show the server.
-The same flow from a terminal: `npx @rafaelfcarneiro/fintrack@latest login` / `logout`. Details: [`auth.md`](auth.md#signing-in-claude-stdio).
+The same flow from a terminal: `npx @rfc0/patty@latest login` / `logout`. Details: [`auth.md`](auth.md#signing-in-claude-stdio).
 
-FinTrack takes **no arguments** when a client runs it as a server: the `args` of a client config are only `-y` and the package spec (`@rafaelfcarneiro/fintrack@latest`). Any argument after that is treated as a CLI command (`setup`, `auth`, `login`, `logout`, `help`), and an unknown one prints the usage and exits non-zero instead of starting a server.
+PATTY takes **no arguments** when a client runs it as a server: the `args` of a client config are only `-y` and the package spec (`@rfc0/patty@latest`). Any argument after that is treated as a CLI command (`setup`, `auth`, `login`, `logout`, `help`), and an unknown one prints the usage and exits non-zero instead of starting a server.
 
 Two optional variables go in the client's `env`:
 
 | Variable | Use |
 |---|---|
-| `FINTRACK_PROFILE` | Names the saved sign-in (default `default`). Give two client configs two profiles and each signs in separately. `setup <client> --profile work` writes it for you. |
-| `FINTRACK_TOKEN` | A [personal access token](auth.md#personal-access-tokens) to sign in with instead of the browser — for headless use or a client that must never prompt. If it is set and invalid the server says so; it never falls back to a saved sign-in. |
+| `PATTY_PROFILE` | Names the saved sign-in (default `default`). Give two client configs two profiles and each signs in separately. `setup <client> --profile work` writes it for you. |
+| `PATTY_TOKEN` | A [personal access token](auth.md#personal-access-tokens) to sign in with instead of the browser — for headless use or a client that must never prompt. If it is set and invalid the server says so; it never falls back to a saved sign-in. |
 
 ```json
 "mcpServers": {
-  "fintrack": {
+  "patty": {
     "command": "npx",
-    "args": ["-y", "@rafaelfcarneiro/fintrack@latest"],
-    "env": { "FINTRACK_PROFILE": "work" }
+    "args": ["-y", "@rfc0/patty@latest"],
+    "env": { "PATTY_PROFILE": "work" }
   }
 }
 ```
 
-With `FINTRACK_HTTP=false` there is no dashboard to open, so the message says to use `login` or `FINTRACK_TOKEN` instead. The saved sign-in lives in your OS keychain (never in the config file).
+With `PATTY_HTTP=false` there is no dashboard to open, so the message says to use `login` or `PATTY_TOKEN` instead. The saved sign-in lives in your OS keychain (never in the config file).
 
 ### Claude Desktop ✅
 
@@ -73,9 +73,9 @@ In `~/Library/Application Support/Claude/claude_desktop_config.json`, add a top-
 
 ```json
 "mcpServers": {
-  "fintrack": {
+  "patty": {
     "command": "npx",
-    "args": ["-y", "@rafaelfcarneiro/fintrack@latest"]
+    "args": ["-y", "@rfc0/patty@latest"]
   }
 }
 ```
@@ -89,21 +89,21 @@ Commit `.vscode/mcp.json` at the repo root (note the root key is `servers`, not 
 ```json
 {
   "servers": {
-    "fintrack": {
+    "patty": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@rafaelfcarneiro/fintrack@latest"]
+      "args": ["-y", "@rfc0/patty@latest"]
     }
   }
 }
 ```
 
-MCP tools only appear in **Agent** mode (not Ask/Edit). After config changes: command palette → `MCP: List Servers` → restart fintrack.
+MCP tools only appear in **Agent** mode (not Ask/Edit). After config changes: command palette → `MCP: List Servers` → restart patty.
 
 ### Claude Code (CLI) ✅
 
 ```bash
-claude mcp add fintrack -- npx -y @rafaelfcarneiro/fintrack@latest
+claude mcp add patty -- npx -y @rfc0/patty@latest
 ```
 
 Or edit `~/.claude/mcp.json` directly with the same `command`/`args` shape as VS Code above.
@@ -115,9 +115,9 @@ Global config at `~/.gemini/config/mcp_config.json` (or workspace-scoped at `.ag
 ```json
 {
   "mcpServers": {
-    "fintrack": {
+    "patty": {
       "command": "npx",
-      "args": ["-y", "@rafaelfcarneiro/fintrack@latest"]
+      "args": ["-y", "@rfc0/patty@latest"]
     }
   }
 }
@@ -141,10 +141,10 @@ starts automatically alongside it on `PORT` (default `51737` for the published p
 npm run dev
 
 # or from the published package → :51737
-npx @rafaelfcarneiro/fintrack@latest
+npx @rfc0/patty@latest
 ```
 
-Set `FINTRACK_HTTP=false` if you want stdio-only with nothing bound at all. If the sidecar's port is already
+Set `PATTY_HTTP=false` if you want stdio-only with nothing bound at all. If the sidecar's port is already
 taken, it logs an actionable message to stderr and skips starting instead of failing the whole process —
 **stdio MCP keeps working regardless**; this is a resilience fallback, not the normal state, and the same chat
 session can then help you find and free the port (see `docs/architecture.md` § HTTP sidecar, ADR-013
@@ -157,8 +157,8 @@ not reachable from other devices on your network, only from this machine; settin
 ## Multiple clients at once (dogfooding)
 
 Stdio servers are spawned **per client connection** (ADR-007): running Desktop and Cowork/Code together, or
-reconnecting a client without its first server exiting, means two `fintrack` processes hold two separate
-connections to the same `fintrack.db` file. FinTrack makes this graceful rather than fatal (ADR-024) — WAL mode
+reconnecting a client without its first server exiting, means two `patty` processes hold two separate
+connections to the same `patty.db` file. PATTY makes this graceful rather than fatal (ADR-024) — WAL mode
 plus a `busy_timeout` on every connection means a contended writer waits for the lock instead of throwing, and
 `runEffects` bounded-retries any `SQLITE_BUSY` that outlives the timeout — but it is still two writers on one
 file. For heavy multi-client use, prefer the single shared **HTTP transport** below instead: one process, one
@@ -173,7 +173,7 @@ Start the server explicitly before connecting:
 MCP_TRANSPORT=http npm run dev
 
 # or from the published package → :51737
-MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack@latest
+MCP_TRANSPORT=http npx @rfc0/patty@latest
 ```
 
 This serves streamable HTTP MCP at `http://127.0.0.1:51737/mcp` (stateless, published package —
@@ -185,7 +185,7 @@ Desktop only launches stdio servers, so the HTTP endpoint is bridged with `mcp-r
 
 ```json
 "mcpServers": {
-  "fintrack": {
+  "patty": {
     "command": "npx",
     "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:51737/mcp", "--transport", "http-only"]
   }
@@ -199,7 +199,7 @@ Running from source instead? Use port `3001`.
 Native HTTP support — no bridge. In `.vscode/mcp.json`:
 
 ```json
-{ "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:51737/mcp" } } }
+{ "servers": { "patty": { "type": "http", "url": "http://127.0.0.1:51737/mcp" } } }
 ```
 
 Running from source instead (`npm run dev`)? Use port `3001` — this repo's own `.vscode/mcp.json` already does.
@@ -214,7 +214,7 @@ ChatGPT's servers connect from the internet: needs a paid plan with Developer Mo
 cloudflared tunnel --url http://127.0.0.1:51737   # → https://xxx.trycloudflare.com (:3001 from source)
 ```
 
-**Current limitation: FinTrack cannot be connected to ChatGPT yet.** An auth-disabled loopback instance (an explicit `FINTRACK_AUTH=disabled`) refuses a tunnel's non-loopback `Host` with `403`, and an instance with authentication on (the container, or any `PUBLIC_URL`) needs `Authorization: Bearer ftk_…` on every `/mcp` request — a header this connector cannot send. It becomes possible once the OAuth authorization server lands (ADR-033 Phase 3). Don't expose FinTrack through a public tunnel in the meantime.
+**Current limitation: PATTY cannot be connected to ChatGPT yet.** An auth-disabled loopback instance (an explicit `PATTY_AUTH=disabled`) refuses a tunnel's non-loopback `Host` with `403`, and an instance with authentication on (the container, or any `PUBLIC_URL`) needs `Authorization: Bearer ptk_…` on every `/mcp` request — a header this connector cannot send. It becomes possible once the OAuth authorization server lands (ADR-033 Phase 3). Don't expose PATTY through a public tunnel in the meantime.
 
 ### Ollama (HTTP mode, untested — needs a bridge client)
 
@@ -228,32 +228,32 @@ The image ([README § Docker](../README.md#docker)) always runs the HTTP transpo
 `http://127.0.0.1:51737/mcp` — instead of spawning a process. The compose file publishes the port on host loopback only
 (`127.0.0.1:51737:51737`); keep it that way — the container serves plain HTTP. Use `127.0.0.1`, not `localhost`.
 
-> A client that reaches FinTrack through a **non-loopback hostname** (a LAN name, a tunnel) needs authentication on — set `PUBLIC_URL`; an auth-disabled instance only answers `127.0.0.1`, `localhost` and `::1` Hosts (and loopback `Origin`s).
+> A client that reaches PATTY through a **non-loopback hostname** (a LAN name, a tunnel) needs authentication on — set `PUBLIC_URL`; an auth-disabled instance only answers `127.0.0.1`, `localhost` and `::1` Hosts (and loopback `Origin`s).
 
 The container requires authentication (ADR-033), so every HTTP client sends a **personal access token** as
-`Authorization: Bearer ftk_…`:
+`Authorization: Bearer ptk_…`:
 
 1. Open <http://127.0.0.1:51737/ui/access/tokens> (the key icon in the dashboard sidebar) in your logged-in browser.
 2. Create a token (the page asks for your password again) — *read only* if the client only needs to look at your data, *read and write* if it records or changes
    anything — with an expiry (default 90 days).
-3. Copy it from the page that follows. It is shown **once**; FinTrack keeps only a hash.
+3. Copy it from the page that follows. It is shown **once**; PATTY keeps only a hash.
 4. Give it to the client as below. Revoke it at `/ui/access/tokens` at any time; the very next request is refused.
 
 A read-only token can use every read tool (`list_*`, `get_*`, `search_transactions`, …) and is refused (`403
 insufficient_scope`) on any tool that changes data — the split is listed in [`mcp-tools.md`](mcp-tools.md#scopes-per-tool).
 A client that gets `401` with `WWW-Authenticate: Bearer … resource_metadata="…"` has no or a bad token; the metadata URL
-resolves to FinTrack's [Protected Resource Metadata](auth.md#protected-resource-metadata).
+resolves to PATTY's [Protected Resource Metadata](auth.md#protected-resource-metadata).
 
 Keep the token out of the config file you commit: use the environment variable or input prompt where the client has one.
 Each client's way of sending a custom header was checked against its own documentation:
 
-| Client | Streamable HTTP | How to send `Authorization: Bearer ftk_…` |
+| Client | Streamable HTTP | How to send `Authorization: Bearer ptk_…` |
 |---|---|---|
-| Claude Code | native | `claude mcp add --transport http fintrack http://127.0.0.1:51737/mcp --header "Authorization: Bearer ftk_…"`; or in `.mcp.json`: `{ "mcpServers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:51737/mcp", "headers": { "Authorization": "Bearer ${FINTRACK_TOKEN}" } } } }` (`${VAR}` is expanded from the environment) |
-| VS Code / GitHub Copilot | native | `.vscode/mcp.json` with a prompted secret: `{ "inputs": [{ "type": "promptString", "id": "fintrack-token", "description": "FinTrack access token", "password": true }], "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:51737/mcp", "headers": { "Authorization": "Bearer ${input:fintrack-token}" } } } }` — VS Code asks for the value when the server first starts |
-| Google Antigravity | native, but the key is **`serverUrl`** (`url`/`httpUrl` are rejected) | `~/.gemini/config/mcp_config.json`: `{ "mcpServers": { "fintrack": { "serverUrl": "http://127.0.0.1:51737/mcp", "headers": { "Authorization": "Bearer ftk_…" } } } }` — the token sits in the file in clear (its docs do not promise environment substitution in `headers`), so keep that file out of version control |
-| OpenAI Codex | native | `~/.codex/config.toml`: `[mcp_servers.fintrack]` with `url = "http://127.0.0.1:51737/mcp"` and `bearer_token_env_var = "FINTRACK_TOKEN"` (Codex builds `Authorization: Bearer <value of $FINTRACK_TOKEN>`); `http_headers` / `env_http_headers` set other headers |
-| MCP Inspector | native (Streamable HTTP) | CLI: `npx @modelcontextprotocol/inspector --cli --transport http --server-url http://127.0.0.1:51737/mcp --header "Authorization: Bearer ftk_…" --method tools/list`; a server entry in its config file takes `"headers": { … }` |
+| Claude Code | native | `claude mcp add --transport http patty http://127.0.0.1:51737/mcp --header "Authorization: Bearer ptk_…"`; or in `.mcp.json`: `{ "mcpServers": { "patty": { "type": "http", "url": "http://127.0.0.1:51737/mcp", "headers": { "Authorization": "Bearer ${PATTY_TOKEN}" } } } }` (`${VAR}` is expanded from the environment) |
+| VS Code / GitHub Copilot | native | `.vscode/mcp.json` with a prompted secret: `{ "inputs": [{ "type": "promptString", "id": "patty-token", "description": "PATTY access token", "password": true }], "servers": { "patty": { "type": "http", "url": "http://127.0.0.1:51737/mcp", "headers": { "Authorization": "Bearer ${input:patty-token}" } } } }` — VS Code asks for the value when the server first starts |
+| Google Antigravity | native, but the key is **`serverUrl`** (`url`/`httpUrl` are rejected) | `~/.gemini/config/mcp_config.json`: `{ "mcpServers": { "patty": { "serverUrl": "http://127.0.0.1:51737/mcp", "headers": { "Authorization": "Bearer ptk_…" } } } }` — the token sits in the file in clear (its docs do not promise environment substitution in `headers`), so keep that file out of version control |
+| OpenAI Codex | native | `~/.codex/config.toml`: `[mcp_servers.patty]` with `url = "http://127.0.0.1:51737/mcp"` and `bearer_token_env_var = "PATTY_TOKEN"` (Codex builds `Authorization: Bearer <value of $PATTY_TOKEN>`); `http_headers` / `env_http_headers` set other headers |
+| MCP Inspector | native (Streamable HTTP) | CLI: `npx @modelcontextprotocol/inspector --cli --transport http --server-url http://127.0.0.1:51737/mcp --header "Authorization: Bearer ptk_…" --method tools/list`; a server entry in its config file takes `"headers": { … }` |
 | Claude Desktop | `claude_desktop_config.json` only launches stdio servers → local bridge | `mcp-remote` with `--header` (below). *Connectors → Add custom connector* is for internet-hosted servers; I found no documented field there for a static header, so use the bridge. |
 
 Claude Desktop (bridge — `mcp-remote`'s `--header`; the token goes in `env` so the argument has no space in it, which
@@ -262,10 +262,10 @@ out of the process list's arguments):
 
 ```json
 "mcpServers": {
-  "fintrack": {
+  "patty": {
     "command": "npx",
-    "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:51737/mcp", "--transport", "http-only", "--header", "Authorization:${FINTRACK_AUTH_HEADER}"],
-    "env": { "FINTRACK_AUTH_HEADER": "Bearer ftk_…" }
+    "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:51737/mcp", "--transport", "http-only", "--header", "Authorization:${PATTY_AUTH_HEADER}"],
+    "env": { "PATTY_AUTH_HEADER": "Bearer ptk_…" }
   }
 }
 ```
@@ -274,9 +274,9 @@ out of the process list's arguments):
 configuration entirely.
 
 If a client cannot send a custom header at all, connect it over stdio instead (the npm sections above): stdio signs in through
-the browser (or with `FINTRACK_TOKEN`) rather than with a header.
+the browser (or with `PATTY_TOKEN`) rather than with a header.
 
-The `npx @rafaelfcarneiro/fintrack@latest setup <tool>` command writes stdio configs only; for the container, edit the config by hand as above.
+The `npx @rfc0/patty@latest setup <tool>` command writes stdio configs only; for the container, edit the config by hand as above.
 
 ---
 

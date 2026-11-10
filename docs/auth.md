@@ -1,12 +1,12 @@
 # Authentication — operator guide
 
-How FinTrack decides who may use its HTTP surface (`/api`, `/mcp`, `/ui`), how an instance gets its first login,
+How PATTY decides who may use its HTTP surface (`/api`, `/mcp`, `/ui`), how an instance gets its first login,
 and what that does and doesn't protect. Decisions and rationale: [ADR-033](adr/033-authentication-and-multi-user.md).
 Internals (hook, principal, tables): [`architecture.md`](architecture.md) § Authentication.
 The flows as diagrams (startup, setup, login, the auth hook, logout/SSE, existing databases): [`auth-flows.md`](auth-flows.md).
 
 > **Status: Phases 1, 2 and 4 of ADR-033, plus [ADR-034](adr/034-local-auth-and-stdio-sign-in.md) steps 1 and 2.** This release ships
-> identity (password login, sessions, the setup code), **personal access tokens** (`Authorization: Bearer ftk_…` for `/api` and `/mcp`, with
+> identity (password login, sessions, the setup code), **personal access tokens** (`Authorization: Bearer ptk_…` for `/api` and `/mcp`, with
 > read/write scopes), **several users on one instance** — each with a private set of finances (row-level isolation, see
 > [Threat model](#threat-model-so-far)) — and **admin user management by invitation** ([Users](#users-roles-and-invitations)). **Authentication is on by
 > default, on every install** — a local npm one included: the owner is claimed in the terminal during `setup` ([First setup](#first-setup)), and
@@ -15,11 +15,11 @@ The flows as diagrams (startup, setup, login, the auth hook, logout/SSE, existin
 
 ## Auth modes
 
-`FINTRACK_AUTH` is `required` or `disabled`. **Unset, it is `required` — everywhere**, the loopback sidecar of a local
+`PATTY_AUTH` is `required` or `disabled`. **Unset, it is `required` — everywhere**, the loopback sidecar of a local
 npm/stdio install included (ADR-034 §1). `disabled` is an explicit opt-out for development and tests, and only
 possible on a loopback bind:
 
-| Situation | `FINTRACK_AUTH` unset | `FINTRACK_AUTH=required` | `FINTRACK_AUTH=disabled` |
+| Situation | `PATTY_AUTH` unset | `PATTY_AUTH=required` | `PATTY_AUTH=disabled` |
 |---|---|---|---|
 | `HOST` loopback (`127.0.0.1` default, `127.x.x.x`, `::1`, `localhost`), no `PUBLIC_URL`/`TRUST_PROXY` | **required** | required | allowed (explicit, loopback-only) |
 | `HOST` `0.0.0.0`, `::`, a LAN IP, any other name | **required** | required | **startup error** |
@@ -37,7 +37,7 @@ possible on a loopback bind:
   opaque `null` is refused). Anything else is `403 forbidden_origin` on every route and method. This closes DNS
   rebinding — a page you visit resolving its own name to `127.0.0.1` so your browser sends it `Host:
   attacker.example` — and cross-site `fetch`/form requests carrying `Origin: https://evil.example`. Clients that send
-  no `Origin` (native MCP clients, `curl`) are unaffected. To reach FinTrack by any other hostname, set `PUBLIC_URL`,
+  no `Origin` (native MCP clients, `curl`) are unaffected. To reach PATTY by any other hostname, set `PUBLIC_URL`,
   which turns authentication on.
 - **`disabled` ignores `Authorization` headers entirely** — every request already acts as the owner with every scope,
   so there is nothing for a token to add (and no token pages or resource metadata are served).
@@ -47,17 +47,17 @@ possible on a loopback bind:
 - **stdio signs in** under `required` ([below](#signing-in-claude-stdio)): the process is spawned by whichever program the
   user pointed at it, so until it holds a credential every tool call, resource read and prompt answers "not signed in".
   Under an explicit `disabled` it acts as the owner, like every other request.
-- With no HTTP surface running (`FINTRACK_HTTP=false` under stdio) there are no sessions or pages to protect, but the stdio
-  channel still needs its sign-in — by `FINTRACK_TOKEN` or `fintrack login` (the browser link needs the dashboard).
+- With no HTTP surface running (`PATTY_HTTP=false` under stdio) there are no sessions or pages to protect, but the stdio
+  channel still needs its sign-in — by `PATTY_TOKEN` or `patty login` (the browser link needs the dashboard).
 
 ## Settings
 
 | Variable | Meaning |
 |---|---|
-| `FINTRACK_AUTH` | `required` \| `disabled`. Default `required`, on every surface; `disabled` is loopback-only. See [Auth modes](#auth-modes). |
-| `FINTRACK_PROFILE` | Which saved stdio sign-in this process uses (`default` if unset; letters, digits, `.` `_` `-`). Two client configs on one machine can sign in as two users. See [Profiles](#profiles). |
-| `FINTRACK_TOKEN` | A personal access token a stdio process signs in with, instead of the browser flow — for headless use and clients that should never prompt. See [`FINTRACK_TOKEN`](#fintrack_token). |
-| `PUBLIC_URL` | The external **origin** users type, e.g. `https://fintrack.example.com` — no path, no trailing slash. Optional. `https` turns on the cookie `Secure` flag; it is also the origin the [CSRF check](#csrf) expects. Phase 3 (OAuth) will require it. |
+| `PATTY_AUTH` | `required` \| `disabled`. Default `required`, on every surface; `disabled` is loopback-only. See [Auth modes](#auth-modes). |
+| `PATTY_PROFILE` | Which saved stdio sign-in this process uses (`default` if unset; letters, digits, `.` `_` `-`). Two client configs on one machine can sign in as two users. See [Profiles](#profiles). |
+| `PATTY_TOKEN` | A personal access token a stdio process signs in with, instead of the browser flow — for headless use and clients that should never prompt. See [`PATTY_TOKEN`](#patty_token). |
+| `PUBLIC_URL` | The external **origin** users type, e.g. `https://patty.example.com` — no path, no trailing slash. Optional. `https` turns on the cookie `Secure` flag; it is also the origin the [CSRF check](#csrf) expects. Phase 3 (OAuth) will require it. |
 | `TRUST_PROXY` | Passed to Fastify's `trustProxy`: `true`, a hop count (`1`), or trusted addresses/CIDRs (`loopback,10.0.0.0/8`). Set it behind a reverse proxy so [login rate limiting](#brute-force-protection) sees each client's real IP instead of the proxy's. |
 
 Invalid combinations are rejected at startup with an actionable message.
@@ -71,7 +71,7 @@ An instance starts with **one owner**, and every path to the data you already ha
   fresh or existing. It touches no other table; your accounts, transactions, budgets and settings are unchanged.
 - The owner *is* the "default user": requests in `disabled` mode (and a stdio session under it) act as it. Beyond being the first
   administrator it is nothing special: once another administrator stands, an admin can demote or disable it like anyone else.
-- **Setup claims the owner; it never creates a user.** `/ui/setup` and `fintrack auth setup` both set the existing
+- **Setup claims the owner; it never creates a user.** `/ui/setup` and `patty auth setup` both set the existing
   owner's username and password. The **only** flow that inserts a user is an admin's *invite*, and claiming an invite only updates the row
   the invite created — so a database that already holds your data can never end up with an empty account the data doesn't belong to.
 - **Setup is for an owner nobody has ever held.** If an admin later reissues the owner's invite (a password reset), the owner keeps its
@@ -89,7 +89,7 @@ Every database starts with an unclaimed owner, so every new local install claims
 command you already run to connect a client:
 
 ```bash
-npx @rafaelfcarneiro/fintrack@latest setup claude-code     # or claude-desktop, copilot, antigravity, codex
+npx @rfc0/patty@latest setup claude-code     # or claude-desktop, copilot, antigravity, codex
 ```
 
 In order, it:
@@ -98,26 +98,26 @@ In order, it:
    echo (a bad answer is asked again, three tries at most; the rules are the ones `/ui/setup` applies — a password of at
    least 12 characters, no other rules). If the owner is already claimed it says so in one line and skips the step.
 2. **Writes the client's config entry** exactly as before: an idempotent merge that keeps your other keys. With
-   `--profile work` the entry also gets `"env": { "FINTRACK_PROFILE": "work" }` (nothing is added for the default profile).
+   `--profile work` the entry also gets `"env": { "PATTY_PROFILE": "work" }` (nothing is added for the default profile).
 3. **Offers to sign that client in now** — "Sign in this client now? [Y/n]" — by running [`login`](#login-and-logout) for the
    client's profile. Declining, or having no terminal, skips it with a one-line hint; the client's first tool call will show a
    sign-in link anyway. A denied or cancelled sign-in never fails the setup that wrote the config.
 
-`fintrack auth setup` is just step 1, for when the client is already configured (an upgrade, a second machine's
+`patty auth setup` is just step 1, for when the client is already configured (an upgrade, a second machine's
 config…). Run either as often as you like.
 
 ```bash
-npx @rafaelfcarneiro/fintrack@latest auth setup
+npx @rfc0/patty@latest auth setup
 ```
 
 - **Always `@latest`.** `npx` with no version **prefers an installed copy** over the registry's, so an unpinned command can run
-  a stale global install. Every command FinTrack prints, and every one in these docs, is pinned
-  (`npx @rafaelfcarneiro/fintrack@latest …`). Check for a stale global copy with `npm ls -g @rafaelfcarneiro/fintrack` and
-  remove it with `npm rm -g @rafaelfcarneiro/fintrack`. An older build refuses to run against a database a newer one has
+  a stale global install. Every command PATTY prints, and every one in these docs, is pinned
+  (`npx @rfc0/patty@latest …`). Check for a stale global copy with `npm ls -g @rfc0/patty` and
+  remove it with `npm rm -g @rfc0/patty`. An older build refuses to run against a database a newer one has
   migrated — see [Refusing an older build](#refusing-an-older-build).
 - **Scripted installs.** With no terminal there is nothing to ask, so the command fails with instructions —
   *before* it writes any config — instead of hanging. Give it the username and pipe the password in:
-  `printf %s "$PASSWORD" | npx @rafaelfcarneiro/fintrack@latest setup claude-code --username rafael --password-stdin`
+  `printf %s "$PASSWORD" | npx @rfc0/patty@latest setup claude-code --username rafael --password-stdin`
   (stdin must be a pipe or a file, not a terminal).
 - **An upgrade keeps its data.** Authentication is now on by default, so after upgrading the browser dashboard
   (`/ui`) asks for a login. Run `auth setup` (or `setup <client>` again) **once**: it claims the existing owner, and the
@@ -126,7 +126,7 @@ npx @rafaelfcarneiro/fintrack@latest auth setup
 - **It never creates a user and never starts a session.** The claim updates the one owner row, spends any setup code still
   outstanding in the same write (so it cannot claim anything afterwards), and does not log you in: sign in at `/ui/login`.
 - **Why a terminal, and why no code.** These commands open the database with its key from the OS keychain (or
-  `FINTRACK_DB_KEY_FILE`/`FINTRACK_DB_KEY`) and neither start HTTP nor stdio. Whoever can do that already controls the
+  `PATTY_DB_KEY_FILE`/`PATTY_DB_KEY`) and neither start HTTP nor stdio. Whoever can do that already controls the
   data, so a code or a current password would add nothing — the terminal is the proof. A sign-in *link* must never itself
   grant access, and a setup code must never pass through a chat.
 - **The Docker setup code is unchanged** — the container prints it; open `/ui/setup`.
@@ -140,17 +140,17 @@ A second process whose sidecar cannot bind (another one already owns the port) i
 cannot replace the code you were shown (stdout carries the MCP protocol, so it is never used):
 
 ```
-┌─ fintrack: first-time setup ─────────────────────────────────────────
+┌─ patty: first-time setup ─────────────────────────────────────────
 │ This instance has no login yet. Claim it with this one-time setup code:
 │
 │     7QXM-4RTC-HK2V-N8WP-D3ZB
 │
 │ Open http://127.0.0.1:51737/ui/setup and enter the code, then choose a username and password,
-│ or run `npx @rafaelfcarneiro/fintrack@latest auth setup` in a terminal.
+│ or run `npx @rfc0/patty@latest auth setup` in a terminal.
 ```
 
 ```bash
-docker compose logs fintrack        # Docker
+docker compose logs patty        # Docker
 ```
 
 - Open `/ui/setup`, enter the code, choose a **username** and a **password** (at least 12 characters, no other
@@ -172,7 +172,7 @@ Without the code nobody can claim an exposed instance: there is no window in whi
 - **Login** (`/ui/login`) fails with one message — "Invalid username or password." — for an unknown user, a wrong
   password, a disabled user, or the not-yet-claimed owner. An unknown username is verified against a dummy hash so it
   takes as long as a wrong password.
-- A **session** is an opaque 256-bit random token in the `fintrack_session` cookie
+- A **session** is an opaque 256-bit random token in the `patty_session` cookie
   (`HttpOnly`, `SameSite=Lax`, `Path=/`, plus `Secure` when `PUBLIC_URL` is `https`). The database stores only the
   token's SHA-256, so reading the database yields no usable session.
 - **Expiry is sliding with an absolute cap:** 24 hours after last use, and never more than 30 days after login.
@@ -196,11 +196,11 @@ So the sign-in happens outside the protocol, and what it produces is read from t
 ### What you see
 
 1. Claude's first tool call (or resource read, or prompt) returns an ordinary error:
-   *FinTrack: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.*
+   *PATTY: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.*
    (`initialize` and the tool/resource/prompt **lists** still work, so the client can show the server.) While the owner is
-   unclaimed it adds: *Owner not set up yet? Run `npx @rafaelfcarneiro/fintrack@latest auth setup`.* With `FINTRACK_HTTP=false` there is no
-   page to link to, so it says to use `npx @rafaelfcarneiro/fintrack@latest login` or `FINTRACK_TOKEN` instead. The link names this process's own dashboard (or `PUBLIC_URL`); if
-   that dashboard could not start — say another FinTrack already owns the port — the session serves the page itself from a **temporary server on a free `localhost` port, on this
+   unclaimed it adds: *Owner not set up yet? Run `npx @rfc0/patty@latest auth setup`.* With `PATTY_HTTP=false` there is no
+   page to link to, so it says to use `npx @rfc0/patty@latest login` or `PATTY_TOKEN` instead. The link names this process's own dashboard (or `PUBLIC_URL`); if
+   that dashboard could not start — say another PATTY already owns the port — the session serves the page itself from a **temporary server on a free `localhost` port, on this
    database**, for as long as the request is pending (it never points at whatever else is listening on the configured port: that may have opened a different database).
 2. You open the link. If you are not logged in you log in first and land on the same page. The page shows **the client's name and
    version ("reported by the client"), the profile, when it asked, and the code** — confirm the code is the one Claude showed —
@@ -214,7 +214,7 @@ So the sign-in happens outside the protocol, and what it produces is read from t
 
 | Choice | Behavior |
 |---|---|
-| **This session only** (worded after the client — "This Claude Desktop session only") | Kept in the process's memory, **never written to the keychain**. Revoked when the process exits (best effort); capped at **12 hours** in case the process died without cleaning up. The next Claude session asks again. Not offered for `fintrack login`. |
+| **This session only** (worded after the client — "This Claude Desktop session only") | Kept in the process's memory, **never written to the keychain**. Revoked when the process exits (best effort); capped at **12 hours** in case the process died without cleaning up. The next Claude session asks again. Not offered for `patty login`. |
 | **24 hours** (default) | Saved in the OS keychain for the profile; expires 24 h after you approved. |
 | **7 days** | Saved in the keychain. |
 | **30 days** (the default maximum) | Saved in the keychain. |
@@ -234,39 +234,39 @@ So the sign-in happens outside the protocol, and what it produces is read from t
 
 In this order, and only the first that applies:
 
-1. **`FINTRACK_TOKEN`** — see [below](#fintrack_token). If it is set and invalid, the server says so; it **never falls back** to a saved sign-in.
-2. **A saved sign-in** in the OS keychain: service `fintrack`, account `signin:<profile>:<dbId>`, where `dbId` is the first 12 hex characters of the SHA-256 of the
+1. **`PATTY_TOKEN`** — see [below](#patty_token). If it is set and invalid, the server says so; it **never falls back** to a saved sign-in.
+2. **A saved sign-in** in the OS keychain: service `patty`, account `signin:<profile>:<dbId>`, where `dbId` is the first 12 hex characters of the SHA-256 of the
    absolute database path — so a development database and a production one never share a sign-in.
 3. **None** → "not signed in", as above.
 
 ### Profiles
 
-`FINTRACK_PROFILE` (default `default`) names the saved sign-in. Give each client config its own profile and each signs in separately
+`PATTY_PROFILE` (default `default`) names the saved sign-in. Give each client config its own profile and each signs in separately
 (`setup --profile work` writes it into the client's `env`; `login --profile work` signs it in; `logout --profile work` signs it out).
 Each profile holds its own sign-in, so two client configs on one machine can be signed in as two different users — each approves in the browser as themselves.
 
-### `FINTRACK_TOKEN`
+### `PATTY_TOKEN`
 
 Put a [personal access token](#personal-access-tokens) in the client's environment for headless use — CI, scripts, a config that should never prompt:
 
 ```json
-{ "mcpServers": { "fintrack": { "command": "npx", "args": ["-y", "@rafaelfcarneiro/fintrack@latest"], "env": { "FINTRACK_TOKEN": "ftk_…" } } } }
+{ "mcpServers": { "patty": { "command": "npx", "args": ["-y", "@rfc0/patty@latest"], "env": { "PATTY_TOKEN": "ptk_…" } } } }
 ```
 
-Its scopes and expiry apply as they would over HTTP. An **empty** `FINTRACK_TOKEN` counts as unset (a config template that expands a missing variable to nothing falls through to the keychain and the browser sign-in, not to the strict token path). The token is validated on every call, so revoking it takes effect on the next one. A malformed, unknown,
+Its scopes and expiry apply as they would over HTTP. An **empty** `PATTY_TOKEN` counts as unset (a config template that expands a missing variable to nothing falls through to the keychain and the browser sign-in, not to the strict token path). The token is validated on every call, so revoking it takes effect on the next one. A malformed, unknown,
 revoked or expired token gets a clear error — never a silent fallback to the keychain — and the token is never echoed. Prefer the browser sign-in where you can: it keeps the secret in the keychain rather than in a JSON file that syncs and gets shared.
 
 ### `login` and `logout`
 
 ```bash
-npx @rafaelfcarneiro/fintrack@latest login [--profile <p>] [--duration 24h|7d|30d] [--scope read|write]
-npx @rafaelfcarneiro/fintrack@latest logout [--profile <p>]
+npx @rfc0/patty@latest login [--profile <p>] [--duration 24h|7d|30d] [--scope read|write]
+npx @rfc0/patty@latest logout [--profile <p>]
 ```
 
 `login` runs the same flow from a terminal: it prints the link and the code, waits for you to approve, and saves the result to the keychain profile (if the keychain
 refuses, it revokes the sign-in again rather than leave a secret nothing can find). `--duration` and `--scope` only **pre-select** the page; you still choose. It needs
-no dashboard to be running: it **starts a temporary server of its own on a free port of `localhost` (loopback only, and a host name of its own, so its session cookie never replaces that of a FinTrack open at `127.0.0.1` — cookies are keyed by host, not port) for the length of the
-login** (authentication required, the same database) and closes it afterwards — it never reuses a server already on `HOST:PORT`, which may have opened a different database. Ctrl-C cancels cleanly (exit 130). Under `FINTRACK_AUTH=disabled` there is nothing to sign in to and it says so.
+no dashboard to be running: it **starts a temporary server of its own on a free port of `localhost` (loopback only, and a host name of its own, so its session cookie never replaces that of a PATTY open at `127.0.0.1` — cookies are keyed by host, not port) for the length of the
+login** (authentication required, the same database) and closes it afterwards — it never reuses a server already on `HOST:PORT`, which may have opened a different database. Ctrl-C cancels cleanly (exit 130). Under `PATTY_AUTH=disabled` there is nothing to sign in to and it says so.
 `logout` revokes the profile's saved sign-in and deletes the keychain entry; with nothing saved it says so and succeeds.
 
 ### Phishing and its limits
@@ -285,18 +285,18 @@ schema. Two things now make that impossible. Every command is pinned to `@latest
 command (`setup`, `auth …`, `login`, `logout`) — first compares the database's newest applied migration with the newest this build ships. If the database is ahead it exits
 non-zero with this, before it copies, migrates, seeds or writes anything:
 
-> fintrack: this build (v1.2.3) is older than your database (it has migrations this version doesn't know). Update with `npx @rafaelfcarneiro/fintrack@latest`, or check for a stale global install: `npm ls -g @rafaelfcarneiro/fintrack`.
+> patty: this build (v1.2.3) is older than your database (it has migrations this version doesn't know). Update with `npx @rfc0/patty@latest`, or check for a stale global install: `npm ls -g @rfc0/patty`.
 
 A fresh database, or one at or behind the build, proceeds as always. The guard protects only builds that include it (see [`releasing.md`](releasing.md)).
-Unknown commands (`fintrack bogus`, `fintrack auth bogus`) print the usage and exit non-zero — they never fall through to starting a server.
+Unknown commands (`patty bogus`, `patty auth bogus`) print the usage and exit non-zero — they never fall through to starting a server.
 
 ## Reset a password
 
 There is no recovery email; recovery is a terminal command, trusted the same way as [`auth setup`](#first-setup):
 
 ```bash
-npx @rafaelfcarneiro/fintrack@latest auth reset-password            # the owner
-npx @rafaelfcarneiro/fintrack@latest auth reset-password --user ana # a named user
+npx @rfc0/patty@latest auth reset-password            # the owner
+npx @rfc0/patty@latest auth reset-password --user ana # a named user
 ```
 
 It asks for the new password twice, no echo (or `--password-stdin`), then in **one write**:
@@ -321,7 +321,7 @@ person sets their own password by claiming an invite.
 | `admin` | The same, **plus** user management and the instance's sign-in cap. The owner is the first admin and nothing more special than that. |
 
 **User management is session-only and admin-only.** It is browser pages under `/ui/access/users` and, in a terminal that can open the database,
-`fintrack users …`. It is **not** an MCP tool, not an `/api` route, and unreachable with a bearer token of any scope (`/ui` ignores a bearer altogether). A member's
+`patty users …`. It is **not** an MCP tool, not an `/api` route, and unreachable with a bearer token of any scope (`/ui` ignores a bearer altogether). A member's
 request to any of those pages — the list or any form post — is answered exactly as for a page that does not exist (the framework's own `404`), not with a `403` that would
 announce it. (One difference remains: a form POST to a path that really does not exist is a `415`, because the form parser is only registered inside the pages that take forms.)
 The Access page links to Users for admins only.
@@ -329,13 +329,13 @@ The Access page links to Users for admins only.
 ### Inviting someone
 
 At **`/ui/access/users`** (admins), *Invite a user* takes a username, a role and **your own password again** (like creating a token: a script running in a dashboard page
-holds your session but not your password, so it cannot invite anyone on its own). The result page shows a **link and a code, once** — FinTrack keeps only the code's SHA-256 —
+holds your session but not your password, so it cannot invite anyone on its own). The result page shows a **link and a code, once** — PATTY keeps only the code's SHA-256 —
 valid for **72 hours** and for a single use. Send them privately: whoever opens the link first chooses the password.
 
 - The user exists straight away as `invited`: a username and a role, no password, so nobody can log in as them yet. Usernames are unique, case-insensitively, among everyone —
   invited and disabled users included.
 - **At most one unclaimed invite per user:** issuing a new one removes the previous one in the same write.
-- From a terminal: `npx @rafaelfcarneiro/fintrack@latest users invite ana [--admin]` prints the code (no password — the terminal holds the database key) and, when `PUBLIC_URL` is set, the link. Without it the
+- From a terminal: `npx @rfc0/patty@latest users invite ana [--admin]` prints the code (no password — the terminal holds the database key) and, when `PUBLIC_URL` is set, the link. Without it the
   terminal prints only the claim page's path, `/ui/access/invite`: it starts no server, so it cannot know which process on
   `HOST:PORT` serves this database, and a link there could hand the code to another one. Type the code on that page.
 
@@ -383,10 +383,10 @@ A personal access token (PAT) lets a script or an MCP client that cannot open a 
 Create and revoke them at **`/ui/access/tokens`** (the key icon in the dashboard sidebar; only present when authentication is
 `required`).
 
-- **Format:** `ftk_` followed by 32 random bytes, base64url (47 characters). The fixed prefix makes a leaked token
+- **Format:** `ptk_` followed by 32 random bytes, base64url (47 characters). The fixed prefix makes a leaked token
   greppable — in a repo, a log, a paste.
-- **Shown once.** `POST /ui/access/tokens` answers with the plaintext on that one page. FinTrack stores only its **SHA-256**
-  and a display prefix (`ftk_` + the first 6 characters) so you can tell tokens apart in the list. Lose it and you
+- **Shown once.** `POST /ui/access/tokens` answers with the plaintext on that one page. PATTY stores only its **SHA-256**
+  and a display prefix (`ptk_` + the first 6 characters) so you can tell tokens apart in the list. Lose it and you
   revoke it and create another. The plaintext is never logged: request logs redact `Authorization`, and nothing else
   receives it.
 - **Name, access, expiry, and your password.** Access is *read only* or *read and write* (see [Scopes](#scopes)). Expiry is 30,
@@ -412,8 +412,8 @@ On `/api` and `/mcp` an `Authorization` header is **authoritative**:
 
 | Request | Result |
 |---|---|
-| `Authorization: Bearer ftk_…`, valid | Acts as the token's user with the token's scopes. The cookie, if any, is ignored. **No CSRF check** — a bearer is not an ambient credential, a hostile page cannot make a browser attach it. |
-| `Authorization` present but not a valid `Bearer ftk_…` (another scheme, unknown, revoked or expired token) | `401 invalid_token`. The session cookie is **not** tried: a bad bearer never falls back to a session. |
+| `Authorization: Bearer ptk_…`, valid | Acts as the token's user with the token's scopes. The cookie, if any, is ignored. **No CSRF check** — a bearer is not an ambient credential, a hostile page cannot make a browser attach it. |
+| `Authorization` present but not a valid `Bearer ptk_…` (another scheme, unknown, revoked or expired token) | `401 invalid_token`. The session cookie is **not** tried: a bad bearer never falls back to a session. |
 | No `Authorization`, valid session cookie | Acts as the owner with every scope; unsafe methods are [CSRF-checked](#csrf) as before. |
 | Neither | `401` with a [challenge](#challenges). |
 
@@ -424,8 +424,8 @@ On `/ui` the header is ignored: a bearer there is just "no credential", so the r
 
 | Scope | Allows |
 |---|---|
-| `fintrack:read` | `GET`/`HEAD` on `/api`; every MCP tool marked read-only; MCP resources and prompts; `initialize`, `tools/list`, `ping`. |
-| `fintrack:write` | Everything else on `/api` and every other MCP tool — and, by implication, everything `read` allows. |
+| `patty:read` | `GET`/`HEAD` on `/api`; every MCP tool marked read-only; MCP resources and prompts; `initialize`, `tools/list`, `ping`. |
+| `patty:write` | Everything else on `/api` and every other MCP tool — and, by implication, everything `read` allows. |
 
 A session and the trusted owner (auth `disabled`) hold both scopes; a stdio sign-in holds the scopes its approver chose.
 
@@ -445,9 +445,9 @@ Refusals follow [RFC 6750 §3](https://www.rfc-editor.org/rfc/rfc6750#section-3)
 
 | Situation | Status | `WWW-Authenticate` |
 |---|---|---|
-| No credential on `/api`, `/mcp` | `401` | `Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp", scope="fintrack:read fintrack:write"` |
+| No credential on `/api`, `/mcp` | `401` | `Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp", scope="patty:read patty:write"` |
 | Invalid, expired, revoked or malformed bearer | `401` | `Bearer error="invalid_token", resource_metadata="…"` |
-| Token lacks the scope | `403` | `Bearer error="insufficient_scope", scope="fintrack:write", resource_metadata="…"` |
+| Token lacks the scope | `403` | `Bearer error="insufficient_scope", scope="patty:write", resource_metadata="…"` |
 
 `<origin>` is `PUBLIC_URL`, else the request's own origin when it arrived at a loopback host; if neither is known
 (a LAN hostname with no `PUBLIC_URL`) `resource_metadata` is left out rather than guessed.
@@ -460,10 +460,10 @@ return the same document, with no credential:
 
 ```json
 {
-  "resource": "https://fintrack.example.com/mcp",
-  "scopes_supported": ["fintrack:read", "fintrack:write"],
+  "resource": "https://patty.example.com/mcp",
+  "scopes_supported": ["patty:read", "patty:write"],
   "bearer_methods_supported": ["header"],
-  "resource_name": "FinTrack"
+  "resource_name": "PATTY"
 }
 ```
 
@@ -473,7 +473,7 @@ return the same document, with no credential:
 
 ### Connecting a client
 
-Send `Authorization: Bearer ftk_…` — see [`mcp-clients.md`](mcp-clients.md#docker-container-http-on-12700151737) for each client.
+Send `Authorization: Bearer ptk_…` — see [`mcp-clients.md`](mcp-clients.md#docker-container-http-on-12700151737) for each client.
 
 ## The public surface
 
@@ -496,7 +496,7 @@ nothing else is reachable.
 
 A browser attaches the session cookie to any request to your instance, including ones a hostile page triggers. On top
 of `SameSite=Lax`, every **unsafe** request (`POST`/`PUT`/`PATCH`/`DELETE` — including `POST /mcp`) that is authenticated
-by the session cookie must declare, in `Origin` (or, failing that, `Referer`), an origin FinTrack recognises:
+by the session cookie must declare, in `Origin` (or, failing that, `Referer`), an origin PATTY recognises:
 
 - `PUBLIC_URL`, when set; and
 - the request's own origin **when it arrived at a loopback host** (`127.0.0.1:51737`, `localhost`) — so a local
@@ -523,12 +523,12 @@ The data and its encryption key have to travel together, and the key must never 
 cannot read your OS keychain, so the key goes to a file it mounts as a secret. Two terminal commands do the exporting
 (`key export` and `db export`; they are not reachable from MCP, HTTP or a token — whoever can run them already holds the key):
 
-- `key export --to <file>` writes the database key to a new file usable as `FINTRACK_DB_KEY_FILE`. It resolves the key the way
+- `key export --to <file>` writes the database key to a new file usable as `PATTY_DB_KEY_FILE`. It resolves the key the way
   the server does (file, then env var, then keychain), proves it by opening your database with it and reading once, and
   only then writes. The file is created owner-only (`0600`), is never overwritten (there is no `--force`), and cannot be in
   the database's own directory or under it (real paths are compared, so a relative path or a symlink does not get around it).
   The key is never printed, logged or put in an error. The check "the keychain is empty" and the store are one step under
-  a per-user key lock (`~/.fintrack/db-key.lock`, held by the OS, so a dead process lets go), the same lock the server
+  a per-user key lock (`~/.patty/db-key.lock`, held by the OS, so a dead process lets go), the same lock the server
   takes when it generates a key on first start: another process that writes a key in the gap is never replaced, and the
   import refuses as above. A server whose keychain already holds a key never takes the lock. A writer waits up to 60 s
   for the lock (a keychain may sit on an unlock prompt) before failing with a message to try again.
@@ -542,44 +542,44 @@ cannot read your OS keychain, so the key goes to a file it mounts as a secret. T
    older one ([Refusing an older build](#refusing-an-older-build)). `npx …@latest` runs the newest published build; the
    image's version is checked in step 4, once the key file exists (compose mounts it as a secret). If the image is older,
    pull or build a newer one first (a too-old image refuses the database at startup and changes nothing).
-2. **Stop every FinTrack client** (Claude Desktop/Code, VS Code), so nothing writes after the snapshot.
+2. **Stop every PATTY client** (Claude Desktop/Code, VS Code), so nothing writes after the snapshot.
 3. **Export the key and the data**, in the directory that holds `compose.yaml`:
 
    ```bash
-   (umask 077; npx @rafaelfcarneiro/fintrack@latest key export --to ./fintrack_db_key)
-   npx @rafaelfcarneiro/fintrack@latest db export --to ./fintrack.snapshot.db
+   (umask 077; npx @rfc0/patty@latest key export --to ./patty_db_key)
+   npx @rfc0/patty@latest db export --to ./patty.snapshot.db
    ```
 
    If your database is not at the default path, set `DB_PATH` for both commands, as you do for the server.
-4. **Put the snapshot into the `fintrack-data` volume as `/data/fintrack.db`**, owned by the image's `node` user (uid 1000).
+4. **Put the snapshot into the `patty-data` volume as `/data/patty.db`**, owned by the image's `node` user (uid 1000).
    Compose prefixes the volume name with the project, so use `docker compose`, not a guessed `docker volume` name. This
    creates the volume, then streams the file in through stdin to a throwaway container that runs as that user (the host's `0600` file is read by you, so it works whatever your host uid is, and the container creates its own owner-only copy):
 
    ```bash
-   npm view @rafaelfcarneiro/fintrack version
+   npm view @rfc0/patty version
    docker compose create
-   docker compose run --rm --no-deps --entrypoint node fintrack -p "require('./package.json').version"
-   docker compose run --rm --no-deps -T --entrypoint sh fintrack \
-     -c 'umask 077; cat > /data/fintrack.db && chmod 600 /data/fintrack.db' < ./fintrack.snapshot.db
+   docker compose run --rm --no-deps --entrypoint node patty -p "require('./package.json').version"
+   docker compose run --rm --no-deps -T --entrypoint sh patty \
+     -c 'umask 077; cat > /data/patty.db && chmod 600 /data/patty.db' < ./patty.snapshot.db
    ```
 
-   The first two lines compare the newest published version with the image's (step 1). Do the copy on a volume with no database in it yet: it overwrites `/data/fintrack.db`.
-5. **On Linux, `sudo chown 1000 fintrack_db_key`** (the container's user must own the `0600` file; skip this on Docker Desktop), then
+   The first two lines compare the newest published version with the image's (step 1). Do the copy on a volume with no database in it yet: it overwrites `/data/patty.db`.
+5. **On Linux, `sudo chown 1000 patty_db_key`** (the container's user must own the `0600` file; skip this on Docker Desktop), then
    `docker compose up -d`.
 6. **Sign in.**
    - **You already claimed the owner on npm** (you ran `setup` or `auth setup`): no setup code is printed. Log in at
      <http://127.0.0.1:51737/ui/login> with the same username and password.
-   - **You never claimed it:** `docker compose logs fintrack` shows the setup code; claim it at `/ui/setup`
+   - **You never claimed it:** `docker compose logs patty` shows the setup code; claim it at `/ui/setup`
      ([The setup code](#the-setup-code)).
 7. **Verify.** The dashboard shows your accounts and transactions. `db export`'s counts are for the whole database (every user, credit accounts included), while the dashboard is scoped to the signed-in user and its accounts page leaves credit accounts out. With one user and no credit accounts they match exactly; otherwise expect the dashboard to show the same or fewer.
 8. **Reconnect the MCP clients to the container.** Create a personal access token at `/ui/access/tokens` and use the HTTP
    config from [`mcp-clients.md`](mcp-clients.md#docker-container-http-on-12700151737). The old stdio config still points at
    the npm database, which is no longer the one in use.
 9. **Clean up.**
-   - Delete `fintrack.snapshot.db`.
-   - Keep `fintrack_db_key`, and back it up somewhere other than where the volume's backup goes: with the key beside the data,
+   - Delete `patty.snapshot.db`.
+   - Keep `patty_db_key`, and back it up somewhere other than where the volume's backup goes: with the key beside the data,
      the encryption protects nothing.
-   - Keep the old `~/.fintrack` (and its keychain entry) until you are satisfied, then delete it yourself. Nothing here deletes it.
+   - Keep the old `~/.patty` (and its keychain entry) until you are satisfied, then delete it yourself. Nothing here deletes it.
 
 `scripts/docker-move-smoke.sh` runs steps 3–7 against an image (an npm-style database with a claimed owner and one account), so
 the commands above are the commands that are tested.
@@ -595,17 +595,17 @@ the next start migrates the database, after its usual [safety copy](#backups-mad
 snapshot, and `setup` needs the database.
 
 ```bash
-npx @rafaelfcarneiro/fintrack@latest key import --from ./fintrack_db_key
-npx @rafaelfcarneiro/fintrack@latest db import --from ./fintrack.snapshot.db
-npx @rafaelfcarneiro/fintrack@latest setup <client>
+npx @rfc0/patty@latest key import --from ./patty_db_key
+npx @rfc0/patty@latest db import --from ./patty.snapshot.db
+npx @rfc0/patty@latest setup <client>
 ```
 
 - `key import --from <file>` reads the file `key export` wrote: the 64 hexadecimal characters and at most one trailing
   newline, nothing else (a symlink to it is fine, which is how a Docker secret is mounted). It stores the key in the OS
   keychain entry the server reads. It **refuses** when
-  - the keychain already holds a key for this install. There is no `--force`: remove the `fintrack` / `db-encryption-key`
+  - the keychain already holds a key for this install. There is no `--force`: remove the `patty` / `db-encryption-key`
     keychain entry yourself if you mean to replace it (that loses access to a database encrypted with the old key);
-  - `FINTRACK_DB_KEY_FILE` or `FINTRACK_DB_KEY` is set: those installs read the key from there, not from the keychain;
+  - `PATTY_DB_KEY_FILE` or `PATTY_DB_KEY` is set: those installs read the key from there, not from the keychain;
   - a database already exists at `DB_PATH` and the key does not open it. Without a database, only the format is checked;
     `db import` proves the key against the snapshot.
 
@@ -627,18 +627,18 @@ npx @rafaelfcarneiro/fintrack@latest setup <client>
   The snapshot must be one `db export` wrote: a live database file with a `-wal` beside it would be copied without it.
 
 **Docker to npm.** Stop the container, then export from it and import on the host. The container's key is already on the
-host as `fintrack_db_key`, so only the data needs exporting:
+host as `patty_db_key`, so only the data needs exporting:
 
 ```bash
-docker compose stop fintrack
-(umask 077; docker compose run --rm --no-deps -T --entrypoint sh fintrack \
-  -c 'umask 077; node dist/main.js db export --to /tmp/back.db >&2 && cat /tmp/back.db' > ./fintrack.snapshot.db)
-sudo chown "$USER" ./fintrack_db_key   # Linux only, see below
-npx @rafaelfcarneiro/fintrack@latest key import --from ./fintrack_db_key
-npx @rafaelfcarneiro/fintrack@latest db import --from ./fintrack.snapshot.db
+docker compose stop patty
+(umask 077; docker compose run --rm --no-deps -T --entrypoint sh patty \
+  -c 'umask 077; node dist/main.js db export --to /tmp/back.db >&2 && cat /tmp/back.db' > ./patty.snapshot.db)
+sudo chown "$USER" ./patty_db_key   # Linux only, see below
+npx @rfc0/patty@latest key import --from ./patty_db_key
+npx @rfc0/patty@latest db import --from ./patty.snapshot.db
 ```
 
-The outer `umask 077` matters: the host shell creates `./fintrack.snapshot.db` for the redirection before Docker starts,
+The outer `umask 077` matters: the host shell creates `./patty.snapshot.db` for the redirection before Docker starts,
 so the one inside the container does not reach it. On native Linux the move to Docker handed the key file to UID 1000 so
 the container could read it; the `chown` takes it back so `key import` can read it as you (Docker Desktop did not change
 the owner, so skip it there).
@@ -646,24 +646,35 @@ the owner, so skip it there).
 `scripts/docker-move-smoke.sh` also runs this direction (with the key supplied as a file, since a CI host has no
 keychain); the key-into-keychain step is covered by the integration tests with an in-memory keychain.
 
+## Moving from the former name
+
+The product was renamed to PATTY (ADR-035), and the token prefix, the scopes and the cookie name changed with it, so
+nothing issued under the old name can authenticate. Migration `0028_reset_sign_ins` therefore empties `access_tokens`
+and `client_grants` (a data-rewriting migration: the `.bak` safety copy below is taken first). It names no old value,
+so it clears every row whatever it holds. Users, passwords, accounts and transactions are untouched. After upgrading:
+
+- every personal access token is gone: create new ones at `/ui/access/tokens` and update the clients that held them;
+- every stdio sign-in is gone: the next tool call prints the sign-in link, or run `npx @rfc0/patty@latest login`;
+- browser sessions end with the cookie rename: sign in again at `/ui/login`.
+
 ## Backups made before a migration
 
 Before applying a migration that **rewrites existing data** — Phase 1's owner insert is the first — startup
 snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 
 ```
-<DB_PATH>.pre-<migration>.bak        e.g.  ~/.fintrack/fintrack.db.pre-0018_auth_identity.bak
+<DB_PATH>.pre-<migration>.bak        e.g.  ~/.patty/patty.db.pre-0018_auth_identity.bak
 ```
 
-- It is a consistent snapshot of everything committed at that moment, taken while FinTrack holds SQLite's write
+- It is a consistent snapshot of everything committed at that moment, taken while PATTY holds SQLite's write
   lock and applies the migration in the same transaction — so a process that is already running (even on an older
   release) cannot commit in between and be missing from it, and its writes simply wait or fail with `database is
   locked` for the instant of the upgrade. It is a standalone file (no `-wal`/`-shm` needed). It stays encrypted under the same key, mode `0600`, so it adds no
   exposure — and no value without the key.
 - The path is logged to stderr (never the key). It is **not** made for a brand-new database, nor on later starts.
-- To roll back: stop FinTrack, put the `.bak` back as `fintrack.db` (delete the live `-wal`/`-shm` beside it), and run
+- To roll back: stop PATTY, put the `.bak` back as `patty.db` (delete the live `-wal`/`-shm` beside it), and run
   the previous release.
-- Several FinTrack processes starting at once (multiple MCP clients) take turns on an OS-level lock
+- Several PATTY processes starting at once (multiple MCP clients) take turns on an OS-level lock
   (`<DB_PATH>.migrate.lock`, a tiny companion SQLite file), so exactly one takes the backup and migrates. The lock
   dies with its holder; the file itself is harmless and is left in place.
 - Delete the backup once you've confirmed the upgrade.
@@ -691,7 +702,7 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 - **A leaked invite link** being used *after* the invite is spent, expired or replaced (single use, 72 hours, replaced by a reissue), or guessed (100 random bits, throttled), or read from a `Referer` or a log line (`strict-origin`, the parameter is redacted).
 - **A disabled or reset user keeping access** through any credential they already held (sessions, tokens, stdio sign-ins and approved but unredeemed sign-in requests all end in the same write as the disable or reset), or through one issued while that was happening: every issuance (a token, an approved sign-in request, a redeemed sign-in, an invite, a login) writes the user's `credentials_changed_at`, so a disable or reset that read the credentials before it conflicts and re-reads them, in either order.
 - **Leaving the instance with nobody to administer it**, including by two admins acting on each other at once.
-- **A program that merely runs a FinTrack stdio server in your name** (a client config you did not write, a script that spawns it): it gets "not signed in" until *you* approve a
+- **A program that merely runs a PATTY stdio server in your name** (a client config you did not write, a script that spawns it): it gets "not signed in" until *you* approve a
   request in the browser, for the scopes and duration you pick, and you can revoke it any time at `/ui/access/tokens`.
 - **A sign-in link used as a lure** (the phishing defence, [above](#phishing-and-its-limits)): the link and code grant nothing by themselves, approval needs your own login *and* your password
   and binds to you, the page names the client and the code, and a request lives 10 minutes and works once.
@@ -702,28 +713,28 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 
 - **A leaked access token.** Whoever holds a token has its scopes until it is revoked or expires — there is no IP
   binding or second factor on a bearer. Prefer *read only* where a client does not need to write, give tokens an expiry,
-  keep them out of repos (the `ftk_` prefix is easy to scan for), and revoke at once if one escapes. A write token can
+  keep them out of repos (the `ptk_` prefix is easy to scan for), and revoke at once if one escapes. A write token can
   do everything the owner can except manage tokens and log in. Dashboards are HTML you or an agent saved, and their
   scripts run in your browser at `/ui` with your session: a write token (or any agent you let write dashboards) can
   therefore make your *browser* act as you — read your data and call `/api` with your session — whenever you open that
   dashboard. The password prompt on token creation stops it minting a lasting credential, nothing more; treat write access
   to dashboards as access to your logged-in browser, and review a dashboard before opening one an agent wrote.
-- **Anyone who can read your files, or run FinTrack as you.** The database key and the volume together decrypt everything;
+- **Anyone who can read your files, or run PATTY as you.** The database key and the volume together decrypt everything;
   authentication guards the network surface, not the disk. The `auth` commands are trusted for exactly this reason: they
   open the database with its key, so whoever can run them already holds the data. On one OS account, a program that can run
-  FinTrack can read the key and the database directly, so the login separates *people and network callers*, not your own
+  PATTY can read the key and the database directly, so the login separates *people and network callers*, not your own
   account's processes. **The stdio sign-in does not change that**: it separates *which user, which scopes and for how long* a
-  client acts *through FinTrack*; a program running as your OS account can still read the keychain entry (and the database key beside it), or start FinTrack with
-  `FINTRACK_AUTH=disabled` against your database. It is not a wall against your own OS account. Back up the key and the volume, but not in the same place, and protect both.
+  client acts *through PATTY*; a program running as your OS account can still read the keychain entry (and the database key beside it), or start PATTY with
+  `PATTY_AUTH=disabled` against your database. It is not a wall against your own OS account. Back up the key and the volume, but not in the same place, and protect both.
 - **Other local programs and local web apps, with auth explicitly `disabled` on loopback.** A web page from another *site* can
   no longer reach it (the `Host`/`Origin` rule above), but any program running as any user on your machine can still
   connect to `127.0.0.1` and act as the owner. That includes a web app served from `localhost` on a *different port*
   (a dev server, a local tool): its `Origin` is loopback, which is accepted on purpose so MCP Inspector
-  (`http://localhost:6274`) works. FinTrack sends no CORS headers, so such a page cannot read responses, and a
+  (`http://localhost:6274`) works. PATTY sends no CORS headers, so such a page cannot read responses, and a
   JSON write is stopped by the browser's preflight — but a simple, body-less cross-origin `POST` is not. That is
   today's behavior and the reason `disabled` is loopback-only; it is why `disabled` is
   an explicit opt-out and not the default.
-- **Eavesdropping.** FinTrack serves plain HTTP. Across a network, put a TLS-terminating reverse proxy in front
+- **Eavesdropping.** PATTY serves plain HTTP. Across a network, put a TLS-terminating reverse proxy in front
   (and set `PUBLIC_URL`/`TRUST_PROXY`); Phase 3 documents and supports that deployment.
 - **Username lockout.** Because failures are counted per submitted username, someone who can reach the login page can
   lock the owner's login out for 15 minutes by spamming wrong passwords (the cost of not revealing which usernames
@@ -731,7 +742,7 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 - **A restarted process forgetting rate-limit state.** The limiter is in memory.
 - **One person reading another's data when you hold the key.** Users are isolated **logically (row by row) inside one encrypted database, not cryptographically**: every owned row carries its user and every read and write goes through that user's scoped dependencies, but there is one database key per instance, and whoever holds the key and the volume (or the `.bak` files beside it) can read every user's data. Admins manage *who can sign in*, not a wall between people and the operator. Some data is shared on purpose: the seeded default categories and bundled dashboards (read-only for everyone) and exchange rates (market data any signed-in user with write scope can refresh).
 - **An invite or a password reset handed to the wrong person.** The link and code are bearer secrets for up to 72 hours; whoever claims first becomes that user. Send them privately, and reissue if in doubt (it also ends every credential the user held).
-- **The owner of the machine.** `fintrack users …` and `auth …` run with the database key and need no password; whoever can run them is the operator.
+- **The owner of the machine.** `patty users …` and `auth …` run with the database key and need no password; whoever can run them is the operator.
 - **Eavesdropping on a token.** A bearer sent over plain HTTP across a network can be read; use TLS (Phase 3 documents the proxy deployment).
 
 ## What comes next

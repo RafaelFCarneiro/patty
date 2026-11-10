@@ -30,7 +30,7 @@ const truncateJournalBefore0015 = (folder: string): void => {
 };
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-currencies-migration-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-currencies-migration-'));
   dbPath = join(tmpDir, 'migration.db');
 
   // A copy of the real migrations folder with 0015's journal entry (and everything after) removed
@@ -48,10 +48,10 @@ afterEach(() => {
 const openOpts = () => ({
   DB_PATH: dbPath,
   KEY_LOCK_PATH: keyLockPathForTest(),
-  FINTRACK_DB_KEY: TEST_KEY,
+  PATTY_DB_KEY: TEST_KEY,
   PORT: 3001,
   MCP_TRANSPORT: McpTransport.enum.http,
-  FINTRACK_HTTP: true,
+  PATTY_HTTP: true,
 });
 
 describe('migration 0015 — currencies.decimals backfill (ADR-026 Phase 1)', () => {

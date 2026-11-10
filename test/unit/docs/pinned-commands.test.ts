@@ -5,7 +5,7 @@ import { NPX_COMMAND, PACKAGE_NAME, PACKAGE_SPEC } from '../../../src/models/pac
 
 /**
  * `npx` prefers an installed copy over the registry's when it is given no version, so an unpinned command can run a
- * stale (global) build against a newer database. Every command FinTrack prints or documents is `@latest`-pinned
+ * stale (global) build against a newer database. Every command PATTY prints or documents is `@latest`-pinned
  * (ADR-034 §7); ADRs are history and are left as written.
  */
 const ROOT = join(import.meta.dirname, '..', '..', '..');
@@ -27,8 +27,8 @@ const USER_FACING = ['README.md', 'CLAUDE.md', join('.github', 'copilot-instruct
 
 describe('pinned npx commands', () => {
   it('builds the command from one constant', () => {
-    expect(PACKAGE_SPEC).toBe('@rafaelfcarneiro/fintrack@latest');
-    expect(NPX_COMMAND).toBe('npx @rafaelfcarneiro/fintrack@latest');
+    expect(PACKAGE_SPEC).toBe('@rfc0/patty@latest');
+    expect(NPX_COMMAND).toBe('npx @rfc0/patty@latest');
   });
 
   it.each(USER_FACING)('has no unpinned npx command in %s', (path) => {

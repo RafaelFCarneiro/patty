@@ -21,7 +21,7 @@ const dirs: string[] = [];
 const apps: AppContext[] = [];
 
 const appOf = async (kind: InstanceKind, opts: Parameters<typeof buildApp>[0] = {}, locale?: Locale) => {
-  const dir = mkdtempSync(join(tmpdir(), 'fintrack-demo-mcp-'));
+  const dir = mkdtempSync(join(tmpdir(), 'patty-demo-mcp-'));
   dirs.push(dir);
   const ctx = await buildApp({ dbPath: join(dir, 'test.db'), ...opts });
   apps.push(ctx);

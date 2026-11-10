@@ -9,11 +9,11 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 
 | Participant | Where | Role |
 |---|---|---|
-| Config | `src/config.ts` | Reads `FINTRACK_AUTH` (default `required`) and refuses `disabled` on an exposed instance (`HOST` / `PUBLIC_URL` / `TRUST_PROXY`) |
+| Config | `src/config.ts` | Reads `PATTY_AUTH` (default `required`) and refuses `disabled` on an exposed instance (`HOST` / `PUBLIC_URL` / `TRUST_PROXY`) |
 | VersionGuard | `src/diplomat/db/version-guard.ts` (rule: `src/logic/migration.ts`) | First thing `bootstrap` does: refuses a database a newer build has migrated, before anything is copied, migrated, seeded or written |
 | Bootstrap | `src/diplomat/db/bootstrap.ts`, `safety-copy.ts`, `migration-journal.ts`, `migration-lock.ts` | Migrations, the owner row, the pre-migration backup |
 | AuthRuntime | `src/composition/auth.ts` | Builds the identity deps (shared with the CLI and the stdio session), prunes sessions and expired sign-in requests, issues and prints the setup code |
-| Cli | `src/diplomat/cli/commands.ts` (router), `commands/{auth,login,setup,users}.ts` (handlers), `io.ts`, `messages.ts`, `prompt.ts`, `terminal.ts`; composed in `src/composition/cli.ts` | `fintrack setup [client]`, `auth setup`, `auth reset-password`, `login`, `logout`, `users list|invite|reissue|disable|enable|role`: opens the database like the server (no stdio), prompts with no echo, runs the controller flows or the sign-in protocol through the injected interpreter, prints what the protocol presents; an unknown command prints the usage and exits non-zero |
+| Cli | `src/diplomat/cli/commands.ts` (router), `commands/{auth,login,setup,users}.ts` (handlers), `io.ts`, `messages.ts`, `prompt.ts`, `terminal.ts`; composed in `src/composition/cli.ts` | `patty setup [client]`, `auth setup`, `auth reset-password`, `login`, `logout`, `users list|invite|reissue|disable|enable|role`: opens the database like the server (no stdio), prompts with no echo, runs the controller flows or the sign-in protocol through the injected interpreter, prints what the protocol presents; an unknown command prints the usage and exits non-zero |
 | SignInServer | `src/composition/sign-in/server.ts` | Where `login` sends the browser — and a stdio session whose sidecar names no page: always a temporary loopback app of the asking process, on a free port, for the length of the request |
 | ClientConfig | `src/diplomat/client-config/{merge,clients}.ts` | The MCP clients' own config files `setup` writes (Claude Code, Claude Desktop, VS Code, Antigravity, Codex): pure merge helpers, file reads and writes |
 | SignInFlow | `src/logic/auth/sign-in-flow.ts` (data: `src/models/auth/sign-in-flow.ts`) | The sign-in protocol as a pure state machine, `nextStep(state, observation, config)` → new state + effects: every rule of a stdio sign-in and of `login`, decided once (diagram 11) |
@@ -31,7 +31,7 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | McpRoute | `src/diplomat/mcp/route.ts`, `scopes.ts` | `POST /mcp`: per-tool scope pre-check on the JSON-RPC body, `req.auth` for the transport, per-tool re-check |
 | Controller | `src/controllers/auth/{session,owner,password,access-tokens,grants}.ts` | `issueSetupCode`, `claimOwner`, `claimOwnerLocally`, `resetPassword`, `login`, `logout`, `authenticate`; `createToken`, `listTokens`, `revokeToken`, `revokeSignInByHash`, `authenticateToken`; `startGrant`, `findConsent`, `approveGrant`, `denyGrant`, `redeemGrant`, `pruneExpiredGrants`; `controllers/auth/users.ts`: `listUsers`, `inviteUser`, `reissueInvite`, `claimInvite`, `disableUser`, `enableUser`, `setRole`, `setSignInCap`; returns `{ persist, response }` |
 | Logic | `src/logic/auth/*.ts` — `owner`, `password`, `session`, `token`, `scope`, `bearer`, `origin`, `grant`, `keychain`, `signInFlow`, `message`, `users`, `revoke`, `redact` | Pure rules: expiry, the sliding window, "can log in", origin comparison, scopes, the token verdict, credential parsing, challenges, the metadata document; the grant transitions, `signInExpiry`, the consent pre-selection and the instance cap (`clampToCap`, `offeredDurations`), `redeemPlan`, the not-signed-in message, and the sign-in protocol; user status, the admin gate and the guard tables (`authorizeActor`, `guardAdminChange`), the credentials a disable ends (`endingCredentials`), and what may not reach a log (`redactSecretQuery`) |
-| Secrets | `src/diplomat/auth/credentials.ts` | argon2id, CSPRNG session tokens, access tokens (`ftk_…`), setup / invite / user / device codes, sha256 |
+| Secrets | `src/diplomat/auth/credentials.ts` | argon2id, CSPRNG session tokens, access tokens (`ptk_…`), setup / invite / user / device codes, sha256 |
 | Runner | `@rfc0/effect-runner` via `runEffects` | Applies the persistables in one transaction (optimistic versions, retries) |
 | DB | `users`, `sessions`, `setup_codes`, `access_tokens`, `client_grants`, `invites`, `settings` | Stores only hashes, never a token or code in plaintext |
 
@@ -42,7 +42,7 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 ```mermaid
 flowchart TD
     A[Process starts] --> B[Config: parse env]
-    B --> C{FINTRACK_AUTH set?}
+    B --> C{PATTY_AUTH set?}
     C -- yes --> D[Use it]
     C -- no --> F[required<br/>the default on EVERY surface,<br/>loopback included]
     D --> H{disabled AND exposed?<br/>non-loopback HOST<br/>or PUBLIC_URL<br/>or TRUST_PROXY}
@@ -62,7 +62,7 @@ flowchart TD
     OS -- yes --> OT[The stdio session is created:<br/>it acts as nobody until it holds a credential — diagram 9]
     OS -- no --> OH
     OT --> OH{HTTP surface on?}
-    OH -- "no: FINTRACK_HTTP=false" --> RS[Ready: stdio only<br/>sign in with FINTRACK_TOKEN or login]
+    OH -- "no: PATTY_HTTP=false" --> RS[Ready: stdio only<br/>sign in with PATTY_TOKEN or login]
     OH -- yes --> P[Bind HTTP]
     P --> Q{Bound successfully?}
     Q -- no --> R[No setup code issued<br/>the process that owns the port keeps its own]
@@ -110,12 +110,12 @@ sequenceDiagram
     Run->>DB: one transaction, versioned (a concurrent claim conflicts, retries, then gets setup_unavailable)
     Run-->>Routes: the plaintext token (in memory only)
     Routes->>Routes: clear the IP strike, reset the username
-    Routes-->>Op: 303 → /ui + Set-Cookie fintrack_session (HttpOnly, SameSite=Lax, Secure on https)
+    Routes-->>Op: 303 → /ui + Set-Cookie patty_session (HttpOnly, SameSite=Lax, Secure on https)
 ```
 
 ## 2b. First setup from the terminal
 
-`fintrack setup <client>` and `fintrack auth setup` (ADR-034 §5). The CLI is a process of its own: it opens the database
+`patty setup <client>` and `patty auth setup` (ADR-034 §5). The CLI is a process of its own: it opens the database
 with the same key resolution and migrations as the server, but starts neither HTTP nor stdio. Nothing here is typed into a
 chat, and no sign-in link or setup code is involved.
 
@@ -129,7 +129,7 @@ sequenceDiagram
     participant Run as Runner
     participant Cfg as Client config file
 
-    Op->>Cli: npx @rafaelfcarneiro/fintrack@latest setup claude-code
+    Op->>Cli: npx @rfc0/patty@latest setup claude-code
     Cli->>Cli: unknown client or no client? help or error, nothing else happens
     Cli->>DB: open + bootstrap (migrations, so the owner row exists)
     Cli->>DB: owner already claimed?
@@ -151,7 +151,7 @@ sequenceDiagram
         Cli-->>Op: Owner claimed (never the password)
     end
     opt setup <client> only
-        Cli->>Cfg: merge the fintrack entry (idempotent, other keys kept, FINTRACK_PROFILE in env only for a non-default --profile)
+        Cli->>Cfg: merge the patty entry (idempotent, other keys kept, PATTY_PROFILE in env only for a non-default --profile)
         Cli-->>Op: restart your client
         Cli->>Op: Sign in this client now? [Y/n]  (no terminal: a one-line hint, skipped)
         Note over Cli,Op: yes runs the login flow of diagram 10 for the client's profile — a failure never fails the setup
@@ -213,7 +213,7 @@ sequenceDiagram
         Routes-->>U: 401 login page "Invalid username or password." (strike kept)
     else success
         Ctl-->>Routes: persist: delete expired sessions + INSERT new session (hash)
-        Routes-->>U: 303 → next + Set-Cookie fintrack_session
+        Routes-->>U: 303 → next + Set-Cookie patty_session
     end
 ```
 
@@ -231,7 +231,7 @@ flowchart TD
     E -- otherwise --> Z
     D -- no, incl. unknown paths --> BP{"Path is /api or /mcp<br/>AND an Authorization<br/>header is present?"}
     BP -- "yes" --> BT["Bearer branch — diagram 4b:<br/>the header is authoritative,<br/>the cookie is never consulted"]
-    BP -- no --> G[Read the fintrack_session cookie]
+    BP -- no --> G[Read the patty_session cookie]
     G --> H{Cookie present?}
     H -- no --> N
     H -- yes --> I[sha256 token → session row → user]
@@ -259,7 +259,7 @@ Precedence → verify → scope → handler / 401 / 403. A bearer carries no amb
 
 ```mermaid
 flowchart TD
-    A["/api or /mcp request<br/>with an Authorization header"] --> B{"Header is exactly<br/>Bearer ftk_… ?"}
+    A["/api or /mcp request<br/>with an Authorization header"] --> B{"Header is exactly<br/>Bearer ptk_… ?"}
     B -- "no: another scheme, empty,<br/>not our prefix" --> X1["401 invalid_token<br/>WWW-Authenticate: Bearer error=invalid_token, resource_metadata<br/>the cookie is NOT tried"]
     B -- yes --> C[sha256 token → access_tokens row → user]
     C --> D{"Row exists, not revoked,<br/>not expired,<br/>owner claimed and enabled,<br/>kind admitted here (a personal access<br/>token, a stdio sign-in is stdio-only)?"}
@@ -268,7 +268,7 @@ flowchart TD
     E -- yes --> F[UPDATE last_used_at — version-guarded] --> G
     E -- no --> G["principal = user with the TOKEN's scopes<br/>via = token, tokenId"]
     G --> H{"Scope needed by the matched route<br/>(RouteDefinition.scope, POST /mcp: read)<br/>covered? write implies read"}
-    H -- no --> X2["403 insufficient_scope<br/>WWW-Authenticate: Bearer error=insufficient_scope, scope=fintrack:write, resource_metadata"]
+    H -- no --> X2["403 insufficient_scope<br/>WWW-Authenticate: Bearer error=insufficient_scope, scope=patty:write, resource_metadata"]
     H -- yes --> I{"POST /mcp?"}
     I -- no --> Z[REST handler]
     I -- yes --> J["preHandler: read the JSON-RPC body<br/>(each message of a batch)<br/>tools/call of a write tool?<br/>unknown tool counts as write"]
@@ -299,8 +299,8 @@ sequenceDiagram
     Routes->>Run: runEffects(createToken)
     Run->>Ctl: run the flow
     Ctl->>Sec: verify the password against the user's hash (step-up, same cost if it fails). Wrong: 403 page, nothing created
-    Ctl->>Sec: randomAccessToken() = ftk_ + 32 random bytes (base64url)
-    Ctl->>Sec: sha256(token), display prefix = ftk_ + first 6 chars
+    Ctl->>Sec: randomAccessToken() = ptk_ + 32 random bytes (base64url)
+    Ctl->>Sec: sha256(token), display prefix = ptk_ + first 6 chars
     Ctl-->>Run: persist: INSERT access_token {hash, prefix, scopes, expires_at} and the response is the plaintext + summary
     Run->>DB: one transaction
     Run-->>Routes: plaintext (in memory only)
@@ -348,7 +348,7 @@ sequenceDiagram
     Hook->>Routes: authenticated + CSRF ok
     Routes->>DB: runEffects(logout) — DELETE the session row
     alt delete committed
-        Routes-->>U: 303 → /ui/login + Set-Cookie clearing fintrack_session (Max-Age=0)
+        Routes-->>U: 303 → /ui/login + Set-Cookie clearing patty_session (Max-Age=0)
     else delete failed
         Routes-->>U: error, cookie NOT cleared (never fake a logout)
     end
@@ -359,18 +359,18 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph L1["Local npm: loopback, auth required by default"]
-      S1[MCP client] -- "stdio — signs in first (diagram 8):<br/>FINTRACK_TOKEN, a saved sign-in, or a browser approval" --> O1((Owner, with the scopes<br/>the approval granted))
+      S1[MCP client] -- "stdio — signs in first (diagram 8):<br/>PATTY_TOKEN, a saved sign-in, or a browser approval" --> O1((Owner, with the scopes<br/>the approval granted))
       B1[Browser /ui] -- "needs a login<br/>session cookie + Origin check" --> O1
-      C1["Script / client over HTTP<br/>Authorization: Bearer ftk_…"] -- "access token, no CSRF check" --> O1
+      C1["Script / client over HTTP<br/>Authorization: Bearer ptk_…"] -- "access token, no CSRF check" --> O1
       P1[Any other local program] -. "no credential: 401 / redirect to login" .-> X1[rejected]
     end
-    subgraph L1D["Local, explicit FINTRACK_AUTH=disabled (development, tests)"]
+    subgraph L1D["Local, explicit PATTY_AUTH=disabled (development, tests)"]
       B1D[Browser /ui, /api] -- "loopback Host/Origin only<br/>Authorization ignored" --> O1D((Owner, all scopes))
       S1D[MCP client over stdio] -- "no sign-in" --> O1D
     end
     subgraph L2["Docker or exposed: auth required"]
       B2[Browser] -- session cookie + Origin check --> O2((Owner))
-      M2["MCP client over HTTP<br/>Authorization: Bearer ftk_…"] -- "access token, no CSRF check<br/>scopes: read or read+write" --> O2
+      M2["MCP client over HTTP<br/>Authorization: Bearer ptk_…"] -- "access token, no CSRF check<br/>scopes: read or read+write" --> O2
       M2 -. "no credential: 401 + resource_metadata" .-> X2[rejected]
       H2[Healthcheck] -- /api/health only --> P2[public]
       W2[Any client] -- "/.well-known/oauth-protected-resource[/mcp]" --> P2
@@ -383,17 +383,17 @@ flowchart LR
 sequenceDiagram
     autonumber
     participant You as You (stdio, npm)
-    participant FT as FinTrack (new version)
-    participant DB as ~/.fintrack/fintrack.db
+    participant FT as PATTY (new version)
+    participant DB as ~/.patty/patty.db
     participant Cli as setup / auth setup
 
     You->>FT: first start after upgrading
     FT->>DB: migration 0018 pending on an existing DB?
-    FT->>DB: VACUUM INTO fintrack.db.pre-0018_auth_identity.bak under SQLite's write lock (encrypted, same key)
+    FT->>DB: VACUUM INTO patty.db.pre-0018_auth_identity.bak under SQLite's write lock (encrypted, same key)
     FT->>DB: migrations applied in the same transaction: create users / sessions / setup_codes + INSERT the owner (no credentials)
     Note over DB: no domain table touched — accounts, transactions … unchanged
     FT-->>You: auth is required by default, so /ui asks for a login, and the sidecar prints a setup code and the `auth setup` hint to stderr. The first stdio tool call answers "not signed in" (with the setup hint while the owner is unclaimed)
-    You->>Cli: npx @rafaelfcarneiro/fintrack@latest setup <client>  (or auth setup) — once
+    You->>Cli: npx @rfc0/patty@latest setup <client>  (or auth setup) — once
     Cli->>DB: UPDATE the existing owner row with your username and password hash (never an INSERT of a user)
     Note over You,DB: log in at /ui — it is the same database, so the same data. Nothing was copied or migrated. Then approve the client's sign-in link once (diagram 8)
 ```
@@ -401,7 +401,7 @@ sequenceDiagram
 ## 8. stdio sign-in (device flow)
 
 ADR-034 §3. Three parties and one database: the stdio **process** (spawned by the client), the person's **browser**, and
-FinTrack's HTTP surface (this process's sidecar, or another FinTrack process's on the same port — the grant is a database row, so
+PATTY's HTTP surface (this process's sidecar, or another PATTY process's on the same port — the grant is a database row, so
 either works). Nothing secret travels in a URL or a tool result: the link carries the **user code** only, and the **device
 code** that redeems it never leaves the asking process.
 
@@ -424,7 +424,7 @@ sequenceDiagram
     G->>G: device code = 256 random bits (returned once) · user code = 8 Crockford symbols, free among pending grants
     G->>DB: INSERT client_grant {sha256(device code), user code, status pending, expires in 10 min}
     G-->>S: device code (kept in memory) + ABCD-EFGH
-    S-->>C: isError result: "FinTrack: not signed in. Open ORIGIN/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH."
+    S-->>C: isError result: "PATTY: not signed in. Open ORIGIN/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH."
     Note over C,S: the next calls reuse the SAME pending request until it is answered or expires
 
     P->>R: GET /ui/connect?code=ABCD-EFGH
@@ -468,10 +468,10 @@ the **next call**; a failed lookup is "could not check", never a sign-out.
 flowchart TD
     A[Gated stdio request] --> B{Auth disabled?}
     B -- "yes (explicit)" --> Z["Owner, all scopes — no session exists"]
-    B -- no --> C{FINTRACK_TOKEN set?}
-    C -- yes --> D{"Shaped like ftk_… and valid?<br/>not revoked, not expired,<br/>owner enabled"}
+    B -- no --> C{PATTY_TOKEN set?}
+    C -- yes --> D{"Shaped like ptk_… and valid?<br/>not revoked, not expired,<br/>owner enabled"}
     D -- yes --> G["principal: the token's scopes, via stdio"]
-    D -- no --> E["Error: FINTRACK_TOKEN is not a valid access token<br/>NEVER a fallback to the keychain, never echoed"]
+    D -- no --> E["Error: PATTY_TOKEN is not a valid access token<br/>NEVER a fallback to the keychain, never echoed"]
     C -- no --> H{"Credential held in memory<br/>(this process's sign-in)?"}
     H -- yes --> I{Still valid?}
     I -- yes --> G
@@ -482,8 +482,8 @@ flowchart TD
     L -- yes --> G
     L -- no --> M[Delete the keychain entry]
     K -- no --> N
-    M --> N{"HTTP dashboard available?<br/>(FINTRACK_HTTP not false)"}
-    N -- no --> O["Not signed in: use fintrack login<br/>or set FINTRACK_TOKEN (no link)"]
+    M --> N{"HTTP dashboard available?<br/>(PATTY_HTTP not false)"}
+    N -- no --> O["Not signed in: use patty login<br/>or set PATTY_TOKEN (no link)"]
     N -- yes --> Q{"A pending request of ours<br/>still open?"}
     Q -- yes --> R[Poll it once: redeem]
     Q -- no --> T[startGrant — diagram 8]
@@ -497,7 +497,7 @@ flowchart TD
     Y --> AA["On shutdown: a 'this session only' sign-in is revoked (best effort,<br/>the 12-hour cap covers a crash)"]
 ```
 
-## 10. `fintrack login` and `logout`
+## 10. `patty login` and `logout`
 
 ```mermaid
 sequenceDiagram
@@ -515,7 +515,7 @@ sequenceDiagram
     Cli->>SS: where is /ui/connect?
     SS->>SS: start a temporary app on a free port of `localhost` (loopback only, its own cookie jar entry, authentication required, same database) — closed when the login ends
     SS-->>Cli: its origin (a server already running on HOST:PORT is not reused: it may have opened another database)
-    Cli->>G: startGrant {fintrack login, version, profile, channel cli, hint scope + duration}
+    Cli->>G: startGrant {patty login, version, profile, channel cli, hint scope + duration}
     Cli-->>Op: Open ORIGIN/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH. Waiting… (Ctrl-C cancels)
     Note over Op,DB: the person approves in the browser as in diagram 8 — "this session only" is not offered to a cli request
     loop every 2 s
@@ -545,7 +545,7 @@ The effects in diagrams 8–10 are executed by the interpreter; what to do next 
 
 ## 11. The sign-in protocol: states and observations
 
-ADR-034. The stdio session and `fintrack login` are two presenters over ONE protocol: `nextStep(state, observation, config)` in
+ADR-034. The stdio session and `patty login` are two presenters over ONE protocol: `nextStep(state, observation, config)` in
 `logic/auth/sign-in-flow.ts` is pure and returns the next state and the effects to run; `src/composition/sign-in/interpreter.ts` runs them and feeds
 each answer back as the next observation. The stdio session feeds `requested` (one per gated call), `ticked` (its poll timer while a request
 is open) and `closed`; `login` feeds `login_requested` then `ticked`, or `interrupted` after Ctrl-C; `logout` feeds `logout_requested`. For a stdio
@@ -577,7 +577,7 @@ The rules are decided once, in `nextStep`:
 
 | Rule | Where it shows |
 |---|---|
-| An environment token (`FINTRACK_TOKEN`) is the only credential: a malformed or invalid one is refused, never replaced by the keychain or a new request | `requested` with an env token → `check_credential(env)` only |
+| An environment token (`PATTY_TOKEN`) is the only credential: a malformed or invalid one is refused, never replaced by the keychain or a new request | `requested` with an env token → `check_credential(env)` only |
 | A saved credential found invalid is cleared from the keychain only if the keychain still holds it | `clear_saved_if(token)` — the interpreter loads, compares and clears |
 | "This session only" never reaches the keychain | `redeemed(signed_in)` with duration `session` → held `ephemeral`, no `save_credential` |
 | A keychain that refuses the sign-in: `login` takes it back, stdio keeps it in memory and revokes it at close | `saved(ok: false)` → `revoke_credential(keychain_refused)` (cli) / `ephemeral` (stdio) |
@@ -632,7 +632,7 @@ sequenceDiagram
         Ctl-->>Run: persist - UPDATE user (password hash, last login), UPDATE invite (used_at), INSERT session
         Run->>DB: one transaction, versioned - a concurrent claim of the same code conflicts, re-runs, finds it spent
         Run-->>I: the session token (in memory only)
-        I-->>P: 303 to /ui + Set-Cookie fintrack_session - signed in
+        I-->>P: 303 to /ui + Set-Cookie patty_session - signed in
     end
     Note over DB: the code exists in plaintext only on the admin's result page. The request log redacts the code query parameter
 ```

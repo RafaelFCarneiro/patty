@@ -138,7 +138,7 @@ const submitDecision = (pages: ConnectPages) => async (req: FastifyRequest, repl
 };
 
 /**
- * `/ui/connect` (ADR-034 §3): the consent page for a stdio (or `fintrack login`) sign-in. Browser HTML behind the
+ * `/ui/connect` (ADR-034 §3): the consent page for a stdio (or `patty login`) sign-in. Browser HTML behind the
  * session cookie and the hook's CSRF check — a link that merely carries a code grants nothing, and a bearer token can
  * never approve one. Thin: parse, throttle, run the `controllers/auth/grants.ts` flow, render a page. An unknown,
  * expired or already-answered code all read the same, and a run of them from one address is throttled.

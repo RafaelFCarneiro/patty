@@ -28,7 +28,7 @@ import {
 const INVALID_ROOT_MESSAGE = 'does not contain a JSON object at the root';
 
 const invalidConfigWarning = (path: string): string =>
-  `fintrack setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`;
+  `patty setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`;
 
 // The throwing system calls, wrapped once: everything below this block is Results.
 const readText = Result.fromThrowable((path: string) => readFileSync(path, 'utf8'), R.identity());
@@ -91,7 +91,7 @@ const claudeDesktopConfigPath = (): string => {
 
 type ConfigReport = Result<ClientSetupReport, ClientConfigFailure>;
 
-/** Reads the client's file, merges the FinTrack entry in, writes it back, and reports. */
+/** Reads the client's file, merges the PATTY entry in, writes it back, and reports. */
 const writeEntry = (
   configPath: string,
   merge: (existing: Record<string, unknown>, entry: Record<string, unknown>) => Record<string, unknown>,

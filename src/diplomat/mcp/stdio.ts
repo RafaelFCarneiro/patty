@@ -7,14 +7,14 @@ import { ownerGate, type PrincipalGate } from './gate.js';
 import { buildMcpServer } from './server.js';
 import { createStdioSession, type StdioSession } from './stdio-session.js';
 
-/** Who the stdio channel acts as: the owner under an explicit `FINTRACK_AUTH=disabled`, otherwise whoever signs in
+/** Who the stdio channel acts as: the owner under an explicit `PATTY_AUTH=disabled`, otherwise whoever signs in
  *  (ADR-034) — with the sign-in capability injected, as the CLI's `Shell.signIn` is. */
 export type StdioAuth =
   | { mode: typeof AuthMode.enum.disabled }
   | {
       mode: typeof AuthMode.enum.required;
       profile: string;
-      /** `FINTRACK_TOKEN`, when the process has one. */
+      /** `PATTY_TOKEN`, when the process has one. */
       envToken: string | undefined;
       signIn: (profile: string) => SignInInterpreter;
     };

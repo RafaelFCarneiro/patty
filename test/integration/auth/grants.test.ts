@@ -84,10 +84,10 @@ describe('startGrant', () => {
     expect(Date.parse(started.expiresAt) - Date.now()).toBeLessThanOrEqual(CLIENT_GRANT_TTL_MS);
   });
 
-  it('records what `fintrack login` would like pre-selected', async () => {
+  it('records what `patty login` would like pre-selected', async () => {
     const w = await world();
     await start(w, {
-      client: { name: 'fintrack login', version: '0' },
+      client: { name: 'patty login', version: '0' },
       profile: 'work',
       channel: GrantChannel.enum.cli,
       hint: { access: 'write', duration: '7d' },
@@ -149,7 +149,7 @@ describe('approveGrant / denyGrant', () => {
 
     expect(approved.isOk()).toBe(true);
     expect(await w.ctx.db.all(sql`SELECT status, user_id, scopes, duration FROM client_grants`)).toEqual([
-      { status: 'approved', user_id: OWNER_USER_ID, scopes: '["fintrack:read","fintrack:write"]', duration: '7d' },
+      { status: 'approved', user_id: OWNER_USER_ID, scopes: '["patty:read","patty:write"]', duration: '7d' },
     ]);
     expect(await w.ctx.db.all(sql`SELECT 1 FROM access_tokens`)).toEqual([]);
   });
@@ -246,11 +246,11 @@ describe('approveGrant / denyGrant', () => {
     expect(first.isOk()).toBe(true);
     expect(second._unsafeUnwrapErr()).toEqual(authErrors.invalidGrant);
     expect(await w.ctx.db.all(sql`SELECT scopes, duration FROM client_grants`)).toEqual([
-      { scopes: '["fintrack:read"]', duration: '24h' },
+      { scopes: '["patty:read"]', duration: '24h' },
     ]);
   });
 
-  it('refuses "this session only" for a request made by `fintrack login`, leaving it pending', async () => {
+  it('refuses "this session only" for a request made by `patty login`, leaving it pending', async () => {
     const w = await world();
     const started = await start(w, { ...STDIO_REQUEST, channel: GrantChannel.enum.cli });
     const answered = await w.run(() =>
@@ -300,8 +300,8 @@ describe('redeemGrant', () => {
 
     const result = signedIn((await w.run(() => redeemGrant(w.deps, started.deviceCode)))._unsafeUnwrap());
 
-    expect(result.token).toMatch(/^ftk_[A-Za-z0-9_-]{43}$/);
-    expect(result.scopes).toEqual(['fintrack:read', 'fintrack:write']);
+    expect(result.token).toMatch(/^ptk_[A-Za-z0-9_-]{43}$/);
+    expect(result.scopes).toEqual(['patty:read', 'patty:write']);
     expect(result.duration).toBe('7d');
     const rows = await w.ctx.db.all<Record<string, unknown>>(sql`SELECT * FROM access_tokens`);
     expect(rows).toHaveLength(1);
@@ -407,7 +407,7 @@ describe('redeemGrant', () => {
     const hash = w.deps.secrets.hashSecret(token);
 
     const viaStdio = (await w.run(() => authenticateToken(w.deps, hash, PrincipalVia.enum.stdio)))._unsafeUnwrap();
-    expect(viaStdio).toMatchObject({ via: 'stdio', scopes: ['fintrack:read', 'fintrack:write'] });
+    expect(viaStdio).toMatchObject({ via: 'stdio', scopes: ['patty:read', 'patty:write'] });
     expect((await w.run(() => authenticateToken(w.deps, hash)))._unsafeUnwrap()).toBeNull();
 
     const status = await w.ctx.app.inject({
@@ -618,7 +618,7 @@ describe('pruneExpiredGrants', () => {
 
     const after = await w.deps.clientGrants.lastRedeemed(OWNER_USER_ID, 'default', 'Claude Desktop');
     expect(after?.id).toBe(before?.id);
-    expect(after).toMatchObject({ scopes: ['fintrack:read', 'fintrack:write'], duration: '30d' });
+    expect(after).toMatchObject({ scopes: ['patty:read', 'patty:write'], duration: '30d' });
   });
 
   it('never touches a live pending or approved grant, whatever redeemed ones exist beside it', async () => {

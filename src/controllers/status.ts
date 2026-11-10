@@ -21,7 +21,7 @@ export const getStatus = async (deps: Deps, version: string): Promise<StatusOut>
       deps.instance.kind().catch(R.constant(DEFAULT_INSTANCE_KIND)),
     ]),
     ([db, locale, kind]) => ({
-      name: 'fintrack',
+      name: 'patty',
       version,
       db,
       locale,

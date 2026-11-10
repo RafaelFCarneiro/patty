@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# reset-local-db.sh — MANUAL dev convenience: delete the local FinTrack database.
+# reset-local-db.sh — MANUAL dev convenience: delete the local PATTY database.
 #
-# ⚠️  This permanently deletes your local fintrack.db (and its -wal/-shm sidecars).
+# ⚠️  This permanently deletes your local patty.db (and its -wal/-shm sidecars).
 #     It exists only so a developer can start from a clean seed (e.g. after the
 #     English-canonical category change, ADR-009). It is intentionally NOT wired
 #     into npm scripts, dev, test, or CI — run it by hand, on purpose, never as a
@@ -11,14 +11,14 @@
 # Usage:
 #   scripts/reset-local-db.sh            # asks for confirmation
 #   scripts/reset-local-db.sh --force    # skip the prompt (scripted use)
-#   DB_PATH=/abs/path/fintrack.db scripts/reset-local-db.sh
+#   DB_PATH=/abs/path/patty.db scripts/reset-local-db.sh
 #
 # The encryption key in the OS keychain is left untouched: a fresh DB is recreated,
 # encrypted with the same key, on the next server start.
 
 set -euo pipefail
 
-DB_PATH="${DB_PATH:-$HOME/.fintrack/fintrack.db}"
+DB_PATH="${DB_PATH:-$HOME/.patty/patty.db}"
 FORCE=0
 [[ "${1:-}" == "--force" ]] && FORCE=1
 
@@ -27,7 +27,7 @@ if [[ ! -f "$DB_PATH" ]]; then
   exit 0
 fi
 
-echo "About to delete the local FinTrack database:"
+echo "About to delete the local PATTY database:"
 echo "  $DB_PATH"
 echo "  (plus ${DB_PATH}-wal and ${DB_PATH}-shm if present)"
 

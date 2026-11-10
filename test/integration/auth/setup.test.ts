@@ -113,7 +113,7 @@ describe('setup code issuance', () => {
   });
 
   it('issues no code when auth is disabled', async () => {
-    const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
+    const ctx = await createApp({ auth: { PATTY_AUTH: AuthMode.enum.disabled } });
     expect(ctx.announced).toEqual([]);
     expect(await ctx.db.all(sql`SELECT 1 FROM setup_codes`)).toEqual([]);
   });
@@ -123,7 +123,7 @@ describe('setup code issuance', () => {
     await ctx.db.run(sql`DELETE FROM setup_codes`);
     const announced: string[] = [];
     const prepared = await prepareAuth(
-      { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', FINTRACK_HTTP: false },
+      { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', PATTY_HTTP: false },
       ctx.db,
       ctx.authRunEffects,
     );
@@ -190,12 +190,12 @@ describe('issuing and announcing the setup code', () => {
     const ctx = await createApp();
     const announced: string[] = [];
     const prepared = await prepareAuth(
-      { ...REQUIRED_AUTH, PUBLIC_URL: 'https://fintrack.example.com' },
+      { ...REQUIRED_AUTH, PUBLIC_URL: 'https://patty.example.com' },
       ctx.db,
       ctx.authRunEffects,
     );
     await prepared.issueAndAnnounceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
-    expect(announced[0]).toContain('https://fintrack.example.com/ui/setup');
+    expect(announced[0]).toContain('https://patty.example.com/ui/setup');
     expect(announced[0]).not.toContain('127.0.0.1');
   });
 });
@@ -308,7 +308,7 @@ describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () =>
   it('hands the stdio session its identity deps when auth is required, even with no HTTP server', async () => {
     const ctx = await createApp();
     const prepared = await prepareAuth(
-      { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', FINTRACK_HTTP: false },
+      { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', PATTY_HTTP: false },
       ctx.db,
       ctx.authRunEffects,
     );
@@ -320,7 +320,7 @@ describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () =>
   it('also does so beside the HTTP sidecar, which then guards its own surface', async () => {
     const ctx = await createApp();
     const prepared = await prepareAuth(
-      { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', FINTRACK_HTTP: true },
+      { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', PATTY_HTTP: true },
       ctx.db,
       ctx.authRunEffects,
     );
@@ -328,10 +328,10 @@ describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () =>
     expect(prepared.auth.mode).toBe(AuthMode.enum.required);
   });
 
-  it('gives stdio nothing under an explicit FINTRACK_AUTH=disabled — it acts as the owner', async () => {
+  it('gives stdio nothing under an explicit PATTY_AUTH=disabled — it acts as the owner', async () => {
     const ctx = await createApp();
     const prepared = await prepareAuth(
-      { ...REQUIRED_AUTH, FINTRACK_AUTH: AuthMode.enum.disabled, MCP_TRANSPORT: 'stdio' },
+      { ...REQUIRED_AUTH, PATTY_AUTH: AuthMode.enum.disabled, MCP_TRANSPORT: 'stdio' },
       ctx.db,
       ctx.authRunEffects,
     );
@@ -363,13 +363,13 @@ describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () =>
     expect(kept.map((grant) => grant.id)).toEqual(['live-pending', 'stale-redeemed']);
   });
 
-  it('never prunes anything under an explicit FINTRACK_AUTH=disabled', async () => {
+  it('never prunes anything under an explicit PATTY_AUTH=disabled', async () => {
     const ctx = await createApp();
     await ctx.db.run(
       sql`INSERT INTO client_grants (id, device_code_hash, user_code, client_name, client_version, profile, channel, status, created_at, expires_at, version)
           VALUES ('old', 'h', 'AAAAAAAA', 'c', '1', 'default', 'stdio', 'pending', '2020-01-01T00:00:00.000Z', '2020-01-01T00:10:00.000Z', 0)`,
     );
-    await prepareAuth({ ...REQUIRED_AUTH, FINTRACK_AUTH: AuthMode.enum.disabled }, ctx.db, ctx.authRunEffects);
+    await prepareAuth({ ...REQUIRED_AUTH, PATTY_AUTH: AuthMode.enum.disabled }, ctx.db, ctx.authRunEffects);
     expect(await ctx.db.all(sql`SELECT 1 FROM client_grants`)).toHaveLength(1);
   });
 });

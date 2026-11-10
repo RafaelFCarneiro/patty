@@ -41,7 +41,7 @@ import { DEFAULT_SIGN_IN_CAP, SignInCap } from '../../../../src/models/auth/user
 
 const HOUR_MS = 60 * 60 * 1000;
 
-const READ = 'fintrack:read' as const;
+const READ = 'patty:read' as const;
 
 const NOW = new Date('2026-10-11T12:00:00.000Z');
 
@@ -74,7 +74,7 @@ const approved = (overrides: Partial<ClientGrantEntity> = {}): ClientGrantEntity
   ...overrides,
 });
 
-const WRITE = 'fintrack:write' as const;
+const WRITE = 'patty:write' as const;
 
 describe('signInExpiry — absolute from approval, never past the maximum', () => {
   const approvedAt = '2026-10-11T12:00:00.000Z';
@@ -107,7 +107,7 @@ describe('duration policy', () => {
     for (const duration of ['24h', '7d', '30d'] as const) expect(persistsToKeychain(duration)).toBe(true);
   });
 
-  it('offers "this session only" to a stdio client and never to `fintrack login`', () => {
+  it('offers "this session only" to a stdio client and never to `patty login`', () => {
     expect(durationAllowedFor(GrantChannel.enum.stdio, SignInDuration.enum.session)).toBe(true);
     expect(durationAllowedFor(GrantChannel.enum.cli, SignInDuration.enum.session)).toBe(false);
     expect(durationAllowedFor(GrantChannel.enum.cli, SignInDuration.enum['7d'])).toBe(true);
@@ -150,7 +150,7 @@ describe('grant state transitions', () => {
         deviceCodeHash: 'h',
         userCode: 'ABCDEFGH',
         input: {
-          client: { name: 'fintrack login', version: '1' },
+          client: { name: 'patty login', version: '1' },
           profile: 'work',
           channel: GrantChannel.enum.cli,
           hint: { access: 'write', duration: SignInDuration.enum['7d'] },
@@ -279,7 +279,7 @@ describe('the sign-in token a redeemed grant becomes', () => {
   })();
 
   it('is a stdio-kind token that carries the client, profile and scopes, and expires after the chosen duration', () => {
-    const token = newStdioSignIn({ id: 't1', tokenHash: 'sha(x)', prefix: 'ftk_abcdef', grant }, NOW);
+    const token = newStdioSignIn({ id: 't1', tokenHash: 'sha(x)', prefix: 'ptk_abcdef', grant }, NOW);
     expect(token).toMatchObject({
       kind: AccessTokenKind.enum.stdio,
       clientName: 'Claude Desktop',
@@ -458,21 +458,21 @@ describe('the instance cap on sign-in durations', () => {
 });
 
 describe('signedIn — the answer to a redemption that minted', () => {
-  const principal: Principal = { userId: 'u1', role: 'member', scopes: ['fintrack:read'], via: 'stdio' };
+  const principal: Principal = { userId: 'u1', role: 'member', scopes: ['patty:read'], via: 'stdio' };
 
   it("carries the one-time token, the new sign-in's id, scopes and expiry, and who it acts as", () => {
     expect(
       signedIn(
-        'ftk_secret',
-        { id: 't1', scopes: ['fintrack:read'], expiresAt: '2026-10-12T12:01:00.000Z' },
+        'ptk_secret',
+        { id: 't1', scopes: ['patty:read'], expiresAt: '2026-10-12T12:01:00.000Z' },
         principal,
         SignInDuration.enum['24h'],
       ),
     ).toEqual({
       kind: 'signed_in',
-      token: 'ftk_secret',
+      token: 'ptk_secret',
       tokenId: 't1',
-      scopes: ['fintrack:read'],
+      scopes: ['patty:read'],
       principal,
       duration: '24h',
       expiresAt: '2026-10-12T12:01:00.000Z',

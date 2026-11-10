@@ -34,7 +34,7 @@ const truncateJournalBefore0011 = (folder: string): void => {
 };
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-dashboard-migration-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-dashboard-migration-'));
   dbPath = join(tmpDir, 'migration.db');
 
   // A copy of the real migrations folder with 0011's journal entry (and everything after) removed,
@@ -52,10 +52,10 @@ afterEach(() => {
 const openOpts = () => ({
   DB_PATH: dbPath,
   KEY_LOCK_PATH: keyLockPathForTest(),
-  FINTRACK_DB_KEY: TEST_KEY,
+  PATTY_DB_KEY: TEST_KEY,
   PORT: 3001,
   MCP_TRANSPORT: McpTransport.enum.http,
-  FINTRACK_HTTP: true,
+  PATTY_HTTP: true,
 });
 
 describe('migration 0011 — dashboards id normalization', () => {

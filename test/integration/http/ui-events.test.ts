@@ -16,7 +16,7 @@ let app: FastifyInstance;
 let baseUrl: string;
 
 beforeAll(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sse-test-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-sse-test-'));
   const ctx = await buildApp({ dbPath: join(tmpDir, 'test.db') });
   app = ctx.app;
   await app.listen({ port: 0, host: LOOPBACK_HOST });
@@ -121,7 +121,7 @@ describe('GET /ui/events (ADR-027 Phase 3 — SSE live update)', () => {
   });
 
   it('app.close() does not hang on an SSE connection the client never closed (forceCloseConnections)', async () => {
-    const isolatedTmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sse-shutdown-test-'));
+    const isolatedTmpDir = mkdtempSync(join(tmpdir(), 'patty-sse-shutdown-test-'));
     const ctx = await buildApp({ dbPath: join(isolatedTmpDir, 'test.db') });
     await ctx.app.listen({ port: 0, host: LOOPBACK_HOST });
     const port = (ctx.app.server.address() as AddressInfo).port;

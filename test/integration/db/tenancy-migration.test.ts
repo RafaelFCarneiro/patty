@@ -42,11 +42,11 @@ const journalBeforeTenancy = (folder: string): void => {
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
 
-const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
+const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: TEST_KEY });
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-tenancy-migration-'));
-  dbPath = join(tmpDir, 'fintrack.db');
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-tenancy-migration-'));
+  dbPath = join(tmpDir, 'patty.db');
   preTenancyFolder = join(tmpDir, 'pre-tenancy-migrations');
   cpSync(REAL_MIGRATIONS_FOLDER, preTenancyFolder, { recursive: true });
   journalBeforeTenancy(preTenancyFolder);
@@ -294,7 +294,7 @@ describe('migration 0021 — tenancy data', () => {
     const copy = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: backup,
-      FINTRACK_DB_KEY: TEST_KEY,
+      PATTY_DB_KEY: TEST_KEY,
     });
     expect(await countOf(copy, 'transactions')).toBe(2);
     expect(await copy.all(sql`SELECT name FROM pragma_table_info('transactions') WHERE name = 'user_id'`)).toEqual([]);

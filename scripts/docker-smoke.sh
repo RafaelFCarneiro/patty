@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Smoke-test a built FinTrack image the way compose.yaml runs it: key as a mounted file, read-only
+# Smoke-test a built PATTY image the way compose.yaml runs it: key as a mounted file, read-only
 # root + tmpfs /tmp, /data on a volume, published on host loopback only (ADR-032), with sessions required
 # (ADR-033): the setup code is read from the container log and claims the owner, and personal access tokens
 # (created through the session) authenticate /api and /mcp.
-# Usage: scripts/docker-smoke.sh [image]   (default: fintrack:ci)
+# Usage: scripts/docker-smoke.sh [image]   (default: patty:ci)
 set -euo pipefail
 
-IMAGE="${1:-fintrack:ci}"
+IMAGE="${1:-patty:ci}"
 SUFFIX="$$"
-NAME="fintrack-smoke-$SUFFIX"
-VOLUME="fintrack-smoke-data-$SUFFIX"
+NAME="patty-smoke-$SUFFIX"
+VOLUME="patty-smoke-data-$SUFFIX"
 WORKDIR="$(mktemp -d)"
-KEY_FILE="$WORKDIR/fintrack_db_key"
+KEY_FILE="$WORKDIR/patty_db_key"
 
 cleanup() {
   docker rm -f "$NAME" "$NAME-nokey" >/dev/null 2>&1 || true
@@ -31,8 +31,8 @@ run_container() {
   docker run -d --name "$NAME" \
     -p 127.0.0.1::51737 \
     -v "$VOLUME":/data \
-    -v "$KEY_FILE":/run/secrets/fintrack_db_key:ro \
-    -e FINTRACK_DB_KEY_FILE=/run/secrets/fintrack_db_key \
+    -v "$KEY_FILE":/run/secrets/patty_db_key:ro \
+    -e PATTY_DB_KEY_FILE=/run/secrets/patty_db_key \
     --read-only --tmpfs /tmp \
     --cap-drop ALL --security-opt no-new-privileges:true \
     "$IMAGE" >/dev/null
@@ -91,7 +91,7 @@ echo "== POST /ui/setup claims the owner and starts a session"
 SETUP_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' -c "$COOKIE_JAR" -H "Origin: $BASE" -X POST "$BASE/ui/setup" \
   --data-urlencode "code=$SETUP_CODE" --data-urlencode "username=$SMOKE_USER" --data-urlencode "password=$SMOKE_PASSWORD")"
 [ "$SETUP_STATUS" = "303" ] || fail "/ui/setup returned $SETUP_STATUS, expected 303"
-SESSION_TOKEN="$(awk '$6=="fintrack_session"{print $7}' "$COOKIE_JAR")"
+SESSION_TOKEN="$(awk '$6=="patty_session"{print $7}' "$COOKIE_JAR")"
 [ -n "$SESSION_TOKEN" ] || fail "setup set no session cookie"
 
 echo "== with the session cookie and a matching Origin: /api/status, /ui and /mcp work"
@@ -112,7 +112,7 @@ echo "== create an account"
   || fail "account creation not 201"
 
 echo "== personal access tokens: minted through the session, shown once, usable as a bearer on /api and /mcp"
-TOKEN_PATTERN='ftk_[A-Za-z0-9_-]{43}'
+TOKEN_PATTERN='ptk_[A-Za-z0-9_-]{43}'
 mint_token() { # name, access (read|write) -> prints the plaintext token
   authed -fsS -X POST "$BASE/ui/access/tokens" \
     --data-urlencode "password=$SMOKE_PASSWORD" --data-urlencode "name=$1" --data-urlencode "access=$2" --data-urlencode "expiry=30" | grep -oE "$TOKEN_PATTERN" | head -n1
@@ -137,7 +137,7 @@ CALL_CREATE='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"cre
 [ "$(mcp_status "$READ_TOKEN" "$INIT")" = "200" ] && grep '"result"' "$WORKDIR/body" >/dev/null || fail "/mcp initialize with a read token failed"
 [ "$(mcp_status "$READ_TOKEN" "$CALL_LIST")" = "200" ] && grep -F 'Smoke' "$WORKDIR/body" >/dev/null || fail "a read tool with a read token failed"
 [ "$(mcp_status "$READ_TOKEN" "$CALL_CREATE")" = "403" ] || fail "a write tool with a read token was not 403"
-grep -i '^www-authenticate:.*error="insufficient_scope".*scope="fintrack:write"' "$HEADERS_FILE" >/dev/null \
+grep -i '^www-authenticate:.*error="insufficient_scope".*scope="patty:write"' "$HEADERS_FILE" >/dev/null \
   || fail "403 lacks the insufficient_scope challenge"
 [ "$(mcp_status "$WRITE_TOKEN" "$CALL_CREATE")" = "200" ] || fail "a write tool with a write token failed"
 authed -fsS "$BASE/api/accounts" | grep '"ViaMcp"' >/dev/null || fail "the write token's account is missing"
@@ -149,7 +149,7 @@ authed -fsS "$BASE/api/accounts" | grep '"ViaMcp"' >/dev/null || fail "the write
   || fail "creating a token without the right password was not refused"
 
 echo "== a bad bearer never falls back to the session cookie"
-[ "$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -H "Origin: $BASE" -H 'Authorization: Bearer ftk_nope' "$BASE/api/status")" = "401" ] \
+[ "$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -H "Origin: $BASE" -H 'Authorization: Bearer ptk_nope' "$BASE/api/status")" = "401" ] \
   || fail "a bad bearer fell back to the cookie"
 
 echo "== no credential: 401 with a resource_metadata URL that resolves"

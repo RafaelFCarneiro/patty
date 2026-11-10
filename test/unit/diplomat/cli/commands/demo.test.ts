@@ -14,7 +14,7 @@ import {
 } from '../../../../../src/models/demo/core.js';
 import { unusedExporter, unusedImporter } from '../../../fixtures/exporter.js';
 
-const DATABASE_PATH = '/home/x/.fintrack/demo.db';
+const DATABASE_PATH = '/home/x/.patty/demo.db';
 const PREPARED: DemoPrepared = {
   status: DemoSeedStatus.enum.seeded,
   databasePath: DATABASE_PATH,
@@ -40,7 +40,7 @@ const rig = (prepared: Result<DemoPrepared, DemoFailure>, served: Result<void, D
   return { io, out, err, prepare, serve };
 };
 
-describe('fintrack demo', () => {
+describe('patty demo', () => {
   it('prepares the demo, says what it is and where the dashboards are, then serves', async () => {
     const { io, out, err, prepare, serve } = rig(ok(PREPARED));
     expect(await runCli(['demo'], io)).toBe(0);
@@ -93,7 +93,7 @@ describe('fintrack demo', () => {
     [DemoFailureCode.enum.start_failed, /could not start: boom/],
     [
       DemoFailureCode.enum.not_demo,
-      /not a demo database.*left alone.*If a FinTrack demo is running \(an AI client's fintrack-demo server\), stop it and retry/,
+      /not a demo database.*left alone.*If a PATTY demo is running \(an AI client's patty-demo server\), stop it and retry/,
     ],
     [DemoFailureCode.enum.interrupted, /not fully seeded.*demo --reset/],
     [DemoFailureCode.enum.seed_failed, /seeding the demo failed: boom/],

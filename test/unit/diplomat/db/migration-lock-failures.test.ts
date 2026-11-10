@@ -36,7 +36,7 @@ describe('withMigrationLock — failure paths', () => {
     });
     const work = vi.fn();
 
-    await expect(withMigrationLock('/data/fintrack.db', work)).rejects.toBe(failure);
+    await expect(withMigrationLock('/data/patty.db', work)).rejects.toBe(failure);
     expect(execute.mock.calls.filter(([sql]) => sql === 'BEGIN EXCLUSIVE')).toHaveLength(1);
     expect(work).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledOnce();
@@ -50,12 +50,12 @@ describe('withMigrationLock — failure paths', () => {
     });
     const work = vi.fn();
 
-    const outcome = failureOf(withMigrationLock('/data/fintrack.db', work));
+    const outcome = failureOf(withMigrationLock('/data/patty.db', work));
     await vi.advanceTimersByTimeAsync(61_000);
     const failure = await outcome;
 
     expect(failure.message).toBe(
-      'fintrack: another FinTrack process has held the migration lock (/data/fintrack.db.migrate.lock) for over 60s. ' +
+      'patty: another PATTY process has held the migration lock (/data/patty.db.migrate.lock) for over 60s. ' +
         'Stop it and retry.',
     );
     expect(failure.cause).toBe(lastBusy);

@@ -1,5 +1,5 @@
 import { CliCommand } from '../../wire/in/cli.js';
-import { NPX_COMMAND } from '../../models/package.js';
+import { NPX_COMMAND, PRODUCT_NAME } from '../../models/package.js';
 import { runAuthCommand } from './commands/auth.js';
 import { runDbCommand } from './commands/db.js';
 import { runDemoCommand } from './commands/demo.js';
@@ -24,9 +24,9 @@ Commands:
   users <command>  Manage who can sign in: list, invite, reissue, disable, enable, role
   key <command>    Move the database key between installs (export --to <file>, import --from <file>)
   db <command>     Move an encrypted snapshot of the database between installs (export --to, import --from)
-  demo             Try FinTrack on throwaway sample data, on its own port (--country, --reset)
+  demo             Try ${PRODUCT_NAME} on throwaway sample data, on its own port (--country, --reset)
 
-The setup, auth, users, key and db commands print their own help when run with no arguments. With no command at all, FinTrack runs as an MCP server (stdio).
+The setup, auth, users, key and db commands print their own help when run with no arguments. With no command at all, ${PRODUCT_NAME} runs as an MCP server (stdio).
 `.trimStart();
 
 type CommandRunner = (rest: readonly string[], io: CliIo) => Promise<number>;

@@ -46,8 +46,8 @@ export const authErrors = {
   // Token management is for a person at a browser, never for a bearer token.
   sessionRequired: { code: 'session_required' } satisfies AuthError,
   unknownToken: (id: string): AuthError => ({ code: 'unknown_token', id }),
-  // A `fintrack login` request has no "session" to tie a sign-in to.
-  sessionDurationRefused: validation(['a sign-in requested by `fintrack login` cannot last "this session only"']),
+  // A `patty login` request has no "session" to tie a sign-in to.
+  sessionDurationRefused: validation(['a sign-in requested by `patty login` cannot last "this session only"']),
   // Unknown, expired, denied, already-approved or already-redeemed: indistinguishable, like a setup code.
   invalidGrant: { code: 'invalid_grant' } satisfies AuthError,
   // User management is for signed-in admins; to anyone else it reads as a page that does not exist.

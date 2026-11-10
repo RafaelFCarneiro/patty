@@ -10,7 +10,7 @@ describe('startupRefusalMessage', () => {
 
   it('names the database a demo process refused, and how to create the demo', () => {
     const message = startupRefusalMessage(demoNotReady('/x/demo.db'));
-    expect(message).toContain('FINTRACK_DEMO');
+    expect(message).toContain('PATTY_DEMO');
     expect(message).toContain('/x/demo.db');
     expect(message).toMatch(/demo$/);
   });

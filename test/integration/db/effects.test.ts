@@ -107,11 +107,11 @@ const isTransientContention = isSqliteBusy;
 const conflictError = (): AppError => conflict;
 
 beforeEach(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-uow-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'patty-uow-'));
   db = await openDatabase({
     KEY_LOCK_PATH: keyLockPathForTest(),
     DB_PATH: join(tmpDir, 'uow.db'),
-    FINTRACK_DB_KEY: TEST_KEY,
+    PATTY_DB_KEY: TEST_KEY,
   });
   runner = createTransactionRunner(db);
   await bootstrap(db);

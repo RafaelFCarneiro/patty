@@ -32,7 +32,7 @@ describe('applyPendingMigrationsHolding — failure paths', () => {
       (cause: unknown) => cause as Error,
     );
 
-    expect(failure.message).toContain('another FinTrack process is writing to the database');
+    expect(failure.message).toContain('another PATTY process is writing to the database');
     expect(failure.cause).toBe(busy);
   });
 

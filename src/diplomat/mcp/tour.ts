@@ -1,7 +1,7 @@
 import { DEMO_SERVER_NAME } from '../../models/demo/core.js';
 import { InstanceKind } from '../../models/instance.js';
 import { Locale } from '../../models/locale.js';
-import { NPX_COMMAND } from '../../models/package.js';
+import { NPX_COMMAND, PRODUCT_NAME } from '../../models/package.js';
 import type { TourContext, TourStatementDated } from '../../models/demo/tour.js';
 import { ToolName } from './tool-name.js';
 
@@ -30,7 +30,7 @@ const DEMO_COMMAND = `${NPX_COMMAND} demo`;
 const TOUR_COPY = {
   [Locale.enum.en]: {
     intro:
-      'You are guiding the person through a short tour of FinTrack on its sample data. Do the six steps in order, one ' +
+      `You are guiding the person through a short tour of ${PRODUCT_NAME} on its sample data. Do the six steps in order, one ` +
       'at a time: run the tools, tell them what you found in a few sentences, and wait for them before the next step. ' +
       `Group every figure by currency and never sum across currencies.`,
     balances: `What are my balances? Call ${T.get_account_balances} (accounts and cards, and the total converted to the base currency).`,
@@ -45,17 +45,17 @@ const TOUR_COPY = {
       `data but untagged and spread over several categories and accounts: find it with ${T.search_transactions} by dates ` +
       `and descriptions, create the tag with ${T.create_tag}, tag the purchases, then build the dashboard with ${T.save_dashboard}.`,
     closing:
-      `Ready for your own data? Tell them how to install FinTrack for real, and that this demo is sample data. To remove ` +
+      `Ready for your own data? Tell them how to install ${PRODUCT_NAME} for real, and that this demo is sample data. To remove ` +
       `the demo from their AI client: \`${REMOVE_DEMO}\`.`,
     step: (n) => `Step ${n}`,
     notDemo:
-      'The tour is for the FinTrack demo, and this server holds real data, so do not run it here. Tell the person to ' +
+      `The tour is for the ${PRODUCT_NAME} demo, and this server holds real data, so do not run it here. Tell the person to ` +
       `start the demo with \`${DEMO_COMMAND}\` and to add it to their AI client with \`${SETUP_DEMO}\`, then run the ` +
       `tour prompt on the \`${DEMO_SERVER_NAME}\` server.`,
   },
   [Locale.enum.pt]: {
     intro:
-      'Você vai guiar a pessoa por um tour curto do FinTrack com dados de exemplo. Faça os seis passos em ordem, um ' +
+      `Você vai guiar a pessoa por um tour curto do ${PRODUCT_NAME} com dados de exemplo. Faça os seis passos em ordem, um ` +
       'de cada vez: execute as ferramentas, conte em poucas frases o que encontrou e espere a pessoa antes do passo ' +
       'seguinte. Agrupe todo valor por moeda e nunca some moedas diferentes.',
     balances: `Quais são meus saldos? Chame ${T.get_account_balances} (contas e cartões, e o total convertido para a moeda base).`,
@@ -70,17 +70,17 @@ const TOUR_COPY = {
       `dados, sem tag e espalhada por várias categorias e contas: encontre-a com ${T.search_transactions} por datas ` +
       `e descrições, crie a tag com ${T.create_tag}, marque as compras e monte o dashboard com ${T.save_dashboard}.`,
     closing:
-      `Pronto para os seus dados? Explique como instalar o FinTrack de verdade e que esta demo é de exemplo. Para ` +
+      `Pronto para os seus dados? Explique como instalar o ${PRODUCT_NAME} de verdade e que esta demo é de exemplo. Para ` +
       `remover a demo do cliente de IA: \`${REMOVE_DEMO}\`.`,
     step: (n) => `Passo ${n}`,
     notDemo:
-      'O tour é da demo do FinTrack e este servidor guarda dados reais, então não o execute aqui. Diga à pessoa para ' +
+      `O tour é da demo do ${PRODUCT_NAME} e este servidor guarda dados reais, então não o execute aqui. Diga à pessoa para ` +
       `iniciar a demo com \`${DEMO_COMMAND}\` e adicioná-la ao cliente de IA com \`${SETUP_DEMO}\`, e então rodar o ` +
       `prompt tour no servidor \`${DEMO_SERVER_NAME}\`.`,
   },
   [Locale.enum.es]: {
     intro:
-      'Vas a guiar a la persona por un tour corto de FinTrack con datos de ejemplo. Haz los seis pasos en orden, de ' +
+      `Vas a guiar a la persona por un tour corto de ${PRODUCT_NAME} con datos de ejemplo. Haz los seis pasos en orden, de ` +
       'uno en uno: ejecuta las herramientas, cuenta en pocas frases lo que encontraste y espera a la persona antes del ' +
       'siguiente paso. Agrupa cada cifra por moneda y nunca sumes monedas distintas.',
     balances: `¿Cuáles son mis saldos? Llama a ${T.get_account_balances} (cuentas y tarjetas, y el total convertido a la moneda base).`,
@@ -95,11 +95,11 @@ const TOUR_COPY = {
       `datos, sin etiqueta y repartido en varias categorías y cuentas: encuéntralo con ${T.search_transactions} por fechas ` +
       `y descripciones, crea la etiqueta con ${T.create_tag}, etiqueta las compras y arma el dashboard con ${T.save_dashboard}.`,
     closing:
-      `¿Listo para tus datos? Explica cómo instalar FinTrack de verdad y que esta demo es de ejemplo. Para quitar la ` +
+      `¿Listo para tus datos? Explica cómo instalar ${PRODUCT_NAME} de verdad y que esta demo es de ejemplo. Para quitar la ` +
       `demo del cliente de IA: \`${REMOVE_DEMO}\`.`,
     step: (n) => `Paso ${n}`,
     notDemo:
-      'El tour es de la demo de FinTrack y este servidor guarda datos reales, así que no lo ejecutes aquí. Dile a la ' +
+      `El tour es de la demo de ${PRODUCT_NAME} y este servidor guarda datos reales, así que no lo ejecutes aquí. Dile a la ` +
       `persona que inicie la demo con \`${DEMO_COMMAND}\` y la agregue a su cliente de IA con \`${SETUP_DEMO}\`, y ` +
       `luego ejecute el prompt tour en el servidor \`${DEMO_SERVER_NAME}\`.`,
   },

@@ -115,7 +115,7 @@ export const loadFragment = (
   sandbox.window = sandbox;
   sandbox.location = { pathname: `/ui/${name}`, search: '' };
   sandbox.history = { pushState() {} };
-  sandbox.__fintrackCurrencies = currencyMetadata;
+  sandbox.__appCurrencies = currencyMetadata;
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });

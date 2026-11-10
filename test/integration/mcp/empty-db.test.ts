@@ -46,11 +46,11 @@ let runner: ReturnType<typeof createTransactionRunner>;
 
 describe('empty DB (ADR-008)', () => {
   beforeAll(async () => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-empty-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'patty-empty-'));
     db = await openDatabase({
       KEY_LOCK_PATH: keyLockPathForTest(),
       DB_PATH: join(tmpDir, 'empty.db'),
-      FINTRACK_DB_KEY: TEST_KEY,
+      PATTY_DB_KEY: TEST_KEY,
     });
     runner = createTransactionRunner(db);
     await migrate(db, { migrationsFolder: MIGRATIONS });
