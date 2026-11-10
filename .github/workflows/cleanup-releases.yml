@@ -28,10 +28,11 @@ jobs:
             ''|*[!0-9]*) KEEP=10 ;;
           esac
 
+          # Only patty-v* releases are pruned: the v4.x FinTrack releases and tags are history and stay.
           gh release list \
             --repo "$GITHUB_REPOSITORY" \
             --limit 200 \
             --json tagName \
-            --jq ".[${KEEP}:][].tagName" \
+            --jq "map(select(.tagName | startswith(\"patty-v\"))) | .[${KEEP}:][].tagName" \
           | xargs -r -I{} sh -c \
             'gh release delete {} --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag && echo "Deleted release + tag: {}"'
