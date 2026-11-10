@@ -3,6 +3,7 @@ import type { SqlReader } from './tenancy-integrity.js';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { assertBusyTimeout, type Db } from './driver.js';
 import { isSqliteBusy } from './sqlite-errors.js';
+import { LOG_PREFIX, PRODUCT_NAME } from '../../models/package.js';
 
 export const MIGRATIONS_TABLE = '__drizzle_migrations';
 
@@ -67,7 +68,7 @@ const openWriteBarrier = async (client: Client) => {
   } catch (cause) {
     if (!isSqliteBusy(cause)) throw cause;
     throw new Error(
-      'patty: cannot start the database upgrade — another PATTY process is writing to the database. ' +
+      `${LOG_PREFIX} cannot start the database upgrade — another ${PRODUCT_NAME} process is writing to the database. ` +
         'Stop it (or wait for it to finish) and start again.',
       { cause },
     );

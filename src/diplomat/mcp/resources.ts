@@ -8,6 +8,7 @@ import { listTags } from '../../controllers/tags.js';
 import { DEFAULT_TOP_MERCHANTS_LIMIT } from '../../models/merchant.js';
 import type { ResourceDefinition } from './definition.js';
 import { jsonResource } from './respond.js';
+import { PRODUCT_NAME } from '../../models/package.js';
 
 const openapiDescription =
   'OpenAPI 3.0 document for the REST API (GET /api/openapi.json mirrors this). ' +
@@ -16,7 +17,7 @@ const openapiDescription =
 const openApiResource = (openApiDocument: unknown): ResourceDefinition => ({
   name: 'openapi',
   uri: 'patty://openapi',
-  config: { title: 'PATTY OpenAPI contract', description: openapiDescription, mimeType: 'application/json' },
+  config: { title: `${PRODUCT_NAME} OpenAPI contract`, description: openapiDescription, mimeType: 'application/json' },
   read: async (uri) => jsonResource(uri, openApiDocument),
 });
 
@@ -57,7 +58,7 @@ const currenciesResource: ResourceDefinition = {
 
 const exchangeRatesDescription =
   'All cached exchange rates, each with its own as_of — the same data list_exchange_rates returns. ' +
-  'PATTY never fetches rates itself (local-first, ADR-026); read this to see which pairs are ' +
+  `${PRODUCT_NAME} never fetches rates itself (local-first, ADR-026); read this to see which pairs are ` +
   'cached and how fresh they are before deciding whether to refresh via set_exchange_rate(s).';
 
 const exchangeRatesResource: ResourceDefinition = {

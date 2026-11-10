@@ -31,6 +31,7 @@ import {
   USER_ENTITY_TAG,
 } from '../models/auth/entity.js';
 import { AuthMode } from '../models/auth/mode.js';
+import { LOG_PREFIX } from '../models/package.js';
 
 /**
  * Lazily imports the credential primitives so `@node-rs/argon2`'s native module is never loaded unless
@@ -118,11 +119,13 @@ const NO_SETUP_TO_ISSUE: PreparedAuth['issueAndAnnounceSetup'] = async () => und
 const housekeeping = async (run: RunEffects, deps: AuthDeps): Promise<void> => {
   const sessions = await run(() => pruneExpiredSessions(deps));
   if (sessions.isErr())
-    throw new Error(`patty: could not prune expired sessions — ${formatAppError(sessions.error)}`);
+    throw new Error(`${LOG_PREFIX} could not prune expired sessions — ${formatAppError(sessions.error)}`);
   const grants = await run(() => pruneExpiredGrants(deps));
-  if (grants.isErr()) throw new Error(`patty: could not prune expired sign-ins — ${formatAppError(grants.error)}`);
+  if (grants.isErr())
+    throw new Error(`${LOG_PREFIX} could not prune expired sign-ins — ${formatAppError(grants.error)}`);
   const invites = await run(() => pruneExpiredInvites(deps));
-  if (invites.isErr()) throw new Error(`patty: could not prune expired invites — ${formatAppError(invites.error)}`);
+  if (invites.isErr())
+    throw new Error(`${LOG_PREFIX} could not prune expired invites — ${formatAppError(invites.error)}`);
 };
 
 export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEffects): Promise<PreparedAuth> => {
@@ -154,7 +157,8 @@ export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEff
     stdio,
     issueAndAnnounceSetup: async (boundOrigin, announce = console.error) => {
       const issued = await run(() => issueSetupCode(deps, config.PATTY_AUTH));
-      if (issued.isErr()) throw new Error(`patty: could not issue a setup code — ${formatAppError(issued.error)}`);
+      if (issued.isErr())
+        throw new Error(`${LOG_PREFIX} could not issue a setup code — ${formatAppError(issued.error)}`);
       const code = issued.value;
       if (!code) return;
       const origin = config.PUBLIC_URL ?? boundOrigin;

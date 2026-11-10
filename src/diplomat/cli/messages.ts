@@ -1,7 +1,7 @@
 import { PRIVATE_FILE_MODE, type ExportedRowCounts } from '../../models/export.js';
 import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
 import { KeyImportRefusal } from '../../models/key-import.js';
-import { NPX_COMMAND } from '../../models/package.js';
+import { LOG_PREFIX, NPX_COMMAND, PRODUCT_NAME } from '../../models/package.js';
 import { INVITE_PATH } from '../../models/auth/origin.js';
 import type { PasswordReset } from '../../models/auth/password.js';
 import type { IssuedInvite, RevokedCredentials, UserSummary } from '../../models/auth/users.js';
@@ -30,7 +30,7 @@ const endedCredentials = (revoked: RevokedCredentials): string =>
 export const CLI_MESSAGES = {
   ownerClaimed: (username: string) =>
     `Owner claimed: "${username}". Log in to the dashboard (/ui) with this username and your password.`,
-  alreadyClaimed: (username: string) => `PATTY is already set up: the owner is "${username}".`,
+  alreadyClaimed: (username: string) => `${PRODUCT_NAME} is already set up: the owner is "${username}".`,
   passwordReset: (reset: PasswordReset) => `Password reset for "${reset.username}".`,
   sessionsEnded: (count: number) => `Sessions ended: ${count}`,
   tokensRevoked: (count: number) => `Access tokens revoked: ${count}`,
@@ -101,6 +101,6 @@ export const CLI_MESSAGES = {
   keyBesideData: (directory: string) =>
     `${directory} holds (or contains) the database; the key must never sit next to the data it unlocks. Choose another directory`,
   snapshotIsDatabase: (path: string) => `${path} is the database itself; choose another file`,
-  failure: (reason: string) => `patty: ${reason}`,
+  failure: (reason: string) => `${LOG_PREFIX} ${reason}`,
   unexpectedArgument: (argument: string) => `unexpected argument "${argument}"`,
 } as const;

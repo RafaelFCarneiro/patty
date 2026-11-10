@@ -1,8 +1,8 @@
 name: Release
 
 # SWITCHED OFF. Every job below is gated on the repository variable RELEASE_ENABLED == 'true', which stays
-# unset until ADR-035 step 6 (the first manual npm publish and the trusted-publisher setup) and the pre-publication
-# scan have passed. Merging this file publishes nothing; see docs/releasing.md.
+# unset until the pre-publication scan (ADR-035 step 6) has passed and the first manual npm publish and the
+# trusted-publisher setup (step 7) are done. Merging this file publishes nothing; see docs/releasing.md.
 #
 # On every push to main that contains releasable commits (feat → minor, fix → patch, BREAKING CHANGE → major),
 # semantic-release derives the version from Conventional Commits and cuts the tag + GitHub Release; docs/chore/etc.
@@ -46,6 +46,9 @@ jobs:
         run: npm ci
 
       # --- quality gate (publish only if green) ---
+      - name: Lint
+        run: npm run lint
+
       - name: Type check
         run: npm run typecheck
 

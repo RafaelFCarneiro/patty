@@ -1,6 +1,6 @@
 import { errAsync, ResultAsync } from 'neverthrow';
 import type { ExportedRowCounts, StagedCopy } from '../../../models/export.js';
-import { NPX_COMMAND } from '../../../models/package.js';
+import { NPX_COMMAND, PRODUCT_NAME } from '../../../models/package.js';
 import {
   DbSubcommand,
   EXPORT_FLAGS,
@@ -32,7 +32,7 @@ Commands:
   import --from <file>   Put a snapshot written by \`export\` in place as this install's database
 
 Export: the snapshot is created owner-only and never overwritten, is complete on its own (no -wal file) and opens with
-the same key. It is safe to take while PATTY is running, but stop every client first so nothing is written after
+the same key. It is safe to take while ${PRODUCT_NAME} is running, but stop every client first so nothing is written after
 it. The database is opened as it is: nothing is migrated. Prints row counts (no data) to compare after a move.
 
 Import: refused when a database already exists here, and when the snapshot does not open with this install's key (file,

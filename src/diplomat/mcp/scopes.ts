@@ -7,6 +7,7 @@ import { READ_SCOPE, type Scope } from '../../models/auth/scope.js';
 import { GateKind, type GateOutcome, type PrincipalGate } from './gate.js';
 import type { CallerExtra } from './context.js';
 import { jsonError, textError } from './respond.js';
+import { LOG_PREFIX } from '../../models/package.js';
 
 /**
  * Scope enforcement for MCP tools, resources and prompts (ADR-033 §3, ADR-034 §4). Every tool declares
@@ -84,7 +85,9 @@ export const guardScopes = (server: McpServer, options: ScopeGuardOptions): void
   server.registerTool = ((name, config, callback) => {
     const readOnlyHint = config.annotations?.readOnlyHint;
     if (typeof readOnlyHint !== 'boolean') {
-      throw new Error(`patty: MCP tool "${name}" must declare annotations.readOnlyHint (its scope derives from it)`);
+      throw new Error(
+        `${LOG_PREFIX} MCP tool "${name}" must declare annotations.readOnlyHint (its scope derives from it)`,
+      );
     }
     const required = scopeOfTool(readOnlyHint);
     scopes.set(name, required);

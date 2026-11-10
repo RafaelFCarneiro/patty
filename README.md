@@ -1,4 +1,4 @@
-# PATTY v2
+# PATTY — Personal Agent Tracking for Treasure and Yield
 
 AI-first personal finance manager. The primary interface is natural language through an **MCP server** — connect it to Claude or VS Code Copilot and talk to your finances directly. REST is a secondary surface.
 

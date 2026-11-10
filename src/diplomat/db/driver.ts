@@ -10,6 +10,7 @@ import { PRIVATE_DIRECTORY_MODE } from '../../models/export.js';
 import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
 import { withKeyLock } from './key-lock.js';
 import * as schema from './schema.js';
+import { LOG_PREFIX } from '../../models/package.js';
 
 export type Db = LibSQLDatabase<typeof schema>;
 
@@ -44,14 +45,14 @@ const readKeyFile = (path: string): string => {
     contents = readFileSync(path, 'utf8');
   } catch (cause) {
     throw new Error(
-      `patty: cannot read the encryption key file PATTY_DB_KEY_FILE (${path}). ${KEY_GENERATION_HINT}`,
+      `${LOG_PREFIX} cannot read the encryption key file PATTY_DB_KEY_FILE (${path}). ${KEY_GENERATION_HINT}`,
       { cause },
     );
   }
   const parsed = EncryptionKey.safeParse(contents.trim());
   if (!parsed.success) {
     throw new Error(
-      `patty: PATTY_DB_KEY_FILE (${path}) must contain a 64-character hex key (a trailing newline is fine). ${KEY_GENERATION_HINT}`,
+      `${LOG_PREFIX} PATTY_DB_KEY_FILE (${path}) must contain a 64-character hex key (a trailing newline is fine). ${KEY_GENERATION_HINT}`,
     );
   }
   return parsed.data;
@@ -67,7 +68,7 @@ const validateStoredKey = (stored: string): string => {
   const parsed = EncryptionKey.safeParse(stored);
   if (!parsed.success) {
     throw new Error(
-      'patty: the encryption key stored in the OS keychain is not a 64-character hex key. ' +
+      `${LOG_PREFIX} the encryption key stored in the OS keychain is not a 64-character hex key. ` +
         `Remove the "${KEYCHAIN_SERVICE}" / "${DB_KEY_KEYCHAIN_ACCOUNT}" keychain entry (this loses access to an existing database ` +
         `encrypted with it), or supply the correct key. ${KEY_GENERATION_HINT}`,
     );
@@ -87,7 +88,7 @@ const inKeychain = async <T>(work: () => T | Promise<T>): Promise<T> => {
     return await work();
   } catch (cause) {
     throw new Error(
-      `patty: cannot read or write the database encryption key in the OS keychain, and no key source was configured. ${KEY_GENERATION_HINT}`,
+      `${LOG_PREFIX} cannot read or write the database encryption key in the OS keychain, and no key source was configured. ${KEY_GENERATION_HINT}`,
       { cause },
     );
   }
@@ -115,13 +116,13 @@ const resolveKeychainKey = async (keyLockPath: string): Promise<string> => {
 
 const configuredKey = (config: DbConfig): string | null => {
   if (config.PATTY_DB_KEY_FILE) {
-    console.warn('patty: using the encryption key from PATTY_DB_KEY_FILE; OS keychain bypassed.');
+    console.warn(`${LOG_PREFIX} using the encryption key from PATTY_DB_KEY_FILE; OS keychain bypassed.`);
     return readKeyFile(config.PATTY_DB_KEY_FILE);
   }
   // Env-var override: CI, headless, or manual recovery (ADR-005). We log that we are in
   // env-var mode (never the key value itself) so the weaker posture is visible.
   if (config.PATTY_DB_KEY) {
-    console.warn('patty: using PATTY_DB_KEY from the environment; OS keychain bypassed.');
+    console.warn(`${LOG_PREFIX} using PATTY_DB_KEY from the environment; OS keychain bypassed.`);
     return config.PATTY_DB_KEY;
   }
   return null;
@@ -163,7 +164,7 @@ export const enableWal = async (client: ReturnType<typeof createClient>): Promis
     const appliedMode = result.rows[0]?.journal_mode;
     if (typeof appliedMode !== 'string' || appliedMode.toUpperCase() !== JOURNAL_MODE_WAL) {
       console.warn(
-        `patty: WAL journal mode was not applied (sqlite reports "${String(appliedMode)}"); ` +
+        `${LOG_PREFIX} WAL journal mode was not applied (sqlite reports "${String(appliedMode)}"); ` +
           'continuing with busy_timeout + retry only.',
       );
     }
@@ -171,7 +172,7 @@ export const enableWal = async (client: ReturnType<typeof createClient>): Promis
     // Not necessarily a WAL-support gap — could equally be a wrong key or a corrupt file, both of
     // which still surface their own real error on the next query. Worded neutrally rather than
     // diagnosing a cause this catch can't actually distinguish.
-    console.warn('patty: could not enable WAL journal mode; continuing with busy_timeout + retry only.', cause);
+    console.warn(`${LOG_PREFIX} could not enable WAL journal mode; continuing with busy_timeout + retry only.`, cause);
   }
 };
 

@@ -4,7 +4,7 @@ Guidance for AI agents working in this repository.
 
 ## Project overview
 
-PATTY v2 is an AI-first personal finance manager. The primary interface is AI chat (Claude clients) talking to the backend's **MCP server**; REST is a secondary surface. Backend: TypeScript, Fastify, zod, libSQL (encrypted local SQLite via `@libsql/client`), Drizzle ORM, diplomat architecture, functional programming style. As-built architecture: `docs/architecture.md`. v1 (NestJS/Mongo/React) is archived as functional reference only — never modify it.
+PATTY is an AI-first personal finance manager. The primary interface is AI chat (Claude clients) talking to the backend's **MCP server**; REST is a secondary surface. Backend: TypeScript, Fastify, zod, libSQL (encrypted local SQLite via `@libsql/client`), Drizzle ORM, diplomat architecture, functional programming style. As-built architecture: `docs/architecture.md`. v1 (NestJS/Mongo/React) is archived as functional reference only — never modify it.
 
 ## Development setup
 

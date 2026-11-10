@@ -9,7 +9,7 @@ import type { Locale, SetBaseCurrencyInput, SetLocaleInput } from '../locale.js'
 import type { CurrencyCode } from '../money.js';
 import type { CreateRecurring } from '../recurring.js';
 import { validation, type ValidationError } from '../error.js';
-import { NPX_COMMAND } from '../package.js';
+import { LOG_PREFIX, NPX_COMMAND } from '../package.js';
 
 /** The four data sets a demo can be generated for. A language alone cannot choose: Spanish has two. */
 export const DemoCountry = z.enum(['br', 'us', 'mx', 'co']);
@@ -35,7 +35,7 @@ export const demoNotReady = (databasePath: string): DemoNotReady => ({
 });
 
 export const demoNotReadyMessage = ({ databasePath }: DemoNotReady): string =>
-  `patty: ${DEMO_ENV_VAR} is set, but ${databasePath} is not a demo database. Create it with: ${NPX_COMMAND} demo`;
+  `${LOG_PREFIX} ${DEMO_ENV_VAR} is set, but ${databasePath} is not a demo database. Create it with: ${NPX_COMMAND} demo`;
 
 /** Where a generated purchase comes from. The pack names the accounts and cards; the generator maps these to them. */
 export const DemoFunding = z.enum(['checking', 'wallet', 'primaryCard', 'secondaryCard', 'global']);

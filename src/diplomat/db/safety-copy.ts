@@ -7,6 +7,7 @@ import { lastAppliedMillis, readJournal } from './migration-journal.js';
 import type { SqlReader } from './tenancy-integrity.js';
 import { withMigrationLock } from './migration-lock.js';
 import { EXCLUSIVE_CREATE_FLAG, PRIVATE_FILE_MODE } from '../../models/export.js';
+import { LOG_PREFIX } from '../../models/package.js';
 
 const TEMP_SUFFIX = '.tmp';
 
@@ -97,7 +98,7 @@ export const backupBeforeRewriting = async (db: Db, migrationsFolder: string): P
     rmSync(partial, { force: true });
     await snapshotTo(db, partial);
     renameSync(partial, destination);
-    console.error(`patty: backed up the database before migration ${tag} → ${destination}`);
+    console.error(`${LOG_PREFIX} backed up the database before migration ${tag} → ${destination}`);
     copied.push(destination);
   }
   return copied;

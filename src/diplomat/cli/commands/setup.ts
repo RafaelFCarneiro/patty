@@ -1,7 +1,7 @@
 import { ClientConfigFailureCode, type ClientConfigFailure } from '../../../models/client-config.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/sign-in.js';
 import { DEMO_SERVER_NAME } from '../../../models/demo/core.js';
-import { NPX_COMMAND } from '../../../models/package.js';
+import { NPX_COMMAND, PRODUCT_NAME } from '../../../models/package.js';
 import {
   DEMO_FLAG,
   DemoEntryChange,
@@ -41,7 +41,7 @@ Available tools:
   antigravity      Google Antigravity   (~/.gemini/config/mcp_config.json)
   codex            OpenAI Codex         (prints the config snippet to paste)
 
-PATTY requires a login. The first time, setup asks you to choose the owner's username and password
+${PRODUCT_NAME} requires a login. The first time, setup asks you to choose the owner's username and password
 (typed twice, never echoed), writes the client's config, then offers to sign that client in. Re-running it is safe: an
 owner that already has a login is left alone.
 
@@ -59,9 +59,8 @@ Examples:
   ${NPX_COMMAND} setup vscode
   ${NPX_COMMAND} setup antigravity
 `.trimStart(),
-  unknownTool: (tool: string) =>
-    `patty setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`,
-  settingUp: (label: string) => `Setting up PATTY MCP for ${label}...`,
+  unknownTool: (tool: string) => `patty setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`,
+  settingUp: (label: string) => `Setting up ${PRODUCT_NAME} MCP for ${label}...`,
   settingUpDemo: (change: DemoEntryChange, label: string) =>
     `${change === DemoEntryChange.enum.add ? 'Adding' : 'Removing'} the ${DEMO_SERVER_NAME} MCP entry for ${label}...`,
   demoNotCreated: `  Run \`${NPX_COMMAND} demo\` once to create the demo data.`,

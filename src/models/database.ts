@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { NPX_COMMAND, PACKAGE_NAME } from './package.js';
+import { LOG_PREFIX, NPX_COMMAND, PACKAGE_NAME } from './package.js';
 
 /** A database that a newer build has migrated: an expected failure, not an exception (ADR-034 §7). */
 export const DatabaseAheadCode = z.enum(['database_ahead']);
@@ -18,7 +18,7 @@ export const STALE_GLOBAL_CHECK_COMMAND = `npm ls -g ${PACKAGE_NAME}`;
  * keys, shared by the server and every CLI command.
  */
 export const databaseAheadMessage = (buildVersion: string): string =>
-  `patty: this build (v${buildVersion}) is older than your database (it has migrations this version doesn't ` +
+  `${LOG_PREFIX} this build (v${buildVersion}) is older than your database (it has migrations this version doesn't ` +
   `know). Update with \`${NPX_COMMAND}\`, or check for a stale global install: \`${STALE_GLOBAL_CHECK_COMMAND}\`.`;
 
 export type DatabaseState = 'ok' | 'error';
