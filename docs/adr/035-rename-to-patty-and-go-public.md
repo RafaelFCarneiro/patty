@@ -102,6 +102,15 @@ create new tokens and approve new sign-ins after the move.
     the tag, the GitHub Release and the notes. Its npm plugin no longer publishes (`npmPublish: false`); the staged
     publish is the next step of the same workflow. (A Release created with the workflow's own token cannot trigger
     a second workflow, so effect-runner's `on: release` trigger would not fire here; the steps are the same.)
+  - **A new version line, starting at `1.0.0`.** `@rfc0/patty` is a new package, so it does not continue FinTrack's
+    `v4.x` numbers. semantic-release finds the last release from git tags, so the tag format changes to
+    `patty-v${version}` (`.releaserc.json` `tagFormat`, and every tag lookup in `release.yml`); no existing tag
+    matches it. The `v4.x` tags and GitHub Releases stay in the repository as FinTrack history; none is deleted. npm
+    versions and Docker tags stay bare semver (`1.0.0`, `:1.0.0`).
+  - **The first version is tagged by hand.** With no tag in the new format, the workflow's first run would put the
+    whole history into the release notes. So the hand-published `1.0.0` also gets its tag `patty-v1.0.0` on the
+    published commit and a GitHub Release with short hand-written notes, before the workflow is switched on; the
+    workflow continues from that tag (`1.0.1`, `1.1.0`, …).
   - The trusted publisher on npmjs.com is configured for this repository and `release.yml`. npm only offers that
     setting on an existing package, so the very first version is published by hand from a terminal (2FA), as
     effect-runner's `0.2.0` was; every later version comes from the workflow.
@@ -139,6 +148,10 @@ The history is kept (no fresh repository), subject to the scan.
 - **A `migrate-from-fintrack` command** — rejected for the same reason; the generic import commands do the job.
 - **Rewrite stored scope values in a migration** — rejected: the migration would have to name the old values, and
   the tokens are unusable anyway because the prefix changes.
+- **Continue the `v4.x` version line** — rejected: a new package name starts its own history; continuing would
+  publish `@rfc0/patty` first as `5.0.0`.
+- **Delete the old `v4.x` tags to restart numbering** — rejected: destructive, and loses the history a new tag
+  format keeps.
 - **A fresh public repository** — not needed: the history is kept, subject to the scan.
 
 ## Consequences
@@ -146,6 +159,7 @@ The history is kept (no fresh repository), subject to the scan.
 - Every client config, token and stdio sign-in is reissued once. Data, users and passwords carry over.
 - Saved dashboards using the old globals need re-saving once; afterwards the globals never change with the name.
 - Old install commands stop working; the README and docs show only the new ones.
+- `@rfc0/patty` starts at `1.0.0` under `patty-v*` tags; `v4.x` tags and Releases remain as FinTrack history.
 - The rename PR is large but mechanical. Its gate includes a repository-wide check that `fintrack` appears only in
   ADR and design history.
 
@@ -153,19 +167,22 @@ The history is kept (no fresh repository), subject to the scan.
 
 1. [x] Accept this ADR (2026-11-03).
 2. [x] Import PR (`feat/key-db-import`, #243): `key import` / `db import` with tests, under the current names.
-3. [ ] Rename PR (`refactor/rename-to-patty`): every name in §1, the token/grant cleanup migration, the brand-neutral
+3. [x] Rename PR (`refactor/rename-to-patty`, #244): every name in §1, the token/grant cleanup migration, the brand-neutral
        dashboard globals (bundled dashboards and skills updated), docs, CI and Docker files, and the staged release
        workflow of §3 — **switched off** until step 7 (a repository variable gates it), so no merge publishes
        anything before the scan. Gate plus verification subagent; `grep -rni fintrack` outside `docs/adr` and
        `docs/designs` is empty.
+   - [ ] Release-numbering PR (`chore/release-numbering`, §3): tag format `patty-v${version}` in `.releaserc.json`
+         and `release.yml`, `docs/releasing.md` with the first-release procedure. Before step 7.
 4. [ ] Key-export step-up PR (`feat/key-export-step-up`, §2): login password, interactive only, confirmation and
        warning. After the rename, so the rename stays mechanical; before step 7, so the first public version ships
        with it.
 5. [ ] effect-runner docs PR (§3).
 6. [ ] Pre-publication scan and the history decision (§4).
-7. [ ] Rename the GitHub repository and make it public. Publish the first `@rfc0/patty` version by hand, then
-       configure the trusted publisher on npmjs.com and the `release` environment on GitHub, and switch the release
-       workflow on. From then on, each release is staged by the workflow and goes live when approved (npm, then
+7. [ ] Rename the GitHub repository (this may happen any time before; GitHub redirects the old URL) and make it
+       public. Publish `@rfc0/patty@1.0.0` by hand, push the tag `patty-v1.0.0` on that commit and create its GitHub
+       Release with short notes (§3), then configure the trusted publisher on npmjs.com and the `release` environment
+       on GitHub, and switch the release workflow on. From then on, each release is staged by the workflow and goes live when approved (npm, then
        Docker `latest`).
 8. [ ] The author moves his install with the runbook (§2) — after step 7, since the new client entry installs
        `@rfc0/patty` from npm. Until then the old private package keeps working.
