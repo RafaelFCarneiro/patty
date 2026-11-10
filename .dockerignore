@@ -12,7 +12,7 @@ scripts
 *.db
 *.db-*
 .env*
-patty_db_key
+*_db_key
 Dockerfile
 compose.yaml
 .dockerignore

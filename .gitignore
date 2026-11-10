@@ -12,4 +12,4 @@ coverage/
 *.db-wal
 *.db-shm
 # Local database encryption key for compose.yaml (never commit)
-patty_db_key
+*_db_key
