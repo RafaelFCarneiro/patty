@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   isInteractive,
   open,
+  PromptFailureCode,
   readPasswordFromStdin,
   STDIN_IS_A_TERMINAL_MESSAGE,
 } from '../../../../src/diplomat/cli/terminal.js';
@@ -72,7 +73,11 @@ describe('open', () => {
   it('reads a question asked on a closed terminal as the prompt having ended, not a crash', async () => {
     const { terminal } = rig();
     terminal.close();
-    expect((await terminal.ask('Username: '))._unsafeUnwrapErr()).toMatchObject({ code: 'prompt_ended' });
-    expect((await terminal.askSecret('Password: '))._unsafeUnwrapErr()).toMatchObject({ code: 'prompt_ended' });
+    expect((await terminal.ask('Username: '))._unsafeUnwrapErr()).toMatchObject({
+      code: PromptFailureCode.enum.prompt_ended,
+    });
+    expect((await terminal.askSecret('Password: '))._unsafeUnwrapErr()).toMatchObject({
+      code: PromptFailureCode.enum.prompt_ended,
+    });
   });
 });

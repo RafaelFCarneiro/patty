@@ -1,5 +1,4 @@
 import {
-  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -10,7 +9,6 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { join } from 'node:path';
 import { eq, sql } from 'drizzle-orm';
@@ -21,6 +19,7 @@ import { EXIT_FAILURE, EXIT_OK, type CliIo } from '../../../src/diplomat/cli/io.
 import { CLI_MESSAGES } from '../../../src/diplomat/cli/messages.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase } from '../../../src/diplomat/db/driver.js';
+import { migrationsBefore } from '../fixtures/migrations-before.js';
 import { PRODUCT_NAME } from '../../../src/models/package.js';
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migration-barrier.js';
 import { accounts, transactions, users } from '../../../src/diplomat/db/schema.js';
@@ -37,6 +36,8 @@ import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
  * (`composition/export.ts`), reading `DB_PATH` and the key from the environment as the binary does.
  */
 const KEY = 'a1'.repeat(32);
+/** The migration that added `users.credentials_changed_at`: a database stopped before it cannot be read as today's. */
+const CREDENTIALS_CHANGED_MIGRATION = '0024_credentials_changed_at';
 const OTHER_KEY = 'b2'.repeat(32);
 
 let root = '';
@@ -258,12 +259,7 @@ describe('patty key export', () => {
 
   it('explains a database a newer build has not migrated yet, writes nothing and migrates nothing', async () => {
     const oldDatabase = join(dataDirectory, 'old.db');
-    const migrations = join(root, 'migrations-before-0024');
-    cpSync(fileURLToPath(new URL('../../../drizzle', import.meta.url)), migrations, { recursive: true });
-    const journalPath = join(migrations, 'meta', '_journal.json');
-    const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: Array<{ tag: string }> };
-    const cutoff = journal.entries.findIndex((entry) => entry.tag === '0024_credentials_changed_at');
-    writeFileSync(journalPath, JSON.stringify({ ...journal, entries: journal.entries.slice(0, cutoff) }));
+    const migrations = migrationsBefore(root, CREDENTIALS_CHANGED_MIGRATION);
     const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: oldDatabase, PATTY_DB_KEY: KEY });
     await migrate(db, { migrationsFolder: migrations });
     const appliedBefore = await db.all(sql`SELECT hash FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`);
