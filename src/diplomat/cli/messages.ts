@@ -1,7 +1,7 @@
 import { PRIVATE_FILE_MODE, type ExportedRowCounts } from '../../models/export.js';
 import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
 import { AUTH_MESSAGES, TERMINAL_SETUP_HINT } from '../../models/auth/message.js';
-import type { KeyExportStop } from '../../models/auth/key-export.js';
+import { EXPORT_DECLINED_CODE, USERS_UNREADABLE_CODE, type KeyExportStop } from '../../models/auth/key-export.js';
 import { KeyImportRefusal } from '../../models/key-import.js';
 import { LOG_PREFIX, NPX_COMMAND, PRODUCT_NAME } from '../../models/package.js';
 import { INVITE_PATH } from '../../models/auth/origin.js';
@@ -25,18 +25,19 @@ const KEY_IMPORT_REFUSALS = {
     `the OS keychain already holds a database key for this install; an import never replaces it. Remove the "${KEYCHAIN_SERVICE}" / "${DB_KEY_KEYCHAIN_ACCOUNT}" keychain entry yourself if you mean to`,
 } as const satisfies Record<KeyImportRefusal, string>;
 
-type KeyExportStopMessages = { [C in KeyExportStop['code']]: (stop: Extract<KeyExportStop, { code: C }>) => string };
+const NOTHING_WRITTEN = 'nothing was written';
 
-const KEY_EXPORT_STOP_MESSAGES: KeyExportStopMessages = {
-  owner_unclaimed: () =>
-    `no administrator has a login yet, so there is no password to ask for: finish setting up ${PRODUCT_NAME} first ${TERMINAL_SETUP_HINT}`,
-  invalid_credentials: () => `${AUTH_MESSAGES.invalidCredentials} Too many attempts; nothing was written.`,
-  users_unreadable: (stop) => `cannot read the users of the database: ${stop.reason}`,
-  export_declined: () => 'not confirmed; nothing was written',
-};
+const usersUnreadableMessage = (reason: string): string =>
+  `cannot read the users of the database (${reason}). If it was last used by an older version, start ${PRODUCT_NAME} once (it migrates the database after its safety copy) and run the export again; ${NOTHING_WRITTEN}`;
+
+const FIXED_STOP_MESSAGES = {
+  owner_unclaimed: `no administrator has a login yet, so there is no password to ask for: finish setting up ${PRODUCT_NAME} first ${TERMINAL_SETUP_HINT}`,
+  invalid_credentials: `${AUTH_MESSAGES.invalidCredentials} Too many attempts; ${NOTHING_WRITTEN}.`,
+  [EXPORT_DECLINED_CODE]: `not confirmed; ${NOTHING_WRITTEN}`,
+} as const satisfies Record<Exclude<KeyExportStop['code'], typeof USERS_UNREADABLE_CODE>, string>;
 
 const keyExportStopMessage = (stop: KeyExportStop): string =>
-  (KEY_EXPORT_STOP_MESSAGES[stop.code] as (stop: KeyExportStop) => string)(stop);
+  stop.code === USERS_UNREADABLE_CODE ? usersUnreadableMessage(stop.reason) : FIXED_STOP_MESSAGES[stop.code];
 
 const endedCredentials = (revoked: RevokedCredentials): string =>
   `sessions ended: ${revoked.sessionsEnded}, tokens and sign-ins revoked: ${revoked.tokensRevoked}`;

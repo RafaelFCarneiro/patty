@@ -4,7 +4,7 @@ import { confirmKeyExportAdmin, guardClaimedAdminExists } from '../../../../src/
 import type { KeyExportDeps } from '../../../../src/controllers/deps.js';
 import { authErrors } from '../../../../src/models/auth/errors.js';
 import { usersUnreadable } from '../../../../src/models/auth/key-export.js';
-import type { UserEntity } from '../../../../src/models/auth/owner.js';
+import { UserRole, type UserEntity } from '../../../../src/models/auth/owner.js';
 import { adminFixture, unclaimedFixture, userFixture } from '../../fixtures/users.js';
 
 const RIGHT_PASSWORD = 'correct horse battery staple';
@@ -28,7 +28,7 @@ describe('guardClaimedAdminExists', () => {
   });
 
   it('refuses while no administrator has a login', async () => {
-    const { deps } = depsFor([unclaimedFixture('user-owner', { role: 'admin' }), userFixture('ana')]);
+    const { deps } = depsFor([unclaimedFixture('user-owner', { role: UserRole.enum.admin }), userFixture('ana')]);
     expect((await guardClaimedAdminExists(deps))._unsafeUnwrapErr()).toEqual(authErrors.ownerUnclaimed);
   });
 
@@ -43,7 +43,7 @@ describe('confirmKeyExportAdmin', () => {
     adminFixture('root'),
     userFixture('ana'),
     adminFixture('gone', { disabledAt: '2026-02-01T00:00:00.000Z' }),
-    unclaimedFixture('invited', { role: 'admin' }),
+    unclaimedFixture('invited', { role: UserRole.enum.admin }),
   ];
 
   it('returns the administrator whose password it is', async () => {

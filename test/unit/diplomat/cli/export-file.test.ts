@@ -35,9 +35,7 @@ describe('keyDestination', () => {
   const resolveKey = (to: string) => keyDestination(exporterFor(databaseFile), to);
 
   it('allows a new file in another directory', () => {
-    expect(resolveKey(join(otherDirectory, 'patty_db_key'))._unsafeUnwrap()).toBe(
-      join(otherDirectory, 'patty_db_key'),
-    );
+    expect(resolveKey(join(otherDirectory, 'patty_db_key'))._unsafeUnwrap()).toBe(join(otherDirectory, 'patty_db_key'));
   });
 
   it('refuses the database directory', () => {

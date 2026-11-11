@@ -318,9 +318,7 @@ describe('runSetup — help and an unknown tool', () => {
     const { exit: code, out, err } = runSetup('no-such-tool');
     expect(code).toBe(1);
     expect(out).toEqual([]);
-    expect(err).toEqual([
-      'patty setup: unknown tool "no-such-tool"\n\nRun without arguments to see available tools.',
-    ]);
+    expect(err).toEqual(['patty setup: unknown tool "no-such-tool"\n\nRun without arguments to see available tools.']);
     expect(exit).not.toHaveBeenCalled();
     vi.restoreAllMocks();
   });

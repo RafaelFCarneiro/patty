@@ -27,7 +27,7 @@ import {
   type Importer,
 } from '../io.js';
 import { CLI_MESSAGES } from '../messages.js';
-import { approveKeyExport, exitCodeOfStop } from '../step-up.js';
+import { approveKeyExport, exitCodeOfStop } from '../key-export-approval.js';
 import type { Terminal } from '../terminal.js';
 
 export const KEY_HELP = `

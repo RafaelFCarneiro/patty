@@ -11,16 +11,10 @@ import {
 import { AUTH_MESSAGES } from '../../models/auth/message.js';
 import { CLI_MESSAGES } from './messages.js';
 import { exitCodeOfPrompt, failed, type CliIo } from './io.js';
-import {
-  askAdminCredentials,
-  askConfirmation,
-  MAX_PROMPT_ATTEMPTS,
-  PROMPT_MESSAGES,
-  type PromptFailure,
-} from './prompt.js';
+import { askAdminCredentials, askExportConfirmation, MAX_PROMPT_ATTEMPTS, type PromptFailure } from './prompt.js';
 import { PromptFailureCode, type Terminal } from './terminal.js';
 
-export type StepUpFailure = PromptFailure | KeyExportStop;
+export type KeyExportFailure = PromptFailure | KeyExportStop;
 
 type StepUpContext = {
   terminal: Terminal;
@@ -28,15 +22,15 @@ type StepUpContext = {
   pause: () => Promise<void>;
 };
 
-const isWrongAnswer = (failure: StepUpFailure): boolean => failure.code === authErrors.invalidCredentials.code;
+const isWrongAnswer = (failure: KeyExportFailure): boolean => failure.code === authErrors.invalidCredentials.code;
 
 /** A wrong answer is told, followed by a fixed pause, and asked again — at most `MAX_PROMPT_ATTEMPTS` times in all.
  *  Anything else (the prompt ending, the database unreadable) stops at once. */
-const askUntilConfirmed = (context: StepUpContext, attemptsLeft: number): ResultAsync<void, StepUpFailure> =>
+const askUntilConfirmed = (context: StepUpContext, attemptsLeft: number): ResultAsync<void, KeyExportFailure> =>
   askAdminCredentials(context.terminal)
     .andThen(context.confirm)
     .map(() => undefined)
-    .orElse((failure: StepUpFailure) => {
+    .orElse((failure: KeyExportFailure) => {
       if (!isWrongAnswer(failure) || attemptsLeft <= 1) return errAsync(failure);
       context.terminal.tell(AUTH_MESSAGES.invalidCredentials);
       return ResultAsync.fromSafePromise(context.pause()).andThen(() => askUntilConfirmed(context, attemptsLeft - 1));
@@ -50,9 +44,9 @@ type KeyExportApproval = {
   destination: string;
 };
 
-const confirmWarning = (terminal: Terminal, destination: string): ResultAsync<void, StepUpFailure> => {
+const confirmWarning = (terminal: Terminal, destination: string): ResultAsync<void, KeyExportFailure> => {
   terminal.tell(CLI_MESSAGES.keyExportWarning(destination));
-  return askConfirmation(terminal, PROMPT_MESSAGES.exportConfirmation).andThen((confirmed) =>
+  return askExportConfirmation(terminal).andThen((confirmed) =>
     confirmed ? okAsync(undefined) : errAsync(EXPORT_DECLINED),
   );
 };
@@ -65,7 +59,7 @@ export const approveKeyExport = ({
   secrets,
   pause,
   destination,
-}: KeyExportApproval): ResultAsync<void, StepUpFailure> =>
+}: KeyExportApproval): ResultAsync<void, KeyExportFailure> =>
   guardClaimedAdminExists({ users })
     .andThen(() => ResultAsync.fromSafePromise(secrets()))
     .andThen((loaded) => {
@@ -77,9 +71,9 @@ export const approveKeyExport = ({
     })
     .andThen(() => confirmWarning(terminal, destination));
 
-const isPromptFailure = (failure: StepUpFailure): failure is PromptFailure =>
+const isPromptFailure = (failure: KeyExportFailure): failure is PromptFailure =>
   PromptFailureCode.safeParse(failure.code).success;
 
 /** What a refused export answers: a prompt that ended or was invalid as every command does, anything else in words. */
-export const exitCodeOfStop = (io: CliIo, failure: StepUpFailure): number =>
+export const exitCodeOfStop = (io: CliIo, failure: KeyExportFailure): number =>
   isPromptFailure(failure) ? exitCodeOfPrompt(io, failure) : failed(io, CLI_MESSAGES.keyExportStopped(failure));

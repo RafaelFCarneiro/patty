@@ -48,7 +48,8 @@ const snapshotAndCount = async ({ key, db }: KeyedDatabase, destination: string)
   }
 };
 
-/** Reads the users of the database as it is — no migration, so an older database is read, not upgraded. */
+/** Reads the users of the database as it is — no migration, so a database a newer build has not migrated yet fails
+ *  here (a missing column) and the person is told to start the server once, not upgraded behind their back. */
 const readUsers = async (): Promise<Result<UserEntity[], string>> => {
   const opened = await openKeyed();
   if (opened.isErr()) return err(opened.error);

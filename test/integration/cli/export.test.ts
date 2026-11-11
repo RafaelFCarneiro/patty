@@ -1,4 +1,5 @@
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -9,6 +10,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { migrate } from 'drizzle-orm/libsql/migrator';
 import { join } from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +21,7 @@ import { EXIT_FAILURE, EXIT_OK, type CliIo } from '../../../src/diplomat/cli/io.
 import { CLI_MESSAGES } from '../../../src/diplomat/cli/messages.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase } from '../../../src/diplomat/db/driver.js';
+import { PRODUCT_NAME } from '../../../src/models/package.js';
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migration-barrier.js';
 import { accounts, transactions, users } from '../../../src/diplomat/db/schema.js';
 import { KEY_EXPORT_CONFIRMATION_ANSWER } from '../../../src/models/auth/key-export.js';
@@ -250,6 +254,35 @@ describe('patty key export', () => {
     expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
     expect(existsSync(keyFile)).toBe(false);
     expect(err.join('\n')).toContain('there is no database at');
+  });
+
+  it('explains a database a newer build has not migrated yet, writes nothing and migrates nothing', async () => {
+    const oldDatabase = join(dataDirectory, 'old.db');
+    const migrations = join(root, 'migrations-before-0024');
+    cpSync(fileURLToPath(new URL('../../../drizzle', import.meta.url)), migrations, { recursive: true });
+    const journalPath = join(migrations, 'meta', '_journal.json');
+    const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: Array<{ tag: string }> };
+    const cutoff = journal.entries.findIndex((entry) => entry.tag === '0024_credentials_changed_at');
+    writeFileSync(journalPath, JSON.stringify({ ...journal, entries: journal.entries.slice(0, cutoff) }));
+    const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: oldDatabase, PATTY_DB_KEY: KEY });
+    await migrate(db, { migrationsFolder: migrations });
+    const appliedBefore = await db.all(sql`SELECT hash FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`);
+    closeDatabase(db);
+    vi.stubEnv('DB_PATH', oldDatabase);
+
+    const keyFile = join(outputDirectory, 'patty_db_key');
+    expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
+
+    expect(err.join('\n')).toContain(`start ${PRODUCT_NAME} once`);
+    expect(existsSync(keyFile)).toBe(false);
+    const after = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: oldDatabase, PATTY_DB_KEY: KEY });
+    expect(await after.all(sql`SELECT hash FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`)).toEqual(
+      appliedBefore,
+    );
+    expect(
+      await after.all(sql`SELECT name FROM pragma_table_info('users') WHERE name = 'credentials_changed_at'`),
+    ).toEqual([]);
+    closeDatabase(after);
   });
 
   it('needs --to, and rejects stray arguments', async () => {

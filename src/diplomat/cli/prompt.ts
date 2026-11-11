@@ -71,8 +71,8 @@ export const askAdminCredentials = (terminal: Terminal): Asked<AdminCredentials>
   });
 
 /** Whether the person typed the one confirming answer; anything else is a no. */
-export const askConfirmation = (terminal: Terminal, question: string): Asked<boolean> =>
-  terminal.ask(question).map(isExportConfirmation);
+export const askExportConfirmation = (terminal: Terminal): Asked<boolean> =>
+  terminal.ask(PROMPT_MESSAGES.exportConfirmation).map(isExportConfirmation);
 
 const askNewPassword = (terminal: Terminal): Asked<string> =>
   withRetries(terminal, () =>
