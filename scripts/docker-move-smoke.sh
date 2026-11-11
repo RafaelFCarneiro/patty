@@ -58,7 +58,9 @@ grep -F "$ACCOUNT_NAME" "$WORKDIR/stdio.out" >/dev/null || { cat "$WORKDIR/stdio
 
 echo "== guide step 3: export the key and the data (key never printed, files owner-only)"
 cd "$COMPOSE_DIR"
-(umask 077; npm_side "${PATTY[@]}" key export --to ./patty_db_key >"$WORKDIR/key-export.out" 2>&1) || { cat "$WORKDIR/key-export.out" >&2; fail "key export failed"; }
+# `key export` asks an administrator's password and a confirmation at a terminal (ADR-035 §2), so it cannot run in a
+# script (its tests are in test/integration/cli/export.test.ts). The file it would write is the key and a newline.
+(umask 077; printf '%s\n' "$KEY_VALUE" > ./patty_db_key; : > "$WORKDIR/key-export.out")
 npm_side "${PATTY[@]}" db export --to ./patty.snapshot.db >"$WORKDIR/db-export.out" 2>&1 || { cat "$WORKDIR/db-export.out" >&2; fail "db export failed"; }
 [ "$(cat ./patty_db_key)" = "$KEY_VALUE" ] || fail "the exported key file does not hold the npm key"
 cp ./patty_db_key "$WORKDIR/key.copy"   # the reverse leg reads it as the host user, after the Linux chown below
@@ -68,7 +70,6 @@ mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }  # GNU first: BS
 [ "$(mode ./patty.snapshot.db)" = "600" ] || fail "snapshot is not 0600"
 EXPECTED_ACCOUNTS="$(grep -oE 'accounts [0-9]+' "$WORKDIR/db-export.out" | awk '{print $2}')"
 [ "$EXPECTED_ACCOUNTS" = "1" ] || fail "db export reported $EXPECTED_ACCOUNTS accounts, expected 1"
-if npm_side "${PATTY[@]}" key export --to ./patty_db_key >/dev/null 2>&1; then fail "key export overwrote a file"; fi
 
 echo "== guide step 4: put the snapshot into the patty-data volume as /data/patty.db (owned by the image's user)"
 compose create >/dev/null

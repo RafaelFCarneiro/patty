@@ -1,7 +1,6 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,25 +10,15 @@ import { DATA_REWRITING_MIGRATIONS } from '../../../src/diplomat/db/migrations.j
 import { accessTokensRepo } from '../../../src/diplomat/db/repos/access-tokens.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
+import { migrationsBefore } from '../fixtures/migrations-before.js';
 
 const TEST_KEY = 'f'.repeat(64);
-const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
 const MIGRATION_TAG = '0028_reset_sign_ins';
 const UNKNOWN_SCOPE = 'legacy:read';
 
 let tmpDir: string;
 let dbPath: string;
 let beforeFolder: string;
-
-/** A copy of the real migrations whose journal stops just before this one: a database as the last release left it. */
-const journalBefore = (folder: string): void => {
-  const journalPath = join(folder, 'meta', '_journal.json');
-  const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: Array<{ tag: string }> };
-  const cutoff = journal.entries.findIndex((entry) => entry.tag === MIGRATION_TAG);
-  if (cutoff === -1) throw new Error(`${MIGRATION_TAG} not in ${journalPath}`);
-  journal.entries = journal.entries.slice(0, cutoff);
-  writeFileSync(journalPath, JSON.stringify(journal, null, 2));
-};
 
 const open = () => openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: TEST_KEY });
 
@@ -43,9 +32,7 @@ const seedSignIns = async (db: Awaited<ReturnType<typeof open>>): Promise<void> 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'patty-reset-sign-ins-migration-'));
   dbPath = join(tmpDir, 'patty.db');
-  beforeFolder = join(tmpDir, 'before-migrations');
-  cpSync(REAL_MIGRATIONS_FOLDER, beforeFolder, { recursive: true });
-  journalBefore(beforeFolder);
+  beforeFolder = migrationsBefore(tmpDir, MIGRATION_TAG);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });

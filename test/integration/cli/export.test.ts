@@ -9,8 +9,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { migrate } from 'drizzle-orm/libsql/migrator';
 import { join } from 'node:path';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createExporter } from '../../../src/composition/export.js';
 import { runCli } from '../../../src/diplomat/cli/commands.js';
@@ -18,8 +19,12 @@ import { EXIT_FAILURE, EXIT_OK, type CliIo } from '../../../src/diplomat/cli/io.
 import { CLI_MESSAGES } from '../../../src/diplomat/cli/messages.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase } from '../../../src/diplomat/db/driver.js';
+import { migrationsBefore } from '../fixtures/migrations-before.js';
+import { PRODUCT_NAME } from '../../../src/models/package.js';
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migration-barrier.js';
-import { accounts, transactions } from '../../../src/diplomat/db/schema.js';
+import { accounts, transactions, users } from '../../../src/diplomat/db/schema.js';
+import { KEY_EXPORT_CONFIRMATION_ANSWER } from '../../../src/models/auth/key-export.js';
+import { ADMIN, claimOwner, confirmedExport, PASSWORD, terminalAnswering, type Answers } from './key-export-login.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { PRIVATE_FILE_MODE } from '../../../src/models/export.js';
 import { unusedDemo } from '../../unit/fixtures/demo.js';
@@ -31,6 +36,8 @@ import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
  * (`composition/export.ts`), reading `DB_PATH` and the key from the environment as the binary does.
  */
 const KEY = 'a1'.repeat(32);
+/** The migration that added `users.credentials_changed_at`: a database stopped before it cannot be read as today's. */
+const CREDENTIALS_CHANGED_MIGRATION = '0024_credentials_changed_at';
 const OTHER_KEY = 'b2'.repeat(32);
 
 let root = '';
@@ -40,13 +47,23 @@ let outputDirectory = '';
 let out: string[] = [];
 let err: string[] = [];
 let warnings: unknown[][] = [];
+let script: Answers = { visible: [], secret: [] };
+
+/** The administrator logs in, confirms, and the key is written. */
+const confirmedLogin = () => {
+  script = confirmedExport();
+};
 
 const io = (): CliIo =>
   ({
     openShell: () => {
       throw new Error('the export commands open no shell');
     },
-    openTerminal: () => null,
+    openTerminal: () =>
+      terminalAnswering(
+        () => script,
+        (message) => err.push(message),
+      ),
     readPasswordFromStdin: async () => '',
     out: (line) => out.push(line),
     err: (line) => err.push(line),
@@ -64,6 +81,7 @@ const run = (...args: string[]) => runCli(args, io());
 const seedDatabase = async () => {
   const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: KEY });
   await bootstrap(db);
+  await claimOwner(db);
   await db
     .insert(accounts)
     .values({ id: 'a1', name: 'Checking', type: 'checking', currency: 'USD', userId: OWNER_USER_ID });
@@ -108,6 +126,7 @@ beforeEach(async () => {
   out = [];
   err = [];
   warnings = [];
+  script = { visible: [], secret: [] };
   vi.stubEnv('DB_PATH', dbPath);
   vi.stubEnv('PATTY_DB_KEY', KEY);
   vi.stubEnv('PATTY_DB_KEY_FILE', undefined);
@@ -124,6 +143,7 @@ afterEach(() => {
 describe('patty key export', () => {
   it('writes exactly the key, owner-only, and the file opens the database as PATTY_DB_KEY_FILE', async () => {
     const keyFile = join(outputDirectory, 'patty_db_key');
+    confirmedLogin();
     expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_OK);
 
     expect(readFileSync(keyFile, 'utf8')).toBe(`${KEY}\n`);
@@ -139,10 +159,71 @@ describe('patty key export', () => {
   });
 
   it('prints the key nowhere: not on stdout, stderr or the log', async () => {
+    confirmedLogin();
     await run('key', 'export', '--to', join(outputDirectory, 'patty_db_key'));
     await run('key', 'export', '--to', join(outputDirectory, 'patty_db_key')); // the refusal says nothing either
     await run('key', 'export', '--to', join(dataDirectory, 'patty_db_key'));
     expect(everythingPrinted()).not.toContain(KEY);
+  });
+
+  it('verifies the real password: wrong ones write nothing, the right one after them does', async () => {
+    const keyFile = join(outputDirectory, 'patty_db_key');
+    script = { visible: [ADMIN, ADMIN, ADMIN], secret: ['wrong one', 'another wrong', 'a third wrong'] };
+    expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
+    expect(existsSync(keyFile)).toBe(false);
+
+    script = { visible: [ADMIN, ADMIN, KEY_EXPORT_CONFIRMATION_ANSWER], secret: ['wrong one', PASSWORD] };
+    expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_OK);
+    expect(readFileSync(keyFile, 'utf8')).toBe(`${KEY}\n`);
+  });
+
+  it('writes nothing when the confirmation is declined', async () => {
+    const keyFile = join(outputDirectory, 'patty_db_key');
+    script = { visible: [ADMIN, 'no'], secret: [PASSWORD] };
+    expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
+    expect(existsSync(keyFile)).toBe(false);
+  });
+
+  it('is refused with no terminal, before the database is opened', async () => {
+    const keyFile = join(outputDirectory, 'patty_db_key');
+    vi.stubEnv('DB_PATH', join(dataDirectory, 'never-opened.db')); // opening it would say there is no database
+    const noTerminal = { ...io(), openTerminal: () => null } satisfies CliIo;
+    expect(await runCli(['key', 'export', '--to', keyFile], noTerminal)).toBe(EXIT_FAILURE);
+    expect(err.join('\n')).toContain(CLI_MESSAGES.keyExportNeedsTerminal);
+    expect(err.join('\n')).not.toContain('there is no database');
+    expect(existsSync(keyFile)).toBe(false);
+  });
+
+  it('points to setup, asking nothing, while the owner is unclaimed', async () => {
+    const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: KEY });
+    await db.update(users).set({ username: null, passwordHash: null }).where(eq(users.id, OWNER_USER_ID));
+    closeDatabase(db);
+    const keyFile = join(outputDirectory, 'patty_db_key');
+    expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
+    expect(err.join('\n')).toContain('auth setup');
+    expect(existsSync(keyFile)).toBe(false);
+  });
+
+  it('neither migrates nor writes the database: migrations and rows stay exactly as they were', async () => {
+    const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: KEY });
+    await db.run(
+      sql`DELETE FROM ${sql.identifier(MIGRATIONS_TABLE)} WHERE id = (SELECT max(id) FROM ${sql.identifier(MIGRATIONS_TABLE)})`,
+    );
+    const snapshotOf = async (handle: typeof db) => ({
+      migrations: await handle.all(sql`SELECT hash, created_at FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`),
+      users: await handle.select().from(users),
+      accounts: await handle.select().from(accounts),
+      transactions: await handle.select().from(transactions),
+    });
+    const before = await snapshotOf(db);
+    closeDatabase(db);
+
+    confirmedLogin();
+    expect(await run('key', 'export', '--to', join(outputDirectory, 'patty_db_key'))).toBe(EXIT_OK);
+
+    const after = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: dbPath, PATTY_DB_KEY: KEY });
+    expect(await snapshotOf(after)).toEqual(before);
+    closeDatabase(after);
   });
 
   it('refuses an existing file and leaves it untouched', async () => {
@@ -174,6 +255,30 @@ describe('patty key export', () => {
     expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
     expect(existsSync(keyFile)).toBe(false);
     expect(err.join('\n')).toContain('there is no database at');
+  });
+
+  it('explains a database a newer build has not migrated yet, writes nothing and migrates nothing', async () => {
+    const oldDatabase = join(dataDirectory, 'old.db');
+    const migrations = migrationsBefore(root, CREDENTIALS_CHANGED_MIGRATION);
+    const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: oldDatabase, PATTY_DB_KEY: KEY });
+    await migrate(db, { migrationsFolder: migrations });
+    const appliedBefore = await db.all(sql`SELECT hash FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`);
+    closeDatabase(db);
+    vi.stubEnv('DB_PATH', oldDatabase);
+
+    const keyFile = join(outputDirectory, 'patty_db_key');
+    expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_FAILURE);
+
+    expect(err.join('\n')).toContain(`start ${PRODUCT_NAME} once`);
+    expect(existsSync(keyFile)).toBe(false);
+    const after = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: oldDatabase, PATTY_DB_KEY: KEY });
+    expect(await after.all(sql`SELECT hash FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY id`)).toEqual(
+      appliedBefore,
+    );
+    expect(
+      await after.all(sql`SELECT name FROM pragma_table_info('users') WHERE name = 'credentials_changed_at'`),
+    ).toEqual([]);
+    closeDatabase(after);
   });
 
   it('needs --to, and rejects stray arguments', async () => {

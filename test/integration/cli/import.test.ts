@@ -28,6 +28,7 @@ import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { PRIVATE_FILE_MODE } from '../../../src/models/export.js';
 import { KeyImportRefusal } from '../../../src/models/key-import.js';
 import type * as KeyLock from '../../../src/diplomat/db/key-lock.js';
+import { claimOwner, confirmedExport, terminalAnswering, type Answers } from './key-export-login.js';
 import { unusedDemo } from '../../unit/fixtures/demo.js';
 import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
@@ -79,13 +80,14 @@ let snapshot = '';
 let out: string[] = [];
 let err: string[] = [];
 let warnings: unknown[][] = [];
+let answers: Answers = confirmedExport();
 
 const io = (): CliIo =>
   ({
     openShell: () => {
       throw new Error('the import commands open no shell');
     },
-    openTerminal: () => null,
+    openTerminal: () => terminalAnswering(() => answers),
     readPasswordFromStdin: async () => '',
     out: (line) => out.push(line),
     err: (line) => err.push(line),
@@ -103,6 +105,7 @@ const run = (...args: string[]) => runCli(args, io());
 const seedSource = async () => {
   const db = await openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: sourceDatabase, PATTY_DB_KEY: KEY });
   await bootstrap(db);
+  await claimOwner(db);
   await db
     .insert(accounts)
     .values({ id: 'a1', name: 'Checking', type: 'checking', currency: 'USD', userId: OWNER_USER_ID });
@@ -126,6 +129,7 @@ const seedSource = async () => {
 const exportFromSource = async () => {
   vi.stubEnv('DB_PATH', sourceDatabase);
   vi.stubEnv('PATTY_DB_KEY', KEY);
+  answers = confirmedExport();
   expect(await run('key', 'export', '--to', keyFile)).toBe(EXIT_OK);
   expect(await run('db', 'export', '--to', snapshot)).toBe(EXIT_OK);
   vi.stubEnv('DB_PATH', installDatabase);

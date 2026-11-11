@@ -133,7 +133,10 @@ export const EXPORT_POSITIONALS = 0;
 export const IMPORT_POSITIONALS = 0;
 
 const pathOption = (flag: string) =>
-  z.string({ required_error: `the file is required: --${flag} <file>` }).min(1).max(PATH_MAX_LENGTH);
+  z
+    .string({ required_error: `the file is required: --${flag} <file>` })
+    .min(1)
+    .max(PATH_MAX_LENGTH);
 
 export const ExportOptionsSchema = z.object({ to: pathOption('to') });
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>;

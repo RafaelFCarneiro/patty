@@ -1,5 +1,10 @@
 import { EncryptionKey } from '../models/encryption-key.js';
-import { KEY_FILE_LINE_ENDINGS, KEY_FILE_MAX_CHARACTERS, KeyImportRefusal, type KeySources } from '../models/key-import.js';
+import {
+  KEY_FILE_LINE_ENDINGS,
+  KEY_FILE_MAX_CHARACTERS,
+  KeyImportRefusal,
+  type KeySources,
+} from '../models/key-import.js';
 
 export const decodeKeyFile = (contents: string): string | null => {
   if (contents.length > KEY_FILE_MAX_CHARACTERS) return null;
