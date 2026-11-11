@@ -31,6 +31,9 @@ export type Terminal = {
 export const PROMPT_ABORTED_MESSAGE = 'cancelled';
 export const STDIN_IS_A_TERMINAL_MESSAGE = `--${PASSWORD_STDIN_FLAG} expects the password piped or redirected in, but stdin is a terminal`;
 
+/** Readline remembers every answer, secret ones included, and Up would print them back: remember none. */
+const NO_HISTORY = 0;
+
 const TRAILING_NEWLINE = /\r?\n$/;
 
 export const printResult = (line: string): void => {
@@ -74,7 +77,7 @@ export const open = (streams: TerminalStreams = { input: process.stdin, output: 
       callback();
     },
   });
-  const lines = createInterface({ input: streams.input, output, terminal: true });
+  const lines = createInterface({ input: streams.input, output, terminal: true, historySize: NO_HISTORY });
   const ended = new Promise<PromptEnded>((resolve) => {
     lines.once('close', () =>
       resolve(promptEnded(interrupted ? PromptEnd.enum.interrupted : PromptEnd.enum.cancelled)),
