@@ -62,8 +62,9 @@ commits) that every pull request and push to `main` adds. The history already on
 ref, before publication (ADR-035 §4).
 
 - New kinds of false positive get a narrow allowlist entry in `.gitleaks.toml` with a `description` — never a blanket
-  path outside `legacy/`, never an inline suppression (CI ignores `gitleaks:allow` comments). Entries name their rule and match the finding's secret
-  together with the path (not the whole line), by pattern rather than commit SHA, so they survive squash merges.
+  path outside `legacy/`, never an inline suppression (CI ignores `gitleaks:allow` comments). Entries name their rule
+  and match the finding's secret together with the path (not the whole line), by pattern rather than commit SHA, so
+  they survive squash merges.
 - `.gitleaksignore` holds the fingerprints of the pre-publication history, for full-history local scans.
 - `Secret scan` is a required status check on `main` (set in the branch protection rule).
 
