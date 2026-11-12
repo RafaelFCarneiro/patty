@@ -1,0 +1,28 @@
+# gitleaks configuration (read automatically from the repo root by the CLI and by gitleaks-action).
+# New kinds of false positive get a narrow allowlist entry here, with a description; never an inline suppression.
+# Fingerprints of the pre-publication history live in .gitleaksignore.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Test idempotency keys in the test suites (made-up strings, not credentials)"
+paths = ['''^test/''']
+regexes = ['''idempotencyKey:\s*'[a-z0-9-]+''']
+regexTarget = "line"
+
+[[allowlists]]
+description = "The published DEMO_DB_KEY of the throwaway demo database (documented, not a secret)"
+paths = ['''^src/models/demo(/core)?\.ts$''']
+regexes = ['''DEMO_DB_KEY''']
+regexTarget = "line"
+
+[[allowlists]]
+description = "The smoke tests' deliberately invalid bearer token, used to prove a bad token is refused"
+paths = ['''^scripts/.*smoke.*\.sh$''']
+regexes = ['''Bearer [fp]tk_nope''']
+regexTarget = "line"
+
+[[allowlists]]
+description = "The archived v1 (NestJS starter README badge URL and similar); functional reference only"
+paths = ['''^legacy/''']

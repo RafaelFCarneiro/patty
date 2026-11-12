@@ -1,5 +1,6 @@
-# Known false positives (reviewed 2026-11-11, ADR-035 step 6): none is a credential.
-# Add a new one with a comment saying what it is; do not suppress inline.
+# Fingerprints of the known false positives in the pre-publication history (reviewed 2026-11-11, ADR-035
+# step 6): none is a credential. They keep full-history local scans quiet. A new kind of false positive gets a
+# narrow, described allowlist entry in .gitleaks.toml instead (patterns survive squash merges; fingerprints do not).
 
 # NestJS starter README (archived v1): a badge URL.
 0dc09205d4d333c0d0526f2c59ab57d214ac10d2:legacy/backend/README.md:generic-api-key:5
