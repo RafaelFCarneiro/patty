@@ -56,8 +56,9 @@ and publishes nothing. To turn releases on: Settings → Secrets and variables �
 
 ## Secret scanning
 
-CI runs gitleaks over the full history on every pull request and push to `main` (the `secrets` job). A new false
-positive is added to `.gitleaksignore` (its fingerprint, under a `#` comment saying what it is), never suppressed
+The `Secret scan` workflow (`.github/workflows/secrets.yml`, no path filter, so Markdown-only changes are scanned
+too) runs gitleaks on the commits every pull request and push to `main` adds. The history already on `main` was
+scanned once, over every ref, before publication (ADR-035 §4). A new false positive is added to `.gitleaksignore` (its fingerprint, under a `#` comment saying what it is), never suppressed
 inline.
 
 ## Container image (GHCR)

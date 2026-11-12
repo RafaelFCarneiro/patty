@@ -10,24 +10,6 @@ on:
       - '**/*.md'
 
 jobs:
-  # Scans the full history for committed secrets. Known false positives are listed, with a comment each, in
-  # .gitleaksignore (the action reads it from the repo root).
-  secrets:
-    name: Secret scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read # the action lists the PR's commits to scan
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # the scan walks every commit
-
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   test:
     name: Test & Coverage
     runs-on: ubuntu-latest
