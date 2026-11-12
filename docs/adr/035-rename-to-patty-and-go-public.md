@@ -139,7 +139,9 @@ Making the repository public publishes its whole history. Right before that step
   Architecture as "Nubank's" / "a Nubank pattern". The current docs say "inspired by" and carry a not-affiliated
   note. The decision at that step: keep the history as it is, or run one narrow `git filter-repo --replace-text`
   pass over that wording. A rewrite changes almost every commit SHA (old links and quoted SHAs stop resolving), so it
-  is done at most once, just before publishing.
+  is done at most once, just before publishing. **Decision: kept as is.** It is attribution history, already
+  corrected by #240; a rewrite would change almost every SHA, and GitHub's read-only `refs/pull/*` would keep the old
+  text anyway.
 - **The old name:** not a concern; old commits may keep it.
 
 The history is kept (no fresh repository), subject to the scan.
@@ -180,8 +182,12 @@ The history is kept (no fresh repository), subject to the scan.
 4. [x] Key-export step-up PR (`feat/key-export-step-up`, #246, §2): login password, interactive only, confirmation and
        warning. After the rename, so the rename stays mechanical; before step 7, so the first public version ships
        with it.
-5. [ ] effect-runner docs PR (§3).
-6. [ ] Pre-publication scan and the history decision (§4).
+5. [x] effect-runner docs PR (§3, RafaelFCarneiro/effect-runner#9).
+6. [x] Pre-publication scan and the history decision (§4), 2026-11-11: gitleaks 8.30 over every branch, tag and PR
+       ref (`refs/pull/*`) found 30 results in this repository, all test fixtures or published values (test
+       idempotency keys, the published `DEMO_DB_KEY`, the smoke test's invalid token, the NestJS starter README's
+       badge URL), none a credential; effect-runner 0. No `.env`, database, backup, key or statement file was ever
+       committed, and there is no personal data in any file. History kept, no rewrite.
 7. [ ] Rename the GitHub repository (this may happen any time before; GitHub redirects the old URL) and make it
        public. Publish `@rfc0/patty@1.0.0` by hand, push the tag `patty-v1.0.0` on that commit and create its GitHub
        Release with short notes (§3), then configure the trusted publisher on npmjs.com and the `release` environment

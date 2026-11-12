@@ -54,6 +54,20 @@ and publishes nothing. To turn releases on: Settings → Secrets and variables �
   set to the owner.
 - **Delete the old private package** on GitHub Packages once the move is done.
 
+## Secret scanning
+
+The `Secret scan` workflow (`.github/workflows/secrets.yml`, no path filter, so Markdown-only changes are scanned
+too) runs the gitleaks image, pinned by version, over the exact commit range (base..head, however many
+commits) that every pull request and push to `main` adds. The history already on `main` was scanned once, over every
+ref, before publication (ADR-035 §4).
+
+- New kinds of false positive get a narrow allowlist entry in `.gitleaks.toml` with a `description` — never a blanket
+  path outside `legacy/`, never an inline suppression (CI ignores `gitleaks:allow` comments). Entries name their rule
+  and match the finding's secret together with the path (not the whole line), by pattern rather than commit SHA, so
+  they survive squash merges.
+- `.gitleaksignore` holds the fingerprints of the pre-publication history, for full-history local scans.
+- `Secret scan` is a required status check on `main` (set in the branch protection rule).
+
 ## Container image (GHCR)
 
 The same workflow publishes the container image (ADR-032) right after the release is cut. The `release` job exposes
