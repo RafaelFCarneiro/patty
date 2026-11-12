@@ -57,12 +57,13 @@ and publishes nothing. To turn releases on: Settings → Secrets and variables �
 ## Secret scanning
 
 The `Secret scan` workflow (`.github/workflows/secrets.yml`, no path filter, so Markdown-only changes are scanned
-too) runs gitleaks on the commits every pull request and push to `main` adds. The history already on `main` was
+too) runs the pinned gitleaks image over the exact commit range (base..head, however many commits) every pull
+request and push to `main` adds. The history already on `main` was
 scanned once, over every ref, before publication (ADR-035 §4).
 
 - New kinds of false positive get a narrow allowlist entry in `.gitleaks.toml` with a `description` — never a blanket
-  path outside `legacy/`, never an inline suppression. Entries match by pattern, not commit SHA, so they survive
-  squash merges.
+  path outside `legacy/`, never an inline suppression. Entries name their rule and match the finding's secret
+  together with the path (not the whole line), by pattern rather than commit SHA, so they survive squash merges.
 - `.gitleaksignore` holds the fingerprints of the pre-publication history, for full-history local scans.
 - `Secret scan` is a required status check on `main` (set in the branch protection rule).
 

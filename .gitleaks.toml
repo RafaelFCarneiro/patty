@@ -1,30 +1,32 @@
-# gitleaks configuration (read automatically from the repo root by the CLI and by gitleaks-action).
+# gitleaks configuration (read automatically from the repo root by the CLI and by the CI scan).
 # New kinds of false positive get a narrow allowlist entry here, with a description; never an inline suppression.
-# Fingerprints of the pre-publication history live in .gitleaksignore.
+# Each entry names the rule it covers and matches the finding's secret itself (not the whole line), together with the
+# path, so a real credential next to a fixture is still reported. Fingerprints of the pre-publication history live in
+# .gitleaksignore.
 
 [extend]
 useDefault = true
 
 [[allowlists]]
-description = "Test idempotency keys in the test suites (made-up strings, not credentials)"
+description = "Test idempotency keys in the test suites (made-up kebab-case labels ending in a number)"
+targetRules = ["generic-api-key"]
 paths = ['''^test/''']
-regexes = ['''idempotencyKey:\s*'[a-z0-9-]+''']
-regexTarget = "line"
-condition = "AND" # path AND pattern must both match; the default is OR
+regexes = ['''^[a-z0-9]+(-[a-z0-9]+)*-\d+$''']
+condition = "AND"
 
 [[allowlists]]
-description = "The published DEMO_DB_KEY of the throwaway demo database (documented, not a secret)"
+description = "The published DEMO_DB_KEY of the throwaway demo database: exactly its documented value"
+targetRules = ["generic-api-key"]
 paths = ['''^src/models/demo(/core)?\.ts$''']
-regexes = ['''DEMO_DB_KEY''']
-regexTarget = "line"
-condition = "AND" # path AND pattern must both match; the default is OR
+regexes = ['''^0123456789abcdef$''']
+condition = "AND"
 
 [[allowlists]]
 description = "The smoke tests' deliberately invalid bearer token, used to prove a bad token is refused"
+targetRules = ["curl-auth-header"]
 paths = ['''^scripts/.*smoke.*\.sh$''']
-regexes = ['''Bearer [fp]tk_nope''']
-regexTarget = "line"
-condition = "AND" # path AND pattern must both match; the default is OR
+regexes = ['''^[fp]tk_nope$''']
+condition = "AND"
 
 [[allowlists]]
 description = "The archived v1 (NestJS starter README badge URL and similar); functional reference only"
