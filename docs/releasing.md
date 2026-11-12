@@ -54,6 +54,12 @@ and publishes nothing. To turn releases on: Settings â†’ Secrets and variables â
   set to the owner.
 - **Delete the old private package** on GitHub Packages once the move is done.
 
+## Secret scanning
+
+CI runs gitleaks over the full history on every pull request and push to `main` (the `secrets` job). A new false
+positive is added to `.gitleaksignore` (its fingerprint, under a `#` comment saying what it is), never suppressed
+inline.
+
 ## Container image (GHCR)
 
 The same workflow publishes the container image (ADR-032) right after the release is cut. The `release` job exposes

@@ -1,0 +1,40 @@
+# Known false positives (reviewed 2026-11-11, ADR-035 step 6): none is a credential.
+# Add a new one with a comment saying what it is; do not suppress inline.
+
+# NestJS starter README (archived v1): a badge URL.
+0dc09205d4d333c0d0526f2c59ab57d214ac10d2:legacy/backend/README.md:generic-api-key:5
+
+# docker-smoke.sh: the deliberately invalid bearer token that proves a bad token is refused.
+a17cf37d963c08f15d770496af5388737fb362d2:scripts/docker-smoke.sh:curl-auth-header:152
+d4d745eb642aca26e04d267901f77eb271c5ef02:scripts/docker-smoke.sh:curl-auth-header:152
+
+# The published DEMO_DB_KEY of the throwaway demo database (src/models/demo.ts).
+3116ac3ef6e474f77542fa0345f6cfa1caa9cde1:src/models/demo.ts:generic-api-key:20
+cd087eed85578ec8fa093e90807c8e587c6359ae:src/models/demo.ts:generic-api-key:22
+
+# Test idempotency keys and other test fixtures in the integration suites.
+6858321a1e0b875e9f234401cada88174c44c311:test/integration/http/routes.test.ts:generic-api-key:439
+6858321a1e0b875e9f234401cada88174c44c311:test/integration/http/routes.test.ts:generic-api-key:449
+23d8947c031950dc023e9ce171bfac6b7b022589:test/integration/http/transactions.test.ts:generic-api-key:32
+23d8947c031950dc023e9ce171bfac6b7b022589:test/integration/http/transactions.test.ts:generic-api-key:39
+5e10857c620721e1d19fdcc3943e12965238c7f1:test/integration/http/transactions.test.ts:generic-api-key:500
+6a5bab4a92d99ea9105b0cadda449b48722fbe4d:test/integration/http/transactions.test.ts:generic-api-key:213
+6a5bab4a92d99ea9105b0cadda449b48722fbe4d:test/integration/http/transactions.test.ts:generic-api-key:42
+795f0f4ce72715bce6ae74573fe6faf96769f242:test/integration/http/transactions.test.ts:generic-api-key:38
+795f0f4ce72715bce6ae74573fe6faf96769f242:test/integration/http/transactions.test.ts:generic-api-key:46
+7d36d8f6babac94fa0adf55eab472803ffa24b1e:test/integration/http/transactions.test.ts:generic-api-key:70
+7d36d8f6babac94fa0adf55eab472803ffa24b1e:test/integration/http/transactions.test.ts:generic-api-key:87
+8e82f01f6a249deabfec6930bc34d5f99919e09a:test/integration/http/transactions.test.ts:generic-api-key:70
+8e82f01f6a249deabfec6930bc34d5f99919e09a:test/integration/http/transactions.test.ts:generic-api-key:87
+a1a8d30ea4c30d9d601a47d2b708df90170066d6:test/integration/http/transactions.test.ts:generic-api-key:500
+ad69fced5dce5df290635476a4b672838ed80255:test/integration/http/transactions.test.ts:generic-api-key:70
+ad69fced5dce5df290635476a4b672838ed80255:test/integration/http/transactions.test.ts:generic-api-key:87
+b35f71bc0a5d7f028737161d6c1be6af9fd6d8a3:test/integration/http/transactions.test.ts:generic-api-key:38
+b35f71bc0a5d7f028737161d6c1be6af9fd6d8a3:test/integration/http/transactions.test.ts:generic-api-key:46
+be4af041ccfd566672939287500caaeed671a49f:test/integration/http/transactions.test.ts:generic-api-key:38
+be4af041ccfd566672939287500caaeed671a49f:test/integration/http/transactions.test.ts:generic-api-key:46
+fb5e9abe36af941d30974b3b1fa0499ca4fbfcb2:test/integration/http/transactions.test.ts:generic-api-key:213
+fb5e9abe36af941d30974b3b1fa0499ca4fbfcb2:test/integration/http/transactions.test.ts:generic-api-key:42
+17c4fad1c51259f22b26972a5b5fcf3a5a84e67c:test/integration/mcp/i18n.test.ts:generic-api-key:73
+4b5d836b41aed83ecb716811d5f53bb58b20b315:test/integration/mcp/locale.test.ts:generic-api-key:81
+b0b502722ad7a149e8ae6423fbd689b76d8a6c66:test/integration/mcp/locale.test.ts:generic-api-key:81
