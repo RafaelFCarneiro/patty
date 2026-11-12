@@ -10,18 +10,21 @@ description = "Test idempotency keys in the test suites (made-up strings, not cr
 paths = ['''^test/''']
 regexes = ['''idempotencyKey:\s*'[a-z0-9-]+''']
 regexTarget = "line"
+condition = "AND" # path AND pattern must both match; the default is OR
 
 [[allowlists]]
 description = "The published DEMO_DB_KEY of the throwaway demo database (documented, not a secret)"
 paths = ['''^src/models/demo(/core)?\.ts$''']
 regexes = ['''DEMO_DB_KEY''']
 regexTarget = "line"
+condition = "AND" # path AND pattern must both match; the default is OR
 
 [[allowlists]]
 description = "The smoke tests' deliberately invalid bearer token, used to prove a bad token is refused"
 paths = ['''^scripts/.*smoke.*\.sh$''']
 regexes = ['''Bearer [fp]tk_nope''']
 regexTarget = "line"
+condition = "AND" # path AND pattern must both match; the default is OR
 
 [[allowlists]]
 description = "The archived v1 (NestJS starter README badge URL and similar); functional reference only"
