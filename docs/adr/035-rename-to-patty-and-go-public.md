@@ -188,11 +188,12 @@ The history is kept (no fresh repository), subject to the scan.
        idempotency keys, the published `DEMO_DB_KEY`, the smoke test's invalid token, the NestJS starter README's
        badge URL), none a credential; effect-runner 0. No `.env`, database, backup, key or statement file was ever
        committed, and there is no personal data in any file. History kept, no rewrite.
-7. [ ] Rename the GitHub repository (this may happen any time before; GitHub redirects the old URL) and make it
-       public. Publish `@rfc0/patty@1.0.0` by hand, push the tag `patty-v1.0.0` on that commit and create its GitHub
-       Release with short notes (§3), then configure the trusted publisher on npmjs.com and the `release` environment
-       on GitHub, and switch the release workflow on. From then on, each release is staged by the workflow and goes live when approved (npm, then
-       Docker `latest`).
+7. [x] Rename the GitHub repository and make it public (2026-11-12): repository renamed to
+       `RafaelFCarneiro/patty` and made public; `@rfc0/patty@1.0.0` published by hand; tag `patty-v1.0.0` + GitHub
+       Release; first image `ghcr.io/rafaelfcarneiro/patty:1.0.0` (+ `1.0`, `1`, `latest`) pushed by hand, package
+       public with Actions write access; npm trusted publisher (`release.yml`) with tokens disallowed; `release`
+       environment with a required reviewer; `RELEASE_ENABLED` on. From now on, each release is staged by the
+       workflow and goes live when approved (npm, then Docker `latest`).
 8. [ ] The author moves his install with the runbook (§2) — after step 7, since the new client entry installs
        `@rfc0/patty` from npm. Until then the old private package keeps working.
-9. [ ] Delete the private GitHub Packages package.
+9. [ ] Delete the private GitHub Packages npm package and the old `ghcr.io/rafaelfcarneiro/fintrack` image.
