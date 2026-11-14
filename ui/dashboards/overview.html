@@ -2394,7 +2394,7 @@ function handleAppDataChanged(entities) {
     // (ADR-026) — omitting them would leave the badge stale after a rate or home-currency update
     // until some unrelated entity change happened to trigger a refetch.
     var affected = entities.some(function(tag) {
-        return ['transaction', 'account', 'category', 'recurring', 'currency_rate', 'userSettings'].indexOf(tag) !== -1;
+        return ['transaction', 'account', 'category', 'recurring', 'currency_rate', 'userSettings', 'creditCard', 'bill'].indexOf(tag) !== -1;
     });
     if (affected) {
         console.log("overview refetching due to entity change:", entities);

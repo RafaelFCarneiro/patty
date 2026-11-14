@@ -4021,7 +4021,7 @@ function initCustomSelects() {
 // ADR-027 Live-update listener
 window.onAppDataChanged = function(entities) {
     var affected = entities.some(function(tag) {
-        return ['creditCard', 'transaction', 'account'].indexOf(tag) !== -1;
+        return ['creditCard', 'transaction', 'account', 'bill', 'category', 'tag'].indexOf(tag) !== -1;
     });
     if (affected) {
         console.log("cards refetching due to entity change:", entities);

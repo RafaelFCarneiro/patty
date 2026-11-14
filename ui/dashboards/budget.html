@@ -513,7 +513,7 @@
             </div>
             <div class="controls-group">
                 <label for="currency-select" data-i18n="currency_label">Currency:</label>
-                <select id="currency-select" class="select-custom" onchange="onFilterChange()">
+                <select id="currency-select" class="select-custom" onchange="onCurrencyChange()">
                     <option value="" data-i18n="currency_none">No conversion</option>
                 </select>
             </div>
@@ -782,6 +782,8 @@ var compareChart = null;
 var trendChart = null;
 var currentLocale = 'en';
 var currentDisplayCurrency = '';
+// True once the person picks a currency; until then the selection follows the base currency.
+var displayCurrencyChosen = false;
 
 // Sync the reference selectors to ?month&year query params (deep links) or today's date, instead
 // of always loading the HTML's static placeholder selection — mirrors pending.html's pattern.
@@ -897,6 +899,21 @@ function onFilterChange() {
     const currencySelect = document.getElementById('currency-select');
     currentDisplayCurrency = currencySelect ? currencySelect.value : '';
     loadDashboardData();
+}
+
+// Only the currency selector counts as a choice; changing the month or year leaves the default following the base.
+function onCurrencyChange() {
+    displayCurrencyChosen = true;
+    onFilterChange();
+}
+
+// The shell has already refreshed window.BASE_CURRENCY when a userSettings event reaches this fragment.
+function followBaseCurrency() {
+    const select = document.getElementById('currency-select');
+    if (displayCurrencyChosen || !select || !window.BASE_CURRENCY) return;
+    if (!Object.prototype.hasOwnProperty.call(window.__appCurrencies || {}, window.BASE_CURRENCY)) return;
+    select.value = window.BASE_CURRENCY;
+    currentDisplayCurrency = select.value;
 }
 
 async function fetchBudgetStatus(month, year, displayCurrency) {
@@ -1705,9 +1722,10 @@ function escapeHtml(str) {
 // ADR-027 Live-update listener
 window.onAppDataChanged = function(entities) {
     var affected = entities.some(function(tag) {
-        return ['budget', 'transaction', 'category', 'recurring'].indexOf(tag) !== -1;
+        return ['budget', 'transaction', 'category', 'recurring', 'userSettings', 'account', 'currency_rate'].indexOf(tag) !== -1;
     });
     if (affected) {
+        if (entities.indexOf('userSettings') !== -1) followBaseCurrency();
         console.log("budget refetching due to entity change:", entities);
         loadDashboardData();
     }

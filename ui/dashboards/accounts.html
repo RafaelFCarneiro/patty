@@ -3178,7 +3178,7 @@ function initCustomSelects() {
 // ADR-027 Live-update listener
 window.onAppDataChanged = function(entities) {
     var affected = entities.some(function(tag) {
-        return ['account', 'transaction'].indexOf(tag) !== -1;
+        return ['account', 'transaction', 'category', 'tag', 'currency_rate', 'userSettings'].indexOf(tag) !== -1;
     });
     if (affected) {
         console.log("accounts refetching due to entity change:", entities);

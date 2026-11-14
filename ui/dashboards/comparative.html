@@ -1651,6 +1651,7 @@
             if (hasInitialized) return;
             hasInitialized = true;
             const ownFragmentMarker = panelsLoading;
+            comparativeMarker = ownFragmentMarker;
             await checkLocale();
             if (!ownFragmentMarker || !ownFragmentMarker.isConnected) return;
 
@@ -1662,6 +1663,16 @@
             if (hmSel) hmSel.addEventListener('change', loadTransactionsData);
 
             await initDashboard();
+            comparativeBootDone = true;
+        }
+
+        // Live update: runInit() is one-shot, so an event after boot refetches through initDashboard() directly.
+        // An event while boot is still in flight is dropped (boot fetches current data), as is one for a torn-down fragment.
+        var comparativeBootDone = false;
+        var comparativeMarker = null;
+        function refreshComparative() {
+            if (!comparativeBootDone || !comparativeMarker || !comparativeMarker.isConnected) return Promise.resolve();
+            return initDashboard();
         }
 
         // Run immediately since DOM is already parsed (script is at bottom of body)
@@ -2457,7 +2468,7 @@ window.onAppDataChanged = function(entities) {
     });
     if (affected) {
         console.log("comparative refetching due to entity change:", entities);
-        runInit();
+        refreshComparative();
     }
 };
 

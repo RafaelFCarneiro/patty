@@ -43,6 +43,17 @@
   var DEFAULT_DASHBOARD_NAME = 'overview';
   var UI_PATH_PREFIX = '/ui/';
   var EVENTS_PATH = '/ui/events';
+  var LOGIN_PATH = '/ui/login';
+  var HTTP_UNAUTHORIZED = 401;
+  var EVENT_SOURCE_CLOSED = 2; // EventSource.CLOSED — the browser gave up retrying
+  // Fixed, no backoff: each attempt costs one cheap local /api/status call.
+  var RECONNECT_DELAY_MS = 3000;
+  // Every entity tag a bundled dashboard listens for (tested against ui/dashboards/*.html); a
+  // resync after a gap in the event stream sends all of them so every dashboard refetches.
+  var ALL_ENTITY_TAGS = [
+    'account', 'bill', 'budget', 'category', 'creditCard', 'currency_rate',
+    'dashboard', 'recurring', 'tag', 'transaction', 'userSettings',
+  ];
   var currentLocale = 'en';
 
   var DASHBOARD_ICONS = {
@@ -102,6 +113,9 @@
   // attached, which would silently stop live update. Also guards connectEvents() itself against
   // ever opening a second connection.
   var eventSource = null;
+  // Set by onerror, consumed by the next onopen: the stream was down, so events may have been missed.
+  var streamErrored = false;
+  var reconnectTimer = null;
 
   var Api = {
     status: '/api/status',
@@ -355,17 +369,65 @@
     navigate(currentDashboardName(), false);
   });
 
-  // ADR-027 Phase 3 — live update. Opened once, for the page's whole lifetime; fragment swaps
-  // (navigate/renderFragment above) never touch this connection, only the
-  // window.onAppDataChanged slot it delivers into. EventSource reconnects on its own after a
-  // drop (the browser's built-in retry), so no reconnect logic is needed here; a message that
-  // arrives with no fragment currently registered (or between "torn down" and "registered again")
-  // is simply dropped — the next live-relevant fetch a user triggers (period change, manual
-  // refresh) always reflects current data regardless.
+  // ADR-027 Phase 3 live update, ADR-036 §4 recovery (the as-built flow is in docs/ui.md). One
+  // EventSource serves the whole page: fragment swaps never touch it, only the
+  // window.onAppDataChanged slot it delivers into, and a message with no fragment registered is
+  // dropped (the next fetch reflects current data anyway). Events that pass while the stream is
+  // down are lost for good, hence the resync on reopen.
+  function forwardEntities(entities) {
+    var forward = function () {
+      if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(entities);
+    };
+    if (entities.indexOf('userSettings') === -1) return forward();
+    // A base-currency change updates the default before the fragment re-renders with it.
+    fetchJson(Api.preferences)
+      .then(function (prefs) {
+        window.setBaseCurrency(prefs && prefs.baseCurrency);
+      })
+      .catch(function (err) {
+        console.error('Could not refresh preferences:', err);
+      })
+      .then(forward);
+  }
+
+  function goToLogin() {
+    var here = window.location.pathname + (window.location.search || '');
+    window.location.href = LOGIN_PATH + '?next=' + encodeURIComponent(here);
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(function () {
+      reconnectTimer = null;
+      connectEvents();
+    }, RECONNECT_DELAY_MS);
+  }
+
+  function handleStreamClosed() {
+    eventSource = null;
+    fetch(Api.status, { headers: { accept: 'application/json' } })
+      .then(function (res) {
+        if (res.status === HTTP_UNAUTHORIZED) return goToLogin();
+        scheduleReconnect();
+      })
+      .catch(scheduleReconnect);
+  }
+
   function connectEvents() {
     if (typeof EventSource === 'undefined' || eventSource) return;
-    eventSource = new EventSource(EVENTS_PATH);
-    eventSource.onmessage = function (event) {
+    var source = new EventSource(EVENTS_PATH);
+    eventSource = source;
+    source.onopen = function () {
+      if (!streamErrored) return;
+      streamErrored = false;
+      forwardEntities(ALL_ENTITY_TAGS.slice()); // a copy: fragments receive the array and may mutate it
+    };
+    source.onerror = function () {
+      streamErrored = true;
+      // A replaced source can still report late; only the current one may reconnect or check the session.
+      if (source.readyState === EVENT_SOURCE_CLOSED && eventSource === source) handleStreamClosed();
+    };
+    source.onmessage = function (event) {
       var payload;
       try {
         payload = JSON.parse(event.data);
@@ -373,19 +435,7 @@
         return;
       }
       if (!Array.isArray(payload.entities)) return;
-      var forward = function () {
-        if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(payload.entities);
-      };
-      if (payload.entities.indexOf('userSettings') === -1) return forward();
-      // A base-currency change updates the default before the fragment re-renders with it.
-      fetchJson(Api.preferences)
-        .then(function (prefs) {
-          window.setBaseCurrency(prefs && prefs.baseCurrency);
-        })
-        .catch(function (err) {
-          console.error('Could not refresh preferences:', err);
-        })
-        .then(forward);
+      forwardEntities(payload.entities);
     };
   }
 
