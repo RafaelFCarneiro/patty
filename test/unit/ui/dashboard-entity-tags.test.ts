@@ -22,6 +22,12 @@ const tagsOf = (dashboard: string): string[] | null => {
   return listed === undefined ? null : listed.split(',').map((tag) => tag.trim().replace(/^'|'$/g, ''));
 };
 
+const REAL_ENTITY_TAGS: string[] = [
+  ACCOUNT_ENTITY_TAG, BILL_ENTITY_TAG, BUDGET_ENTITY_TAG, CATEGORY_ENTITY_TAG, CREDIT_CARD_ENTITY_TAG,
+  CURRENCY_RATE_ENTITY_TAG, DASHBOARD_ENTITY_TAG, RECURRING_ENTITY_TAG, TAG_ENTITY_TAG, TRANSACTION_ENTITY_TAG,
+  USER_SETTINGS_ENTITY_TAG,
+];
+
 // dashboard → the entity tags its /api calls read (docs/ui.md § Live update).
 const EXPECTED_TAGS = {
   accounts: [ACCOUNT_ENTITY_TAG, TRANSACTION_ENTITY_TAG, CATEGORY_ENTITY_TAG],
@@ -55,10 +61,18 @@ describe('bundled dashboards live-update listeners', () => {
     expect(Object.keys(EXPECTED_TAGS).sort()).toEqual(bundled.sort());
   });
 
-  it('is resynced by the shell: its tag list holds every tag any dashboard listens for', () => {
+  describe('the shell resync list (ALL_ENTITY_TAGS)', () => {
     const shell = readFileSync(`${UI_DASHBOARDS_ROOT}/../app.js`, 'utf8').match(/ALL_ENTITY_TAGS = \[([^\]]*)\]/)?.[1];
     const shellTags = (shell ?? '').split(',').map((tag) => tag.trim().replace(/^'|'$/g, '')).filter(Boolean);
-    const listened = Object.keys(EXPECTED_TAGS).flatMap((dashboard) => tagsOf(dashboard) ?? []);
-    expect(shellTags).toEqual(expect.arrayContaining(listened));
+
+    it('holds every tag any dashboard listens for', () => {
+      const listened = Object.keys(EXPECTED_TAGS).flatMap((dashboard) => tagsOf(dashboard) ?? []);
+      expect(shellTags).toEqual(expect.arrayContaining(listened));
+    });
+
+    it('holds only real entity tags', () => {
+      expect(shellTags.length).toBeGreaterThan(0);
+      expect(REAL_ENTITY_TAGS).toEqual(expect.arrayContaining(shellTags));
+    });
   });
 });

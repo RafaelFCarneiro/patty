@@ -300,53 +300,52 @@ baseline fragment, and self-check (fragment not full page; no embedded data; sam
 
 ## Live update — SSE, entity-tagged (ADR-027 Phase 3)
 
-**The change bus** is `@rfc0/effect-runner`'s `createChangeBus<ChangeEvent>` (ADR-033 §5), `ChangeEvent` = `{ userId, entities }`: `publish(event)`
-after a commit, `subscribe(listener)`; publish-failure isolation is the package's. The composition root (`runtime.ts`) builds it once and hands `subscribe` down as a
-parameter — the same crossing pattern as `RunEffects`. `GET /ui/events` is the session user's stream: it forwards only the
-events whose `userId` is that user's (instance bookkeeping carries `null` and reaches no one), and refuses to open at all
-without a principal. A subscriber that throws is isolated by the bus and reported to its `onError` (a shared
-stderr reporter — never stdout, which carries the stdio MCP protocol, ADR-007); it can't fail the write that
-triggered it. No external broker: the MCP server, HTTP sidecar, and scheduler share one process (ADR-024), so an
-in-process bus is the whole mechanism.
+**The change bus** is `@rfc0/effect-runner`'s `createChangeBus<ChangeEvent>` (ADR-033 §5), `ChangeEvent` = `{ userId,
+entities }`: `publish(event)` after a commit, `subscribe(listener)`; publish-failure isolation is the package's. The
+composition root (`runtime.ts`) builds it once and hands `subscribe` down as a parameter — the same crossing pattern as
+`RunEffects`. `GET /ui/events` is the session user's stream: it forwards only the events whose `userId` is that user's
+(instance bookkeeping carries `null` and reaches no one), and refuses to open at all without a principal. A subscriber
+that throws is isolated by the bus and reported to its `onError` (a shared stderr reporter — never stdout, which carries
+the stdio MCP protocol, ADR-007); it can't fail the write that triggered it. No external broker: the MCP server, HTTP
+sidecar, and scheduler share one process (ADR-024), so an in-process bus is the whole mechanism.
 
-**The post-commit publish** is the package's (`runEffects`/`runEffectsSequence` publish the entity tags of a
-committed batch that wrote; see its [change-notification section](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/architecture.md#change-notification)).
-PATTY only subscribes: the tags in each SSE message are those the engine published.
+**The post-commit publish** is the package's (`runEffects`/`runEffectsSequence` publish the entity tags of a committed
+batch that wrote; see its [change-notification
+section](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/architecture.md#change-notification)). PATTY
+only subscribes: the tags in each SSE message are those the engine published.
 
-**`GET /ui/events`** (`registerUiEventsRoute`) is the shell's `EventSource` target. The handler calls
-`reply.hijack()` (an SSE stream never ends like a normal response), `reply.raw.writeHead()` +
-`reply.raw.flushHeaders()` (Node doesn't put headers on the wire until the first write, so without the flush a
-client with nothing yet to publish would hang), and writes `data: {"entities":[...]}\n\n` on every publish for
-as long as the client stays connected. `reply.raw.on('close', unsubscribe)` cleans up per connection; the
-publish callback checks `reply.raw.destroyed` before writing (a publish can race a disconnect not yet seen by
-the close handler). `buildHttpApp`'s Fastify instance sets `forceCloseConnections: true` so `app.close()`
-doesn't hang forever on a long-lived SSE stream at shutdown.
+**`GET /ui/events`** (`registerUiEventsRoute`) is the shell's `EventSource` target. The handler calls `reply.hijack()`
+(an SSE stream never ends like a normal response), `reply.raw.writeHead()` + `reply.raw.flushHeaders()` (Node doesn't
+put headers on the wire until the first write, so without the flush a client with nothing yet to publish would hang),
+and writes `data: {"entities":[...]}\n\n` on every publish for as long as the client stays connected.
+`reply.raw.on('close', unsubscribe)` cleans up per connection; the publish callback checks `reply.raw.destroyed` before
+writing (a publish can race a disconnect not yet seen by the close handler). `buildHttpApp`'s Fastify instance sets
+`forceCloseConnections: true` so `app.close()` doesn't hang forever on a long-lived SSE stream at shutdown.
 
-**The shell forwards, the fragment decides.** `ui/app.js` opens exactly one `EventSource('/ui/events')` for the
-page's whole lifetime (fragment swaps never reopen it) and, on each message, calls
-`window.onAppDataChanged(entities)` if the loaded fragment defined it — the shell knows nothing of a
-fragment's internal sections, only this one well-known global slot. `renderFragment` resets the slot to `null`
-before tearing down the outgoing fragment (never after injecting the new one), so a stale closure can't fire.
-The two globals a dashboard may touch, `window.onAppDataChanged` and `window.__appCurrencies`, are deliberately
-brand-neutral: dashboards are stored in the database and call them, so a future rename of the product can never break
-a saved dashboard. A dashboard saved before the rename (ADR-035) used differently named globals and is re-saved once.
-The baseline `overview.html` implements the contract: a `SECTION_ENTITY_DEPENDENCIES` map declares which entity
-tags feed each section loader, and `onDataChanged` refetches only the sections whose dependencies intersect the
-published entities. A fragment that never sets the hook simply has no live update, same as before this phase.
+**The shell forwards, the fragment decides.** `ui/app.js` opens exactly one `EventSource('/ui/events')` for the page's
+whole lifetime (fragment swaps never reopen it) and, on each message, calls `window.onAppDataChanged(entities)` if the
+loaded fragment defined it — the shell knows nothing of a fragment's internal sections, only this one well-known global
+slot. `renderFragment` resets the slot to `null` before tearing down the outgoing fragment (never after injecting the
+new one), so a stale closure can't fire. The two globals a dashboard may touch, `window.onAppDataChanged` and
+`window.__appCurrencies`, are deliberately brand-neutral: dashboards are stored in the database and call them, so a
+future rename of the product can never break a saved dashboard. A dashboard saved before the rename (ADR-035) used
+differently named globals and is re-saved once. The baseline `overview.html` implements the contract: a
+`SECTION_ENTITY_DEPENDENCIES` map declares which entity tags feed each section loader, and `onDataChanged` refetches
+only the sections whose dependencies intersect the published entities. A fragment that never sets the hook simply has no
+live update, same as before this phase.
 
 **The tag lists are tested; the stream recovers and resyncs (ADR-036 §4).** Each bundled dashboard's tag list names
-every entity its `/api` calls read (`test/unit/ui/dashboard-entity-tags.test.ts` parses each list and checks it against the
-`*_ENTITY_TAG` constants, so a renamed or missing tag fails the test). The shell recovers its own stream: when
+every entity its `/api` calls read (`test/unit/ui/dashboard-entity-tags.test.ts` parses each list and checks it against
+the `*_ENTITY_TAG` constants, so a renamed or missing tag fails the test). The shell recovers its own stream: when
 `EventSource` gives up (`readyState` CLOSED, e.g. a 401 after the session lapsed) `onerror` makes one request to
 `/api/status` — a 401 goes to `/ui/login?next=<current path>`; anything else reopens the stream after
 `RECONNECT_DELAY_MS`, never more than one reconnect pending. After any reopen following an error (the shell's own or the
 browser's retry) the shell calls the current `window.onAppDataChanged` once with `ALL_ENTITY_TAGS` (`ui/app.js`, a list
 the test keeps a superset of every dashboard's), so a gap in events costs one refetch.
 
-**Known limit (by design, ADR-027; cross-process delivery is ADR-036):** the change bus reaches only subscribers on this process — a write from a
-*different* stdio server won't push here. Mitigated because ADR-024 steers multi-client use to the single
-HTTP-transport server; a periodic client-side poll can backstop if cross-process live-update ever matters.
-
+**Known limit (by design, ADR-027; cross-process delivery is ADR-036):** the change bus reaches only subscribers on this
+process — a write from a *different* stdio server won't push here. Mitigated because ADR-024 steers multi-client use to
+the single HTTP-transport server; a periodic client-side poll can backstop if cross-process live-update ever matters.
 ## Currency in `pending.html` and `cards.html`
 
 No dashboard names a currency. `pending.html` takes its primary currency from `primaryCurrencyOf` over its own
