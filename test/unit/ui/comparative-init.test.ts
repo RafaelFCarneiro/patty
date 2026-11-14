@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
+import { TRANSACTION_ENTITY_TAG } from '../../../src/models/transaction.js';
 
 // ui/dashboards/comparative.html is a plain browser-global fragment script (no build step, no
 // module system), so runInit()'s async boot sequencing can't be unit-tested by importing it —
@@ -218,5 +219,47 @@ describe("runInit's boot sequencing (ui/dashboards/comparative.html)", () => {
 
     documentStub.getElementById('month-select').fireEvent('change');
     expect(loadCount).toBe(0);
+  });
+});
+
+describe("live update after boot (ui/dashboards/comparative.html)", () => {
+  const bootCompleted = async () => {
+    const loaded = loadComparativeSandboxWithControllableStatus();
+    let loadCount = 0;
+    loaded.sandbox.loadTransactionsData = () => {
+      loadCount += 1;
+    };
+    loaded.resolveStatus({ ok: true, json: async () => ({ locale: 'pt' }) });
+    await flushMicrotasks();
+    await flushMicrotasks();
+    return { ...loaded, loads: () => loadCount };
+  };
+
+  it('refetches when an event arrives after boot completed', async () => {
+    const { sandbox, loads } = await bootCompleted();
+    expect(loads()).toBe(1);
+    (sandbox.onAppDataChanged as (entities: string[]) => void)([TRANSACTION_ENTITY_TAG]);
+    await flushMicrotasks();
+    expect(loads()).toBe(2);
+  });
+
+  it('ignores an event while boot is still waiting for the locale', async () => {
+    const { sandbox, resolveStatus } = loadComparativeSandboxWithControllableStatus();
+    let loadCount = 0;
+    sandbox.loadTransactionsData = () => {
+      loadCount += 1;
+    };
+    (sandbox.onAppDataChanged as (entities: string[]) => void)([TRANSACTION_ENTITY_TAG]);
+    await flushMicrotasks();
+    expect(loadCount).toBe(0);
+    resolveStatus({ ok: true, json: async () => ({ locale: 'pt' }) });
+  });
+
+  it('ignores an event once the fragment was torn down', async () => {
+    const { sandbox, documentStub, loads } = await bootCompleted();
+    documentStub.getElementById('panels-loading').isConnected = false;
+    (sandbox.onAppDataChanged as (entities: string[]) => void)([TRANSACTION_ENTITY_TAG]);
+    await flushMicrotasks();
+    expect(loads()).toBe(1);
   });
 });
