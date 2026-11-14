@@ -2,17 +2,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ACCOUNT_ENTITY_TAG } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG } from '../../../src/models/bill.js';
-import { BUDGET_ENTITY_TAG } from '../../../src/models/budget.js';
-import { CATEGORY_ENTITY_TAG } from '../../../src/models/category.js';
-import { CREDIT_CARD_ENTITY_TAG } from '../../../src/models/credit-card.js';
-import { CURRENCY_RATE_ENTITY_TAG } from '../../../src/models/currency-rate.js';
-import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
-import { USER_SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
-import { RECURRING_ENTITY_TAG } from '../../../src/models/recurring.js';
-import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
-import { TRANSACTION_ENTITY_TAG } from '../../../src/models/transaction.js';
+import { DASHBOARD_ENTITY_TAGS } from './entity-tags.js';
 import { makeStubElement } from './fragment-sandbox.js';
 
 // ui/app.js's live-update stream (ADR-036 §4), run in node:vm with a fake EventSource and fetch.
@@ -20,11 +11,6 @@ const read = (file: string) => readFileSync(fileURLToPath(new URL(`../../../ui/$
 const SHELL_SOURCE = read('app.js');
 const RECONNECT_DELAY_MS = Number(SHELL_SOURCE.match(/RECONNECT_DELAY_MS = (\d+)/)?.[1]);
 const EVENT_SOURCE_STATE = { connecting: 0, open: 1, closed: 2 } as const;
-const EVERY_ENTITY_TAG = [
-  ACCOUNT_ENTITY_TAG, BILL_ENTITY_TAG, BUDGET_ENTITY_TAG, CATEGORY_ENTITY_TAG, CREDIT_CARD_ENTITY_TAG,
-  CURRENCY_RATE_ENTITY_TAG, DASHBOARD_ENTITY_TAG, RECURRING_ENTITY_TAG, TAG_ENTITY_TAG, TRANSACTION_ENTITY_TAG,
-  USER_SETTINGS_ENTITY_TAG,
-];
 
 class FakeSource {
   static all: FakeSource[] = [];
@@ -120,7 +106,7 @@ describe('shell event stream (ui/app.js)', () => {
     FakeSource.all[1]?.onopen?.();
     await vi.advanceTimersByTimeAsync(0);
     expect(calls).toHaveLength(1);
-    expect([...(calls[0] ?? [])].sort()).toEqual([...EVERY_ENTITY_TAG].sort());
+    expect([...(calls[0] ?? [])].sort()).toEqual([...DASHBOARD_ENTITY_TAGS].sort());
     expect(location.href).toBe('');
   });
 

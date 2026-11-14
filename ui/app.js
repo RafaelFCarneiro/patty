@@ -426,7 +426,7 @@
     };
     source.onerror = function () {
       streamErrored = true;
-      if (source.readyState === EVENT_SOURCE_CLOSED) handleStreamClosed();
+      if (source.readyState === EVENT_SOURCE_CLOSED && eventSource === source) handleStreamClosed();
     };
     source.onmessage = function (event) {
       var payload;
