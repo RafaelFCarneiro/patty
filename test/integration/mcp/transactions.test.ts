@@ -4,6 +4,7 @@ import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotoc
 import { toIsoDate } from '../../../src/logic/period.js';
 import { transactionErrors } from '../../../src/models/transaction.js';
 import {
+  EMPTY_STRING_REJECTION,
   callTool,
   callToolError,
   deleteTransactions,
@@ -178,7 +179,7 @@ describe('MCP integration > transactions', () => {
 
       // CategoryFieldsSchema requires category/subCategory to be non-empty (.min(1)) when
       // provided, so '' never reaches resolution — the MCP SDK rejects it against inputSchema
-      // before our handler ever runs. The result is isError: true with a raw zod "too_small"
+      // before our handler ever runs. The result is isError: true with the SDK's
       // validation message (not our own {error: {code, ...}} JSON envelope, since our handler —
       // and therefore fromResult/jsonError — is never invoked), so this reads the response
       // directly instead of going through callTool/callToolError's JSON-payload parsing.
@@ -188,7 +189,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
+      expect(text).toContain(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -208,7 +209,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
+      expect(text).toContain(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -244,7 +245,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
+      expect(text).toContain(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -280,7 +281,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
+      expect(text).toContain(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -312,7 +313,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
+      expect(text).toContain(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -329,7 +330,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
+      expect(text).toContain(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -362,7 +363,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
+      expect(text).toContain(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }

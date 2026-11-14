@@ -9,6 +9,12 @@ export type ToolCallOptions = { name: string; args?: JsonObject };
 export const mcpUrl = process.env.MCP_URL ?? 'http://127.0.0.1:3001/mcp';
 export const preferredAccount = process.env.MCP_SMOKE_ACCOUNT;
 
+/** The MCP SDK's input-validation wording for an empty `.min(1)` string and for a strict object's extra key. A tool
+ *  call that fails its input schema answers `isError: true` with `-32602` and one of these, naming the field — our
+ *  handler (and its JSON error envelope) never runs. The SDK owns the wording, so a bump may change it here only. */
+export const EMPTY_STRING_REJECTION = 'String must contain at least 1 character(s)';
+export const UNRECOGNIZED_KEYS_REJECTION = 'Unrecognized key(s) in object';
+
 export function ensure(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }

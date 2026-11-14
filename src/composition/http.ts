@@ -44,7 +44,7 @@ export type HttpSurface = Tenancy & {
 export type HttpOptions = {
   logger?: boolean;
   /** Fastify `trustProxy` (`TRUST_PROXY`): lets rate limiting see the real client IP behind a proxy. */
-  trustProxy?: boolean | number | string;
+  trustProxy?: boolean | string;
   auth?: HttpAuth;
 };
 

@@ -34,13 +34,10 @@ describe('MCP guided-workflow prompts (Feature Design 019)', () => {
     );
   });
 
-  it(
-    'rejects a getPrompt call that omits the arguments object entirely (all three take an argsSchema, so ' +
-      'the MCP SDK requires the object to be present even though every field inside it is optional)',
-    async () => {
-      await expect(client.getPrompt({ name: 'monthly_review' })).rejects.toThrow();
-    },
-  );
+  it('accepts a getPrompt call that omits the arguments object: every field of every prompt is optional', async () => {
+    const result = await client.getPrompt({ name: 'monthly_review' });
+    expect(messageText(result)).toContain('get_spending_summary');
+  });
 
   describe('monthly_review', () => {
     it('interpolates the given period into a well-formed message', async () => {

@@ -33,9 +33,6 @@ const DEFAULT_KEY_LOCK_PATH = join(DATA_DIRECTORY, 'db-key.lock');
 // a contributor's local dev instance never collides with an already-running installed instance.
 const DEFAULT_PORT = 51737;
 
-// `TRUST_PROXY=0` trusts zero proxy hops: no proxy.
-const NO_PROXY_HOPS = 0;
-
 /** Whether anything besides this machine can reach the instance: a non-loopback bind, or a reverse proxy
  *  configured in front of it (`PUBLIC_URL` names its external origin; `TRUST_PROXY` says to believe it). A
  *  proxy typically connects to a loopback bind, so `HOST` alone would call that instance private. Only used to
@@ -43,11 +40,11 @@ const NO_PROXY_HOPS = 0;
 export const isExposed = (env: {
   HOST: string;
   PUBLIC_URL?: string;
-  TRUST_PROXY?: boolean | number | string;
+  TRUST_PROXY?: boolean | string;
 }): boolean =>
   !isLoopbackHost(env.HOST) ||
   env.PUBLIC_URL !== undefined ||
-  (env.TRUST_PROXY !== undefined && env.TRUST_PROXY !== false && env.TRUST_PROXY !== NO_PROXY_HOPS);
+  (env.TRUST_PROXY !== undefined && env.TRUST_PROXY !== false);
 
 // An empty string (`PUBLIC_URL=` from a compose file or shell) means "unset", not "invalid".
 const unsetWhenEmpty = (value: unknown): unknown => (value === '' ? undefined : value);
@@ -62,16 +59,22 @@ const PublicUrl = z
     message: 'PUBLIC_URL must be an http(s) origin with no path or trailing slash, e.g. https://patty.example.com',
   });
 
-// Fastify's `trustProxy`: `true`/`false`, a hop count, or a comma-separated list of trusted
-// addresses/CIDRs. Anything else is passed through for Fastify (proxy-addr) to interpret.
+// Fastify's `trustProxy`: `true`/`false`, or a comma-separated list of trusted addresses/CIDRs (anything else is
+// passed through for Fastify (proxy-addr) to interpret). A hop count is refused: Fastify trusts nobody for one,
+// because a client that reaches the instance directly could spoof X-Forwarded-*; `0` keeps meaning "no proxy".
 const HOP_COUNT = /^\d+$/;
+const NO_PROXY_HOPS = '0';
+export const HOP_COUNT_REFUSED_MESSAGE =
+  'TRUST_PROXY cannot be a hop count: a client that reaches PATTY directly could spoof X-Forwarded-For. ' +
+  "Name the proxy instead — an address or CIDR list such as 'loopback' or '10.0.0.0/8' — or 'true' to trust every proxy.";
 const TrustProxy = z
   .string()
   .min(1)
-  .transform((value): boolean | number | string => {
+  .refine((value) => !HOP_COUNT.test(value) || value === NO_PROXY_HOPS, { message: HOP_COUNT_REFUSED_MESSAGE })
+  .transform((value): boolean | string => {
     if (value === 'true') return true;
-    if (value === 'false') return false;
-    return HOP_COUNT.test(value) ? Number(value) : value;
+    if (value === 'false' || value === NO_PROXY_HOPS) return false;
+    return value;
   });
 
 const Env = z

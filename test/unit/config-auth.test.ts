@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { IPV4_WILDCARD_HOST, IPV6_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
-import { loadConfig } from '../../src/config.js';
+import { HOP_COUNT_REFUSED_MESSAGE, loadConfig } from '../../src/config.js';
 import { AuthMode } from '../../src/models/auth/mode.js';
 import { DEFAULT_PROFILE } from '../../src/models/auth/sign-in.js';
 
@@ -87,7 +87,7 @@ describe('a reverse proxy in front makes the instance exposed even on a loopback
     expect(withEnv({ PUBLIC_URL: 'https://patty.example.com' }).PATTY_AUTH).toBe('required');
   });
 
-  it.each(['true', '1', '2', 'loopback', '10.0.0.0/8'])('defaults to required when TRUST_PROXY=%s', (trust) => {
+  it.each(['true', 'loopback', '10.0.0.0/8'])('defaults to required when TRUST_PROXY=%s', (trust) => {
     expect(withEnv({ TRUST_PROXY: trust }).PATTY_AUTH).toBe('required');
   });
 
@@ -107,7 +107,7 @@ describe('a reverse proxy in front makes the instance exposed even on a loopback
 
   it('rejects PATTY_AUTH=disabled with TRUST_PROXY set', () => {
     process.env['PATTY_AUTH'] = 'disabled';
-    process.env['TRUST_PROXY'] = '1';
+    process.env['TRUST_PROXY'] = 'loopback';
     expect(() => loadConfig()).toThrow(/reverse proxy/);
   });
 
@@ -153,12 +153,16 @@ describe('TRUST_PROXY', () => {
   it.each([
     ['true', true],
     ['false', false],
-    ['1', 1],
-    ['2', 2],
+    ['0', false],
     ['loopback', 'loopback'],
     ['10.0.0.0/8,172.16.0.0/12', '10.0.0.0/8,172.16.0.0/12'],
   ])('parses %s for Fastify', (raw, expected) => {
     expect(withEnv({ TRUST_PROXY: raw }).TRUST_PROXY).toBe(expected);
+  });
+
+  it.each(['1', '2', '10'])('refuses the hop count %s, which Fastify would treat as trusting nobody', (raw) => {
+    process.env['TRUST_PROXY'] = raw;
+    expect(() => loadConfig()).toThrow(HOP_COUNT_REFUSED_MESSAGE);
   });
 });
 
