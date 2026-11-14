@@ -58,7 +58,7 @@ possible on a loopback bind:
 | `PATTY_PROFILE` | Which saved stdio sign-in this process uses (`default` if unset; letters, digits, `.` `_` `-`). Two client configs on one machine can sign in as two users. See [Profiles](#profiles). |
 | `PATTY_TOKEN` | A personal access token a stdio process signs in with, instead of the browser flow — for headless use and clients that should never prompt. See [`PATTY_TOKEN`](#patty_token). |
 | `PUBLIC_URL` | The external **origin** users type, e.g. `https://patty.example.com` — no path, no trailing slash. Optional. `https` turns on the cookie `Secure` flag; it is also the origin the [CSRF check](#csrf) expects. Phase 3 (OAuth) will require it. |
-| `TRUST_PROXY` | Passed to Fastify's `trustProxy`: `true`, a hop count (`1`), or trusted addresses/CIDRs (`loopback,10.0.0.0/8`). Set it behind a reverse proxy so [login rate limiting](#brute-force-protection) sees each client's real IP instead of the proxy's. |
+| `TRUST_PROXY` | Passed to Fastify's `trustProxy`: `true`, or trusted addresses/CIDRs (`loopback,10.0.0.0/8`). A hop count (`1`, `2`…) is refused at startup — Fastify trusts nobody for one, since a client reaching PATTY directly could spoof `X-Forwarded-For`; `0` still means no proxy. Set it behind a reverse proxy so [login rate limiting](#brute-force-protection) sees each client's real IP instead of the proxy's. |
 
 Invalid combinations are rejected at startup with an actionable message.
 
@@ -514,8 +514,9 @@ Login, setup and [invite claims](#claiming-an-invite) are rate-limited in proces
 and 20 per IP in any 15 minutes, then `429` — even for the correct password — until the window clears. A successful
 login clears that username's count. Failures are counted for unknown usernames too, so the limiter reveals nothing.
 Behind a reverse proxy set `TRUST_PROXY`, or every client shares the proxy's IP and 20 failed logins from anyone
-lock everyone out. Prefer a **hop count** (`TRUST_PROXY=1` for one proxy) or the proxy's address/CIDR over `true`:
-`true` trusts any client's `X-Forwarded-For`, which lets an attacker pick the IP the limiter sees.
+lock everyone out. Name the proxy's address or CIDR (`TRUST_PROXY=loopback` for a proxy on the same machine) rather
+than `true`: `true` trusts any client's `X-Forwarded-For`, which lets an attacker pick the IP the limiter sees. A hop
+count is refused at startup: Fastify cannot check that the immediate peer is the proxy, so it would trust no one.
 
 ## Moving an npm install to Docker
 
