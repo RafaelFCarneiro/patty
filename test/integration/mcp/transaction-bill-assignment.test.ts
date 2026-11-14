@@ -1,7 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, callToolError, ensure, makeClient, searchTransactions } from './helpers.js';
+import {
+  UNRECOGNIZED_KEYS_REJECTION,
+  callTool,
+  callToolError,
+  ensure,
+  makeClient,
+  searchTransactions,
+} from './helpers.js';
 
 describe('MCP integration > transaction ↔ bill assignment (Design 012)', () => {
   const now = new Date();
@@ -208,7 +215,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('unrecognized_keys');
+      expect(text).toContain(UNRECOGNIZED_KEYS_REJECTION);
     } finally {
       await transport.close();
     }

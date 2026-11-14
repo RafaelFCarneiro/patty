@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, callToolError, deleteTransactions, ensure, makeClient } from './helpers.js';
+import {
+  EMPTY_STRING_REJECTION,
+  UNRECOGNIZED_KEYS_REJECTION,
+  callTool,
+  callToolError,
+  deleteTransactions,
+  ensure,
+  makeClient,
+} from './helpers.js';
 
 describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
   const now = new Date();
@@ -215,7 +223,7 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
+      expect(text).toContain(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -245,7 +253,7 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
+      expect(text).toContain(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -276,7 +284,7 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
+      expect(text).toContain(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -618,7 +626,7 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('unrecognized_keys');
+      expect(text).toContain(UNRECOGNIZED_KEYS_REJECTION);
     } finally {
       await transport.close();
     }
