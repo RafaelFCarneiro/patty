@@ -14,9 +14,17 @@ describe('budget.html display currency on a userSettings event', () => {
     expect(sandbox.currentDisplayCurrency).toBe('USD');
   });
 
-  it('keeps a currency the person chose', () => {
+  it('still follows the base currency after only the month or year changed', () => {
     const sandbox = loadBudget();
     sandbox.onFilterChange();
+    sandbox.BASE_CURRENCY = 'USD';
+    sandbox.onAppDataChanged([USER_SETTINGS_ENTITY_TAG]);
+    expect(sandbox.currentDisplayCurrency).toBe('USD');
+  });
+
+  it('keeps a currency the person chose', () => {
+    const sandbox = loadBudget();
+    sandbox.onCurrencyChange();
     const chosen = sandbox.currentDisplayCurrency;
     sandbox.BASE_CURRENCY = 'USD';
     sandbox.onAppDataChanged([USER_SETTINGS_ENTITY_TAG]);

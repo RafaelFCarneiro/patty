@@ -513,7 +513,7 @@
             </div>
             <div class="controls-group">
                 <label for="currency-select" data-i18n="currency_label">Currency:</label>
-                <select id="currency-select" class="select-custom" onchange="onFilterChange()">
+                <select id="currency-select" class="select-custom" onchange="onCurrencyChange()">
                     <option value="" data-i18n="currency_none">No conversion</option>
                 </select>
             </div>
@@ -898,8 +898,13 @@ function formatPct(val) {
 function onFilterChange() {
     const currencySelect = document.getElementById('currency-select');
     currentDisplayCurrency = currencySelect ? currencySelect.value : '';
-    displayCurrencyChosen = true;
     loadDashboardData();
+}
+
+// Only the currency selector counts as a choice; changing the month or year leaves the default following the base.
+function onCurrencyChange() {
+    displayCurrencyChosen = true;
+    onFilterChange();
 }
 
 // The shell has already refreshed window.BASE_CURRENCY when a userSettings event reaches this fragment.
