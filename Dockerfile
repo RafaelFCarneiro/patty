@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # PATTY image (ADR-032). glibc base: @libsql/client ships native bindings, so no Alpine.
-ARG NODE_IMAGE=node:25-bookworm-slim
+ARG NODE_IMAGE=node:26-bookworm-slim
 
 # Build on the host's own architecture so tsc never runs under QEMU when targeting arm64.
 FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS build

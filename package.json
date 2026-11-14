@@ -30,7 +30,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=25 <26",
+    "node": ">=26 <27",
     "npm": ">=11"
   },
   "scripts": {

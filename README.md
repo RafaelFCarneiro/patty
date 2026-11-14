@@ -30,7 +30,7 @@ and ask for the **`tour`** prompt on the `patty-demo` server. Details in [`docs/
 
 Before running `npx`, make sure these tools are installed:
 
-- **Node.js 25.x**
+- **Node.js 26.x**
 - **npm 11+**
 
 Quick check:
