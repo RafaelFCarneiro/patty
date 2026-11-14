@@ -334,7 +334,16 @@ The baseline `overview.html` implements the contract: a `SECTION_ENTITY_DEPENDEN
 tags feed each section loader, and `onDataChanged` refetches only the sections whose dependencies intersect the
 published entities. A fragment that never sets the hook simply has no live update, same as before this phase.
 
-**Known limit (by design, ADR-027):** the change bus reaches only subscribers on this process — a write from a
+**The tag lists are tested; the stream recovers and resyncs (ADR-036 §4).** Each bundled dashboard's tag list names
+every entity its `/api` calls read (`test/unit/ui/dashboard-entity-tags.test.ts` parses each list and checks it against the
+`*_ENTITY_TAG` constants, so a renamed or missing tag fails the test). The shell recovers its own stream: when
+`EventSource` gives up (`readyState` CLOSED, e.g. a 401 after the session lapsed) `onerror` makes one request to
+`/api/status` — a 401 goes to `/ui/login?next=<current path>`; anything else reopens the stream after
+`RECONNECT_DELAY_MS`, never more than one reconnect pending. After any reopen following an error (the shell's own or the
+browser's retry) the shell calls the current `window.onAppDataChanged` once with `ALL_ENTITY_TAGS` (`ui/app.js`, a list
+the test keeps a superset of every dashboard's), so a gap in events costs one refetch.
+
+**Known limit (by design, ADR-027; cross-process delivery is ADR-036):** the change bus reaches only subscribers on this process — a write from a
 *different* stdio server won't push here. Mitigated because ADR-024 steers multi-client use to the single
 HTTP-transport server; a periodic client-side poll can backstop if cross-process live-update ever matters.
 

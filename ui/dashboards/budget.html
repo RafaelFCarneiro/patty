@@ -1705,7 +1705,7 @@ function escapeHtml(str) {
 // ADR-027 Live-update listener
 window.onAppDataChanged = function(entities) {
     var affected = entities.some(function(tag) {
-        return ['budget', 'transaction', 'category', 'recurring'].indexOf(tag) !== -1;
+        return ['budget', 'transaction', 'category', 'recurring', 'userSettings'].indexOf(tag) !== -1;
     });
     if (affected) {
         console.log("budget refetching due to entity change:", entities);
