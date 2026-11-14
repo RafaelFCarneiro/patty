@@ -12,7 +12,6 @@ import { USER_SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
 import { RECURRING_ENTITY_TAG } from '../../../src/models/recurring.js';
 import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from '../../../src/models/transaction.js';
-
 import { DASHBOARD_ENTITY_TAGS } from './entity-tags.js';
 
 /** Dashboards listen for entity tags as plain strings, so a renamed or missing tag silently stops refreshing them. */

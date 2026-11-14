@@ -125,6 +125,21 @@ describe('shell event stream (ui/app.js)', () => {
     expect(calls).toEqual([]);
   });
 
+  it('ignores an error from a source that was already replaced: no status check, no second reconnect', async () => {
+    const { location, fetchStatus } = await boot(200);
+    const [stale] = FakeSource.all;
+    if (stale) stale.readyState = EVENT_SOURCE_STATE.closed;
+    stale?.onerror?.();
+    await vi.advanceTimersByTimeAsync(RECONNECT_DELAY_MS);
+    expect(FakeSource.all).toHaveLength(2);
+    const checks = statusChecks(fetchStatus);
+    stale?.onerror?.();
+    await vi.advanceTimersByTimeAsync(RECONNECT_DELAY_MS * 2);
+    expect(statusChecks(fetchStatus)).toBe(checks);
+    expect(FakeSource.all).toHaveLength(2);
+    expect(location.href).toBe('');
+  });
+
   it('does not reconnect while the browser retries, and resyncs when it reopens', async () => {
     const { calls, fetchStatus } = await boot(200);
     const before = statusChecks(fetchStatus);

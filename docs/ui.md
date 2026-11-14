@@ -346,6 +346,7 @@ the test keeps a superset of every dashboard's), so a gap in events costs one re
 **Known limit (by design, ADR-027; cross-process delivery is ADR-036):** the change bus reaches only subscribers on this
 process — a write from a *different* stdio server won't push here. Mitigated because ADR-024 steers multi-client use to
 the single HTTP-transport server; a periodic client-side poll can backstop if cross-process live-update ever matters.
+
 ## Currency in `pending.html` and `cards.html`
 
 No dashboard names a currency. `pending.html` takes its primary currency from `primaryCurrencyOf` over its own
