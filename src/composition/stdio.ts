@@ -10,6 +10,7 @@ import { AuthMode } from '../models/auth/mode.js';
 import type { HttpAuth } from '../diplomat/http/context.js';
 import type { PreparedAuth } from './auth.js';
 import { boot } from './boot.js';
+import { startServingRelay, type ChangeRelay } from './change-relay.js';
 import type { HttpSidecar } from './http.js';
 import type { Runtime } from './runtime.js';
 import { loadHttpModule } from './lazy-modules.js';
@@ -48,7 +49,12 @@ const stdioAuthFor = (config: Config, stdio: PreparedAuth['stdio'], linkOrigin: 
 
 const closeLogged = (closing: Promise<void>): Promise<void> => closing.catch((err: unknown) => console.error(err));
 
-const shutdownOf = ({ server, session }: StdioConnection, sidecar: HttpSidecar | null): (() => void) => {
+const shutdownOf = (
+  { server, session }: StdioConnection,
+  sidecar: HttpSidecar | null,
+  relay: ChangeRelay | null,
+  { changeLog }: Pick<Runtime, 'changeLog'>,
+): (() => void) => {
   let shuttingDown = false;
   return (): void => {
     if (shuttingDown) return;
@@ -57,7 +63,11 @@ const shutdownOf = ({ server, session }: StdioConnection, sidecar: HttpSidecar |
       closeLogged(server.close()),
       sidecar?.listening ? closeLogged(sidecar.app.close()) : Promise.resolve(),
       session?.close(),
-    ]).finally(() => process.exit(0));
+    ])
+      // Writers have stopped: stop listening, then let the last write's queued announcement land.
+      .then(() => closeLogged(Promise.resolve(relay?.stop())))
+      .then(() => closeLogged(changeLog.close()))
+      .finally(() => process.exit(0));
   };
 };
 
@@ -70,17 +80,19 @@ const shutDownOnDisconnect = (shutdown: () => void): void => {
 
 export const runStdio = (config: Config): ResultAsync<void, StartupRefusal> =>
   safeTry(async function* () {
-    const { runtime, prepared } = yield* boot(config);
+    const { db, runtime, prepared } = yield* boot(config);
     const link = signInLink(config);
     const connection = await connectStdio(runtime, version, stdioAuthFor(config, prepared.stdio, link.origin));
 
     const sidecar = await maybeStartSidecar(config, runtime, prepared.auth);
+    // Only a process that serves a dashboard listens for the others' writes (ADR-036 §3).
+    const relay = sidecar?.listening ? await startServingRelay(db, runtime) : null;
     if (sidecar?.listening) {
       const boundOrigin = httpOrigin(config.HOST, (sidecar.app.server.address() as AddressInfo).port);
       link.bind(boundOrigin);
       await prepared.issueAndAnnounceSetup(boundOrigin);
     }
 
-    shutDownOnDisconnect(shutdownOf(connection, sidecar));
+    shutDownOnDisconnect(shutdownOf(connection, sidecar, relay, runtime));
     return ok(undefined);
   });

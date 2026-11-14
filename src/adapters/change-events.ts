@@ -1,0 +1,21 @@
+import type { ChangeEventEntry } from '../models/change-events.js';
+import { ChangeEventRowSchema } from '../wire/db/change-events.js';
+
+const NO_ID = 0;
+
+const idOf = (row: unknown): number => {
+  const id = (row as { id?: unknown } | null)?.id;
+  return typeof id === 'number' ? id : NO_ID;
+};
+
+/** A stored row as the relay's entry: the decoded event, or the reason it could not be decoded (never thrown). */
+export const dbToModel = (row: unknown): ChangeEventEntry => {
+  const decoded = ChangeEventRowSchema.safeParse(row);
+  return decoded.success
+    ? {
+        id: decoded.data.id,
+        origin: decoded.data.origin,
+        event: { userId: decoded.data.userId, entities: decoded.data.entities },
+      }
+    : { id: idOf(row), skipped: decoded.error.issues.map(({ message }) => message).join('; ') };
+};

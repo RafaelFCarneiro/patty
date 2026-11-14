@@ -435,3 +435,19 @@ export const clientGrants = sqliteTable(
     index('client_grants_user_code_idx').on(table.userCode),
   ],
 );
+
+// ADR-036 §1: change notifications between the processes that share this file. Infrastructure, not a domain
+// table: no repo, no applier, no `user_id` ownership (the column only says whose change it announces), not in
+// `Tenancy`. It holds entity tags, never data; only `diplomat/db/change-events.ts` and the composition root's
+// relay and appending bus touch it. Rows live minutes (`CHANGE_EVENT_RETENTION_MS`).
+export const changeEvents = sqliteTable(
+  'change_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: text('user_id'),
+    entities: text('entities').notNull(),
+    origin: text('origin').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [index('change_events_created_at_idx').on(table.createdAt)],
+);

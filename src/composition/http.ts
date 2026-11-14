@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { version } from '../common/build-version.js';
 import type { Config } from '../config.js';
 import { boot } from './boot.js';
+import { startServingRelay, type ChangeRelay } from './change-relay.js';
 import { DASHBOARD_PATH, httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';
 import type { Tenancy } from '../controllers/deps.js';
 import { DISABLED_AUTH, type HttpAuth, type HttpContext } from '../diplomat/http/context.js';
@@ -127,16 +128,18 @@ export const startHttpSidecar = async (
  */
 export const runHttp = (config: Config): ResultAsync<void, StartupRefusal> =>
   safeTry(async function* () {
-    const { runtime, prepared } = yield* boot(config);
+    const { db, runtime, prepared } = yield* boot(config);
     const app = buildHttpApp(runtime, version, { auth: prepared.auth, trustProxy: config.TRUST_PROXY });
 
     // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
     let shuttingDown = false;
+    let relay: ChangeRelay | null = null;
     const shutdown = (): void => {
       if (shuttingDown) return;
       shuttingDown = true;
-      app
-        .close()
+      Promise.resolve(relay?.stop())
+        .then(() => app.close())
+        .then(() => runtime.changeLog.close())
         .catch((err: unknown) => app.log.error(err))
         .finally(() => process.exit(0));
     };
@@ -144,6 +147,7 @@ export const runHttp = (config: Config): ResultAsync<void, StartupRefusal> =>
     process.on('SIGTERM', shutdown);
 
     await app.listen({ port: config.PORT, host: config.HOST });
+    relay = await startServingRelay(db, runtime);
     // config.PORT may be 0 (OS-assigned); read back the address actually bound for the banner.
     const boundPort = (app.server.address() as AddressInfo).port;
     const origin = httpOrigin(config.HOST, boundPort);

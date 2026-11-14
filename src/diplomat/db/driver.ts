@@ -198,7 +198,34 @@ export const openDatabaseWithKey = async (
   if (initializeJournal) await enableWal(client);
   // busy_timeout is per-connection (ADR-024), so it is asserted unconditionally on every open.
   await assertBusyTimeout(client);
+  const db = drizzle(client, { schema });
+  siblingOpeners.set(db, (busyTimeoutMs) => openSiblingClient(config, encryptionKey, busyTimeoutMs));
+  return db;
+};
+
+type SiblingOpener = (busyTimeoutMs: number) => Promise<Db>;
+// A `Db` does not expose the key it was opened with; the opener closes over it here, in the adapter, so nothing else
+// ever holds the key just to open a second connection.
+const siblingOpeners = new WeakMap<Db, SiblingOpener>();
+
+const openSiblingClient = async (
+  config: Pick<Config, 'DB_PATH'>,
+  encryptionKey: string,
+  busyTimeoutMs: number,
+): Promise<Db> => {
+  const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey });
+  await client.execute(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
   return drizzle(client, { schema });
+};
+
+/** A second, independent connection to the same database file, waiting at most `busyTimeoutMs` for a lock. libsql
+ *  replaces a client's connection after every transaction, so anything that needs one stable connection (SQLite's
+ *  `data_version` is per connection) or must not disturb the engine's own (a short lock wait) takes this one and
+ *  never runs a transaction on it. Close it with `closeDatabase`. */
+export const openSibling = (db: Db, busyTimeoutMs: number): Promise<Db> => {
+  const open = siblingOpeners.get(db);
+  if (!open) return Promise.reject(new Error(`${LOG_PREFIX} this database handle was not opened by openDatabase`));
+  return open(busyTimeoutMs);
 };
 
 /** Releases the libSQL connection a short-lived process (the CLI) opened, so it can end by itself. Drizzle keeps

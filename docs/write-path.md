@@ -119,8 +119,10 @@ and its failure isolation) is the package's to document — see the pointer abov
 - **The `ApplierRegistry`** is assembled once there, one `EntityApplier` per PATTY entity tag.
 - **Typed `Tx`.** `diplomat/db/effects.ts` re-exports the package's `EntityApplier`/`ApplierRegistry`/`ReadBack`
   specialized with PATTY's own `Tx`.
-- **Change bus.** `composition/runtime.ts` calls the package's `createChangeBus<ChangeEvent>({ onError })` once and gives each
-  runner `publishFor(userId)` = `(entities) => bus.publish({ userId, entities })` — the only PATTY code on the bus — so every event says whose change it is (`null` for the identity runner). It hands `changeBus.subscribe`
+- **Change bus.** `composition/runtime.ts` builds the bus once with `composition/change-log.ts`'s `createAppendingBus` — the package's
+  `createChangeBus<ChangeEvent>({ onError })` for local delivery, then a queued best-effort `change_events` append so other processes
+  on the same database hear it (ADR-036; the post-commit publish itself is unchanged and still the package's) — and gives each
+  runner `publishFor(userId)` = `(entities) => bus.publish({ userId, entities })`, so every event says whose change it is (`null` for the identity runner). It hands `changeBus.subscribe`
   to the HTTP sidecar (SSE, `docs/ui.md`, which forwards only the stream's own user's events), and wires one shared
   stderr reporter (`reportChangeError`) as both the bus `onError` and the context's `onPublishError`. stderr only —
   stdout carries the stdio MCP protocol (ADR-007).

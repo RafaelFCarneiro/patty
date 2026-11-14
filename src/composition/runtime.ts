@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { createChangeBus, runEffects, runEffectsSequence, type ChangeBus } from '@rfc0/effect-runner';
+import { runEffects, runEffectsSequence, type ChangeBus } from '@rfc0/effect-runner';
 import { AUTH_APPLIERS } from './auth.js';
+import { createAppendingBus, reportChangeError, type AppendingBus } from './change-log.js';
 import type { Config } from '../config.js';
 import type { Deps, RunEffects, Tenancy } from '../controllers/deps.js';
 import type { Db } from '../diplomat/db/driver.js';
@@ -44,13 +45,12 @@ export type Runtime = Tenancy & {
   publicDeps: Pick<Deps, 'health'>;
   authRunEffects: RunEffects;
   changeBus: ChangeBus<ChangeEvent>;
+  /** What a relay and a clean shutdown need of the appending bus (ADR-036): this process's id, the local-only publish
+   *  that never appends, and the way to wait for / release the log connection. */
+  changeLog: { origin: string } & Pick<AppendingBus, 'publishLocal' | 'settled' | 'close'>;
 };
 
 export type RuntimeConfig = Pick<Config, 'PATTY_LOCALE' | 'FIAT_RATE_STALE_HOURS' | 'CRYPTO_RATE_STALE_HOURS'>;
-
-const reportChangeError = (cause: unknown): void => {
-  console.error('[patty] change notification failed:', cause);
-};
 
 const applierRegistryFor = (userId: string): ApplierRegistry => ({
   [ACCOUNT_ENTITY_TAG]: accountApplier(userId),
@@ -116,7 +116,15 @@ const runnersOn = (
 export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOptions = {}): Runtime => {
   const onChangeError = options.onChangeError ?? reportChangeError;
   const localeResolver = createLocaleResolver(config.PATTY_LOCALE);
-  const changeBus = createChangeBus<ChangeEvent>({ onError: onChangeError });
+  const origin = randomUUID();
+  // The wall clock, never `options.clock`: a row's age is judged by other processes' real time, so a clock a test or a
+  // flow pins must not date it.
+  const { bus: changeBus, ...appending } = createAppendingBus({
+    db,
+    origin,
+    clock: () => new Date(),
+    onError: onChangeError,
+  });
   const health = healthRepo(db);
   const instance = instanceRepo(db);
 
@@ -144,5 +152,6 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
     ...runnersOn(createEngineContext(db, onChangeError), changeBus),
     resetLocaleFor: ({ userId }) => localeResolver.resetLocale(userId),
     changeBus,
+    changeLog: { origin, ...appending },
   };
 };

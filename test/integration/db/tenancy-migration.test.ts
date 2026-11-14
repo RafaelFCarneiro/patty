@@ -353,8 +353,9 @@ describe('migration 0021 — tenancy data', () => {
         .map((table) => getTableConfig(table as SQLiteTable))
         .filter((config) => config.columns.some((column) => column.name === 'user_id'))
         .map((config) => config.name);
-    // Identity tables also have a user_id (a login's owner, not tenancy) and are not tenant data.
-    const IDENTITY = ['sessions', 'access_tokens', 'client_grants', 'invites'];
+    // Identity tables also have a user_id (a login's owner, not tenancy) and are not tenant data; so does
+    // `change_events` (ADR-036 infrastructure: whose change a row announces, no owner, no scoped repo).
+    const IDENTITY = ['sessions', 'access_tokens', 'client_grants', 'invites', 'change_events'];
 
     it('lists exactly the schema’s tenant tables, so a new owned table cannot be forgotten', () => {
       const listed = [...OWNED_TABLES, ...SHARED_OR_OWNED_TABLES, 'user_settings'].sort();

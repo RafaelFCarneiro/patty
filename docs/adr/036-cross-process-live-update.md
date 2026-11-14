@@ -109,5 +109,9 @@ changes stay immediate.
 1. [x] `fix/dashboard-live-update-gaps` (#249), independent of this ADR: `cards` listens for `bill`, `projections` for
        `account`, each bundled dashboard's tag list checked by a test; the shell recovers a closed event stream
        (login on 401, reconnect otherwise) and resyncs after a reconnect (§4).
-2. [ ] `feat/cross-process-live-update`: the table and migration, the appending `ChangeBus`, the relay, retention,
-       tests across two runtimes on one database, docs.
+2. [x] `feat/cross-process-live-update` (#251): the table and migration, the appending `ChangeBus`, the relay, retention,
+       tests across two runtimes on one database, docs. One adjustment to §3: `PRAGMA data_version` is per connection and
+       libsql replaces a client's connection after every transaction, so the relay (and the appender) read and write on a
+       sibling connection of their own (`diplomat/db/driver.ts`'s `openSibling`), which never runs a transaction; the
+       first tick always reads past the cursor, so a commit between reading the newest id and the first version
+       reading is never absorbed into a baseline.
