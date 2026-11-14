@@ -106,7 +106,7 @@ changes stay immediate.
 
 ## Plan
 
-1. [ ] `fix/dashboard-live-update-gaps`, independent of this ADR: `cards` listens for `bill`, `projections` for
+1. [x] `fix/dashboard-live-update-gaps` (#249), independent of this ADR: `cards` listens for `bill`, `projections` for
        `account`, each bundled dashboard's tag list checked by a test; the shell recovers a closed event stream
        (login on 401, reconnect otherwise) and resyncs after a reconnect (§4).
 2. [ ] `feat/cross-process-live-update`: the table and migration, the appending `ChangeBus`, the relay, retention,
