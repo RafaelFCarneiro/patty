@@ -46,6 +46,7 @@
   var LOGIN_PATH = '/ui/login';
   var HTTP_UNAUTHORIZED = 401;
   var EVENT_SOURCE_CLOSED = 2; // EventSource.CLOSED — the browser gave up retrying
+  // Fixed, no backoff: each attempt costs one cheap local /api/status call.
   var RECONNECT_DELAY_MS = 3000;
   // Every entity tag a bundled dashboard listens for (tested against ui/dashboards/*.html); a
   // resync after a gap in the event stream sends all of them so every dashboard refetches.
@@ -112,6 +113,7 @@
   // attached, which would silently stop live update. Also guards connectEvents() itself against
   // ever opening a second connection.
   var eventSource = null;
+  // Set by onerror, consumed by the next onopen: the stream was down, so events may have been missed.
   var streamErrored = false;
   var reconnectTimer = null;
 
@@ -367,15 +369,11 @@
     navigate(currentDashboardName(), false);
   });
 
-  // ADR-027 Phase 3 — live update, ADR-036 §4 — recovery. One EventSource for the page's whole
-  // lifetime; fragment swaps (navigate/renderFragment above) never touch it, only the
-  // window.onAppDataChanged slot it delivers into. A message that arrives with no fragment
-  // registered is dropped — the next fetch a user triggers reflects current data regardless.
-  // The browser retries a dropped stream by itself (readyState CONNECTING); when it gives up
-  // (CLOSED, e.g. a 401 once the session lapsed) onerror checks the session and either sends the
-  // person to the login page or reopens the stream after RECONNECT_DELAY_MS. Whenever the stream
-  // reopens after an error, the events that passed meanwhile are lost, so one resync tells the
-  // fragment every tag changed: a gap costs one refetch.
+  // ADR-027 Phase 3 live update, ADR-036 §4 recovery (the as-built flow is in docs/ui.md). One
+  // EventSource serves the whole page: fragment swaps never touch it, only the
+  // window.onAppDataChanged slot it delivers into, and a message with no fragment registered is
+  // dropped (the next fetch reflects current data anyway). Events that pass while the stream is
+  // down are lost for good, hence the resync on reopen.
   function forwardEntities(entities) {
     var forward = function () {
       if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(entities);
@@ -422,10 +420,11 @@
     source.onopen = function () {
       if (!streamErrored) return;
       streamErrored = false;
-      forwardEntities(ALL_ENTITY_TAGS.slice());
+      forwardEntities(ALL_ENTITY_TAGS.slice()); // a copy: fragments receive the array and may mutate it
     };
     source.onerror = function () {
       streamErrored = true;
+      // A replaced source can still report late; only the current one may reconnect or check the session.
       if (source.readyState === EVENT_SOURCE_CLOSED && eventSource === source) handleStreamClosed();
     };
     source.onmessage = function (event) {
