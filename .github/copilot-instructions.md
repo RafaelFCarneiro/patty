@@ -163,6 +163,7 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 - Docs are updated in the same change that alters behavior — `docs/architecture.md` for structural changes, `docs/mcp-tools.md` for tool changes.
 - New MCP tools must be documented in `docs/mcp-tools.md` with schema, error codes, and an example.
 - Commit messages follow Conventional Commits: `type(scope): description`. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`. Use `!` or `BREAKING CHANGE:` footer for incompatible changes.
+- Mark `!` / `BREAKING CHANGE:` only when a user must change something to keep working and it cannot be detected for them: an MCP tool or REST contract removed or changed incompatibly, a CLI command or flag removed, or data needing a manual step. A configuration value that now fails at startup with a clear message saying what to use instead is a `fix:` with a `Note:` paragraph in the body, not a `BREAKING CHANGE:` footer. Check the squash-merge title before merging: it decides the version.
 
 ## Git workflow (branch + PR only)
 
