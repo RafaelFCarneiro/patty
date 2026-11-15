@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../../src/composition/boot.js', () => ({ boot: mocks.boot }));
 vi.mock('../../../src/diplomat/mcp/stdio.js', () => ({ connectStdio: mocks.connectStdio }));
 vi.mock('../../../src/composition/http.js', () => ({ startHttpSidecar: mocks.startHttpSidecar }));
-vi.mock('../../../src/composition/change-relay.js', () => ({ startServingRelay: mocks.startServingRelay }));
+vi.mock('../../../src/composition/change-log.js', () => ({ startServingRelay: mocks.startServingRelay }));
 
 const { runStdio } = await import('../../../src/composition/stdio.js');
 
@@ -165,7 +165,7 @@ describe('runStdio — startup', () => {
 
     await runStdio(configWith({ PATTY_HTTP: true }));
 
-    expect(mocks.startServingRelay).toHaveBeenCalledWith(DB, runtime);
+    expect(mocks.startServingRelay).toHaveBeenCalledWith(runtime);
   });
 
   it('starts no change relay where no dashboard is served: sidecar disabled or port taken', async () => {

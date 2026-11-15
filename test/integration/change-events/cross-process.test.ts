@@ -5,9 +5,10 @@ import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { LOOPBACK_HOST } from '../../../src/common/net.js';
-import { startChangeRelay, type ChangeRelay } from '../../../src/composition/change-relay.js';
+import { startChangeRelay, type ChangeRelay, type ChangeRelayOptions } from '@rfc0/effect-runner';
 import { append, openChangeLog } from '../../../src/diplomat/db/change-events.js';
 import { closeDatabase } from '../../../src/diplomat/db/driver.js';
+import { CHANGE_RELAY_BATCH_LIMIT } from '../../../src/models/change-events.js';
 import { ACCOUNT_ENTITY_TAG } from '../../../src/models/account.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { BILL_ENTITY_TAG } from '../../../src/models/bill.js';
@@ -38,16 +39,16 @@ const stoppers: Array<() => Promise<void>> = [];
 
 const startRelayOn = async (
   ctx: AppContext,
-  overrides: Partial<Parameters<typeof startChangeRelay>[0]> = {},
+  overrides: Partial<ChangeRelayOptions<ChangeEvent>> = {},
 ): Promise<ChangeRelay> => {
   const relay = await startChangeRelay({
-    db: ctx.db,
+    store: ctx.runtime.changeLog.store,
     publishLocal: ctx.runtime.changeLog.publishLocal,
     origin: ctx.runtime.changeLog.origin,
-    clock: () => new Date(),
     pollMs: POLL_MS,
     retentionMs: RETENTION_MS,
     pruneEveryMs: 60_000,
+    batchLimit: CHANGE_RELAY_BATCH_LIMIT,
     onError: (cause) => relayErrors.push(cause),
     ...overrides,
   });
@@ -57,7 +58,7 @@ const startRelayOn = async (
 
 /** An extra relay for one test, stopped when it ends, reporting to its own list so only its errors are counted. */
 const withExtraRelay = async (
-  overrides: Partial<Parameters<typeof startChangeRelay>[0]>,
+  overrides: Partial<ChangeRelayOptions<ChangeEvent>>,
   body: () => Promise<void>,
 ): Promise<void> => {
   const relay = await startRelayOn(b, overrides);
@@ -276,7 +277,7 @@ describe('a row that cannot be decoded', () => {
 
         expect(published).toEqual([{ userId: OWNER_USER_ID, entities: [BILL_ENTITY_TAG] }]);
         expect(reported).toHaveLength(2);
-        expect(String(reported[0])).toMatch(/row \d+ skipped: entities is not valid JSON/);
+        expect(String(reported[0])).toMatch(/record \d+ skipped: entities is not valid JSON/);
       },
     );
   });

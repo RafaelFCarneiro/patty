@@ -249,8 +249,8 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     });
     expect((await restored.all(sql`SELECT 1 FROM accounts`)).length).toBe(2);
     await expect(
-      openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: alone, PATTY_DB_KEY: 'f'.repeat(64) }).then(
-        (db) => db.all(sql`SELECT 1 FROM accounts`),
+      openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: alone, PATTY_DB_KEY: 'f'.repeat(64) }).then((db) =>
+        db.all(sql`SELECT 1 FROM accounts`),
       ),
     ).rejects.toThrow();
   });

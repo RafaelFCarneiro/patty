@@ -302,7 +302,7 @@ baseline fragment, and self-check (fragment not full page; no embedded data; sam
 
 **The change bus** is a `ChangeBus<ChangeEvent>` (ADR-033 §5, ADR-036), `ChangeEvent` = `{ userId,
 entities }`: `publish(event)` after a commit, `subscribe(listener)`; publish-failure isolation is `@rfc0/effect-runner`'s
-`createChangeBus`, which the composition root's appending bus wraps for local delivery (§ Across processes below). The
+`createChangeBus`, which `createRelayedChangeBus` wraps for local delivery (§ Across processes below). The
 composition root (`runtime.ts`) builds it once and hands `subscribe` down as a parameter — the same crossing pattern as
 `RunEffects`. `GET /ui/events` is the session user's stream: it forwards only the events whose `userId` is that user's
 (instance bookkeeping carries `null` and reaches no one), and refuses to open at all without a principal. A subscriber
@@ -348,9 +348,10 @@ the test keeps a superset of every dashboard's), so a gap in events costs one re
 binds the dashboard port, so a write made through another process must still reach the dashboard. The processes share one
 thing, the database file, and a small infrastructure table carries the news: `change_events` (`id`, `user_id`, `entities` —
 a JSON array of entity tags, never data —, `origin` — the writing process's id —, `created_at`). Every process's bus
-delivers locally first (a browser on the writing process updates at once, as before) and then appends a row on a connection
-of its own that waits at most `CHANGE_EVENT_APPEND_TIMEOUT_MS`; a busy or closed database costs one missed refresh and never
-fails or delays the write. A process that serves a dashboard (stdio with the sidecar bound, or the HTTP transport) runs a
+is `@rfc0/effect-runner`'s relayed bus: it delivers locally first (a browser on the writing process updates at once, as
+before) and then appends a row, through PATTY's SQLite store, on a connection of its own that waits at most
+`CHANGE_EVENT_APPEND_TIMEOUT_MS`; a busy or closed database costs one missed refresh and never
+fails or delays the write. A process that serves a dashboard (stdio with the sidecar bound, or the HTTP transport) runs the package's
 relay: it starts at the newest row (no replay) and every `CHANGE_RELAY_POLL_MS` (about a second) reads SQLite's
 `PRAGMA data_version` — which moves only when another connection committed — and, only then, reads the rows from other
 origins past its cursor, in id order, and publishes them on its local bus alone (never appended again, so rows do not echo).

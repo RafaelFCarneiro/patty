@@ -10,7 +10,8 @@ import { AuthMode } from '../models/auth/mode.js';
 import type { HttpAuth } from '../diplomat/http/context.js';
 import type { PreparedAuth } from './auth.js';
 import { boot } from './boot.js';
-import { startServingRelay, type ChangeRelay } from './change-relay.js';
+import type { ChangeRelay } from '@rfc0/effect-runner';
+import { startServingRelay } from './change-log.js';
 import type { HttpSidecar } from './http.js';
 import type { Runtime } from './runtime.js';
 import { loadHttpModule } from './lazy-modules.js';
@@ -80,13 +81,13 @@ const shutDownOnDisconnect = (shutdown: () => void): void => {
 
 export const runStdio = (config: Config): ResultAsync<void, StartupRefusal> =>
   safeTry(async function* () {
-    const { db, runtime, prepared } = yield* boot(config);
+    const { runtime, prepared } = yield* boot(config);
     const link = signInLink(config);
     const connection = await connectStdio(runtime, version, stdioAuthFor(config, prepared.stdio, link.origin));
 
     const sidecar = await maybeStartSidecar(config, runtime, prepared.auth);
     // Only a process that serves a dashboard listens for the others' writes (ADR-036 §3).
-    const relay = sidecar?.listening ? await startServingRelay(db, runtime) : null;
+    const relay = sidecar?.listening ? await startServingRelay(runtime) : null;
     if (sidecar?.listening) {
       const boundOrigin = httpOrigin(config.HOST, (sidecar.app.server.address() as AddressInfo).port);
       link.bind(boundOrigin);

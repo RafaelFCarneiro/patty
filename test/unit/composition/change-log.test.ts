@@ -1,154 +1,99 @@
+import type { ChangeLogStore } from '@rfc0/effect-runner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Db } from '../../../src/diplomat/db/driver.js';
+import {
+  CHANGE_EVENT_PRUNE_EVERY_MS,
+  CHANGE_EVENT_RETENTION_MS,
+  CHANGE_RELAY_BATCH_LIMIT,
+  CHANGE_RELAY_POLL_MS,
+} from '../../../src/models/change-events.js';
+import type { ChangeEvent } from '../../../src/models/tenancy.js';
 
-const mocks = vi.hoisted(() => ({ append: vi.fn(), openChangeLog: vi.fn(), closeDatabase: vi.fn() }));
+const mocks = vi.hoisted(() => ({ changeLogStore: vi.fn() }));
 
-vi.mock('../../../src/diplomat/db/change-events.js', () => ({
-  append: mocks.append,
-  openChangeLog: mocks.openChangeLog,
-}));
-vi.mock('../../../src/diplomat/db/driver.js', () => ({ closeDatabase: mocks.closeDatabase }));
+vi.mock('../../../src/diplomat/db/change-events.js', () => ({ changeLogStore: mocks.changeLogStore }));
 
-const { createAppendingBus } = await import('../../../src/composition/change-log.js');
+const { createChangeLog, startServingRelay } = await import('../../../src/composition/change-log.js');
 
-const LOG = { tag: 'log' } as unknown as Db;
-const NOW = new Date('2026-11-14T12:00:00.000Z');
-
-const busWith = (onError = vi.fn()) => ({
-  onError,
-  ...createAppendingBus({ db: {} as Db, origin: 'proc-a', clock: () => NOW, onError }),
+const fakeStore = (overrides: Partial<ChangeLogStore<ChangeEvent> & { close: () => Promise<void> }> = {}) => ({
+  append: vi.fn(async () => undefined),
+  latestId: vi.fn(async () => 0),
+  readAfter: vi.fn(async () => []),
+  pruneBefore: vi.fn(async () => undefined),
+  close: vi.fn(async () => undefined),
+  ...overrides,
 });
 
-afterEach(() => Object.values(mocks).forEach((mock) => mock.mockReset()));
+afterEach(() => {
+  mocks.changeLogStore.mockReset();
+  vi.restoreAllMocks();
+});
 
-describe('createAppendingBus', () => {
-  it('tells local subscribers before it appends', async () => {
+describe('PATTY’s relay policy', () => {
+  it('keeps every row for at least twice the poll interval, as the package requires', () => {
+    expect(CHANGE_EVENT_RETENTION_MS).toBeGreaterThanOrEqual(2 * CHANGE_RELAY_POLL_MS);
+    expect(CHANGE_EVENT_PRUNE_EVERY_MS).toBeGreaterThan(0);
+    expect(CHANGE_RELAY_BATCH_LIMIT).toBeGreaterThan(0);
+  });
+});
+
+describe('startServingRelay', () => {
+  it('starts a relay on the runtime’s store with PATTY’s values, and stop releases its timers', async () => {
+    const store = fakeStore();
+    mocks.changeLogStore.mockReturnValue(store);
+    const { changeLog } = createChangeLog({} as Db, vi.fn());
+
+    const relay = await startServingRelay({ changeLog });
+
+    expect(relay).not.toBeNull();
+    expect(store.latestId).toHaveBeenCalledOnce();
+    await relay?.stop();
+  });
+
+  it('reports a relay that cannot start and answers null, so the process runs without it', async () => {
+    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failure = new Error('no such table');
+    mocks.changeLogStore.mockReturnValue(fakeStore({ latestId: vi.fn(async () => Promise.reject(failure)) }));
+    const { changeLog } = createChangeLog({} as Db, vi.fn());
+
+    expect(await startServingRelay({ changeLog })).toBeNull();
+
+    expect(report).toHaveBeenCalledWith('[patty] change notification failed:', failure);
+  });
+});
+
+describe('createChangeLog', () => {
+  it('close waits for the queued appends, then releases the store', async () => {
     const order: string[] = [];
-    mocks.openChangeLog.mockResolvedValue(LOG);
-    mocks.append.mockImplementation(async () => void order.push('append'));
-    const { bus, settled } = busWith();
-    bus.subscribe(() => order.push('local'));
-
-    bus.publish({ userId: 'u1', entities: ['account'] });
-    expect(order).toEqual(['local']);
-    await settled();
-
-    expect(order).toEqual(['local', 'append']);
-  });
-
-  it('appends the event with this process’s origin and the wall-clock time', async () => {
-    mocks.openChangeLog.mockResolvedValue(LOG);
-    const { bus, settled } = busWith();
-
-    bus.publish({ userId: 'u1', entities: ['account', 'bill'] });
-    await settled();
-
-    expect(mocks.append).toHaveBeenCalledWith(LOG, {
-      event: { userId: 'u1', entities: ['account', 'bill'] },
-      origin: 'proc-a',
-      createdAt: '2026-11-14T12:00:00.000Z',
+    const store = fakeStore({
+      append: vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        order.push('append');
+      }),
+      close: vi.fn(async () => void order.push('close')),
     });
+    mocks.changeLogStore.mockReturnValue(store);
+    const { changeBus, changeLog } = createChangeLog({} as Db, vi.fn());
+
+    changeBus.publish({ userId: 'u1', entities: ['account'] });
+    await changeLog.close();
+
+    expect(order).toEqual(['append', 'close']);
   });
 
-  it('keeps publish order across appends, even when an earlier one is slow', async () => {
-    mocks.openChangeLog.mockResolvedValue(LOG);
-    const written: string[][] = [];
-    mocks.append.mockImplementationOnce(async (_log, { event }) => {
-      await new Promise((resolve) => setTimeout(resolve, 15));
-      written.push([...event.entities]);
-    });
-    mocks.append.mockImplementation(async (_log, { event }) => void written.push([...event.entities]));
-    const { bus, settled } = busWith();
+  it('gives every process its own origin and announces only events that name an entity', async () => {
+    const store = fakeStore();
+    mocks.changeLogStore.mockReturnValue(store);
+    const first = createChangeLog({} as Db, vi.fn());
+    const second = createChangeLog({} as Db, vi.fn());
 
-    bus.publish({ userId: 'u1', entities: ['first'] });
-    bus.publish({ userId: 'u1', entities: ['second'] });
-    await settled();
+    first.changeBus.publish({ userId: null, entities: [] });
+    first.changeBus.publish({ userId: 'u1', entities: ['tag'] });
+    await first.changeLog.settled();
 
-    expect(written).toEqual([['first'], ['second']]);
-  });
-
-  it('reports a failed append to onError and never throws from publish; later events still append', async () => {
-    mocks.openChangeLog.mockResolvedValue(LOG);
-    const failure = new Error('database is locked');
-    mocks.append.mockRejectedValueOnce(failure);
-    const { bus, settled, onError } = busWith();
-    const listener = vi.fn();
-    bus.subscribe(listener);
-
-    expect(() => bus.publish({ userId: 'u1', entities: ['tag'] })).not.toThrow();
-    bus.publish({ userId: 'u1', entities: ['budget'] });
-    await settled();
-
-    expect(listener).toHaveBeenCalledTimes(2);
-    expect(onError).toHaveBeenCalledExactlyOnceWith(failure);
-    expect(mocks.append).toHaveBeenCalledTimes(2);
-  });
-
-  it('retries opening the log connection after it failed to open', async () => {
-    const failure = new Error('cannot open');
-    mocks.openChangeLog.mockRejectedValueOnce(failure).mockResolvedValue(LOG);
-    const { bus, settled, onError } = busWith();
-
-    bus.publish({ userId: 'u1', entities: ['tag'] });
-    bus.publish({ userId: 'u1', entities: ['budget'] });
-    await settled();
-
-    expect(onError).toHaveBeenCalledExactlyOnceWith(failure);
-    expect(mocks.openChangeLog).toHaveBeenCalledTimes(2);
-    expect(mocks.append).toHaveBeenCalledTimes(1);
-  });
-
-  it('opens the log connection once, however many events follow', async () => {
-    mocks.openChangeLog.mockResolvedValue(LOG);
-    const { bus, settled } = busWith();
-
-    bus.publish({ userId: 'u1', entities: ['tag'] });
-    bus.publish({ userId: 'u1', entities: ['budget'] });
-    await settled();
-
-    expect(mocks.openChangeLog).toHaveBeenCalledTimes(1);
-  });
-
-  it('announces nothing for an event that names no entity, but still tells local subscribers', async () => {
-    const { bus, settled } = busWith();
-    const listener = vi.fn();
-    bus.subscribe(listener);
-
-    bus.publish({ userId: null, entities: [] });
-    await settled();
-
-    expect(listener).toHaveBeenCalledOnce();
-    expect(mocks.append).not.toHaveBeenCalled();
-  });
-
-  it('publishLocal reaches local subscribers and never appends (no echo between processes)', async () => {
-    const { publishLocal, bus, settled } = busWith();
-    const listener = vi.fn();
-    bus.subscribe(listener);
-
-    publishLocal({ userId: 'u1', entities: ['account'] });
-    await settled();
-
-    expect(listener).toHaveBeenCalledWith({ userId: 'u1', entities: ['account'] });
-    expect(mocks.append).not.toHaveBeenCalled();
-  });
-
-  it('close waits for queued appends, then releases the log connection', async () => {
-    mocks.openChangeLog.mockResolvedValue(LOG);
-    const { bus, close } = busWith();
-
-    bus.publish({ userId: 'u1', entities: ['tag'] });
-    await close();
-
-    expect(mocks.append).toHaveBeenCalledOnce();
-    expect(mocks.closeDatabase).toHaveBeenCalledWith(LOG);
-  });
-
-  it('close with nothing ever appended has no connection to release', async () => {
-    const { close } = busWith();
-
-    await close();
-
-    expect(mocks.closeDatabase).not.toHaveBeenCalled();
+    expect(first.changeLog.origin).not.toBe(second.changeLog.origin);
+    expect(store.append).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ origin: first.changeLog.origin, event: { userId: 'u1', entities: ['tag'] } }),
+    );
   });
 });

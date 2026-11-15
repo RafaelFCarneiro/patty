@@ -1,7 +1,14 @@
-import { createChangeBus, type ChangeBus } from '@rfc0/effect-runner';
-import { append, openChangeLog } from '../diplomat/db/change-events.js';
-import { closeDatabase, type Db } from '../diplomat/db/driver.js';
+import { randomUUID } from 'node:crypto';
+import { createRelayedChangeBus, startChangeRelay, type ChangeBus, type ChangeRelay } from '@rfc0/effect-runner';
+import { changeLogStore, type SqliteChangeLog } from '../diplomat/db/change-events.js';
+import type { Db } from '../diplomat/db/driver.js';
 import { isWorthAnnouncing } from '../logic/change-events.js';
+import {
+  CHANGE_EVENT_PRUNE_EVERY_MS,
+  CHANGE_EVENT_RETENTION_MS,
+  CHANGE_RELAY_BATCH_LIMIT,
+  CHANGE_RELAY_POLL_MS,
+} from '../models/change-events.js';
 import type { ChangeEvent } from '../models/tenancy.js';
 
 /** stderr only — stdout carries the stdio MCP protocol (ADR-007). */
@@ -9,67 +16,55 @@ export const reportChangeError = (cause: unknown): void => {
   console.error('[patty] change notification failed:', cause);
 };
 
-export type AppendingBusOptions = {
-  db: Db;
-  /** This process's id, written on every row so the relay of another process (and this one) can tell whose it is. */
+/** What a relay and a clean shutdown need of the relayed bus (ADR-036): this process's id, the store, the local-only
+ *  publish that never appends, and `close` — wait for the appends in flight, then release the store. */
+export type ChangeLog = {
   origin: string;
-  clock: () => Date;
-  /** Receives a failing listener (the bus's own) and a failed append: stderr, never stdout (ADR-007). */
-  onError: (cause: unknown) => void;
-};
-
-export type AppendingBus = {
-  /** The engine's `ChangeBus` over this process: `publish` tells local subscribers first, then appends a row. */
-  bus: ChangeBus<ChangeEvent>;
-  /** The local bus alone: what a relay publishes on, so a relayed event is never appended again (no echo). */
+  store: SqliteChangeLog;
   publishLocal: (event: ChangeEvent) => void;
-  /** Resolves once every append requested so far has been written or has failed. */
   settled: () => Promise<void>;
-  /** Releases the log connection. */
   close: () => Promise<void>;
 };
 
-/**
- * ADR-036 §2: `@rfc0/effect-runner`'s `ChangeBus` implemented over the database. Local subscribers run first, so a
- * browser on this process still updates at once; the append that tells the other processes follows as a separate,
- * best-effort write on its own short-waiting connection. It is queued, never awaited by `publish`: a busy or closed
- * database costs one missed refresh (§4's resync repairs it), never a failed or delayed write. Appends keep
- * `publish` order.
- */
-export const createAppendingBus = ({ db, origin, clock, onError }: AppendingBusOptions): AppendingBus => {
-  const local = createChangeBus<ChangeEvent>({ onError });
-  const log = { opened: undefined as Promise<Db> | undefined };
-  // A failed open is forgotten, so the next append tries again; a failed insert keeps the connection (it is only busy).
-  const openOnce = (): Promise<Db> =>
-    (log.opened ??= openChangeLog(db).catch((cause: unknown) => {
-      log.opened = undefined;
-      throw cause;
-    }));
-  const queue = { tail: Promise.resolve() };
-
-  const appendLater = (event: ChangeEvent): void => {
-    queue.tail = queue.tail
-      .then(async () => append(await openOnce(), { event, origin, createdAt: clock().toISOString() }))
-      .catch(onError)
-      // A reporter that throws (a closed stderr) must not poison every later append.
-      .catch(() => undefined);
+/** The process's change bus (ADR-036 §2): `@rfc0/effect-runner`'s relayed bus over the SQLite store, so a publish
+ *  reaches this process's subscribers first and the other processes' relays after. A subscriber's failure and a failed
+ *  append go to `onError`, never to the write. */
+export const createChangeLog = (
+  db: Db,
+  onError: (cause: unknown) => void,
+): { changeBus: ChangeBus<ChangeEvent>; changeLog: ChangeLog } => {
+  const origin = randomUUID();
+  const store = changeLogStore(db);
+  const { bus, publishLocal, settled } = createRelayedChangeBus({
+    store,
+    origin,
+    onError,
+    shouldAppend: isWorthAnnouncing,
+  });
+  const close = async (): Promise<void> => {
+    await settled();
+    await store.close();
   };
-
-  return {
-    bus: {
-      publish: (event) => {
-        local.publish(event);
-        if (isWorthAnnouncing(event)) appendLater(event);
-      },
-      subscribe: local.subscribe,
-    },
-    publishLocal: local.publish,
-    settled: () => queue.tail,
-    close: async () => {
-      await queue.tail;
-      const opened = log.opened;
-      log.opened = undefined;
-      if (opened) closeDatabase(await opened);
-    },
-  };
+  return { changeBus: bus, changeLog: { origin, store, publishLocal, settled, close } };
 };
+
+/**
+ * The relay of a process that serves a dashboard (ADR-036 §3), with PATTY's policy values: `@rfc0/effect-runner`
+ * owns the loop, PATTY the store and these numbers. A relay that cannot start — a failing store, or the package's
+ * `RangeError` for invalid options — is reported and answers `null`: the dashboard then updates from this process's own
+ * writes only, as before.
+ */
+export const startServingRelay = ({ changeLog }: { changeLog: ChangeLog }): Promise<ChangeRelay | null> =>
+  startChangeRelay({
+    store: changeLog.store,
+    publishLocal: changeLog.publishLocal,
+    origin: changeLog.origin,
+    pollMs: CHANGE_RELAY_POLL_MS,
+    retentionMs: CHANGE_EVENT_RETENTION_MS,
+    pruneEveryMs: CHANGE_EVENT_PRUNE_EVERY_MS,
+    batchLimit: CHANGE_RELAY_BATCH_LIMIT,
+    onError: reportChangeError,
+  }).catch((cause: unknown) => {
+    reportChangeError(cause);
+    return null;
+  });

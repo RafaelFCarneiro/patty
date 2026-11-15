@@ -4,11 +4,11 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { version } from '../common/build-version.js';
 import type { Config } from '../config.js';
 import { boot } from './boot.js';
-import { startServingRelay, type ChangeRelay } from './change-relay.js';
+import type { ChangeBus, ChangeRelay } from '@rfc0/effect-runner';
+import { startServingRelay } from './change-log.js';
 import { DASHBOARD_PATH, httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';
 import type { Tenancy } from '../controllers/deps.js';
 import { DISABLED_AUTH, type HttpAuth, type HttpContext } from '../diplomat/http/context.js';
-import type { ChangeBus } from '@rfc0/effect-runner';
 import type { ChangeEvent } from '../models/tenancy.js';
 import type { StartupRefusal } from '../models/startup.js';
 import { redactSecretQuery } from '../logic/auth/redact.js';
@@ -128,7 +128,7 @@ export const startHttpSidecar = async (
  */
 export const runHttp = (config: Config): ResultAsync<void, StartupRefusal> =>
   safeTry(async function* () {
-    const { db, runtime, prepared } = yield* boot(config);
+    const { runtime, prepared } = yield* boot(config);
     const app = buildHttpApp(runtime, version, { auth: prepared.auth, trustProxy: config.TRUST_PROXY });
 
     // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
@@ -147,7 +147,7 @@ export const runHttp = (config: Config): ResultAsync<void, StartupRefusal> =>
     process.on('SIGTERM', shutdown);
 
     await app.listen({ port: config.PORT, host: config.HOST });
-    relay = await startServingRelay(db, runtime);
+    relay = await startServingRelay(runtime);
     // config.PORT may be 0 (OS-assigned); read back the address actually bound for the banner.
     const boundPort = (app.server.address() as AddressInfo).port;
     const origin = httpOrigin(config.HOST, boundPort);
