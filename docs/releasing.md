@@ -248,5 +248,7 @@ version is tagged by hand, in this order:
    -t ghcr.io/rafaelfcarneiro/patty:1 -t ghcr.io/rafaelfcarneiro/patty:latest --push .`. Tagging `latest` here is the
    owner's approval for the first version; later versions go through the `release` environment.
 5. Configure the trusted publisher on npmjs.com and the `release` environment on GitHub (see *One-time setup*).
+
+A wrong automatic version is undone by discarding the staged npm version, moving the image's `latest` back (`docker buildx imagetools create --tag ghcr.io/rafaelfcarneiro/patty:latest ghcr.io/rafaelfcarneiro/patty:<previous>`), deleting the GitHub Release and tag, and tagging the offending commit with the version it should have had, so the next run counts from there.
 6. Set the repository variable `RELEASE_ENABLED` to `true`. The workflow continues from `patty-v1.0.0`
    (`1.0.1`, `1.1.0`, …).
