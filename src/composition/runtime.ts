@@ -113,6 +113,12 @@ const runnersOn = (
   };
 };
 
+const dropStaleLocale =
+  (localeResolver: ReturnType<typeof createLocaleResolver>) =>
+  ({ userId, entities }: ChangeEvent): void => {
+    if (userId !== null && entities.includes(USER_SETTINGS_ENTITY_TAG)) localeResolver.resetLocale(userId);
+  };
+
 export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOptions = {}): Runtime => {
   const onChangeError = options.onChangeError ?? reportChangeError;
   const localeResolver = createLocaleResolver(config.PATTY_LOCALE);
@@ -125,6 +131,9 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
     clock: () => new Date(),
     onError: onChangeError,
   });
+  // First subscriber, so it runs before any dashboard stream: another process's `set_locale` reaches this one as a
+  // relayed event, and the cached language must be gone by the time the refetch it triggers resolves a locale.
+  changeBus.subscribe(dropStaleLocale(localeResolver));
   const health = healthRepo(db);
   const instance = instanceRepo(db);
 

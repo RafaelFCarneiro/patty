@@ -71,7 +71,14 @@ export const startChangeRelay = async (options: ChangeRelayOptions): Promise<Cha
   const log = await openChangeLog(options.db);
   // No version yet, so the first tick always reads past the cursor: a commit between `latestId` and a version
   // baseline would otherwise be absorbed into that baseline and never looked at.
-  const cursor: Cursor = { lastId: await latestId(log), version: null };
+  // A failure here leaves no relay whose `stop` could release the connection, so release it before propagating.
+  const cursor: Cursor = {
+    lastId: await latestId(log).catch((cause: unknown) => {
+      closeDatabase(log);
+      throw cause;
+    }),
+    version: null,
+  };
 
   const tick = repeating(options.onError, () => relayOnce(log, options, cursor));
   const prune = repeating(options.onError, () => pruneBefore(log, pruneCutoff(options.clock(), options.retentionMs)));

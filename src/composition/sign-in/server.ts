@@ -38,8 +38,15 @@ export const startSignInServer = async (config: AuthConfig, db: Db): Promise<Sig
   // Fastify binds `localhost` to both its IPv4 and IPv6 loopback addresses.
   await app.listen({ port: 0, host: LOCALHOST_NAME }).catch(async (cause: unknown) => {
     await app.close();
+    await runtime.changeLog.close();
     throw cause;
   });
   const { port } = app.server.address() as AddressInfo;
-  return { origin: httpOrigin(LOCALHOST_NAME, port), close: () => app.close() };
+  return {
+    origin: httpOrigin(LOCALHOST_NAME, port),
+    close: async () => {
+      await app.close();
+      await runtime.changeLog.close();
+    },
+  };
 };

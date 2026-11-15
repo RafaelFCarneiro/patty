@@ -13,6 +13,7 @@ import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { BILL_ENTITY_TAG } from '../../../src/models/bill.js';
 import { BUDGET_ENTITY_TAG } from '../../../src/models/budget.js';
 import { CURRENCY_RATE_ENTITY_TAG } from '../../../src/models/currency-rate.js';
+import { USER_SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
 import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
 import type { ChangeEvent } from '../../../src/models/tenancy.js';
 import { buildApp, type AppContext } from '../app-builder.js';
@@ -213,6 +214,24 @@ describe('a relay that starts later', () => {
 
       expect(published).toEqual([{ userId: OWNER_USER_ID, entities: [BILL_ENTITY_TAG] }]);
     });
+  });
+});
+
+describe('a relayed settings change', () => {
+  it('drops the receiving process’s cached locale before its subscribers refetch', async () => {
+    expect(await b.deps.locale()).toBe('en');
+    await b.db.run(
+      sql`INSERT INTO user_settings (user_id, locale) VALUES (${OWNER_USER_ID}, 'pt') ON CONFLICT (user_id) DO UPDATE SET locale = 'pt'`,
+    );
+    const heardOnB = collect(b);
+
+    a.changeBus.publish({ userId: OWNER_USER_ID, entities: [USER_SETTINGS_ENTITY_TAG] });
+    await vi.waitFor(() => expect(heardOnB).toHaveLength(1), { timeout: WITHIN_TWO_POLLS_MS });
+
+    expect(await b.deps.locale()).toBe('pt');
+    await b.db.run(sql`UPDATE user_settings SET locale = 'en' WHERE user_id = ${OWNER_USER_ID}`);
+    a.changeBus.publish({ userId: OWNER_USER_ID, entities: [USER_SETTINGS_ENTITY_TAG] });
+    await vi.waitFor(() => expect(heardOnB).toHaveLength(2), { timeout: WITHIN_TWO_POLLS_MS });
   });
 });
 

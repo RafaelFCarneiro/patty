@@ -176,6 +176,14 @@ describe('startChangeRelay', () => {
     await stop();
   });
 
+  it('releases the log connection when initialization fails after it opened', async () => {
+    mocks.latestId.mockRejectedValue(new Error('no such table'));
+
+    await expect(start().relay).rejects.toThrow('no such table');
+
+    expect(mocks.closeDatabase).toHaveBeenCalledExactlyOnceWith(LOG);
+  });
+
   it('does not start when the log connection cannot be opened', async () => {
     mocks.openChangeLog.mockRejectedValue(new Error('cannot open'));
 
