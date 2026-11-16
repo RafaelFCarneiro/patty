@@ -174,6 +174,16 @@ Consequences for releases:
 - **`drizzle-kit generate` cannot load the schema as-is**: `schema.ts` imports models that import `@rfc0/effect-runner`, whose `exports` map has an `import` condition only, and drizzle-kit loads the schema through `require`. Temporarily add `"default": "./dist/index.js"` next to `"import"` in `node_modules/@rfc0/effect-runner/package.json`, run `npx drizzle-kit generate --name <name>`, then restore the file (`npm ci` also does). A migration that drops a UNIQUE constraint or adds a NOT NULL foreign key needs a hand-written table rebuild (see `drizzle/0021_tenancy_data.sql`): keep the generated snapshot, replace the generated SQL.
 - A migration that was released and then dropped from the journal leaves databases "ahead" of every later build — treat a released migration as permanent (add a new one to undo it).
 
+## Dependencies
+
+Dependabot (`.github/dependabot.yml`) checks npm weekly and GitHub Actions monthly. Minor and patch updates arrive
+grouped (one PR for dev dependencies, one for production ones); every major is its own PR, and `zod`'s and
+`typescript`'s majors are ignored there because each has a planned PR of its own. A production update ships as a
+`fix(deps):` (patch). `package.json` `overrides` are only for advisories in **dev-only transitive** dependencies that
+`npm audit fix` cannot resolve within range, pinned to the first fixed version, one entry each with the advisory
+named in the PR that adds it; review them whenever their parent package updates and drop the ones it no longer needs.
+Never use `npm audit fix --force` or accept a suggested downgrade.
+
 ## Dependency upgrades — `drizzle-orm`, `drizzle-kit`, `@libsql/client`
 
 `src/diplomat/db/migration-barrier.ts` **mirrors drizzle's libSQL migrator** (`drizzle-orm/libsql`'s `migrate()` and
