@@ -38,6 +38,34 @@ describe('createLocaleResolver', () => {
     expect(settings.getLocale).toHaveBeenCalledTimes(2);
   });
 
+  it('a lookup that started before a reset does not put its stale result back in the cache', async () => {
+    let finishRead: (entity: UserSettingsEntity) => void = () => undefined;
+    const slowRead = new Promise<UserSettingsEntity>((resolve) => (finishRead = resolve));
+    const staleSettings: SettingsRepo = { getLocale: vi.fn(() => slowRead) };
+    const freshSettings = makeSettings(Locale.enum.pt);
+    const { locale, resetLocale } = createLocaleResolver();
+
+    const inFlight = locale(USER, staleSettings);
+    resetLocale(USER);
+    finishRead({ locale: Locale.enum.en, localeSource: LocaleSource.enum.default, baseCurrency: null, version: 0 });
+    await inFlight;
+
+    expect(await locale(USER, freshSettings)).toBe(Locale.enum.pt);
+    expect(freshSettings.getLocale).toHaveBeenCalledOnce();
+  });
+
+  it('a reset for one user never keeps another user’s lookup from caching', async () => {
+    const settings = makeSettings(Locale.enum.es);
+    const { locale, resetLocale } = createLocaleResolver();
+
+    const inFlight = locale(OTHER_USER, settings);
+    resetLocale(USER);
+    await inFlight;
+    await locale(OTHER_USER, settings);
+
+    expect(settings.getLocale).toHaveBeenCalledOnce();
+  });
+
   it('a configLocale override always wins, for every user, and never touches the DB', async () => {
     const settings = makeSettings(Locale.enum.pt);
     const { locale } = createLocaleResolver(Locale.enum.es);

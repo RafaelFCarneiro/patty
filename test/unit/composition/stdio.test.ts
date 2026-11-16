@@ -209,6 +209,31 @@ describe('runStdio — shutdown', () => {
 
     serverClosed.resolve();
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    expect(order).toEqual(['server', 'sidecar', 'session', 'relay', 'change-log']);
+  });
+
+  it('stops the relay, then closes the change log, and exits only after both have finished', async () => {
+    booted(undefined);
+    const relayStopped = deferred();
+    const logClosed = deferred();
+    mocks.startServingRelay.mockResolvedValue({ stop: vi.fn(() => (order.push('relay'), relayStopped.promise)) });
+    changeLogClose.mockImplementation(() => (order.push('change-log'), logClosed.promise));
+    connection();
+    sidecar(true);
+    await runStdio(configWith({ PATTY_HTTP: true }));
+
+    handlers['stdin:end']?.();
+    await vi.waitFor(() => expect(order).toContain('relay'));
+    expect(order).not.toContain('change-log');
+    expect(exit).not.toHaveBeenCalled();
+
+    relayStopped.resolve();
+    await vi.waitFor(() => expect(order).toContain('change-log'));
+    expect(exit).not.toHaveBeenCalled();
+
+    logClosed.resolve();
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    expect(order).toEqual(['server', 'sidecar', 'session', 'relay', 'change-log']);
   });
 
   it('shuts down once however many of the signals arrive', async () => {
