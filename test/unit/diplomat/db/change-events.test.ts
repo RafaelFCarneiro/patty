@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CHANGE_EVENT_APPEND_TIMEOUT_MS } from '../../../../src/models/change-events.js';
+import { CHANGE_EVENT_LOCK_WAIT_MS } from '../../../../src/models/change-events.js';
 import type { Db } from '../../../../src/diplomat/db/driver.js';
 
 const mocks = vi.hoisted(() => ({ openSibling: vi.fn(), closeDatabase: vi.fn() }));
@@ -27,13 +27,13 @@ describe('changeLogStore connection', () => {
     expect(mocks.openSibling).toHaveBeenCalledTimes(1);
   });
 
-  it('opens its connection with the short lock wait, not the database’s own', async () => {
+  it('opens its connection with no lock wait inside SQLite (the loop is never blocked)', async () => {
     mocks.openSibling.mockResolvedValue(connection(1));
     const db = {} as Db;
 
     await changeLogStore(db).changeToken!();
 
-    expect(mocks.openSibling).toHaveBeenCalledWith(db, CHANGE_EVENT_APPEND_TIMEOUT_MS);
+    expect(mocks.openSibling).toHaveBeenCalledWith(db, CHANGE_EVENT_LOCK_WAIT_MS);
   });
 
   it('opens again after a failed open instead of remembering the failure', async () => {

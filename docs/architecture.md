@@ -299,7 +299,7 @@ its user, the identity runner as `null` (instance bookkeeping no dashboard hears
 `userId` is the stream's session user. **It spans processes (ADR-036):** `composition/change-log.ts`'s `createChangeLog` builds it (called
 by `composition/runtime.ts`) with the package's `createRelayedChangeBus` — `publish` delivers to this process's subscribers first, then queues
 an append the write never waits for — over PATTY's `ChangeLogStore`, `diplomat/db/change-events.ts`'s `changeLogStore`: the `change_events`
-table on one sibling connection that waits at most `CHANGE_EVENT_APPEND_TIMEOUT_MS`, whose `changeToken` is `PRAGMA data_version`
+table on one sibling connection with no lock wait of its own (`CHANGE_EVENT_LOCK_WAIT_MS`: libsql is synchronous, so a wait would block the loop; an append backs off asynchronously, `CHANGE_EVENT_APPEND_BACKOFF_MS`), whose `changeToken` is `PRAGMA data_version`
 (per connection, and libsql replaces a client's connection after each transaction, so the engine's handle cannot hold the reading). A
 process that serves a dashboard also runs the package's `startChangeRelay` (`startServingRelay`, with PATTY's `CHANGE_*` values from
 `models/change-events.ts`): when the token moved it reads the other origins' rows past its cursor and publishes them on the *local* bus

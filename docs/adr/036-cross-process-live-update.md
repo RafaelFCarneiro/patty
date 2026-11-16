@@ -47,11 +47,13 @@ the policy values and the wiring. What it does:
 
 The append happens after the commit, as a separate best-effort write. A failure (busy database, closed connection)
 goes to the bus's `onError` and never fails the write that triggered it; the cost of a lost row is one missed
-refresh, which the next navigation or the resync in §4 repairs. The write must not wait long for a lock: it uses a
-short, named timeout, not the database's normal `busy_timeout`. libsql's file client is synchronous, so
-the same value bounds how long one failing append can block the process's event loop: measured against a second process
-holding the write lock, 250 ms cost about 285 ms of loop lag per append and 50 ms about 60 ms, so the value is 50 ms
-(`CHANGE_EVENT_APPEND_TIMEOUT_MS`; other writes hold the lock for milliseconds).
+refresh, which the next navigation or the resync in §4 repairs. The append must not wait for a lock inside SQLite at
+all: libsql's file client is synchronous, so a wait there blocks the whole event loop, and a lock held by this
+process's own open transaction cannot be released while it does (the wait would only burn and the refresh be lost).
+Measured against a second process holding the write lock, a 250 ms wait cost about 285 ms of loop lag per append and
+50 ms about 60 ms. So the store's connection has no lock wait (`CHANGE_EVENT_LOCK_WAIT_MS`, 0): a busy statement fails at
+once and the append retries after short asynchronous pauses (`CHANGE_EVENT_APPEND_BACKOFF_MS`), during which the loop
+is free and the lock holder, another transaction of this process or a short write of another, finishes.
 
 Every process appends, whether or not it serves a dashboard: it cannot know whether another process does.
 

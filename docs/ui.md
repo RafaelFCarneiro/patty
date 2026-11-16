@@ -349,9 +349,9 @@ binds the dashboard port, so a write made through another process must still rea
 thing, the database file, and a small infrastructure table carries the news: `change_events` (`id`, `user_id`, `entities` —
 a JSON array of entity tags, never data —, `origin` — the writing process's id —, `created_at`). Every process's bus
 is `@rfc0/effect-runner`'s relayed bus: it delivers locally first (a browser on the writing process updates at once, as
-before) and then appends a row, through PATTY's SQLite store, on a connection of its own that waits at most
-`CHANGE_EVENT_APPEND_TIMEOUT_MS`; a busy or closed database costs one missed refresh and never
-fails or delays the write. A process that serves a dashboard (stdio with the sidecar bound, or the HTTP transport) runs the package's
+before) and then appends a row, through PATTY's SQLite store, on a connection of its own that never waits for a lock inside SQLite
+(`CHANGE_EVENT_LOCK_WAIT_MS`, none) and instead backs off asynchronously (`CHANGE_EVENT_APPEND_BACKOFF_MS`); a database still
+busy after that, or closed, costs one missed refresh and never fails or delays the write. A process that serves a dashboard (stdio with the sidecar bound, or the HTTP transport) runs the package's
 relay: it starts at the newest row (no replay) and every `CHANGE_RELAY_POLL_MS` (about a second) reads SQLite's
 `PRAGMA data_version` — which moves only when another connection committed — and, only then, reads the rows from other
 origins past its cursor, in id order, and publishes them on its local bus alone (never appended again, so rows do not echo).

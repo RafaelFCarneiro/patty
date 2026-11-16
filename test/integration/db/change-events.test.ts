@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { changeLogStore, type SqliteChangeLog } from '../../../src/diplomat/db/change-events.js';
 import { BUSY_TIMEOUT_MS, closeDatabase, openDatabase, openSibling, type Db } from '../../../src/diplomat/db/driver.js';
-import { CHANGE_EVENT_APPEND_TIMEOUT_MS } from '../../../src/models/change-events.js';
+import { CHANGE_EVENT_APPEND_BACKOFF_MS } from '../../../src/models/change-events.js';
 import type { ChangeEvent } from '../../../src/models/tenancy.js';
 import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
@@ -166,20 +166,73 @@ describe('changeLogStore — the SQLite ChangeLogStore', () => {
       }
     };
 
-    it('fails an append within the short lock wait, far below the database’s own busy timeout', async () => {
+    const pause = (ms: number) => new Promise<void>((resume) => setTimeout(resume, ms));
+    /** The longest the event loop went without running a 5 ms timer while `work` ran. */
+    const loopLagDuring = async (work: () => Promise<unknown>): Promise<number> => {
+      const lag = { worst: 0, last: Date.now() };
+      const timer = setInterval(() => {
+        lag.worst = Math.max(lag.worst, Date.now() - lag.last - 5);
+        lag.last = Date.now();
+      }, 5);
+      await work().catch(() => undefined);
+      clearInterval(timer);
+      return lag.worst;
+    };
+
+    it('gives up on a lock never released after the backoff, far below the database’s own timeout', async () => {
       await store.append(record(['warm up the connection']));
+      const backoff = CHANGE_EVENT_APPEND_BACKOFF_MS.reduce((total, ms) => total + ms, 0);
 
       await holdingTheWriteLock(async () => {
         const startedAt = Date.now();
         await expect(store.append(record(['blocked']))).rejects.toThrow();
         const waited = Date.now() - startedAt;
 
-        expect(waited).toBeGreaterThanOrEqual(CHANGE_EVENT_APPEND_TIMEOUT_MS - 50);
+        expect(waited).toBeGreaterThanOrEqual(backoff - 5);
         expect(waited).toBeLessThan(BUSY_TIMEOUT_MS / 2);
       });
     });
 
-    it('leaves the main connection’s own lock wait untouched by the store’s short one', async () => {
+    it('never blocks the event loop while it waits for a lock', async () => {
+      await store.append(record(['warm up the connection']));
+
+      await holdingTheWriteLock(async () => {
+        const worst = await loopLagDuring(() => store.append(record(['blocked'])));
+
+        expect(worst).toBeLessThan(40);
+      });
+    });
+
+    it('lands the append when the lock is released during the backoff', async () => {
+      await store.append(record(['warm up the connection']));
+      const releaseAfterMs = CHANGE_EVENT_APPEND_BACKOFF_MS[0]! + CHANGE_EVENT_APPEND_BACKOFF_MS[1]!;
+      const holder = await openSibling(db, BUSY_TIMEOUT_MS);
+      await holder.run(sql`BEGIN IMMEDIATE`);
+      const released = pause(releaseAfterMs).then(async () => {
+        await holder.run(sql`COMMIT`);
+        closeDatabase(holder);
+      });
+
+      await store.append(record(['waited it out']));
+      await released;
+
+      expect(entitiesOf(await store.readAfter(0, 'none', 10))).toEqual(['warm up the connection', 'waited it out']);
+    });
+
+    it('lands the append while this process’s own transaction is open (a blocking wait never could)', async () => {
+      const ownTransaction = db.transaction(async (tx) => {
+        await tx.run(sql`UPDATE settings SET version = version + 1 WHERE id = 'singleton'`);
+        await pause(15);
+      });
+      await pause(1);
+
+      await store.append(record(['during the engine’s transaction']));
+      await ownTransaction;
+
+      expect(entitiesOf(await store.readAfter(0, 'none', 10))).toEqual(['during the engine’s transaction']);
+    });
+
+    it('leaves the main connection’s own lock wait untouched by the store’s', async () => {
       const busyTimeout = async () => (await db.all<{ timeout: number }>(sql`PRAGMA busy_timeout`))[0]?.timeout;
       const before = await busyTimeout();
 
