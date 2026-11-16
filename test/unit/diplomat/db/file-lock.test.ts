@@ -10,8 +10,8 @@ vi.mock('@libsql/client', async (importOriginal) => ({
   createClient: () => ({ execute, close }),
 }));
 
-const { NEVER_BLOCK_IN_SQLITE_MS, tryExclusiveLock, waitForExclusiveLock } =
-  await import('../../../../src/diplomat/db/file-lock.js');
+const { NEVER_BLOCK_IN_SQLITE_MS } = await import('../../../../src/diplomat/db/driver.js');
+const { tryExclusiveLock, waitForExclusiveLock } = await import('../../../../src/diplomat/db/file-lock.js');
 const { withMigrationLock } = await import('../../../../src/diplomat/db/migration-lock.js');
 
 const wrappedBusy = () => new Error('query failed', { cause: new LibsqlError('database is locked', 'SQLITE_BUSY') });

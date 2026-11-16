@@ -249,6 +249,21 @@ version is tagged by hand, in this order:
    owner's approval for the first version; later versions go through the `release` environment.
 5. Configure the trusted publisher on npmjs.com and the `release` environment on GitHub (see *One-time setup*).
 
-A wrong automatic version is undone by discarding the staged npm version, moving the image's `latest` back (`docker buildx imagetools create --tag ghcr.io/rafaelfcarneiro/patty:latest ghcr.io/rafaelfcarneiro/patty:<previous>`), deleting the GitHub Release and tag, and tagging the offending commit with the version it should have had, so the next run counts from there.
-6. Set the repository variable `RELEASE_ENABLED` to `true`. The workflow continues from `patty-v1.0.0`
+6. Confirm the GHCR package grants this repository **Write** (*Package settings → Manage Actions access*; the
+   *Inherit access from source repository* option works too): the workflow cannot push an image without it, so it is
+   required before `RELEASE_ENABLED` is turned on.
+7. Set the repository variable `RELEASE_ENABLED` to `true`. The workflow continues from `patty-v1.0.0`
    (`1.0.1`, `1.1.0`, …).
+
+**Undoing a wrong automatic version.** The version comes from the commit messages, so a wrong one (a stray `!`, a
+missing `feat`) is undone in this order:
+
+1. Discard the staged npm version (do not approve its publication).
+2. Move every alias the wrong release overwrote back to the previous image — `latest`, and the `<major>.<minor>` and
+   `<major>` tags the image job also pushes (`release.yml`'s metadata step): `docker buildx imagetools create --tag
+   ghcr.io/rafaelfcarneiro/patty:latest --tag ghcr.io/rafaelfcarneiro/patty:<major>.<minor> --tag
+   ghcr.io/rafaelfcarneiro/patty:<major> ghcr.io/rafaelfcarneiro/patty:<previous>` (using the previous version's own
+   major and minor; an alias the wrong release created that did not exist before, such as a new major, is deleted
+   instead). Only then delete the wrong image version, so no tag is left pointing at it.
+3. Delete the GitHub Release and its tag.
+4. Tag the offending commit with the version it should have had, so the next run counts from there.

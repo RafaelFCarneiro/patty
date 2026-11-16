@@ -64,10 +64,11 @@ afterEach(() => {
 
 type Row = Record<string, unknown>;
 
-// drizzle's bookkeeping, sqlite internals, the FTS shadow tables, the tables this migration adds — and the preferences
-// tables, which the tenancy migration (same startup) splits in two; `tenancy-migration.test.ts` owns that.
+// drizzle's bookkeeping, sqlite internals, the FTS shadow tables, the tables this migration adds, a later
+// infrastructure table (`change_events`) — and the preferences tables, which the tenancy migration (same startup)
+// splits in two; `tenancy-migration.test.ts` owns that.
 const EXCLUDED_TABLES =
-  /^(__drizzle|sqlite_|transactions_fts|users$|sessions$|access_tokens$|setup_codes$|client_grants$|invites$|settings$|user_settings$)/;
+  /^(__drizzle|sqlite_|transactions_fts|users$|sessions$|access_tokens$|setup_codes$|client_grants$|invites$|change_events$|settings$|user_settings$)/;
 
 /** Every table outside the auth ones and drizzle's bookkeeping, fully dumped and ordered — the database's
  *  domain content, to compare byte-for-byte before and after the migration. */
@@ -248,8 +249,8 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     });
     expect((await restored.all(sql`SELECT 1 FROM accounts`)).length).toBe(2);
     await expect(
-      openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: alone, PATTY_DB_KEY: 'f'.repeat(64) }).then(
-        (db) => db.all(sql`SELECT 1 FROM accounts`),
+      openDatabase({ KEY_LOCK_PATH: keyLockPathForTest(), DB_PATH: alone, PATTY_DB_KEY: 'f'.repeat(64) }).then((db) =>
+        db.all(sql`SELECT 1 FROM accounts`),
       ),
     ).rejects.toThrow();
   });

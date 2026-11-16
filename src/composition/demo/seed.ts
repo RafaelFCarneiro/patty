@@ -110,6 +110,21 @@ const runPlan = async (
 export const seedDemo = async (db: Db, options: DemoSeedOptions): Promise<Result<DemoSeedReport, AppError>> => {
   const clock = { now: options.today };
   const runtime = createRuntime(db, { ...options.config, PATTY_LOCALE: undefined }, { clock: () => clock.now });
+  try {
+    return await seedOn(runtime, db, options, clock);
+  } finally {
+    // The seed's writes queued change announcements: drain them and release the log connection before the caller
+    // closes or removes the database.
+    await runtime.changeLog.close();
+  }
+};
+
+const seedOn = async (
+  runtime: Runtime,
+  db: Db,
+  options: DemoSeedOptions,
+  clock: { now: Date },
+): Promise<Result<DemoSeedReport, AppError>> => {
   const scoped = scopedFor(runtime, OWNER_PRINCIPAL);
   const instanceSettings = instanceSettingsRepo(db);
 

@@ -9,6 +9,7 @@ import {
   enableWal,
   findEncryptionKey,
   keychainHoldsKey,
+  openSibling,
   resolveEncryptionKey,
   storeKeychainKeyIfAbsent,
 } from '../../../../src/diplomat/db/driver.js';
@@ -301,5 +302,20 @@ describe('enableWal (ADR-024)', () => {
     await enableWal(client);
 
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('openSibling', () => {
+  it.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'refuses a lock wait that is not a non-negative integer (%s) before opening anything',
+    async (busyTimeoutMs) => {
+      await expect(openSibling({} as never, busyTimeoutMs)).rejects.toThrow(
+        /busyTimeoutMs must be a non-negative integer/,
+      );
+    },
+  );
+
+  it('accepts zero (never wait) and then still needs a handle this adapter opened', async () => {
+    await expect(openSibling({} as never, 0)).rejects.toThrow(/not opened by openDatabase/);
   });
 });

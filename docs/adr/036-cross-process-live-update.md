@@ -37,6 +37,9 @@ The processes share exactly one thing: the database file. A small table carries 
 
 ### 2. Writing: a `ChangeBus` that also appends
 
+The bus is `@rfc0/effect-runner`'s `createRelayedChangeBus` (its ADR 0003); PATTY provides the SQLite `ChangeLogStore`,
+the policy values and the wiring. What it does:
+
 `composition/` builds the runtime's bus as a `ChangeBus<ChangeEvent>` whose `publish`:
 
 1. publishes locally first (`createChangeBus`, unchanged), so a browser on the same process still updates at once;
@@ -44,17 +47,24 @@ The processes share exactly one thing: the database file. A small table carries 
 
 The append happens after the commit, as a separate best-effort write. A failure (busy database, closed connection)
 goes to the bus's `onError` and never fails the write that triggered it; the cost of a lost row is one missed
-refresh, which the next navigation or the resync in §4 repairs. The write must not wait long for a lock: it uses a
-short, named timeout, not the database's normal `busy_timeout`.
+refresh, which the next navigation or the resync in §4 repairs. The append must not wait for a lock inside SQLite at
+all: libsql's file client is synchronous, so a wait there blocks the whole event loop, and a lock held by this
+process's own open transaction cannot be released while it does (the wait would only burn and the refresh be lost).
+Measured against a second process holding the write lock, a 250 ms wait cost about 285 ms of loop lag per append and
+50 ms about 60 ms. So the store's connection has no lock wait (`NEVER_BLOCK_IN_SQLITE_MS`, 0): a busy statement fails at
+once and the append retries after short asynchronous pauses (`CHANGE_EVENT_APPEND_BACKOFF_MS`), during which the loop
+is free and the lock holder, another transaction of this process or a short write of another, finishes.
 
 Every process appends, whether or not it serves a dashboard: it cannot know whether another process does.
 
-`@rfc0/effect-runner` does not change. PATTY contributes a `ChangeBus` implementation and a relay, both at the
-composition root, which is what the engine boundary rule allows.
+`@rfc0/effect-runner` does not change for this decision; its 0.6.0 release later took the generic mechanics (§2 and §3)
+into the package. PATTY keeps only what is its own: the store, the policy values and the wiring at the composition
+root.
 
 ### 3. Reading: a relay in each process that serves the dashboard
 
-A process whose HTTP sidecar is up (or that runs the HTTP transport) runs a relay:
+The relay is `@rfc0/effect-runner`'s `startChangeRelay` (its ADR 0003); PATTY supplies the store, the intervals and
+starts it only where a dashboard is served. A process whose HTTP sidecar is up (or that runs the HTTP transport) runs it:
 
 - It starts from the current `MAX(id)`, so it never replays old changes.
 - Every `CHANGE_RELAY_POLL_MS` (about one second) it first checks SQLite's `PRAGMA data_version`, which changes only
@@ -64,7 +74,20 @@ A process whose HTTP sidecar is up (or that runs the HTTP transport) runs a rela
   on the local bus only (never appended again, so rows do not echo between processes).
 - `/ui/events` is unchanged: it already filters each event by the stream's user and `SHARED_ENTITY_TAGS`.
 
-A process without a sidecar (`PATTY_HTTP=false`, or the port was taken) runs no relay.
+A process without a sidecar (`PATTY_HTTP=false`, or the port was taken) runs no relay; every process also prunes once
+when it starts, since only a relay prunes on a timer.
+
+```mermaid
+flowchart LR
+  W[engine publish] --> B[createRelayedChangeBus]
+  B --> L[local subscribers]
+  B -->|queued append| S[(change_events<br/>SQLite ChangeLogStore)]
+  S -->|PRAGMA data_version<br/>on its own connection| R[startChangeRelay<br/>only where the sidecar is up]
+  R -->|publishLocal, other origins only| L2["/ui/events subscribers"]
+```
+
+The package's side of this (the append queue, the relay loop, the echo and isolation guarantees) is in effect-runner's
+ADR 0003 diagrams.
 
 ### 4. Retention and resync
 
@@ -78,7 +101,8 @@ A process without a sidecar (`PATTY_HTTP=false`, or the port was taken) runs no 
 
 Changes from the same process arrive in order; across processes, in commit order of the append, which is close
 enough for a refresh signal. A cross-process change reaches the dashboard within about one poll interval. Same-process
-changes stay immediate.
+changes stay immediate. A process's own writes also move its relay's `data_version`, which costs one read per write
+that finds only its own (excluded) rows.
 
 ## Options considered
 
@@ -109,5 +133,9 @@ changes stay immediate.
 1. [x] `fix/dashboard-live-update-gaps` (#249), independent of this ADR: `cards` listens for `bill`, `projections` for
        `account`, each bundled dashboard's tag list checked by a test; the shell recovers a closed event stream
        (login on 401, reconnect otherwise) and resyncs after a reconnect (§4).
-2. [ ] `feat/cross-process-live-update`: the table and migration, the appending `ChangeBus`, the relay, retention,
-       tests across two runtimes on one database, docs.
+2. [x] `feat/cross-process-live-update` (#251): the table and migration, the SQLite `ChangeLogStore`, the wiring over
+       `@rfc0/effect-runner` 0.6's relayed bus and relay, retention, tests across two runtimes on one database, docs. One adjustment to §3: `PRAGMA data_version` is per connection and
+       libsql replaces a client's connection after every transaction, so the relay (and the appender) read and write on a
+       sibling connection of their own (`diplomat/db/driver.ts`'s `openSibling`), which never runs a transaction; the
+       first tick always reads past the cursor, so a commit between reading the newest id and the first version
+       reading is never absorbed into a baseline.

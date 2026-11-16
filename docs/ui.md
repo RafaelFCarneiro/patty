@@ -300,14 +300,15 @@ baseline fragment, and self-check (fragment not full page; no embedded data; sam
 
 ## Live update — SSE, entity-tagged (ADR-027 Phase 3)
 
-**The change bus** is `@rfc0/effect-runner`'s `createChangeBus<ChangeEvent>` (ADR-033 §5), `ChangeEvent` = `{ userId,
-entities }`: `publish(event)` after a commit, `subscribe(listener)`; publish-failure isolation is the package's. The
+**The change bus** is a `ChangeBus<ChangeEvent>` (ADR-033 §5, ADR-036), `ChangeEvent` = `{ userId,
+entities }`: `publish(event)` after a commit, `subscribe(listener)`; publish-failure isolation is `@rfc0/effect-runner`'s
+`createChangeBus`, which `createRelayedChangeBus` wraps for local delivery (§ Across processes below). The
 composition root (`runtime.ts`) builds it once and hands `subscribe` down as a parameter — the same crossing pattern as
 `RunEffects`. `GET /ui/events` is the session user's stream: it forwards only the events whose `userId` is that user's
 (instance bookkeeping carries `null` and reaches no one), and refuses to open at all without a principal. A subscriber
 that throws is isolated by the bus and reported to its `onError` (a shared stderr reporter — never stdout, which carries
-the stdio MCP protocol, ADR-007); it can't fail the write that triggered it. No external broker: the MCP server, HTTP
-sidecar, and scheduler share one process (ADR-024), so an in-process bus is the whole mechanism.
+the stdio MCP protocol, ADR-007); it can't fail the write that triggered it. No external broker: within a process the bus is
+in-memory; between processes the database is the transport (§ Across processes).
 
 **The post-commit publish** is the package's (`runEffects`/`runEffectsSequence` publish the entity tags of a committed
 batch that wrote; see its [change-notification
@@ -343,9 +344,27 @@ the `*_ENTITY_TAG` constants, so a renamed or missing tag fails the test). The s
 browser's retry) the shell calls the current `window.onAppDataChanged` once with `ALL_ENTITY_TAGS` (`ui/app.js`, a list
 the test keeps a superset of every dashboard's), so a gap in events costs one refetch.
 
-**Known limit (by design, ADR-027; cross-process delivery is ADR-036):** the change bus reaches only subscribers on this
-process — a write from a *different* stdio server won't push here. Mitigated because ADR-024 steers multi-client use to
-the single HTTP-transport server; a periodic client-side poll can backstop if cross-process live-update ever matters.
+**Across processes (ADR-036).** Every MCP client starts its own PATTY process on the same database, and only the first
+binds the dashboard port, so a write made through another process must still reach the dashboard. The processes share
+one thing, the database file, and a small infrastructure table carries the news: `change_events` (`id`, `user_id`,
+`entities` — a JSON array of entity tags, never data —, `origin` — the writing process's id —, `created_at`). Every
+process's bus is `@rfc0/effect-runner`'s relayed bus: it delivers locally first (a browser on the writing process
+updates at once, as before) and then appends a row, through PATTY's SQLite store, on a connection of its own that never
+blocks the event loop waiting for a lock (`NEVER_BLOCK_IN_SQLITE_MS`, `CHANGE_EVENT_APPEND_BACKOFF_MS`; [ADR-036
+§2](adr/036-cross-process-live-update.md)); a database still busy after that, or closed, costs one missed refresh and
+never fails or delays the write. A process that serves a dashboard (stdio with the sidecar bound, or the HTTP transport)
+runs the package's relay: it starts at the newest row (no replay) and every `CHANGE_RELAY_POLL_MS` (about a second)
+reads SQLite's `PRAGMA data_version` — which moves only when another connection committed — and, only then, reads the
+rows from other origins past its cursor, in id order, and publishes them on its local bus alone (never appended again,
+so rows do not echo). `/ui/events` is unchanged: it already forwards only the stream's own user's events and the shared
+tags. So a cross-process change reaches the dashboard within about one poll interval; same-process changes stay
+immediate (a process's own writes also move its relay's `data_version`, costing one read that finds only its own,
+excluded, rows). A row that does not decode is skipped and reported on stderr; rows older than
+`CHANGE_EVENT_RETENTION_MS` (ten minutes) are deleted by the relay, so the table stays a few rows long. A process
+without a sidecar (`PATTY_HTTP=false`, or the port was taken) runs no relay but still appends; every process prunes
+expired rows once at startup, so the log does not grow across sessions. Any gap — a lost append, a relay that started
+after a write, a stream that dropped — is covered by the resync above: the shell refetches everything it shows after a
+reconnect.
 
 ## Currency in `pending.html` and `cards.html`
 

@@ -4,10 +4,11 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { version } from '../common/build-version.js';
 import type { Config } from '../config.js';
 import { boot } from './boot.js';
+import type { ChangeBus, ChangeRelay } from '@rfc0/effect-runner';
+import { startServingRelay } from './change-log.js';
 import { DASHBOARD_PATH, httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';
 import type { Tenancy } from '../controllers/deps.js';
 import { DISABLED_AUTH, type HttpAuth, type HttpContext } from '../diplomat/http/context.js';
-import type { ChangeBus } from '@rfc0/effect-runner';
 import type { ChangeEvent } from '../models/tenancy.js';
 import type { StartupRefusal } from '../models/startup.js';
 import { redactSecretQuery } from '../logic/auth/redact.js';
@@ -132,18 +133,27 @@ export const runHttp = (config: Config): ResultAsync<void, StartupRefusal> =>
 
     // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
     let shuttingDown = false;
+    let relay: ChangeRelay | null = null;
     const shutdown = (): void => {
       if (shuttingDown) return;
       shuttingDown = true;
-      app
-        .close()
-        .catch((err: unknown) => app.log.error(err))
+      // Each stage is logged when it fails and never skips the next: a relay that fails to stop must not leave the
+      // listening socket and the change-log connection open.
+      const stage = (work: () => Promise<unknown> | undefined): Promise<void> =>
+        Promise.resolve()
+          .then(work)
+          .then(() => undefined)
+          .catch((err: unknown) => app.log.error(err));
+      void stage(() => relay?.stop())
+        .then(() => stage(() => app.close()))
+        .then(() => stage(() => runtime.changeLog.close()))
         .finally(() => process.exit(0));
     };
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
 
     await app.listen({ port: config.PORT, host: config.HOST });
+    relay = await startServingRelay(runtime);
     // config.PORT may be 0 (OS-assigned); read back the address actually bound for the banner.
     const boundPort = (app.server.address() as AddressInfo).port;
     const origin = httpOrigin(config.HOST, boundPort);

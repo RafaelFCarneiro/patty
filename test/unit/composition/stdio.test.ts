@@ -6,11 +6,13 @@ const mocks = vi.hoisted(() => ({
   boot: vi.fn(),
   connectStdio: vi.fn<(...args: unknown[]) => unknown>(),
   startHttpSidecar: vi.fn(),
+  startServingRelay: vi.fn(),
 }));
 
 vi.mock('../../../src/composition/boot.js', () => ({ boot: mocks.boot }));
 vi.mock('../../../src/diplomat/mcp/stdio.js', () => ({ connectStdio: mocks.connectStdio }));
 vi.mock('../../../src/composition/http.js', () => ({ startHttpSidecar: mocks.startHttpSidecar }));
+vi.mock('../../../src/composition/change-log.js', () => ({ startServingRelay: mocks.startServingRelay }));
 
 const { runStdio } = await import('../../../src/composition/stdio.js');
 
@@ -30,6 +32,9 @@ type Handlers = Record<string, () => void>;
 let handlers: Handlers;
 let exit: ReturnType<typeof vi.spyOn>;
 let order: string[];
+let changeLogClose: ReturnType<typeof vi.fn>;
+let runtime: { tag: string; changeLog: { close: ReturnType<typeof vi.fn> } };
+const DB = { tag: 'db' };
 
 const deferred = () => {
   let resolve: () => void = () => undefined;
@@ -56,14 +61,23 @@ const sidecar = (listening: boolean, port = 51737) => {
 const booted = (stdio: unknown = undefined) => {
   const issueAndAnnounceSetup = vi.fn(async () => undefined);
   mocks.boot.mockReturnValue(
-    okAsync({ runtime: { tag: 'runtime' }, prepared: { auth: { tag: 'auth' }, stdio, issueAndAnnounceSetup } }),
+    okAsync({ db: DB, runtime, prepared: { auth: { tag: 'auth' }, stdio, issueAndAnnounceSetup } }),
   );
   return issueAndAnnounceSetup;
+};
+
+const relay = () => {
+  const stop = vi.fn(() => (order.push('relay'), Promise.resolve()));
+  mocks.startServingRelay.mockResolvedValue({ stop });
+  return stop;
 };
 
 beforeEach(() => {
   handlers = {};
   order = [];
+  changeLogClose = vi.fn(() => (order.push('change-log'), Promise.resolve()));
+  runtime = { tag: 'runtime', changeLog: { close: changeLogClose } };
+  mocks.startServingRelay.mockResolvedValue(null);
   vi.spyOn(process, 'once').mockImplementation(((event: string, handler: () => void) => {
     handlers[`process:${event}`] = handler;
     return process;
@@ -88,7 +102,7 @@ describe('runStdio — startup', () => {
     const started = await runStdio(configWith());
 
     expect(started.isOk()).toBe(true);
-    expect(mocks.connectStdio).toHaveBeenCalledWith({ tag: 'runtime' }, expect.any(String), { mode: 'disabled' });
+    expect(mocks.connectStdio).toHaveBeenCalledWith(runtime, expect.any(String), { mode: 'disabled' });
     expect(mocks.startHttpSidecar).not.toHaveBeenCalled();
     expect(announce).not.toHaveBeenCalled();
   });
@@ -115,7 +129,7 @@ describe('runStdio — startup', () => {
 
     await runStdio(configWith({ PATTY_HTTP: true, PORT: 51737 }));
 
-    expect(mocks.startHttpSidecar).toHaveBeenCalledWith({ tag: 'runtime' }, expect.any(String), 51737, '127.0.0.1', {
+    expect(mocks.startHttpSidecar).toHaveBeenCalledWith(runtime, expect.any(String), 51737, '127.0.0.1', {
       auth: { tag: 'auth' },
       trustProxy: false,
     });
@@ -144,6 +158,27 @@ describe('runStdio — startup', () => {
     expect(announce).not.toHaveBeenCalled();
   });
 
+  it('starts the change relay on the database and runtime once the sidecar has bound (ADR-036 §3)', async () => {
+    booted(undefined);
+    connection();
+    sidecar(true);
+
+    await runStdio(configWith({ PATTY_HTTP: true }));
+
+    expect(mocks.startServingRelay).toHaveBeenCalledWith(runtime);
+  });
+
+  it('starts no change relay where no dashboard is served: sidecar disabled or port taken', async () => {
+    booted(undefined);
+    connection();
+
+    await runStdio(configWith({ PATTY_HTTP: false }));
+    sidecar(false);
+    await runStdio(configWith({ PATTY_HTTP: true }));
+
+    expect(mocks.startServingRelay).not.toHaveBeenCalled();
+  });
+
   it('shuts down on SIGINT, SIGTERM and when stdin ends or closes', async () => {
     booted(undefined);
     connection();
@@ -155,8 +190,9 @@ describe('runStdio — startup', () => {
 });
 
 describe('runStdio — shutdown', () => {
-  it('closes the server, the sidecar and the sign-in session, in order, then exits 0 once all settled', async () => {
+  it('closes server, sidecar, session, relay and change log in order, then exits 0 once all settled', async () => {
     booted(undefined);
+    relay();
     const serverClosed = deferred();
     const { server, session } = connection({ server: serverClosed.promise });
     const app = sidecar(true);
@@ -173,6 +209,31 @@ describe('runStdio — shutdown', () => {
 
     serverClosed.resolve();
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    expect(order).toEqual(['server', 'sidecar', 'session', 'relay', 'change-log']);
+  });
+
+  it('stops the relay, then closes the change log, and exits only after both have finished', async () => {
+    booted(undefined);
+    const relayStopped = deferred();
+    const logClosed = deferred();
+    mocks.startServingRelay.mockResolvedValue({ stop: vi.fn(() => (order.push('relay'), relayStopped.promise)) });
+    changeLogClose.mockImplementation(() => (order.push('change-log'), logClosed.promise));
+    connection();
+    sidecar(true);
+    await runStdio(configWith({ PATTY_HTTP: true }));
+
+    handlers['stdin:end']?.();
+    await vi.waitFor(() => expect(order).toContain('relay'));
+    expect(order).not.toContain('change-log');
+    expect(exit).not.toHaveBeenCalled();
+
+    relayStopped.resolve();
+    await vi.waitFor(() => expect(order).toContain('change-log'));
+    expect(exit).not.toHaveBeenCalled();
+
+    logClosed.resolve();
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    expect(order).toEqual(['server', 'sidecar', 'session', 'relay', 'change-log']);
   });
 
   it('shuts down once however many of the signals arrive', async () => {

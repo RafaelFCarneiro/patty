@@ -53,7 +53,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `common/errors` | `models/` (composes `AppError` as the union of per-model error types; ADR-012) |
 | `adapters/` | `models/`, `wire/*`, `@rfc0/effect-runner` (`INITIAL_VERSION`/`PersistOp` — e.g. `adapters/bills.ts`'s hand-written `persistableToDb`) |
 | `diplomat/*` | `controllers/`, `adapters/`, `models/`, wire schemas, runtime clients |
-| `diplomat/http`, `composition/http.ts` → `@rfc0/effect-runner`, `models/tenancy.ts` | **Type-only**: `ChangeBus<ChangeEvent>['subscribe']` (`ChangeEvent` = `{ userId, entities }`) for the SSE route's parameter; the bus is the package's `createChangeBus<ChangeEvent>`, built in the composition root (`composition/runtime.ts`) and passed in, never constructed inside `diplomat/*`. |
+| `diplomat/http`, `composition/http.ts` → `@rfc0/effect-runner`, `models/tenancy.ts` | **Type-only**: `ChangeBus<ChangeEvent>['subscribe']` (`ChangeEvent` = `{ userId, entities }`) for the SSE route's parameter; the bus is the package's `createRelayedChangeBus` over PATTY's SQLite `ChangeLogStore` (`composition/change-log.ts`, built in `composition/runtime.ts`, ADR-036) and passed in, never constructed inside `diplomat/*`. |
 | `diplomat/http`, `diplomat/mcp` → `controllers/deps.ts` (`Tenancy`, `Scoped`, `scopedFor`) | The factories that turn the request's `Principal` into that user's `Deps`/`RunEffects` (ADR-033 §5). HTTP asks per request through `ScopeOf` (`openapi.ts`'s `mountRoutes` binds it to `req.principal`); MCP through `McpContext.as(extra)` (the scope guard puts the gate's principal on `extra`). Both throw without a principal — fail closed. Neither edge ever holds an unscoped repo or runner. |
 | `diplomat/db/repos/*`, `diplomat/db/queries/*` | Every repo is built for one user — `xRepo(db, userId)` — and every query on an owned table filters `user_id = :me` (`queries/scope.ts`: `ownedBy`/`visibleTo`); no method gained a `userId` parameter. The factory only binds a `RepoScope` (`{ db, userId }`, `queries/scope.ts`): each query is a named module-level function over it, so the tenancy filter reads in the query itself. |
 | `diplomat/db` | Same base `diplomat/*` rule, **plus** `@rfc0/effect-runner` — it is the SQLite adapter implementing the port the package's engine defines (`versionedTableApplier` builds an `EntityApplier`, including its read-only `check`; `driver.ts`'s `createTransactionRunner` implements `TransactionRunner`; `sqlite-errors.ts`'s `isSqliteBusy` implements `IsTransientContention`). Imports the package, never the reverse. |
@@ -77,6 +77,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | File | Wires |
 | --- | --- |
 | `runtime.ts` | Repos (`Deps`), the applier registry and the change bus over an open `Db` — shared by `boot.ts` and the temporary sign-in server |
+| `change-log.ts` | ADR-036's wiring over `@rfc0/effect-runner`'s relayed bus and relay: `createChangeLog` (the bus over the SQLite store; its `publishLocal`, `settled`, `close`), `startServingRelay` (the relay with PATTY's intervals, only where a dashboard is served; a relay that cannot start is reported and skipped) and `reportChangeError` |
 | `auth.ts` | `prepareAuth` (HTTP `auth`, the stdio `signIn(profile, origin)`, setup-code announcement), `createAuthDeps`, `AUTH_APPLIERS`, `bindAuthRunEffects` |
 | `boot.ts` | Open the database → bootstrap → runtime → `prepareAuth`: what every server start shares |
 | `stdio.ts` | The stdio start: `StdioAuth` for `connectStdio`, the HTTP sidecar (loaded lazily), setup-code announcement, shutdown |
@@ -254,6 +255,12 @@ client_grants       (id PK, device_code_hash UNIQUE — sha256, the plaintext li
 setup_codes         (id PK — the single fixed row `SETUP_CODE_ID`, replaced in place on each issue, code_hash UNIQUE — sha256, never the code — created_at, expires_at, used_at?,
                      version)
 
+change_events       (id INTEGER PK AUTOINCREMENT, user_id? — whose change the row announces, `ChangeEvent.userId`; no FK,
+                     never filtered by —, entities — JSON array of entity tags, never data —, origin — the writing
+                     process's id —, created_at; index on created_at; ADR-036 §1) — infrastructure, see § Tenancy:
+                     no repo, no applier, not in `Tenancy`; rows are deleted `CHANGE_EVENT_RETENTION_MS` after they
+                     were written
+
 transactions_fts    VIRTUAL TABLE fts5(description, content='transactions')
                     — kept in sync via INSERT/UPDATE/DELETE triggers
 ```
@@ -267,6 +274,7 @@ can read every user's data. **user_id** is on every user-owned row; the map says
 | --- | --- | --- |
 | **Owned** | `accounts`, `credit_cards`, `bills`, `transactions`, `tags`, `budgets`, `recurring_rules` (`user_id` NOT NULL, FK RESTRICT); `user_settings` (PK, FK CASCADE); `transaction_tags` (via its parents) | Reads see only the user's rows; writes are stamped with and confined to the user. |
 | **Shared default** | `categories` (the seeded `cat-*`), `merchant_category` `origin = rule`, `dashboards` `source = file` (`user_id` NULL) | Every read returns *shared + own*; nobody can rename or delete one (`SHARED_DEFAULT_READ_ONLY_MESSAGE`, `models/tenancy.ts`, one validation error from every tool and route). A dashboard saved under a default's name is the user's own copy and replaces the default for them alone. |
+| **Infrastructure** | `change_events` (ADR-036 §1) | Entity tags announced between the processes that share the file; never data. Not owned and not a shared default: no `Deps` repo, no applier, no controller or logic access, not in `Tenancy` — only `diplomat/db/change-events.ts` (the `ChangeLogStore`, with its row decoding in `adapters/change-events.ts`) and the composition root's wiring (`composition/change-log.ts`) touch it. Its `user_id` only says whose change a row announces (nullable, no foreign key); isolation is the relay's local publish plus `/ui/events`' per-user filter. `test/integration/tenancy/table-classification.test.ts` lists it in an explicit infrastructure allow-list with that reason, and fails when any table is unclassified or domain code names it. |
 | **Shared dictionary / reference** | `merchants`, `currencies`, `currency_rates`, `settings` (singleton: the sign-in cap and the instance kind) | No owner. Any signed-in user with write scope refreshes exchange rates (market data); the merchant dictionary is never listed across users. |
 
 **`depsFor(principal)` / `runEffectsFor(principal)`.** The composition root (`composition/runtime.ts`) builds, per request and
@@ -286,9 +294,25 @@ never *forbidden* — and the candidates an ambiguous/not-found error lists are 
 defaults. **Classification** reads the shared `rule` edges plus the caller's own `history` edges (summed per
 (merchant, category), as one row's weight was before); a correction writes a `history` edge for the caller.
 
-**The change bus** is the package's `createChangeBus<ChangeEvent>` (`@rfc0/effect-runner` ≥ 0.4, generic over the event), carrying `ChangeEvent` = `{ userId, entities }` (`models/tenancy.ts`); the scoped runner publishes as
-its user, the identity runner as `null` (instance bookkeeping no dashboard hears). `/ui/events` forwards only events whose
-`userId` is the stream's session user.
+**The change bus** is a `ChangeBus<ChangeEvent>` (`@rfc0/effect-runner` ≥ 0.6, generic over the event), carrying
+`ChangeEvent` = `{ userId, entities }` (`models/tenancy.ts`); the scoped runner publishes as its user, the identity
+runner as `null` (instance bookkeeping no dashboard hears). `/ui/events` forwards only events whose `userId` is the
+stream's session user. **It spans processes (ADR-036):** `composition/change-log.ts`'s `createChangeLog` builds it
+(called by `composition/runtime.ts`) with the package's `createRelayedChangeBus` — `publish` delivers to this process's
+subscribers first, then queues an append the write never waits for — over PATTY's `ChangeLogStore`,
+`diplomat/db/change-events.ts`'s `changeLogStore`: the `change_events` table on one sibling connection with no lock wait
+(`NEVER_BLOCK_IN_SQLITE_MS`, `CHANGE_EVENT_APPEND_BACKOFF_MS`; [ADR-036 §2](adr/036-cross-process-live-update.md)),
+whose `changeToken` is `PRAGMA data_version` (per connection, and libsql replaces a client's connection after each
+transaction, so the engine's handle cannot hold the reading). A process that serves a dashboard also runs the package's
+`startChangeRelay` (`startServingRelay`, with PATTY's `CHANGE_*` values from `models/change-events.ts`): when the token
+moved it reads the other origins' rows past its cursor and publishes them on the *local* bus alone, prunes rows past
+retention, and reports a row that does not decode. Every process (relay or not) also prunes once in
+`composition/boot.ts`, since only a relay prunes on an interval. It starts where a dashboard is served —
+`composition/stdio.ts` once the sidecar bound, `composition/http.ts` — and shuts down relay first, then the pending
+appends, then the store. Everything generic (queue, loop, scheduling, isolation) is the package's; PATTY's code is the
+store, `adapters/change-events.ts`' row decoding, `logic/change-events.ts`' `isWorthAnnouncing` (the `shouldAppend`
+rule), the policy constants and this wiring.
+
 
 **Data-rewriting migration `0021_tenancy_data`** rebuilds the owned tables with `user_id` (backfilled to the owner, looked up —
 a missing owner aborts), keeps the 15 seeded categories, `rule` edges and `file` dashboards shared, moves the singleton's
@@ -984,4 +1008,4 @@ Preferred remeda helpers (canonical `code-quality.md` § Declarative over impera
 - ADR-033: authentication and multi-user — identity (owner row by migration, password login, sessions, setup code), personal access tokens, in-process OAuth 2.1 AS for MCP, per-user tenancy; phased (accepted; Phase 1 — identity: owner row, sessions, setup code, UI login, auth mode, minimal public surface — complete; Phase 2 — personal access tokens, scopes, challenges, Protected Resource Metadata — complete; Phase 4 — per-user tenancy and admin user management by invitation — complete; Phase 3 pending)
 - ADR-034: authentication on by default (`PATTY_AUTH=required` everywhere), terminal owner claim inside `setup`, and browser sign-in for stdio sessions with chosen expiry; revises ADR-033 §1 (accepted; step 1 — auth by default, `setup`/`auth setup`/`auth reset-password`, PAT expiry without "never" — and step 2 — stdio sign-in, `login`/`logout`, `/ui/connect`, the startup version guard — are implemented)
 - ADR-035: rename to PATTY and go public — new names for the package, binary, image, data directory, keychain and environment variables, with generic `key import` / `db import` as the way to move an install and no compatibility code (accepted; step 2 — `key import` / `db import` — and step 4 — `key export` behind an administrator's password, interactive only, with a confirmation — implemented)
-- ADR-036: live update across processes (step 1 — dashboard tag lists, stream recovery and resync — implemented; see the ADR for the rest)
+- ADR-036: live update across processes — the database is the transport: a `change_events` table, `@rfc0/effect-runner` 0.6's relayed `ChangeBus` and polling relay over PATTY's SQLite `ChangeLogStore` (steps 1 and 2 — dashboard tag lists, stream recovery and resync; the table, the store, the wiring, retention — implemented)

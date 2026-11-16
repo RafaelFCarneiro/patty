@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CHANGE_NOTIFICATION_FAILED } from '../../../src/models/change-events.js';
+import { LOG_PREFIX } from '../../../src/models/package.js';
 import { createRuntime } from '../../../src/composition/runtime.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
 
@@ -33,7 +35,7 @@ describe('createRuntime defaults', () => {
 
     changeBus.publish({ userId: 'user-1', entities: ['account'] });
 
-    expect(report).toHaveBeenCalledWith('[patty] change notification failed:', failure);
+    expect(report).toHaveBeenCalledWith(`${LOG_PREFIX} ${CHANGE_NOTIFICATION_FAILED}:`, failure);
     expect(survivor).toHaveBeenCalledWith({ userId: 'user-1', entities: ['account'] });
   });
 
