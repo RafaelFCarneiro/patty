@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { EnvKey } from '../../../../src/wire/out/client-config.js';
 import { DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT, DEMO_SERVER_NAME } from '../../../../src/models/demo/core.js';
 import {
-  ENV_KEY,
   mergeMcpServersKey,
   mergeServersKey,
   OPENCODE_ENTRY,
@@ -120,20 +120,26 @@ describe('VSCODE_ENTRY', () => {
 
 describe('withProfile (ADR-034 §5.2)', () => {
   it('leaves an ordinary install’s entry exactly as it always was', () => {
-    expect(withProfile(STDIO_ENTRY, 'default')).toBe(STDIO_ENTRY);
-    expect(withProfile(VSCODE_ENTRY, 'default')).toBe(VSCODE_ENTRY);
+    expect(withProfile(STDIO_ENTRY, 'default', EnvKey.enum.env)).toBe(STDIO_ENTRY);
+    expect(withProfile(VSCODE_ENTRY, 'default', EnvKey.enum.env)).toBe(VSCODE_ENTRY);
   });
 
   it('adds PATTY_PROFILE to the entry’s env only for a non-default profile, keeping the rest', () => {
-    expect(withProfile(STDIO_ENTRY, 'work')).toEqual({ ...STDIO_ENTRY, env: { PATTY_PROFILE: 'work' } });
-    expect(withProfile(VSCODE_ENTRY, 'work')).toEqual({ ...VSCODE_ENTRY, env: { PATTY_PROFILE: 'work' } });
+    expect(withProfile(STDIO_ENTRY, 'work', EnvKey.enum.env)).toEqual({
+      ...STDIO_ENTRY,
+      env: { PATTY_PROFILE: 'work' },
+    });
+    expect(withProfile(VSCODE_ENTRY, 'work', EnvKey.enum.env)).toEqual({
+      ...VSCODE_ENTRY,
+      env: { PATTY_PROFILE: 'work' },
+    });
   });
 });
 
 describe('the demo entry', () => {
   it('merges under its own name and leaves the patty entry alone', () => {
     const existing = { mcpServers: { patty: { command: 'real' } } };
-    const demo = withDemo(STDIO_ENTRY, '/home/x/.patty/demo.db');
+    const demo = withDemo(STDIO_ENTRY, '/home/x/.patty/demo.db', EnvKey.enum.env);
     expect(mergeMcpServersKey(existing, demo, DEMO_SERVER_NAME).mcpServers).toEqual({
       patty: { command: 'real' },
       [DEMO_SERVER_NAME]: demo,
@@ -142,7 +148,7 @@ describe('the demo entry', () => {
   });
 
   it('runs the same server against the demo database, port and key switch', () => {
-    expect(withDemo(VSCODE_ENTRY, '/home/x/.patty/demo.db')).toEqual({
+    expect(withDemo(VSCODE_ENTRY, '/home/x/.patty/demo.db', EnvKey.enum.env)).toEqual({
       ...VSCODE_ENTRY,
       env: { DB_PATH: '/home/x/.patty/demo.db', PORT: String(DEMO_PORT), [DEMO_ENV_VAR]: DEMO_ENV_ON },
     });
@@ -166,17 +172,13 @@ describe('withoutServer', () => {
 });
 
 describe('the environment key', () => {
-  it('defaults to env', () => {
-    expect(withProfile(STDIO_ENTRY, 'work')).toEqual({ ...STDIO_ENTRY, env: { PATTY_PROFILE: 'work' } });
-    expect(withDemo(STDIO_ENTRY, '/d.db').env).toMatchObject({ DB_PATH: '/d.db' });
-  });
   it('is carried under the key a client names, and never added for the default profile', () => {
-    expect(withProfile(OPENCODE_ENTRY, 'work', ENV_KEY.environment)).toEqual({
+    expect(withProfile(OPENCODE_ENTRY, 'work', EnvKey.enum.environment)).toEqual({
       ...OPENCODE_ENTRY,
       environment: { PATTY_PROFILE: 'work' },
     });
-    expect(withProfile(OPENCODE_ENTRY, 'default', ENV_KEY.environment)).toBe(OPENCODE_ENTRY);
-    expect(withDemo(OPENCODE_ENTRY, '/d.db', ENV_KEY.environment)).toMatchObject({
+    expect(withProfile(OPENCODE_ENTRY, 'default', EnvKey.enum.environment)).toBe(OPENCODE_ENTRY);
+    expect(withDemo(OPENCODE_ENTRY, '/d.db', EnvKey.enum.environment)).toMatchObject({
       environment: { DB_PATH: '/d.db', PORT: String(DEMO_PORT), [DEMO_ENV_VAR]: DEMO_ENV_ON },
     });
   });

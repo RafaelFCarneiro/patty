@@ -5,21 +5,26 @@ import { err, ok, Result } from 'neverthrow';
 import * as R from 'remeda';
 import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/sign-in.js';
-import { clientConfigFailures, type ClientConfigFailure } from '../../models/client-config.js';
+import {
+  clientConfigFailures,
+  INVALID_ROOT_MESSAGE,
+  LEFT_UNCHANGED,
+  type ClientConfigFailure,
+} from '../../models/client-config.js';
 import { DEMO_SERVER_NAME } from '../../models/demo/core.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
-import { ServersKey } from '../../wire/out/client-config.js';
+import { EnvKey, ServersKey } from '../../wire/out/client-config.js';
 import {
   detectLayout,
   layoutRefusal,
   OPENCODE_UNUSABLE_MESSAGE,
   parseDocument,
   withoutServerText,
+  withFinalNewline,
   withServerText,
   type JsoncDocument,
 } from './jsonc.js';
 import {
-  ENV_KEY,
   mergeMcpServersKey,
   mergeServersKey,
   OPENCODE_ENTRY,
@@ -35,8 +40,6 @@ import {
 // ---------------------------------------------------------------------------
 // FS helpers
 // ---------------------------------------------------------------------------
-
-const INVALID_ROOT_MESSAGE = 'does not contain a JSON object at the root';
 
 const invalidConfigWarning = (path: string): string =>
   `patty setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`;
@@ -56,7 +59,7 @@ type WhenUnusable = (path: string) => Result<ConfigRead, ClientConfigFailure>;
 const replaceUnusable: WhenUnusable = (path) => ok({ config: {}, warnings: [invalidConfigWarning(path)] });
 
 const refuseUnusable: WhenUnusable = (path) =>
-  err(clientConfigFailures.readFailed(path, `${INVALID_ROOT_MESSAGE}, or is not plain JSON — left unchanged`));
+  err(clientConfigFailures.readFailed(path, `${INVALID_ROOT_MESSAGE}, or is not plain JSON${LEFT_UNCHANGED}`));
 
 /** The demo entry refuses an unusable file instead of replacing it. */
 export const readJsonOrEmpty = (
@@ -95,7 +98,7 @@ const readJsoncDocument = (path: string): Result<JsoncDocument, ClientConfigFail
 };
 
 const writeJsonc = (path: string, text: string): Result<void, ClientConfigFailure> =>
-  writeText(path, text.endsWith('\n') ? text : `${text}\n`).mapErr((cause) =>
+  writeText(path, withFinalNewline(text)).mapErr((cause) =>
     clientConfigFailures.writeFailed(path, cause),
   );
 
@@ -176,12 +179,12 @@ const MERGE_BY_KEY = {
 
 const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig => ({
   label,
-  run: (profile) => writeEntry(path(), MERGE_BY_KEY[key], withProfile(entry, profile), next),
+  run: (profile) => writeEntry(path(), MERGE_BY_KEY[key], withProfile(entry, profile, EnvKey.enum.env), next),
   addDemo: (databasePath) =>
     writeEntry(
       path(),
       (existing, demoEntry) => MERGE_BY_KEY[key](existing, demoEntry, DEMO_SERVER_NAME),
-      withDemo(entry, databasePath),
+      withDemo(entry, databasePath, EnvKey.enum.env),
       next,
       refuseUnusable,
     ),
@@ -207,8 +210,8 @@ const jsoncClient = ({ label, path, entry, next }: JsoncClient): ClientConfig =>
   };
   return {
     label,
-    run: (profile) => setEntry(SERVER_NAME, withProfile(entry, profile, ENV_KEY.environment)),
-    addDemo: (databasePath) => setEntry(DEMO_SERVER_NAME, withDemo(entry, databasePath, ENV_KEY.environment)),
+    run: (profile) => setEntry(SERVER_NAME, withProfile(entry, profile, EnvKey.enum.environment)),
+    addDemo: (databasePath) => setEntry(DEMO_SERVER_NAME, withDemo(entry, databasePath, EnvKey.enum.environment)),
     removeDemo: () => {
       const configPath = path();
       // A missing file is "nothing to remove", never a file to create.
@@ -255,7 +258,10 @@ const codex: ClientConfig = {
   label: 'OpenAI Codex',
   run: setupCodex,
   addDemo: (databasePath) =>
-    ok({ warnings: [], lines: [codexSnippet(DEMO_SERVER_NAME, withDemo(STDIO_ENTRY, databasePath).env)] }),
+    ok({
+      warnings: [],
+      lines: [codexSnippet(DEMO_SERVER_NAME, withDemo(STDIO_ENTRY, databasePath, EnvKey.enum.env).env)],
+    }),
   removeDemo: () =>
     ok({ warnings: [], lines: [`  Codex CLI: remove the "${DEMO_SERVER_NAME}" entry from your MCP config file.`] }),
 };
@@ -314,7 +320,6 @@ const TOOLS: Readonly<Record<string, ClientConfig>> = {
   antigravity,
   codex,
   opencode: openCode,
-  'open-code': openCode,
 };
 
 const findClient = (tool: string): ClientConfig | undefined => TOOLS[tool.trim().toLowerCase()];

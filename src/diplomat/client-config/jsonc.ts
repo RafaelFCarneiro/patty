@@ -1,4 +1,6 @@
-import { applyEdits, modify, parse, ParseErrorCode, type FormattingOptions, type ParseError } from 'jsonc-parser';
+import { applyEdits, modify, parse, ParseErrorCode, type ParseError } from 'jsonc-parser';
+import { INVALID_ROOT_MESSAGE, LEFT_UNCHANGED } from '../../models/client-config.js';
+import { McpLayout } from '../../wire/out/client-config.js';
 import { resolveConfigObject } from './merge.js';
 
 // ---------------------------------------------------------------------------
@@ -12,29 +14,21 @@ const SERVERS_PATH = [MCP_KEY, SERVERS_KEY] as const;
 
 const BYTE_ORDER_MARK = '\uFEFF';
 
-const FORMATTING: FormattingOptions = { insertSpaces: true, tabSize: 2, eol: '\n' };
-
 const EMPTY_DOCUMENT = '{}';
+
+const CRLF = '\r\n';
+const LF = '\n';
+
+/** The document's own line ending: CRLF when it holds one, else LF. */
+const lineEnding = (text: string): string => (text.includes(CRLF) ? CRLF : LF);
 
 export const OPENCODE_V1_LAYOUT_MESSAGE =
   'is in OpenCode\'s V1 layout (servers directly under "mcp") — migrate it first (see "Migrate from V1" at ' +
-  'https://opencode.ai/docs/mcp-servers), then run setup again — left unchanged';
+  `https://opencode.ai/docs/mcp-servers), then run setup again${LEFT_UNCHANGED}`;
 
-export const OPENCODE_UNUSABLE_MESSAGE =
-  'does not contain a JSON object at the root, or is not valid JSON/JSONC — left unchanged';
+export const OPENCODE_UNUSABLE_MESSAGE = `${INVALID_ROOT_MESSAGE}, or is not valid JSON/JSONC${LEFT_UNCHANGED}`;
 
-const OPENCODE_SERVERS_NOT_OBJECT_MESSAGE = 'has an "mcp" or "mcp.servers" that is not an object — left unchanged';
-
-/** What the file's `mcp` key says about its layout. */
-export const McpLayout = {
-  /** No `mcp` key, or an empty one: the V2 shape is created. */
-  fresh: 'fresh',
-  v2: 'v2',
-  v1: 'v1',
-  /** `mcp` or `mcp.servers` exists but is not an object. */
-  malformed: 'malformed',
-} as const;
-export type McpLayout = (typeof McpLayout)[keyof typeof McpLayout];
+const OPENCODE_SERVERS_NOT_OBJECT_MESSAGE = `has an "mcp" or "mcp.servers" that is not an object${LEFT_UNCHANGED}`;
 
 export type JsoncDocument = { text: string; root: Record<string, unknown> };
 
@@ -46,30 +40,34 @@ export const parseDocument = (text: string): JsoncDocument | null => {
   // Nothing but whitespace or comments is "no value yet": the comments stay, an empty object follows them.
   const isBlank = value === undefined && errors.every(({ error }) => error === ParseErrorCode.ValueExpected);
   if (errors.length > 0 && !isBlank) return null;
-  if (isBlank) return { text: `${unmarked.trimEnd()}\n${EMPTY_DOCUMENT}`.trimStart(), root: {} };
+  if (isBlank) return { text: `${unmarked.trimEnd()}${lineEnding(unmarked)}${EMPTY_DOCUMENT}`.trimStart(), root: {} };
   const root = resolveConfigObject(value);
   return root === null ? null : { text: unmarked, root };
 };
 
 export const detectLayout = (root: Record<string, unknown>): McpLayout => {
   const mcp = root[MCP_KEY];
-  if (mcp === undefined) return McpLayout.fresh;
+  if (mcp === undefined) return McpLayout.enum.fresh;
   const section = resolveConfigObject(mcp);
-  if (section === null) return McpLayout.malformed;
-  if (!(SERVERS_KEY in section)) return Object.keys(section).length === 0 ? McpLayout.fresh : McpLayout.v1;
-  return resolveConfigObject(section[SERVERS_KEY]) === null ? McpLayout.malformed : McpLayout.v2;
+  if (section === null) return McpLayout.enum.malformed;
+  if (!(SERVERS_KEY in section)) return Object.keys(section).length === 0 ? McpLayout.enum.fresh : McpLayout.enum.v1;
+  return resolveConfigObject(section[SERVERS_KEY]) === null ? McpLayout.enum.malformed : McpLayout.enum.v2;
 };
 
+const LAYOUT_REFUSALS = {
+  [McpLayout.enum.fresh]: null,
+  [McpLayout.enum.v2]: null,
+  [McpLayout.enum.v1]: OPENCODE_V1_LAYOUT_MESSAGE,
+  [McpLayout.enum.malformed]: OPENCODE_SERVERS_NOT_OBJECT_MESSAGE,
+} as const satisfies Record<McpLayout, string | null>;
+
 /** Why a layout cannot be edited; `null` when it can. */
-export const layoutRefusal = (layout: McpLayout): string | null =>
-  layout === McpLayout.v1
-    ? OPENCODE_V1_LAYOUT_MESSAGE
-    : layout === McpLayout.malformed
-      ? OPENCODE_SERVERS_NOT_OBJECT_MESSAGE
-      : null;
+export const layoutRefusal = (layout: McpLayout): string | null => LAYOUT_REFUSALS[layout];
 
 const editAt = (text: string, name: string, value: unknown): string =>
-  applyEdits(text, modify(text, [...SERVERS_PATH, name], value, { formattingOptions: FORMATTING }));
+  applyEdits(text, modify(text, [...SERVERS_PATH, name], value, {
+      formattingOptions: { insertSpaces: true, tabSize: 2, eol: lineEnding(text) },
+    }));
 
 /** The document with `mcp.servers.<name>` set to `entry`; comments, other keys and formatting stay as they were. */
 export const withServerText = (text: string, name: string, entry: Record<string, unknown>): string =>
@@ -80,3 +78,6 @@ export const withoutServerText = (document: JsoncDocument, name: string): string
   const servers = resolveConfigObject(resolveConfigObject(document.root[MCP_KEY])?.[SERVERS_KEY]);
   return servers !== null && name in servers ? editAt(document.text, name, undefined) : null;
 };
+
+/** The text ending in a line break, in the document's own style. */
+export const withFinalNewline = (text: string): string => (text.endsWith(LF) ? text : `${text}${lineEnding(text)}`);

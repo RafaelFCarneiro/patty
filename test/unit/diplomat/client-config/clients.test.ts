@@ -218,11 +218,9 @@ describe('OpenCode (JSONC-safe)', () => {
     expect(written(jsonFile())).toEqual({ mcp: { servers: { patty: ENTRY } } });
   });
 
-  it('is also found as open-code', async () => {
-    await opencode();
-    const { clientConfigs } = await import('../../../../src/diplomat/client-config/clients.js');
-    expect(clientConfigs.find('open-code')).toBe(clientConfigs.find('opencode'));
-    expect(clientConfigs.find('opencode')!.label).toBe('OpenCode');
+  it('is labelled OpenCode', async () => {
+    const client = await opencode();
+    expect(client.label).toBe('OpenCode');
   });
 
   it('adds the entry to a JSONC file, keeping comments, trailing commas and other keys', async () => {
@@ -318,17 +316,24 @@ describe('OpenCode (JSONC-safe)', () => {
   });
 
   it.each([
-    ['an empty file', ''],
-    ['a file of only comments', '// mine\n'],
-    ['a CRLF file', '{\r\n  "theme": "dark"\r\n}\r\n'],
-    ['a file with a byte-order mark', '\uFEFF{"theme":"dark"}'],
-  ])('writes the entry into %s', async (_name, content) => {
+    ['an empty file', '', []],
+    ['a file of only comments', '// mine\n', ['// mine\n']],
+    ['a CRLF file', '{\r\n  "theme": "dark"\r\n}\r\n', ['"theme": "dark",\r\n']],
+    ['a file with a byte-order mark', '\uFEFF{"theme":"dark"}', []],
+  ])('writes the entry into %s', async (_name, content, kept) => {
     const client = await opencode();
     seed(jsonFile(), content);
     client.run('default')._unsafeUnwrap();
+    const text = readFileSync(jsonFile(), 'utf8');
     expect(written(jsonFile()).mcp.servers.patty).toEqual(ENTRY);
-    if (content.includes('// mine')) expect(readFileSync(jsonFile(), 'utf8')).toContain('// mine');
-    if (content.includes('\r\n')) expect(readFileSync(jsonFile(), 'utf8')).toContain('"theme": "dark"');
+    kept.forEach((fragment) => expect(text).toContain(fragment));
+  });
+
+  it('keeps every line break CRLF in a CRLF file', async () => {
+    const client = await opencode();
+    seed(jsonFile(), '{\r\n  "theme": "dark"\r\n}\r\n');
+    client.run('default')._unsafeUnwrap();
+    expect(readFileSync(jsonFile(), 'utf8')).not.toMatch(/(?<!\r)\n/);
   });
 
   it('reports a config path that is a directory as a read failure', async () => {

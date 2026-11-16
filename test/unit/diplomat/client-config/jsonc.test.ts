@@ -1,10 +1,11 @@
+import { McpLayout } from '../../../../src/wire/out/client-config.js';
 import { describe, expect, it } from 'vitest';
 import {
   detectLayout,
   layoutRefusal,
-  McpLayout,
   OPENCODE_V1_LAYOUT_MESSAGE,
   parseDocument,
+  withFinalNewline,
   withoutServerText,
   withServerText,
 } from '../../../../src/diplomat/client-config/jsonc.js';
@@ -30,25 +31,32 @@ describe('parseDocument', () => {
 
 describe('detectLayout', () => {
   it.each([
-    [{}, McpLayout.fresh],
-    [{ mcp: {} }, McpLayout.fresh],
-    [{ mcp: { servers: {} } }, McpLayout.v2],
-    [{ mcp: { other: { type: 'local' } } }, McpLayout.v1],
-    [{ mcp: { servers: [] } }, McpLayout.malformed],
-    [{ mcp: 'x' }, McpLayout.malformed],
+    [{}, McpLayout.enum.fresh],
+    [{ mcp: {} }, McpLayout.enum.fresh],
+    [{ mcp: { servers: {} } }, McpLayout.enum.v2],
+    [{ mcp: { other: { type: 'local' } } }, McpLayout.enum.v1],
+    [{ mcp: { servers: [] } }, McpLayout.enum.malformed],
+    [{ mcp: 'x' }, McpLayout.enum.malformed],
   ])('%j is %s', (root, layout) => {
     expect(detectLayout(root)).toBe(layout);
   });
 
   it('refuses only the layouts it cannot edit', () => {
-    expect(layoutRefusal(McpLayout.v1)).toBe(OPENCODE_V1_LAYOUT_MESSAGE);
-    expect(layoutRefusal(McpLayout.malformed)).not.toBeNull();
-    expect(layoutRefusal(McpLayout.fresh)).toBeNull();
-    expect(layoutRefusal(McpLayout.v2)).toBeNull();
+    expect(layoutRefusal(McpLayout.enum.v1)).toBe(OPENCODE_V1_LAYOUT_MESSAGE);
+    expect(layoutRefusal(McpLayout.enum.malformed)).not.toBeNull();
+    expect(layoutRefusal(McpLayout.enum.fresh)).toBeNull();
+    expect(layoutRefusal(McpLayout.enum.v2)).toBeNull();
   });
 });
 
 describe('withServerText / withoutServerText', () => {
+  it('uses the document\'s own line ending', () => {
+    const text = withServerText('{\r\n  "a": 1\r\n}\r\n', 'patty', { type: 'local' });
+    expect(text).toContain('\r\n');
+    expect(text).not.toMatch(/(?<!\r)\n/);
+    expect(withFinalNewline('{}')).toBe('{}\n');
+    expect(withFinalNewline('{\r\n}')).toBe('{\r\n}\r\n');
+  });
   it('inserts into an empty document and removes again', () => {
     const text = withServerText('{}', 'patty', { type: 'local' });
     expect(parseDocument(text)?.root).toEqual({ mcp: { servers: { patty: { type: 'local' } } } });

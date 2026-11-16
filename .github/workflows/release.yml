@@ -13,7 +13,7 @@ on:
   push:
     branches: [main]
 
-# Release tags are patty-vX.Y.Z (.releaserc.json tagFormat); the v4.x tags are FinTrack history and never match.
+# Release tags are patty-vX.Y.Z (.releaserc.json tagFormat); the v4.x tags from before the rename (ADR-035) are history and never match.
 env:
   TAG_PREFIX: patty-v
 

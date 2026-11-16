@@ -5,6 +5,10 @@ import { reasonOf } from './error.js';
 export const ClientConfigFailureCode = z.enum(['read_failed', 'write_failed']);
 export type ClientConfigFailureCode = z.infer<typeof ClientConfigFailureCode>;
 
+/** What every refusal of an unusable client file says first, and last. */
+export const INVALID_ROOT_MESSAGE = 'does not contain a JSON object at the root';
+export const LEFT_UNCHANGED = ' — left unchanged';
+
 export type ClientConfigFailure = {
   code: ClientConfigFailureCode;
   path: string;
