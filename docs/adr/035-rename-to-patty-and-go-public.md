@@ -194,6 +194,7 @@ The history is kept (no fresh repository), subject to the scan.
        public with Actions write access; npm trusted publisher (`release.yml`) with tokens disallowed; `release`
        environment with a required reviewer; `RELEASE_ENABLED` on. From now on, each release is staged by the
        workflow and goes live when approved (npm, then Docker `latest`).
-8. [ ] The author moves his install with the runbook (§2) — after step 7, since the new client entry installs
-       `@rfc0/patty` from npm. Until then the old private package keeps working.
-9. [ ] Delete the private GitHub Packages npm package and the old `ghcr.io/rafaelfcarneiro/fintrack` image.
+8. [x] (2026-11-16) the author moved his install with the §2 runbook: key/db export from the old package, key/db
+       import into ~/.patty, setup for each client, new sign-ins; the old data directory and keychain entry removed.
+9. [x] the private GitHub Packages npm package @rafaelfcarneiro/fintrack and the old ghcr.io/rafaelfcarneiro/fintrack
+       image deleted.
