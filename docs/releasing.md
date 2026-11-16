@@ -259,7 +259,11 @@ version is tagged by hand, in this order:
 missing `feat`) is undone in this order:
 
 1. Discard the staged npm version (do not approve its publication).
-2. Move the image's `latest` back — `docker buildx imagetools create --tag ghcr.io/rafaelfcarneiro/patty:latest
-   ghcr.io/rafaelfcarneiro/patty:<previous>` — then delete the wrong image version.
+2. Move every alias the wrong release overwrote back to the previous image — `latest`, and the `<major>.<minor>` and
+   `<major>` tags the image job also pushes (`release.yml`'s metadata step): `docker buildx imagetools create --tag
+   ghcr.io/rafaelfcarneiro/patty:latest --tag ghcr.io/rafaelfcarneiro/patty:<major>.<minor> --tag
+   ghcr.io/rafaelfcarneiro/patty:<major> ghcr.io/rafaelfcarneiro/patty:<previous>` (using the previous version's own
+   major and minor; an alias the wrong release created that did not exist before, such as a new major, is deleted
+   instead). Only then delete the wrong image version, so no tag is left pointing at it.
 3. Delete the GitHub Release and its tag.
 4. Tag the offending commit with the version it should have had, so the next run counts from there.
