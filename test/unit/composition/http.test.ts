@@ -1,3 +1,4 @@
+import { Server } from 'node:net';
 import { okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Config } from '../../../src/config.js';
@@ -42,6 +43,12 @@ beforeEach(() => {
     return process;
   }) as never);
   exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+  // The listening socket's close is the server shutting down: observe it in the same order as the other stages.
+  const closeServer = Server.prototype.close;
+  vi.spyOn(Server.prototype, 'close').mockImplementation(function (this: Server, ...args: Parameters<Server['close']>) {
+    order.push('server');
+    return closeServer.apply(this, args);
+  });
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
@@ -78,11 +85,12 @@ describe('runHttp — change relay lifecycle (ADR-036)', () => {
     expect(exit).not.toHaveBeenCalled();
 
     relayStopped.resolve();
-    await vi.waitFor(() => expect(order).toEqual(['relay', 'change-log']));
+    await vi.waitFor(() => expect(order).toEqual(['relay', 'server', 'change-log']));
     expect(exit).not.toHaveBeenCalled();
 
     logClosed.resolve();
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    expect(order).toEqual(['relay', 'server', 'change-log']);
   });
 
   it('shuts down once however many signals arrive', async () => {
