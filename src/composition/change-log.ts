@@ -65,7 +65,8 @@ export const createChangeLog = (
 /**
  * The relay of a process that serves a dashboard (ADR-036 §3), with PATTY's policy values: `@rfc0/effect-runner`
  * owns the loop, PATTY the store and these numbers. A relay that cannot start — a failing store, or the package's
- * `RangeError` for invalid options — is reported (to the bus's own `onError`, so both share one reporter) and answers `null`: the dashboard then updates from this process's own
+ * `RangeError` for invalid options — is reported (to the bus's own `onError`, so both share one reporter) and answers
+ * `null`: the dashboard then updates from this process's own
  * writes only, as before.
  */
 export const startServingRelay = ({ changeLog }: { changeLog: ChangeLog }): Promise<ChangeRelay | null> =>
