@@ -45,12 +45,21 @@ export const parseDocument = (text: string): JsoncDocument | null => {
   return root === null ? null : { text: unmarked, root };
 };
 
+/** A V1 server entry: an object saying how to start or reach the server. Global options (`timeout`, …) are not. */
+const SERVER_ENTRY_KEYS = ['type', 'command', 'url'] as const;
+
+const isLegacyServerEntry = (value: unknown): boolean => {
+  const entry = resolveConfigObject(value);
+  return entry !== null && SERVER_ENTRY_KEYS.some((key) => key in entry);
+};
+
 export const detectLayout = (root: Record<string, unknown>): McpLayout => {
   const mcp = root[MCP_KEY];
   if (mcp === undefined) return McpLayout.enum.fresh;
   const section = resolveConfigObject(mcp);
   if (section === null) return McpLayout.enum.malformed;
-  if (!(SERVERS_KEY in section)) return Object.keys(section).length === 0 ? McpLayout.enum.fresh : McpLayout.enum.v1;
+  if (!(SERVERS_KEY in section))
+    return Object.values(section).some(isLegacyServerEntry) ? McpLayout.enum.v1 : McpLayout.enum.fresh;
   return resolveConfigObject(section[SERVERS_KEY]) === null ? McpLayout.enum.malformed : McpLayout.enum.v2;
 };
 

@@ -35,6 +35,9 @@ describe('detectLayout', () => {
     [{ mcp: {} }, McpLayout.enum.fresh],
     [{ mcp: { servers: {} } }, McpLayout.enum.v2],
     [{ mcp: { other: { type: 'local' } } }, McpLayout.enum.v1],
+    [{ mcp: { other: { command: ['x'] } } }, McpLayout.enum.v1],
+    [{ mcp: { timeout: { startup: 45000 } } }, McpLayout.enum.fresh],
+    [{ mcp: { timeout: { startup: 1 }, other: { type: 'remote', url: 'u' } } }, McpLayout.enum.v1],
     [{ mcp: { servers: [] } }, McpLayout.enum.malformed],
     [{ mcp: 'x' }, McpLayout.enum.malformed],
   ])('%j is %s', (root, layout) => {

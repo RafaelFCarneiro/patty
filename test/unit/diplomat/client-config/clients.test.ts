@@ -357,9 +357,16 @@ describe('OpenCode (JSONC-safe)', () => {
     });
   });
 
+  it('adds servers next to global MCP options, keeping them', async () => {
+    const client = await opencode();
+    seed(jsonFile(), '{ "mcp": { "timeout": { "startup": 45000 } } }');
+    client.run('default')._unsafeUnwrap();
+    expect(written(jsonFile()).mcp).toEqual({ timeout: { startup: 45000 }, servers: { patty: ENTRY } });
+  });
+
   it('points a V1 layout to the migration docs', async () => {
     const client = await opencode();
-    seed(jsonFile(), '{ "mcp": { "other": {} } }');
+    seed(jsonFile(), '{ "mcp": { "other": { "type": "local", "command": ["x"] } } }');
     expect(client.run('default')._unsafeUnwrapErr().reason).toContain('Migrate from V1');
   });
 });
