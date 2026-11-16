@@ -26,6 +26,8 @@ export const reportChangeError = (cause: unknown): void => {
  *  publish that never appends, and `close` — wait for the appends in flight, then release the store. */
 export type ChangeLog = {
   origin: string;
+  /** The reporter the bus uses; the relay reports to the same one. */
+  onError: (cause: unknown) => void;
   store: SqliteChangeLog;
   publishLocal: (event: ChangeEvent) => void;
   settled: () => Promise<void>;
@@ -57,13 +59,13 @@ export const createChangeLog = (
     await settled();
     await store.close();
   };
-  return { changeBus: bus, changeLog: { origin, store, publishLocal, settled, prune, close } };
+  return { changeBus: bus, changeLog: { origin, onError, store, publishLocal, settled, prune, close } };
 };
 
 /**
  * The relay of a process that serves a dashboard (ADR-036 §3), with PATTY's policy values: `@rfc0/effect-runner`
  * owns the loop, PATTY the store and these numbers. A relay that cannot start — a failing store, or the package's
- * `RangeError` for invalid options — is reported and answers `null`: the dashboard then updates from this process's own
+ * `RangeError` for invalid options — is reported (to the bus's own `onError`, so both share one reporter) and answers `null`: the dashboard then updates from this process's own
  * writes only, as before.
  */
 export const startServingRelay = ({ changeLog }: { changeLog: ChangeLog }): Promise<ChangeRelay | null> =>
@@ -75,8 +77,8 @@ export const startServingRelay = ({ changeLog }: { changeLog: ChangeLog }): Prom
     retentionMs: CHANGE_EVENT_RETENTION_MS,
     pruneEveryMs: CHANGE_EVENT_PRUNE_EVERY_MS,
     batchLimit: CHANGE_RELAY_BATCH_LIMIT,
-    onError: reportChangeError,
+    onError: changeLog.onError,
   }).catch((cause: unknown) => {
-    reportChangeError(cause);
+    changeLog.onError(cause);
     return null;
   });

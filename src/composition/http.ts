@@ -137,10 +137,16 @@ export const runHttp = (config: Config): ResultAsync<void, StartupRefusal> =>
     const shutdown = (): void => {
       if (shuttingDown) return;
       shuttingDown = true;
-      Promise.resolve(relay?.stop())
-        .then(() => app.close())
-        .then(() => runtime.changeLog.close())
-        .catch((err: unknown) => app.log.error(err))
+      // Each stage is logged when it fails and never skips the next: a relay that fails to stop must not leave the
+      // listening socket and the change-log connection open.
+      const stage = (work: () => Promise<unknown> | undefined): Promise<void> =>
+        Promise.resolve()
+          .then(work)
+          .then(() => undefined)
+          .catch((err: unknown) => app.log.error(err));
+      void stage(() => relay?.stop())
+        .then(() => stage(() => app.close()))
+        .then(() => stage(() => runtime.changeLog.close()))
         .finally(() => process.exit(0));
     };
     process.on('SIGINT', shutdown);

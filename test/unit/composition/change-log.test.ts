@@ -51,14 +51,15 @@ describe('startServingRelay', () => {
   });
 
   it('reports a relay that cannot start and answers null, so the process runs without it', async () => {
-    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const failure = new Error('no such table');
     mocks.changeLogStore.mockReturnValue(fakeStore({ latestId: vi.fn(async () => Promise.reject(failure)) }));
-    const { changeLog } = createChangeLog({} as Db, vi.fn());
+    const onError = vi.fn();
+    const { changeLog } = createChangeLog({} as Db, onError);
 
     expect(await startServingRelay({ changeLog })).toBeNull();
 
-    expect(report).toHaveBeenCalledWith('[patty] change notification failed:', failure);
+    // The same reporter the bus uses, not a hard-wired stderr one.
+    expect(onError).toHaveBeenCalledExactlyOnceWith(failure);
   });
 });
 

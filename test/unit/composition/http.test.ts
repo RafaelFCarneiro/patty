@@ -93,6 +93,19 @@ describe('runHttp — change relay lifecycle (ADR-036)', () => {
     expect(order).toEqual(['relay', 'server', 'change-log']);
   });
 
+  it('still closes the server and the change log, and exits, when the relay fails to stop', async () => {
+    const failure = new Error('relay would not stop');
+    const { runtime } = booted(async () => void order.push('change-log'));
+    mocks.startServingRelay.mockResolvedValue({ stop: vi.fn(async () => Promise.reject(failure)) });
+    await runHttp(CONFIG);
+
+    handlers.SIGTERM?.();
+
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    expect(order).toEqual(['server', 'change-log']);
+    expect(runtime.changeLog.close).toHaveBeenCalledOnce();
+  });
+
   it('shuts down once however many signals arrive', async () => {
     const { runtime } = booted(async () => undefined);
     mocks.startServingRelay.mockResolvedValue({ stop: vi.fn(async () => undefined) });
