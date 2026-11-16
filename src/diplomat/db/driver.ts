@@ -214,7 +214,13 @@ const openSiblingClient = async (
   busyTimeoutMs: number,
 ): Promise<Db> => {
   const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey });
-  await client.execute(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
+  try {
+    await client.execute(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
+  } catch (cause) {
+    // Nothing will hold this handle, so a failed setup releases its native connection and file handles itself.
+    client.close();
+    throw cause;
+  }
   return drizzle(client, { schema });
 };
 
