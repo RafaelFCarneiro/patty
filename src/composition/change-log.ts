@@ -11,15 +11,17 @@ import type { Db } from '../diplomat/db/driver.js';
 import { isWorthAnnouncing } from '../logic/change-events.js';
 import {
   CHANGE_EVENT_PRUNE_EVERY_MS,
+  CHANGE_NOTIFICATION_FAILED,
   CHANGE_EVENT_RETENTION_MS,
   CHANGE_RELAY_BATCH_LIMIT,
   CHANGE_RELAY_POLL_MS,
 } from '../models/change-events.js';
+import { LOG_PREFIX } from '../models/package.js';
 import type { ChangeEvent } from '../models/tenancy.js';
 
 /** stderr only — stdout carries the stdio MCP protocol (ADR-007). */
 export const reportChangeError = (cause: unknown): void => {
-  console.error('[patty] change notification failed:', cause);
+  console.error(`${LOG_PREFIX} ${CHANGE_NOTIFICATION_FAILED}`, cause);
 };
 
 /** What a relay and a clean shutdown need of the relayed bus (ADR-036): this process's id, the store, the local-only
@@ -41,6 +43,7 @@ export type ChangeLog = {
 export const createChangeLog = (
   db: Db,
   onError: (cause: unknown) => void,
+  clock: () => Date = () => new Date(),
 ): { changeBus: ChangeBus<ChangeEvent>; changeLog: ChangeLog } => {
   const origin = randomUUID();
   const store = changeLogStore(db);
@@ -51,8 +54,7 @@ export const createChangeLog = (
     shouldAppend: isWorthAnnouncing,
   });
   // Only a relay prunes on a timer, so every process prunes once at startup.
-  const prune = (): Promise<void> =>
-    store.pruneBefore(pruneCutoff(new Date(), CHANGE_EVENT_RETENTION_MS)).catch(onError);
+  const prune = (): Promise<void> => store.pruneBefore(pruneCutoff(clock(), CHANGE_EVENT_RETENTION_MS)).catch(onError);
   const close = async (): Promise<void> => {
     await settled();
     await store.close();

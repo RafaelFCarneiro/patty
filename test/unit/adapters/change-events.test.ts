@@ -20,7 +20,14 @@ describe('change-events dbToModel', () => {
     expect(dbToModel({ ...row, entities: '[1]' })).toMatchObject({ id: 3, skipped: expect.any(String) });
   });
 
-  it('skips a row with no usable id as id 0', () => {
+  it('skips a row with no usable id as id 0, whatever the row is', () => {
     expect(dbToModel({})).toMatchObject({ id: 0, skipped: expect.any(String) });
+    expect(dbToModel({ ...row, id: 'three' })).toMatchObject({ id: 0, skipped: expect.any(String) });
+    expect(dbToModel({ ...row, id: 3.5 })).toMatchObject({ id: 0, skipped: expect.any(String) });
+    expect(dbToModel(null)).toMatchObject({ id: 0, skipped: expect.any(String) });
+  });
+
+  it('keeps the id of a row that has one but cannot otherwise be decoded', () => {
+    expect(dbToModel({ id: 9, origin: 5 })).toMatchObject({ id: 9, skipped: expect.any(String) });
   });
 });

@@ -5,7 +5,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startChangeRelay, type ChangeRelay } from '@rfc0/effect-runner';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { CHANGE_EVENT_RETENTION_MS, CHANGE_RELAY_BATCH_LIMIT } from '../../../src/models/change-events.js';
+import {
+  CHANGE_EVENT_RETENTION_MS,
+  CHANGE_NOTIFICATION_FAILED,
+  CHANGE_RELAY_BATCH_LIMIT,
+} from '../../../src/models/change-events.js';
 import { BUSY_TIMEOUT_MS } from '../../../src/diplomat/db/driver.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
@@ -76,7 +80,7 @@ describe('a writer in a separate process (ADR-036)', () => {
         timeout: 5000,
       });
 
-      expect({ code, stderr: stderr.join('').includes('change notification failed') }).toEqual({
+      expect({ code, stderr: stderr.join('').includes(CHANGE_NOTIFICATION_FAILED) }).toEqual({
         code: 0,
         stderr: false,
       });

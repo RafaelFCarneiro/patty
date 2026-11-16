@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { createClient, type Client } from '@libsql/client';
 import { isSqliteBusy } from './sqlite-errors.js';
+import { sleep } from '../../common/time.js';
 
 export const NEVER_BLOCK_IN_SQLITE_MS = 0;
 
@@ -70,8 +71,6 @@ export const tryExclusiveLock = async (lockPath: string): Promise<ExclusiveLock 
   (await attemptExclusiveLock(lockPath)).lock;
 
 export type LockWait = { waitMs: number; retryMs: number; timeoutMessage: string };
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const acquireWithin = async (lockPath: string, deadline: number, wait: LockWait): Promise<ExclusiveLock> => {
   const attempt = await attemptExclusiveLock(lockPath);

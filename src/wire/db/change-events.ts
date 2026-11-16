@@ -20,5 +20,8 @@ export const ChangeEventRowSchema = z.object({
   createdAt: z.string(),
 });
 
+/** What can be read of a row that failed to decode: its id, to report it and move past it. */
+export const RowIdSchema = z.object({ id: z.number().int() });
+
 export const DataVersionRowSchema = z.object({ data_version: z.number().int() });
 export const LatestIdRowSchema = z.object({ latest: z.number().int().nullable() });

@@ -1,13 +1,10 @@
 import type { ChangeLogEntry } from '@rfc0/effect-runner';
 import type { ChangeEvent } from '../models/tenancy.js';
-import { ChangeEventRowSchema } from '../wire/db/change-events.js';
+import { ChangeEventRowSchema, RowIdSchema } from '../wire/db/change-events.js';
 
 const NO_ID = 0;
 
-const idOf = (row: unknown): number => {
-  const id = (row as { id?: unknown } | null)?.id;
-  return typeof id === 'number' ? id : NO_ID;
-};
+const idOf = (row: unknown): number => RowIdSchema.safeParse(row).data?.id ?? NO_ID;
 
 /** A stored row as the relay's entry: the decoded event, or the reason it could not be decoded (never thrown). */
 export const dbToModel = (row: unknown): ChangeLogEntry<ChangeEvent> => {

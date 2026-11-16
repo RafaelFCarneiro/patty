@@ -1,5 +1,6 @@
 import type { ChangeLogEntry, ChangeLogStore, NewChangeLogRecord } from '@rfc0/effect-runner';
 import { asc, and, gt, ne, lt, sql } from 'drizzle-orm';
+import { sleep } from '../../common/time.js';
 import * as changeEventAdapters from '../../adapters/change-events.js';
 import { CHANGE_EVENT_APPEND_BACKOFF_MS, CHANGE_EVENT_LOCK_WAIT_MS } from '../../models/change-events.js';
 import type { ChangeEvent } from '../../models/tenancy.js';
@@ -21,8 +22,6 @@ const insertRow = async (log: Db, { event, origin, createdAt }: NewChangeLogReco
   });
 };
 
-const pause = (ms: number): Promise<void> => new Promise((resume) => setTimeout(resume, ms));
-
 /** Appends one row; while the database is busy, retries after each pause, then fails. */
 export const append = async (
   log: Db,
@@ -34,7 +33,7 @@ export const append = async (
   } catch (cause) {
     const [next, ...rest] = pauses;
     if (next === undefined || !isSqliteBusy(cause)) throw cause;
-    await pause(next);
+    await sleep(next);
     await append(log, record, rest);
   }
 };

@@ -5,6 +5,8 @@ export const CHANGE_RELAY_POLL_MS = 1000;
 export const CHANGE_EVENT_RETENTION_MS = 10 * 60 * 1000;
 /** How often the relay deletes rows past retention. */
 export const CHANGE_EVENT_PRUNE_EVERY_MS = 60 * 1000;
+/** Reported with `LOG_PREFIX` when a change notification (a subscriber, an append, the relay) fails. */
+export const CHANGE_NOTIFICATION_FAILED = 'change notification failed:';
 /** No lock wait inside SQLite: libsql is synchronous, so any wait blocks the event loop (ADR-036 §2). */
 export const CHANGE_EVENT_LOCK_WAIT_MS = 0;
 /** Pauses between append attempts while the database is busy; the loop stays free meanwhile (ADR-036 §2). */

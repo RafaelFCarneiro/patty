@@ -72,15 +72,14 @@ describe('createChangeLog', () => {
     const store = fakeStore({ pruneBefore });
     mocks.changeLogStore.mockReturnValue(store);
     const onError = vi.fn();
-    const { changeLog } = createChangeLog({} as Db, onError);
-    const before = Date.now() - CHANGE_EVENT_RETENTION_MS;
+    const now = new Date('2026-11-16T12:00:00.000Z');
+    const { changeLog } = createChangeLog({} as Db, onError, () => now);
 
     await changeLog.prune();
     await changeLog.prune();
 
-    const [cutoff] = pruneBefore.mock.calls[0] as [string];
-    expect(Date.parse(cutoff)).toBeGreaterThanOrEqual(before);
-    expect(Date.parse(cutoff)).toBeLessThanOrEqual(Date.now() - CHANGE_EVENT_RETENTION_MS + 1000);
+    // The cutoff is the injected clock's now minus the retention, not the wall clock's.
+    expect(pruneBefore).toHaveBeenNthCalledWith(1, new Date(now.getTime() - CHANGE_EVENT_RETENTION_MS).toISOString());
     expect(onError).toHaveBeenCalledExactlyOnceWith(failure);
   });
 
