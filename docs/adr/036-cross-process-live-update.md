@@ -48,7 +48,10 @@ the policy values and the wiring. What it does:
 The append happens after the commit, as a separate best-effort write. A failure (busy database, closed connection)
 goes to the bus's `onError` and never fails the write that triggered it; the cost of a lost row is one missed
 refresh, which the next navigation or the resync in §4 repairs. The write must not wait long for a lock: it uses a
-short, named timeout, not the database's normal `busy_timeout`.
+short, named timeout, not the database's normal `busy_timeout`. libsql's file client is synchronous, so
+the same value bounds how long one failing append can block the process's event loop: measured against a second process
+holding the write lock, 250 ms cost about 285 ms of loop lag per append and 50 ms about 60 ms, so the value is 50 ms
+(`CHANGE_EVENT_APPEND_TIMEOUT_MS`; other writes hold the lock for milliseconds).
 
 Every process appends, whether or not it serves a dashboard: it cannot know whether another process does.
 
