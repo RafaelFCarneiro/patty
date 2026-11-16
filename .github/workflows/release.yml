@@ -37,7 +37,7 @@ jobs:
       pull-requests: write # semantic-release may comment
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # semantic-release needs full history + tags
 
@@ -113,7 +113,7 @@ jobs:
       packages: write # push to ghcr.io
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG_PREFIX }}${{ needs.release.outputs.version }}
 
