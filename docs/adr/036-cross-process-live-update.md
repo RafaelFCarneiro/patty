@@ -95,7 +95,8 @@ ADR 0003 diagrams.
 
 Changes from the same process arrive in order; across processes, in commit order of the append, which is close
 enough for a refresh signal. A cross-process change reaches the dashboard within about one poll interval. Same-process
-changes stay immediate.
+changes stay immediate. A process's own writes also move its relay's `data_version`, which costs one read per write
+that finds only its own (excluded) rows.
 
 ## Options considered
 

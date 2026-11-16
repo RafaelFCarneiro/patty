@@ -356,7 +356,7 @@ relay: it starts at the newest row (no replay) and every `CHANGE_RELAY_POLL_MS` 
 `PRAGMA data_version` — which moves only when another connection committed — and, only then, reads the rows from other
 origins past its cursor, in id order, and publishes them on its local bus alone (never appended again, so rows do not echo).
 `/ui/events` is unchanged: it already forwards only the stream's own user's events and the shared tags. So a cross-process
-change reaches the dashboard within about one poll interval; same-process changes stay immediate. A row that does not
+change reaches the dashboard within about one poll interval; same-process changes stay immediate (a process's own writes also move its relay's `data_version`, costing one read that finds only its own, excluded, rows). A row that does not
 decode is skipped and reported on stderr; rows older than `CHANGE_EVENT_RETENTION_MS` (ten minutes) are deleted by the relay,
 so the table stays a few rows long. A process without a sidecar (`PATTY_HTTP=false`, or the port was taken) runs no relay
 but still appends. Any gap — a lost append, a relay that started after a write, a stream that dropped — is covered by the

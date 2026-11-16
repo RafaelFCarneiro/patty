@@ -45,8 +45,6 @@ export type Runtime = Tenancy & {
   publicDeps: Pick<Deps, 'health'>;
   authRunEffects: RunEffects;
   changeBus: ChangeBus<ChangeEvent>;
-  /** What a relay and a clean shutdown need of the relayed bus (ADR-036): this process's id, the store, the
-   *  local-only publish that never appends, and `close` — wait for the appends in flight, then release the store. */
   changeLog: ChangeLog;
 };
 

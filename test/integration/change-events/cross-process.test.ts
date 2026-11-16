@@ -127,7 +127,7 @@ let markerCount = 0;
 const drain = async (): Promise<void> => {
   const marker = `marker-${++markerCount}`;
   const heard = collect(b);
-  a.changeBus.publish({ userId: null, entities: [marker] });
+  a.changeBus.publish({ userId: OWNER_USER_ID, entities: [marker] });
   await vi.waitFor(() => expect(heard.some((event) => event.entities.includes(marker))).toBe(true), {
     timeout: WITHIN_TWO_POLLS_MS,
   });

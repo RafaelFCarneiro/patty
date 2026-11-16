@@ -81,17 +81,22 @@ describe('createChangeLog', () => {
     expect(order).toEqual(['append', 'close']);
   });
 
-  it('gives every process its own origin and announces only events that name an entity', async () => {
+  it('gives every process its own origin and announces only a user’s events that name an entity', async () => {
     const store = fakeStore();
     mocks.changeLogStore.mockReturnValue(store);
     const first = createChangeLog({} as Db, vi.fn());
     const second = createChangeLog({} as Db, vi.fn());
 
+    const heardLocally = vi.fn();
+    first.changeBus.subscribe(heardLocally);
     first.changeBus.publish({ userId: null, entities: [] });
+    first.changeBus.publish({ userId: null, entities: ['session'] });
     first.changeBus.publish({ userId: 'u1', entities: ['tag'] });
     await first.changeLog.settled();
 
     expect(first.changeLog.origin).not.toBe(second.changeLog.origin);
+    // Delivered locally all the same; only the append is skipped.
+    expect(heardLocally).toHaveBeenCalledTimes(3);
     expect(store.append).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ origin: first.changeLog.origin, event: { userId: 'u1', entities: ['tag'] } }),
     );
