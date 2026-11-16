@@ -345,22 +345,26 @@ browser's retry) the shell calls the current `window.onAppDataChanged` once with
 the test keeps a superset of every dashboard's), so a gap in events costs one refetch.
 
 **Across processes (ADR-036).** Every MCP client starts its own PATTY process on the same database, and only the first
-binds the dashboard port, so a write made through another process must still reach the dashboard. The processes share one
-thing, the database file, and a small infrastructure table carries the news: `change_events` (`id`, `user_id`, `entities` —
-a JSON array of entity tags, never data —, `origin` — the writing process's id —, `created_at`). Every process's bus
-is `@rfc0/effect-runner`'s relayed bus: it delivers locally first (a browser on the writing process updates at once, as
-before) and then appends a row, through PATTY's SQLite store, on a connection of its own that never waits for a lock inside SQLite
-(`CHANGE_EVENT_LOCK_WAIT_MS`, none) and instead backs off asynchronously (`CHANGE_EVENT_APPEND_BACKOFF_MS`); a database still
-busy after that, or closed, costs one missed refresh and never fails or delays the write. A process that serves a dashboard (stdio with the sidecar bound, or the HTTP transport) runs the package's
-relay: it starts at the newest row (no replay) and every `CHANGE_RELAY_POLL_MS` (about a second) reads SQLite's
-`PRAGMA data_version` — which moves only when another connection committed — and, only then, reads the rows from other
-origins past its cursor, in id order, and publishes them on its local bus alone (never appended again, so rows do not echo).
-`/ui/events` is unchanged: it already forwards only the stream's own user's events and the shared tags. So a cross-process
-change reaches the dashboard within about one poll interval; same-process changes stay immediate (a process's own writes also move its relay's `data_version`, costing one read that finds only its own, excluded, rows). A row that does not
-decode is skipped and reported on stderr; rows older than `CHANGE_EVENT_RETENTION_MS` (ten minutes) are deleted by the relay,
-so the table stays a few rows long. A process without a sidecar (`PATTY_HTTP=false`, or the port was taken) runs no relay
-but still appends; every process prunes expired rows once at startup, so the log does not grow across sessions. Any gap — a lost append, a relay that started after a write, a stream that dropped — is covered by the
-resync above: the shell refetches everything it shows after a reconnect.
+binds the dashboard port, so a write made through another process must still reach the dashboard. The processes share
+one thing, the database file, and a small infrastructure table carries the news: `change_events` (`id`, `user_id`,
+`entities` — a JSON array of entity tags, never data —, `origin` — the writing process's id —, `created_at`). Every
+process's bus is `@rfc0/effect-runner`'s relayed bus: it delivers locally first (a browser on the writing process
+updates at once, as before) and then appends a row, through PATTY's SQLite store, on a connection of its own that never
+blocks the event loop waiting for a lock (`CHANGE_EVENT_LOCK_WAIT_MS`, `CHANGE_EVENT_APPEND_BACKOFF_MS`; [ADR-036
+§2](adr/036-cross-process-live-update.md)); a database still busy after that, or closed, costs one missed refresh and
+never fails or delays the write. A process that serves a dashboard (stdio with the sidecar bound, or the HTTP transport)
+runs the package's relay: it starts at the newest row (no replay) and every `CHANGE_RELAY_POLL_MS` (about a second)
+reads SQLite's `PRAGMA data_version` — which moves only when another connection committed — and, only then, reads the
+rows from other origins past its cursor, in id order, and publishes them on its local bus alone (never appended again,
+so rows do not echo). `/ui/events` is unchanged: it already forwards only the stream's own user's events and the shared
+tags. So a cross-process change reaches the dashboard within about one poll interval; same-process changes stay
+immediate (a process's own writes also move its relay's `data_version`, costing one read that finds only its own,
+excluded, rows). A row that does not decode is skipped and reported on stderr; rows older than
+`CHANGE_EVENT_RETENTION_MS` (ten minutes) are deleted by the relay, so the table stays a few rows long. A process
+without a sidecar (`PATTY_HTTP=false`, or the port was taken) runs no relay but still appends; every process prunes
+expired rows once at startup, so the log does not grow across sessions. Any gap — a lost append, a relay that started
+after a write, a stream that dropped — is covered by the resync above: the shell refetches everything it shows after a
+reconnect.
 
 ## Currency in `pending.html` and `cards.html`
 

@@ -1,5 +1,7 @@
 import type { ChangeLogStore } from '@rfc0/effect-runner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SESSION_ENTITY_TAG } from '../../../src/models/auth/entity.js';
+import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
 import {
   CHANGE_EVENT_PRUNE_EVERY_MS,
@@ -109,15 +111,15 @@ describe('createChangeLog', () => {
     const heardLocally = vi.fn();
     first.changeBus.subscribe(heardLocally);
     first.changeBus.publish({ userId: null, entities: [] });
-    first.changeBus.publish({ userId: null, entities: ['session'] });
-    first.changeBus.publish({ userId: 'u1', entities: ['tag'] });
+    first.changeBus.publish({ userId: null, entities: [SESSION_ENTITY_TAG] });
+    first.changeBus.publish({ userId: 'u1', entities: [TAG_ENTITY_TAG] });
     await first.changeLog.settled();
 
     expect(first.changeLog.origin).not.toBe(second.changeLog.origin);
     // Delivered locally all the same; only the append is skipped.
     expect(heardLocally).toHaveBeenCalledTimes(3);
     expect(store.append).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ origin: first.changeLog.origin, event: { userId: 'u1', entities: ['tag'] } }),
+      expect.objectContaining({ origin: first.changeLog.origin, event: { userId: 'u1', entities: [TAG_ENTITY_TAG] } }),
     );
   });
 });

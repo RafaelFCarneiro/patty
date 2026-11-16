@@ -294,19 +294,25 @@ never *forbidden* — and the candidates an ambiguous/not-found error lists are 
 defaults. **Classification** reads the shared `rule` edges plus the caller's own `history` edges (summed per
 (merchant, category), as one row's weight was before); a correction writes a `history` edge for the caller.
 
-**The change bus** is a `ChangeBus<ChangeEvent>` (`@rfc0/effect-runner` ≥ 0.6, generic over the event), carrying `ChangeEvent` = `{ userId, entities }` (`models/tenancy.ts`); the scoped runner publishes as
-its user, the identity runner as `null` (instance bookkeeping no dashboard hears). `/ui/events` forwards only events whose
-`userId` is the stream's session user. **It spans processes (ADR-036):** `composition/change-log.ts`'s `createChangeLog` builds it (called
-by `composition/runtime.ts`) with the package's `createRelayedChangeBus` — `publish` delivers to this process's subscribers first, then queues
-an append the write never waits for — over PATTY's `ChangeLogStore`, `diplomat/db/change-events.ts`'s `changeLogStore`: the `change_events`
-table on one sibling connection with no lock wait of its own (`CHANGE_EVENT_LOCK_WAIT_MS`: libsql is synchronous, so a wait would block the loop; an append backs off asynchronously, `CHANGE_EVENT_APPEND_BACKOFF_MS`), whose `changeToken` is `PRAGMA data_version`
-(per connection, and libsql replaces a client's connection after each transaction, so the engine's handle cannot hold the reading). A
-process that serves a dashboard also runs the package's `startChangeRelay` (`startServingRelay`, with PATTY's `CHANGE_*` values from
-`models/change-events.ts`): when the token moved it reads the other origins' rows past its cursor and publishes them on the *local* bus
-alone, prunes rows past retention, and reports a row that does not decode. Every process (relay or not) also prunes once in `composition/boot.ts`, since only a relay prunes on an interval. It starts where a dashboard is served — `composition/stdio.ts`
-once the sidecar bound, `composition/http.ts` — and shuts down relay first, then the pending appends, then the store. Everything generic
-(queue, loop, scheduling, isolation) is the package's; PATTY's code is the store, `adapters/change-events.ts`' row decoding,
-`logic/change-events.ts`' `isWorthAnnouncing` (the `shouldAppend` rule), the policy constants and this wiring.
+**The change bus** is a `ChangeBus<ChangeEvent>` (`@rfc0/effect-runner` ≥ 0.6, generic over the event), carrying
+`ChangeEvent` = `{ userId, entities }` (`models/tenancy.ts`); the scoped runner publishes as its user, the identity
+runner as `null` (instance bookkeeping no dashboard hears). `/ui/events` forwards only events whose `userId` is the
+stream's session user. **It spans processes (ADR-036):** `composition/change-log.ts`'s `createChangeLog` builds it
+(called by `composition/runtime.ts`) with the package's `createRelayedChangeBus` — `publish` delivers to this process's
+subscribers first, then queues an append the write never waits for — over PATTY's `ChangeLogStore`,
+`diplomat/db/change-events.ts`'s `changeLogStore`: the `change_events` table on one sibling connection with no lock wait
+(`CHANGE_EVENT_LOCK_WAIT_MS`, `CHANGE_EVENT_APPEND_BACKOFF_MS`; [ADR-036 §2](adr/036-cross-process-live-update.md)),
+whose `changeToken` is `PRAGMA data_version` (per connection, and libsql replaces a client's connection after each
+transaction, so the engine's handle cannot hold the reading). A process that serves a dashboard also runs the package's
+`startChangeRelay` (`startServingRelay`, with PATTY's `CHANGE_*` values from `models/change-events.ts`): when the token
+moved it reads the other origins' rows past its cursor and publishes them on the *local* bus alone, prunes rows past
+retention, and reports a row that does not decode. Every process (relay or not) also prunes once in
+`composition/boot.ts`, since only a relay prunes on an interval. It starts where a dashboard is served —
+`composition/stdio.ts` once the sidecar bound, `composition/http.ts` — and shuts down relay first, then the pending
+appends, then the store. Everything generic (queue, loop, scheduling, isolation) is the package's; PATTY's code is the
+store, `adapters/change-events.ts`' row decoding, `logic/change-events.ts`' `isWorthAnnouncing` (the `shouldAppend`
+rule), the policy constants and this wiring.
+
 
 **Data-rewriting migration `0021_tenancy_data`** rebuilds the owned tables with `user_id` (backfilled to the owner, looked up —
 a missing owner aborts), keeps the 15 seeded categories, `rule` edges and `file` dashboards shared, moves the singleton's

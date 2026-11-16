@@ -227,8 +227,7 @@ const openSiblingClient = async (
 /** A second, independent connection to the same database file, waiting at most `busyTimeoutMs` for a lock. libsql
  *  replaces a client's connection after every transaction, so anything that needs one stable connection (SQLite's
  *  `data_version` is per connection) or must not disturb the engine's own (a short lock wait) takes this one and
- *  never runs a transaction on it. Close it with `closeDatabase`. A timeout that is not a non-negative integer is
- *  refused before anything is opened. */
+ *  never runs a transaction on it. Close it with `closeDatabase`. */
 export const openSibling = (db: Db, busyTimeoutMs: number): Promise<Db> => {
   if (!Number.isInteger(busyTimeoutMs) || busyTimeoutMs < 0) {
     return Promise.reject(

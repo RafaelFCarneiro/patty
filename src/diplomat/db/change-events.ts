@@ -8,9 +8,8 @@ import { closeDatabase, openSibling, type Db } from './driver.js';
 import { changeEvents } from './schema.js';
 import { isSqliteBusy } from './sqlite-errors.js';
 
-/** The connection every `change_events` statement runs on: a sibling of the engine's, so its lock wait
- *  (`CHANGE_EVENT_LOCK_WAIT_MS`, none) never touches how long a write waits, and it keeps one identity for as long as
- *  it is open (`data_version` is per connection). Never run a transaction on it. */
+/** The change log's own connection: no lock wait, and one stable identity (`data_version` is per connection).
+ *  Never run a transaction on it. */
 export const openChangeLog = (db: Db): Promise<Db> => openSibling(db, CHANGE_EVENT_LOCK_WAIT_MS);
 
 const insertRow = async (log: Db, { event, origin, createdAt }: NewChangeLogRecord<ChangeEvent>): Promise<void> => {
@@ -24,9 +23,7 @@ const insertRow = async (log: Db, { event, origin, createdAt }: NewChangeLogReco
 
 const pause = (ms: number): Promise<void> => new Promise((resume) => setTimeout(resume, ms));
 
-/** Appends one row (parameterized). A busy database fails the statement at once (it never blocks the event loop)
- *  and the append waits asynchronously, `CHANGE_EVENT_APPEND_BACKOFF_MS` between attempts, so a transaction of this
- *  process or a short write of another one can finish; still busy after the last pause, it fails with that error. */
+/** Appends one row; while the database is busy, retries after each pause, then fails. */
 export const append = async (
   log: Db,
   record: NewChangeLogRecord<ChangeEvent>,
@@ -79,13 +76,9 @@ export const dataVersion = async (log: Db): Promise<number> => {
 export type SqliteChangeLog = ChangeLogStore<ChangeEvent> & { close: () => Promise<void> };
 
 /**
- * `@rfc0/effect-runner`'s `ChangeLogStore` over the `change_events` table. The table meets the package's id
- * contract: `INTEGER PRIMARY KEY AUTOINCREMENT` ids strictly increase and are never reused, even after a prune empties
- * the table, and SQLite admits one writer at a time, so a row becomes readable in id order. Every statement, and the
- * `changeToken` (`PRAGMA data_version`, per connection), runs on one sibling connection opened on first use and opened
- * again after a failed open; `close` releases it. A busy database fails a statement at once, never blocking the event
- * loop; an append then waits asynchronously (`CHANGE_EVENT_APPEND_BACKOFF_MS`) before the package reports the failure
- * and carries on.
+ * The package's `ChangeLogStore` over `change_events`. It meets the package's id contract: AUTOINCREMENT never reuses
+ * an id, and with one writer at a time rows become readable in id order. It runs on one lazily opened sibling
+ * connection; `close` releases it.
  */
 export const changeLogStore = (db: Db): SqliteChangeLog => {
   const link = { opened: undefined as Promise<Db> | undefined };

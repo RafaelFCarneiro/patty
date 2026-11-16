@@ -26,7 +26,6 @@ export const reportChangeError = (cause: unknown): void => {
  *  publish that never appends, and `close` — wait for the appends in flight, then release the store. */
 export type ChangeLog = {
   origin: string;
-  /** The reporter the bus uses; the relay reports to the same one. */
   onError: (cause: unknown) => void;
   store: SqliteChangeLog;
   publishLocal: (event: ChangeEvent) => void;
@@ -51,8 +50,7 @@ export const createChangeLog = (
     onError,
     shouldAppend: isWorthAnnouncing,
   });
-  // Only a relay prunes on an interval, and a process without a dashboard (PATTY_HTTP=false, or the port taken) runs
-  // none while it still appends: so every process prunes once when it starts.
+  // Only a relay prunes on a timer, so every process prunes once at startup.
   const prune = (): Promise<void> =>
     store.pruneBefore(pruneCutoff(new Date(), CHANGE_EVENT_RETENTION_MS)).catch(onError);
   const close = async (): Promise<void> => {
@@ -63,11 +61,8 @@ export const createChangeLog = (
 };
 
 /**
- * The relay of a process that serves a dashboard (ADR-036 §3), with PATTY's policy values: `@rfc0/effect-runner`
- * owns the loop, PATTY the store and these numbers. A relay that cannot start — a failing store, or the package's
- * `RangeError` for invalid options — is reported (to the bus's own `onError`, so both share one reporter) and answers
- * `null`: the dashboard then updates from this process's own
- * writes only, as before.
+ * The relay of a process that serves a dashboard, with PATTY's values (ADR-036 §3). One that cannot start is reported
+ * and answers `null`; the dashboard then updates from this process's writes only.
  */
 export const startServingRelay = ({ changeLog }: { changeLog: ChangeLog }): Promise<ChangeRelay | null> =>
   startChangeRelay({
