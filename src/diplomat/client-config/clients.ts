@@ -1,17 +1,33 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { err, ok, Result } from 'neverthrow';
 import * as R from 'remeda';
 import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/sign-in.js';
-import { clientConfigFailures, type ClientConfigFailure } from '../../models/client-config.js';
+import {
+  clientConfigFailures,
+  INVALID_ROOT_MESSAGE,
+  LEFT_UNCHANGED,
+  type ClientConfigFailure,
+} from '../../models/client-config.js';
 import { DEMO_SERVER_NAME } from '../../models/demo/core.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
-import { ServersKey } from '../../wire/out/client-config.js';
+import { EnvKey, ServersKey } from '../../wire/out/client-config.js';
+import {
+  detectLayout,
+  layoutRefusal,
+  OPENCODE_UNUSABLE_MESSAGE,
+  parseDocument,
+  withoutServerText,
+  withFinalNewline,
+  withServerText,
+  type JsoncDocument,
+} from './jsonc.js';
 import {
   mergeMcpServersKey,
   mergeServersKey,
+  OPENCODE_ENTRY,
   resolveConfigObject,
   SERVER_NAME,
   STDIO_ENTRY,
@@ -24,8 +40,6 @@ import {
 // ---------------------------------------------------------------------------
 // FS helpers
 // ---------------------------------------------------------------------------
-
-const INVALID_ROOT_MESSAGE = 'does not contain a JSON object at the root';
 
 const invalidConfigWarning = (path: string): string =>
   `patty setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`;
@@ -45,7 +59,7 @@ type WhenUnusable = (path: string) => Result<ConfigRead, ClientConfigFailure>;
 const replaceUnusable: WhenUnusable = (path) => ok({ config: {}, warnings: [invalidConfigWarning(path)] });
 
 const refuseUnusable: WhenUnusable = (path) =>
-  err(clientConfigFailures.readFailed(path, `${INVALID_ROOT_MESSAGE}, or is not plain JSON — left unchanged`));
+  err(clientConfigFailures.readFailed(path, `${INVALID_ROOT_MESSAGE}, or is not plain JSON${LEFT_UNCHANGED}`));
 
 /** The demo entry refuses an unusable file instead of replacing it. */
 export const readJsonOrEmpty = (
@@ -65,6 +79,26 @@ export const readJsonOrEmpty = (
 
 const writeJson = (path: string, data: unknown): Result<void, ClientConfigFailure> =>
   writeText(path, JSON.stringify(data, null, 2) + '\n').mapErr((cause) =>
+    clientConfigFailures.writeFailed(path, cause),
+  );
+
+/** Reads an OpenCode config (JSON or JSONC) for editing: a missing or empty file is an empty document, and one that
+ *  cannot be edited without damage — unparsable, a non-object root, a V1 layout — is refused, never replaced. */
+const readJsoncDocument = (path: string): Result<JsoncDocument, ClientConfigFailure> => {
+  const refuse = (reason: string) => err(clientConfigFailures.readFailed(path, reason));
+  const content = existsSync(path) ? readText(path) : ok('');
+  return content
+    .mapErr((cause) => clientConfigFailures.readFailed(path, cause))
+    .andThen((text) => {
+      const document = parseDocument(text);
+      if (document === null) return refuse(OPENCODE_UNUSABLE_MESSAGE);
+      const refusal = layoutRefusal(detectLayout(document.root));
+      return refusal === null ? ok(document) : refuse(refusal);
+    });
+};
+
+const writeJsonc = (path: string, text: string): Result<void, ClientConfigFailure> =>
+  writeText(path, withFinalNewline(text)).mapErr((cause) =>
     clientConfigFailures.writeFailed(path, cause),
   );
 
@@ -108,13 +142,24 @@ const writeEntry = (
 
 const nothingToRemove = (reason: string): ConfigReport => ok({ warnings: [], lines: [`  ${reason}`] });
 
+const demoRemoval = {
+  noFile: (configPath: string): ConfigReport =>
+    nothingToRemove(`No demo entry to remove: ${configPath} does not exist`),
+  noEntry: (configPath: string): ConfigReport =>
+    nothingToRemove(`No ${DEMO_SERVER_NAME} entry in ${configPath}`),
+  removed: (configPath: string, next: string): ClientSetupReport => ({
+    warnings: [],
+    lines: [`  Removed ${DEMO_SERVER_NAME} from ${configPath}`, next],
+  }),
+};
+
 const removeDemoEntry = (configPath: string, key: ServersKey, next: string): ConfigReport => {
-  if (!existsSync(configPath)) return nothingToRemove(`No demo entry to remove: ${configPath} does not exist`);
+  if (!existsSync(configPath)) return demoRemoval.noFile(configPath);
   return readJsonOrEmpty(configPath, refuseUnusable).andThen(({ config, warnings }) => {
     const without = withoutServer(config, key, DEMO_SERVER_NAME);
-    if (without === null) return nothingToRemove(`No ${DEMO_SERVER_NAME} entry in ${configPath}`);
+    if (without === null) return demoRemoval.noEntry(configPath);
     return writeJson(configPath, without)
-      .map((): ClientSetupReport => ({ warnings, lines: [`  Removed ${DEMO_SERVER_NAME} from ${configPath}`, next] }))
+      .map((): ClientSetupReport => ({ ...demoRemoval.removed(configPath, next), warnings }))
       .mapErr((failure) => ({ ...failure, warnings }));
   });
 };
@@ -134,17 +179,51 @@ const MERGE_BY_KEY = {
 
 const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig => ({
   label,
-  run: (profile) => writeEntry(path(), MERGE_BY_KEY[key], withProfile(entry, profile), next),
+  run: (profile) => writeEntry(path(), MERGE_BY_KEY[key], withProfile(entry, profile, EnvKey.enum.env), next),
   addDemo: (databasePath) =>
     writeEntry(
       path(),
       (existing, demoEntry) => MERGE_BY_KEY[key](existing, demoEntry, DEMO_SERVER_NAME),
-      withDemo(entry, databasePath),
+      withDemo(entry, databasePath, EnvKey.enum.env),
       next,
       refuseUnusable,
     ),
   removeDemo: () => removeDemoEntry(path(), key, next),
 });
+
+type JsoncClient = {
+  label: string;
+  path: () => string;
+  entry: Record<string, unknown>;
+  next: string;
+};
+
+/** A client whose file is JSON with comments: edited in place, so what the person wrote survives. */
+const jsoncClient = ({ label, path, entry, next }: JsoncClient): ClientConfig => {
+  const setEntry = (name: string, withEnv: Record<string, unknown>): ConfigReport => {
+    const configPath = path();
+    return readJsoncDocument(configPath).andThen(({ text }) =>
+      writeJsonc(configPath, withServerText(text, name, withEnv)).map(
+        (): ClientSetupReport => ({ warnings: [], lines: [`  Updated: ${configPath}`, next] }),
+      ),
+    );
+  };
+  return {
+    label,
+    run: (profile) => setEntry(SERVER_NAME, withProfile(entry, profile, EnvKey.enum.environment)),
+    addDemo: (databasePath) => setEntry(DEMO_SERVER_NAME, withDemo(entry, databasePath, EnvKey.enum.environment)),
+    removeDemo: () => {
+      const configPath = path();
+      // A missing file is "nothing to remove", never a file to create.
+      if (!existsSync(configPath)) return demoRemoval.noFile(configPath);
+      return readJsoncDocument(configPath).andThen((document) => {
+        const without = withoutServerText(document, DEMO_SERVER_NAME);
+        if (without === null) return demoRemoval.noEntry(configPath);
+        return writeJsonc(configPath, without).map(() => demoRemoval.removed(configPath, next));
+      });
+    },
+  };
+};
 
 // Codex CLI MCP configuration path and format is not yet stable: describe the snippet and let the user place it.
 /** JSON-escaped: a path may hold backslashes or quotes. */
@@ -179,7 +258,10 @@ const codex: ClientConfig = {
   label: 'OpenAI Codex',
   run: setupCodex,
   addDemo: (databasePath) =>
-    ok({ warnings: [], lines: [codexSnippet(DEMO_SERVER_NAME, withDemo(STDIO_ENTRY, databasePath).env)] }),
+    ok({
+      warnings: [],
+      lines: [codexSnippet(DEMO_SERVER_NAME, withDemo(STDIO_ENTRY, databasePath, EnvKey.enum.env).env)],
+    }),
   removeDemo: () =>
     ok({ warnings: [], lines: [`  Codex CLI: remove the "${DEMO_SERVER_NAME}" entry from your MCP config file.`] }),
 };
@@ -217,6 +299,25 @@ const antigravity = fileClient({
   next: '  Reopen Antigravity or type /mcp in the CLI to refresh.',
 });
 
+/** OpenCode's config root: `XDG_CONFIG_HOME` when it is an absolute path (the XDG rule), else `~/.config`. */
+const xdgConfigHome = (): string => {
+  const configured = process.env['XDG_CONFIG_HOME'];
+  return configured !== undefined && isAbsolute(configured) ? configured : join(home, '.config');
+};
+
+/** `opencode.jsonc` when it exists, else `opencode.json` (created if neither does). */
+const openCodeConfigPath = (): string => {
+  const directory = join(xdgConfigHome(), 'opencode');
+  const jsonc = join(directory, 'opencode.jsonc');
+  return existsSync(jsonc) ? jsonc : join(directory, 'opencode.json');
+};
+const openCode = jsoncClient({
+  label: 'OpenCode',
+  path: openCodeConfigPath,
+  entry: OPENCODE_ENTRY,
+  next: '  Verify with: opencode mcp list   (or /mcps inside OpenCode)',
+});
+
 const TOOLS: Readonly<Record<string, ClientConfig>> = {
   'claude-code': claudeCode,
   'claude-desktop': claudeDesktop,
@@ -224,6 +325,7 @@ const TOOLS: Readonly<Record<string, ClientConfig>> = {
   vscode: copilot,
   antigravity,
   codex,
+  opencode: openCode,
 };
 
 const findClient = (tool: string): ClientConfig | undefined => TOOLS[tool.trim().toLowerCase()];

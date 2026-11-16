@@ -54,6 +54,7 @@ npx @rfc0/patty@latest setup claude-desktop   # Claude Desktop
 npx @rfc0/patty@latest setup copilot          # VS Code / GitHub Copilot
 npx @rfc0/patty@latest setup antigravity      # Google Antigravity
 npx @rfc0/patty@latest setup codex            # OpenAI Codex (prints snippet)
+npx @rfc0/patty@latest setup opencode         # OpenCode (JSONC-safe)
 ```
 
 Run without a tool name to list all options and the config file each one writes:

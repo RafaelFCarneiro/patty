@@ -40,6 +40,7 @@ Available tools:
   vscode           VS Code / GitHub Copilot    (alias for copilot)
   antigravity      Google Antigravity   (~/.gemini/config/mcp_config.json)
   codex            OpenAI Codex         (prints the config snippet to paste)
+  opencode         OpenCode             (~/.config/opencode/opencode.jsonc or opencode.json; honours XDG_CONFIG_HOME)
 
 ${PRODUCT_NAME} requires a login. The first time, setup asks you to choose the owner's username and password
 (typed twice, never echoed), writes the client's config, then offers to sign that client in. Re-running it is safe: an
@@ -58,6 +59,7 @@ Examples:
   ${NPX_COMMAND} setup copilot
   ${NPX_COMMAND} setup vscode
   ${NPX_COMMAND} setup antigravity
+  ${NPX_COMMAND} setup opencode
 `.trimStart(),
   unknownTool: (tool: string) => `patty setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`,
   settingUp: (label: string) => `Setting up ${PRODUCT_NAME} MCP for ${label}...`,

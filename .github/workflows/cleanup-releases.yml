@@ -28,7 +28,7 @@ jobs:
             ''|*[!0-9]*) KEEP=10 ;;
           esac
 
-          # Only patty-v* releases are pruned: the v4.x FinTrack releases and tags are history and stay.
+          # Only patty-v* releases are pruned: the v4.x releases and tags from before the rename (ADR-035) are history and stay.
           gh release list \
             --repo "$GITHUB_REPOSITORY" \
             --limit 200 \

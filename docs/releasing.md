@@ -224,8 +224,8 @@ How this lands in each HTTP-mode client:
 
 Release tags are `patty-vX.Y.Z` (`tagFormat` in `.releaserc.json`; `release.yml` defines the prefix once as
 `TAG_PREFIX`). `@rfc0/patty` is a new package, so it starts its own version line at `1.0.0` instead of continuing
-FinTrack's `v4.x`. semantic-release finds the previous release from git tags, and no existing tag matches the new
-format. The `v4.x` tags and GitHub Releases are FinTrack history: they stay in the repository and are never deleted
+the `v4.x` line from before the rename (ADR-035). semantic-release finds the previous release from git tags, and no existing tag matches the new
+format. The `v4.x` tags and GitHub Releases are history from before the rename (ADR-035): they stay in the repository and are never deleted
 (`cleanup-releases.yml` prunes only `patty-v*` releases).
 npm versions and Docker tags are bare semver (`1.0.0`, `:1.0.0`); only the git tag carries the prefix.
 

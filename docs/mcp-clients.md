@@ -21,6 +21,7 @@ npx @rfc0/patty@latest setup <tool>
 | `copilot` or `vscode` | VS Code / GitHub Copilot | `.vscode/mcp.json` in current directory |
 | `antigravity` | Google Antigravity (2.0, CLI, IDE) | `~/.gemini/config/mcp_config.json` |
 | `codex` | OpenAI Codex | prints the snippet to paste manually |
+| `opencode` | OpenCode | `~/.config/opencode/opencode.jsonc` (under `$XDG_CONFIG_HOME` when set to an absolute path) if it exists, else `opencode.json` (created if neither does) |
 
 Run without arguments for usage and paths:
 
@@ -128,6 +129,30 @@ Antigravity CLI: type `/mcp` at the prompt to open the MCP Manager and reload.
 Antigravity IDE: click `...` in the agent panel → MCP Servers → Manage → View raw config.
 
 ---
+
+### OpenCode ✅
+
+```bash
+npx @rfc0/patty@latest setup opencode
+```
+
+OpenCode's global config is `~/.config/opencode/opencode.jsonc` (preferred when it exists) or `opencode.json`, and may
+hold comments and trailing commas. `setup` edits it **in place** with a JSONC-aware editor, so your comments, other
+keys and formatting stay; it adds `mcp.servers.patty` (replacing a previous one):
+
+```jsonc
+{ "mcp": { "servers": { "patty": { "type": "local", "command": ["npx", "-y", "@rfc0/patty@latest"] } } } }
+```
+
+Environment variables go under `environment` (OpenCode's name for `env`), e.g. `--profile work` adds
+`"environment": { "PATTY_PROFILE": "work" }`. A file that is not valid JSON/JSONC, whose root is not an object, or that
+is still in OpenCode's V1 layout (servers directly under `mcp`, no `mcp.servers`) is **refused and left untouched**
+— migrate it first ("Migrate from V1" in OpenCode's [MCP servers docs](https://opencode.ai/docs/mcp-servers)).
+
+Verify with `opencode mcp list` (or `/mcps` inside OpenCode).
+
+**Demo:** `setup opencode --demo` adds a second entry, `mcp.servers.patty-demo`, with the demo `environment`
+(`DB_PATH`, `PORT`, `PATTY_DEMO`) and never touches `patty`; `setup opencode --remove-demo` removes only it.
 
 ## HTTP sidecar (alongside stdio)
 
