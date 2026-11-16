@@ -36,7 +36,9 @@ const spawnWriter = (...args: string[]): ChildProcessWithoutNullStreams =>
   });
 
 const exited = (child: ChildProcessWithoutNullStreams): Promise<number | null> =>
-  new Promise((done) => child.once('exit', (code) => done(code)));
+  child.exitCode !== null
+    ? Promise.resolve(child.exitCode)
+    : new Promise((done) => child.once('exit', (code) => done(code)));
 
 beforeAll(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'patty-separate-process-'));
@@ -93,12 +95,19 @@ describe('a writer in a separate process (ADR-036)', () => {
         createdAt: '2026-11-16T00:00:00.000Z',
       };
 
-      const startedAt = Date.now();
-      await expect(b.runtime.changeLog.store.append(record)).rejects.toThrow();
-      expect(Date.now() - startedAt).toBeLessThan(BUSY_TIMEOUT_MS / 2);
+      // Whatever the assertions find, the holder is released and awaited: a failing run must not leave a live process
+      // holding the write lock.
+      let holderExit: number | null = null;
+      try {
+        const startedAt = Date.now();
+        await expect(b.runtime.changeLog.store.append(record)).rejects.toThrow();
+        expect(Date.now() - startedAt).toBeLessThan(BUSY_TIMEOUT_MS / 2);
+      } finally {
+        holder.stdin.end();
+        holderExit = await exited(holder);
+      }
 
-      holder.stdin.end();
-      expect(await exited(holder)).toBe(0);
+      expect(holderExit).toBe(0);
       await b.runtime.changeLog.store.append(record);
       expect(await b.runtime.changeLog.store.latestId()).toBeGreaterThan(0);
     },
