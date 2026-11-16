@@ -5,9 +5,12 @@ import type { ChangeLogEntry } from '@rfc0/effect-runner';
 import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
-import { changeLogStore, type SqliteChangeLog } from '../../../src/diplomat/db/change-events.js';
+import {
+  CHANGE_EVENT_APPEND_BACKOFF_MS,
+  changeLogStore,
+  type SqliteChangeLog,
+} from '../../../src/diplomat/db/change-events.js';
 import { BUSY_TIMEOUT_MS, closeDatabase, openDatabase, openSibling, type Db } from '../../../src/diplomat/db/driver.js';
-import { CHANGE_EVENT_APPEND_BACKOFF_MS } from '../../../src/models/change-events.js';
 import type { ChangeEvent } from '../../../src/models/tenancy.js';
 import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 

@@ -2,16 +2,15 @@ import type { ChangeLogEntry, ChangeLogStore, NewChangeLogRecord } from '@rfc0/e
 import { asc, and, gt, ne, lt, sql } from 'drizzle-orm';
 import { sleep } from '../../common/time.js';
 import * as changeEventAdapters from '../../adapters/change-events.js';
-import { CHANGE_EVENT_APPEND_BACKOFF_MS, CHANGE_EVENT_LOCK_WAIT_MS } from '../../models/change-events.js';
 import type { ChangeEvent } from '../../models/tenancy.js';
 import { DataVersionRowSchema, LatestIdRowSchema } from '../../wire/db/change-events.js';
-import { closeDatabase, openSibling, type Db } from './driver.js';
+import { closeDatabase, NEVER_BLOCK_IN_SQLITE_MS, openSibling, type Db } from './driver.js';
 import { changeEvents } from './schema.js';
 import { isSqliteBusy } from './sqlite-errors.js';
 
 /** The change log's own connection: no lock wait, and one stable identity (`data_version` is per connection).
  *  Never run a transaction on it. */
-export const openChangeLog = (db: Db): Promise<Db> => openSibling(db, CHANGE_EVENT_LOCK_WAIT_MS);
+export const openChangeLog = (db: Db): Promise<Db> => openSibling(db, NEVER_BLOCK_IN_SQLITE_MS);
 
 const insertRow = async (log: Db, { event, origin, createdAt }: NewChangeLogRecord<ChangeEvent>): Promise<void> => {
   await log.insert(changeEvents).values({
@@ -21,6 +20,9 @@ const insertRow = async (log: Db, { event, origin, createdAt }: NewChangeLogReco
     createdAt,
   });
 };
+
+/** Pauses between append attempts while the database is busy; the loop stays free meanwhile (ADR-036 §2). */
+export const CHANGE_EVENT_APPEND_BACKOFF_MS: readonly number[] = [5, 10, 20, 40, 80];
 
 /** Appends one row; while the database is busy, retries after each pause, then fails. */
 export const append = async (

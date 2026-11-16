@@ -2,8 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { createClient, type Client } from '@libsql/client';
 import { isSqliteBusy } from './sqlite-errors.js';
 import { sleep } from '../../common/time.js';
-
-export const NEVER_BLOCK_IN_SQLITE_MS = 0;
+import { NEVER_BLOCK_IN_SQLITE_MS } from './driver.js';
 
 export type ExclusiveLock = { release: () => Promise<void> };
 

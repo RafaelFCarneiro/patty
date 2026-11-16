@@ -1,14 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CHANGE_EVENT_LOCK_WAIT_MS } from '../../../../src/models/change-events.js';
+import type * as Driver from '../../../../src/diplomat/db/driver.js';
 import type { Db } from '../../../../src/diplomat/db/driver.js';
 
 const mocks = vi.hoisted(() => ({ openSibling: vi.fn(), closeDatabase: vi.fn() }));
 
-vi.mock('../../../../src/diplomat/db/driver.js', () => ({
+vi.mock('../../../../src/diplomat/db/driver.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof Driver>()),
   openSibling: mocks.openSibling,
   closeDatabase: mocks.closeDatabase,
 }));
 
+const { NEVER_BLOCK_IN_SQLITE_MS } = await import('../../../../src/diplomat/db/driver.js');
 const { changeLogStore } = await import('../../../../src/diplomat/db/change-events.js');
 
 const connection = (version: number) => ({ all: vi.fn(async () => [{ data_version: version }]) }) as unknown as Db;
@@ -33,7 +35,7 @@ describe('changeLogStore connection', () => {
 
     await changeLogStore(db).changeToken!();
 
-    expect(mocks.openSibling).toHaveBeenCalledWith(db, CHANGE_EVENT_LOCK_WAIT_MS);
+    expect(mocks.openSibling).toHaveBeenCalledWith(db, NEVER_BLOCK_IN_SQLITE_MS);
   });
 
   it('opens again after a failed open instead of remembering the failure', async () => {

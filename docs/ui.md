@@ -350,7 +350,7 @@ one thing, the database file, and a small infrastructure table carries the news:
 `entities` — a JSON array of entity tags, never data —, `origin` — the writing process's id —, `created_at`). Every
 process's bus is `@rfc0/effect-runner`'s relayed bus: it delivers locally first (a browser on the writing process
 updates at once, as before) and then appends a row, through PATTY's SQLite store, on a connection of its own that never
-blocks the event loop waiting for a lock (`CHANGE_EVENT_LOCK_WAIT_MS`, `CHANGE_EVENT_APPEND_BACKOFF_MS`; [ADR-036
+blocks the event loop waiting for a lock (`NEVER_BLOCK_IN_SQLITE_MS`, `CHANGE_EVENT_APPEND_BACKOFF_MS`; [ADR-036
 §2](adr/036-cross-process-live-update.md)); a database still busy after that, or closed, costs one missed refresh and
 never fails or delays the write. A process that serves a dashboard (stdio with the sidecar bound, or the HTTP transport)
 runs the package's relay: it starts at the newest row (no replay) and every `CHANGE_RELAY_POLL_MS` (about a second)

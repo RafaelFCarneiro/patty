@@ -51,7 +51,7 @@ refresh, which the next navigation or the resync in §4 repairs. The append must
 all: libsql's file client is synchronous, so a wait there blocks the whole event loop, and a lock held by this
 process's own open transaction cannot be released while it does (the wait would only burn and the refresh be lost).
 Measured against a second process holding the write lock, a 250 ms wait cost about 285 ms of loop lag per append and
-50 ms about 60 ms. So the store's connection has no lock wait (`CHANGE_EVENT_LOCK_WAIT_MS`, 0): a busy statement fails at
+50 ms about 60 ms. So the store's connection has no lock wait (`NEVER_BLOCK_IN_SQLITE_MS`, 0): a busy statement fails at
 once and the append retries after short asynchronous pauses (`CHANGE_EVENT_APPEND_BACKOFF_MS`), during which the loop
 is free and the lock holder, another transaction of this process or a short write of another, finishes.
 

@@ -21,7 +21,7 @@ import type { ChangeEvent } from '../models/tenancy.js';
 
 /** stderr only — stdout carries the stdio MCP protocol (ADR-007). */
 export const reportChangeError = (cause: unknown): void => {
-  console.error(`${LOG_PREFIX} ${CHANGE_NOTIFICATION_FAILED}`, cause);
+  console.error(`${LOG_PREFIX} ${CHANGE_NOTIFICATION_FAILED}:`, cause);
 };
 
 /** What a relay and a clean shutdown need of the relayed bus (ADR-036): this process's id, the store, the local-only

@@ -35,7 +35,7 @@ describe('createRuntime defaults', () => {
 
     changeBus.publish({ userId: 'user-1', entities: ['account'] });
 
-    expect(report).toHaveBeenCalledWith(`${LOG_PREFIX} ${CHANGE_NOTIFICATION_FAILED}`, failure);
+    expect(report).toHaveBeenCalledWith(`${LOG_PREFIX} ${CHANGE_NOTIFICATION_FAILED}:`, failure);
     expect(survivor).toHaveBeenCalledWith({ userId: 'user-1', entities: ['account'] });
   });
 

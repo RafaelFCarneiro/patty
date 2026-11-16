@@ -5,6 +5,7 @@
  */
 import { sql } from 'drizzle-orm';
 import { loadConfig } from '../../../src/config.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
 import { createRuntime } from '../../../src/composition/runtime.js';
 import { closeDatabase, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
@@ -12,7 +13,7 @@ import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 const main = async (): Promise<void> => {
   const [mode, dbPath, userId, entity] = process.argv.slice(2);
   const config = {
-    ...loadConfig({ DB_PATH: dbPath!, PATTY_DB_KEY: process.env.PATTY_DB_KEY, PATTY_AUTH: 'disabled' }),
+    ...loadConfig({ DB_PATH: dbPath!, PATTY_DB_KEY: process.env.PATTY_DB_KEY, PATTY_AUTH: AuthMode.enum.disabled }),
     KEY_LOCK_PATH: keyLockPathForTest(),
   };
   const db = await openDatabase(config);
@@ -23,7 +24,7 @@ const main = async (): Promise<void> => {
     await new Promise<void>((done) => process.stdin.once('end', done));
     await db.run(sql`COMMIT`);
   } else {
-    const runtime = createRuntime(db, config, { onChangeError: (cause) => console.error(cause) });
+    const runtime = createRuntime(db, config);
     runtime.changeBus.publish({ userId: userId!, entities: [entity!] });
     await runtime.changeLog.close();
   }

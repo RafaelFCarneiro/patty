@@ -301,7 +301,7 @@ stream's session user. **It spans processes (ADR-036):** `composition/change-log
 (called by `composition/runtime.ts`) with the package's `createRelayedChangeBus` — `publish` delivers to this process's
 subscribers first, then queues an append the write never waits for — over PATTY's `ChangeLogStore`,
 `diplomat/db/change-events.ts`'s `changeLogStore`: the `change_events` table on one sibling connection with no lock wait
-(`CHANGE_EVENT_LOCK_WAIT_MS`, `CHANGE_EVENT_APPEND_BACKOFF_MS`; [ADR-036 §2](adr/036-cross-process-live-update.md)),
+(`NEVER_BLOCK_IN_SQLITE_MS`, `CHANGE_EVENT_APPEND_BACKOFF_MS`; [ADR-036 §2](adr/036-cross-process-live-update.md)),
 whose `changeToken` is `PRAGMA data_version` (per connection, and libsql replaces a client's connection after each
 transaction, so the engine's handle cannot hold the reading). A process that serves a dashboard also runs the package's
 `startChangeRelay` (`startServingRelay`, with PATTY's `CHANGE_*` values from `models/change-events.ts`): when the token

@@ -27,6 +27,8 @@ export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 // (ADR-007) when more than one is connected to the same file at once.
 const JOURNAL_MODE_WAL = 'WAL';
 export const BUSY_TIMEOUT_MS = 5000;
+/** No lock wait inside SQLite: libsql is synchronous, so any wait blocks the event loop (ADR-036 §2). */
+export const NEVER_BLOCK_IN_SQLITE_MS = 0;
 
 /** `busy_timeout` is per connection (ADR-024) and libsql opens a fresh connection after every transaction, so
  *  anything that has just run one re-asserts it on the connection that follows. */
