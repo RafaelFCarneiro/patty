@@ -5,8 +5,8 @@ updates:
     schedule:
       interval: weekly
     commit-message:
-      prefix: "fix(deps)"
-      prefix-development: "chore(deps-dev)"
+      prefix: 'fix(deps)'
+      prefix-development: 'chore(deps-dev)'
     groups:
       dev-minor-patch:
         dependency-type: development
@@ -17,12 +17,12 @@ updates:
     ignore:
       # Each has its own planned PR.
       - dependency-name: zod
-        update-types: ["version-update:semver-major"]
+        update-types: ['version-update:semver-major']
       - dependency-name: typescript
-        update-types: ["version-update:semver-major"]
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
     commit-message:
-      prefix: "chore(ci)"
+      prefix: 'chore(ci)'
