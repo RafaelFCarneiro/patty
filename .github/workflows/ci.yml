@@ -78,7 +78,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: echo "container=$(scripts/container-files-changed.sh "$BASE_SHA")" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
         if: steps.changes.outputs.container == 'true'
 
       - name: Resolve the base image
