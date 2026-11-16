@@ -53,6 +53,7 @@ npx @rafaelfcarneiro/fintrack@latest setup <tool>
 | `copilot` / `vscode` | VS Code / GitHub Copilot | `.vscode/mcp.json` in the current working directory |
 | `antigravity` | Google Antigravity (2.0, CLI, IDE) | `~/.gemini/config/mcp_config.json` |
 | `codex` | OpenAI Codex | Prints the JSON snippet to paste (config path not yet stable) |
+| `opencode` | OpenCode | `~/.config/opencode/opencode.jsonc` if present, else `opencode.json`; edited as JSONC (comments kept), V1 layout refused |
 
 Running without an argument prints the full usage and exits with code 0.
 Running with an unknown tool prints an error and exits with code 1.

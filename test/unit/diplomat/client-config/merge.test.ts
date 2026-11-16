@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT, DEMO_SERVER_NAME } from '../../../../src/models/demo/core.js';
 import {
+  ENV_KEY,
   mergeMcpServersKey,
   mergeServersKey,
+  OPENCODE_ENTRY,
   resolveConfigObject,
   STDIO_ENTRY,
   VSCODE_ENTRY,
@@ -160,5 +162,22 @@ describe('withoutServer', () => {
     ['no such server', { mcpServers: { other: {} } }],
   ])('is null when there is nothing to remove (%s)', (_label, existing) => {
     expect(withoutServer(existing, 'mcpServers', 'a')).toBeNull();
+  });
+});
+
+describe('the environment key', () => {
+  it('defaults to env', () => {
+    expect(withProfile(STDIO_ENTRY, 'work')).toEqual({ ...STDIO_ENTRY, env: { PATTY_PROFILE: 'work' } });
+    expect(withDemo(STDIO_ENTRY, '/d.db').env).toMatchObject({ DB_PATH: '/d.db' });
+  });
+  it('is carried under the key a client names, and never added for the default profile', () => {
+    expect(withProfile(OPENCODE_ENTRY, 'work', ENV_KEY.environment)).toEqual({
+      ...OPENCODE_ENTRY,
+      environment: { PATTY_PROFILE: 'work' },
+    });
+    expect(withProfile(OPENCODE_ENTRY, 'default', ENV_KEY.environment)).toBe(OPENCODE_ENTRY);
+    expect(withDemo(OPENCODE_ENTRY, '/d.db', ENV_KEY.environment)).toMatchObject({
+      environment: { DB_PATH: '/d.db', PORT: String(DEMO_PORT), [DEMO_ENV_VAR]: DEMO_ENV_ON },
+    });
   });
 });

@@ -41,7 +41,8 @@ npx @rafaelfcarneiro/fintrack@latest demo [--country br|us|mx|co] [--reset]
 - Runs on its own sidecar port, `DEMO_PORT = 51738` (the real install keeps `51737`), so both can run at once.
 - `npx @rafaelfcarneiro/fintrack@latest setup <client> --demo` adds a **second** MCP entry, `fintrack-demo`,
   pointing at the demo database (`DB_PATH`, `PORT`, `FINTRACK_DEMO=1` in its `env`); it never replaces the
-  `fintrack` entry. `setup <client> --remove-demo` removes it.
+  `fintrack` entry. `setup <client> --remove-demo` removes it. For OpenCode the entry is `mcp.servers.patty-demo` in its JSONC config,
+  with the demo variables under `environment` (OpenCode's name for `env`), edited in place so comments survive.
 - Docker is out of scope for v1 (it depends on the public image and `init`, a separate decision).
 
 ### 2. No login, no keychain — on purpose, and only for the demo
