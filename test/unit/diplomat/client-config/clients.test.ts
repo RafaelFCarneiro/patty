@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ClientConfigFailureCode } from '../../../../src/models/client-config.js';
@@ -171,6 +171,7 @@ describe('what each client reports', () => {
 describe('OpenCode (JSONC-safe)', () => {
   let home = '';
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.doUnmock('node:os');
     vi.resetModules();
     if (home) rmSync(home, { recursive: true, force: true });
@@ -187,6 +188,7 @@ describe('OpenCode (JSONC-safe)', () => {
 
   const opencode = async () => {
     home = mkdtempSync(join(tmpdir(), 'patty-opencode-'));
+    vi.stubEnv('XDG_CONFIG_HOME', '');
     vi.resetModules();
     vi.doMock('node:os', () => ({ homedir: () => home }));
     const { clientConfigs } = await import('../../../../src/diplomat/client-config/clients.js');
@@ -216,6 +218,22 @@ describe('OpenCode (JSONC-safe)', () => {
       '  Verify with: opencode mcp list   (or /mcps inside OpenCode)',
     ]);
     expect(written(jsonFile())).toEqual({ mcp: { servers: { patty: ENTRY } } });
+  });
+
+  it('writes under XDG_CONFIG_HOME when it is an absolute path', async () => {
+    const client = await opencode();
+    const xdg = join(home, 'xdg');
+    vi.stubEnv('XDG_CONFIG_HOME', xdg);
+    client.run('default')._unsafeUnwrap();
+    expect(written(join(xdg, 'opencode', 'opencode.json')).mcp.servers.patty).toEqual(ENTRY);
+    expect(existsSync(jsonFile())).toBe(false);
+  });
+
+  it('ignores a relative XDG_CONFIG_HOME and uses ~/.config', async () => {
+    const client = await opencode();
+    vi.stubEnv('XDG_CONFIG_HOME', 'relative/dir');
+    client.run('default')._unsafeUnwrap();
+    expect(written(jsonFile()).mcp.servers.patty).toEqual(ENTRY);
   });
 
   it('is labelled OpenCode', async () => {

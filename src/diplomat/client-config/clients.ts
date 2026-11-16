@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { err, ok, Result } from 'neverthrow';
 import * as R from 'remeda';
 import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../controllers/deps.js';
@@ -299,9 +299,15 @@ const antigravity = fileClient({
   next: '  Reopen Antigravity or type /mcp in the CLI to refresh.',
 });
 
+/** OpenCode's config root: `XDG_CONFIG_HOME` when it is an absolute path (the XDG rule), else `~/.config`. */
+const xdgConfigHome = (): string => {
+  const configured = process.env['XDG_CONFIG_HOME'];
+  return configured !== undefined && isAbsolute(configured) ? configured : join(home, '.config');
+};
+
 /** `opencode.jsonc` when it exists, else `opencode.json` (created if neither does). */
 const openCodeConfigPath = (): string => {
-  const directory = join(home, '.config', 'opencode');
+  const directory = join(xdgConfigHome(), 'opencode');
   const jsonc = join(directory, 'opencode.jsonc');
   return existsSync(jsonc) ? jsonc : join(directory, 'opencode.json');
 };

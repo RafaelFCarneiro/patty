@@ -21,7 +21,7 @@ npx @rfc0/patty@latest setup <tool>
 | `copilot` or `vscode` | VS Code / GitHub Copilot | `.vscode/mcp.json` in current directory |
 | `antigravity` | Google Antigravity (2.0, CLI, IDE) | `~/.gemini/config/mcp_config.json` |
 | `codex` | OpenAI Codex | prints the snippet to paste manually |
-| `opencode` | OpenCode | `~/.config/opencode/opencode.jsonc` if it exists, else `opencode.json` (created if neither does) |
+| `opencode` | OpenCode | `~/.config/opencode/opencode.jsonc` (under `$XDG_CONFIG_HOME` when set to an absolute path) if it exists, else `opencode.json` (created if neither does) |
 
 Run without arguments for usage and paths:
 
