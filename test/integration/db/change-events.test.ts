@@ -6,7 +6,8 @@ import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { changeLogStore, type SqliteChangeLog } from '../../../src/diplomat/db/change-events.js';
-import { openDatabase, openSibling, type Db } from '../../../src/diplomat/db/driver.js';
+import { BUSY_TIMEOUT_MS, closeDatabase, openDatabase, openSibling, type Db } from '../../../src/diplomat/db/driver.js';
+import { CHANGE_EVENT_APPEND_TIMEOUT_MS } from '../../../src/models/change-events.js';
 import type { ChangeEvent } from '../../../src/models/tenancy.js';
 import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
@@ -150,6 +151,55 @@ describe('changeLogStore — the SQLite ChangeLogStore', () => {
 
     expect(afterFirst).toBeGreaterThan(baseline as number);
     expect(await store.changeToken!()).toBe(afterFirst);
+  });
+
+  describe('under real write contention', () => {
+    // Another connection holds the write lock, as a long write of another process would.
+    const holdingTheWriteLock = async (work: () => Promise<void>): Promise<void> => {
+      const holder = await openSibling(db, BUSY_TIMEOUT_MS);
+      await holder.run(sql`BEGIN IMMEDIATE`);
+      try {
+        await work();
+      } finally {
+        await holder.run(sql`COMMIT`);
+        closeDatabase(holder);
+      }
+    };
+
+    it('fails an append within the short lock wait, far below the database’s own busy timeout', async () => {
+      await store.append(record(['warm up the connection']));
+
+      await holdingTheWriteLock(async () => {
+        const startedAt = Date.now();
+        await expect(store.append(record(['blocked']))).rejects.toThrow();
+        const waited = Date.now() - startedAt;
+
+        expect(waited).toBeGreaterThanOrEqual(CHANGE_EVENT_APPEND_TIMEOUT_MS - 50);
+        expect(waited).toBeLessThan(BUSY_TIMEOUT_MS / 2);
+      });
+    });
+
+    it('leaves the main connection’s own lock wait untouched by the store’s short one', async () => {
+      const busyTimeout = async () => (await db.all<{ timeout: number }>(sql`PRAGMA busy_timeout`))[0]?.timeout;
+      const before = await busyTimeout();
+
+      await holdingTheWriteLock(async () => {
+        await expect(store.append(record(['blocked']))).rejects.toThrow();
+      });
+
+      expect(before).toBe(BUSY_TIMEOUT_MS);
+      expect(await busyTimeout()).toBe(BUSY_TIMEOUT_MS);
+    });
+
+    it('recovers once the lock is released: the next append lands, the failed one left no row', async () => {
+      await holdingTheWriteLock(async () => {
+        await expect(store.append(record(['lost']))).rejects.toThrow();
+      });
+
+      await store.append(record(['after']));
+
+      expect(entitiesOf(await store.readAfter(0, 'none', 10))).toEqual(['after']);
+    });
   });
 
   it('reopens after close: the next call opens a fresh connection', async () => {
