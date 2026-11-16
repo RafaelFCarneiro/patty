@@ -25,5 +25,6 @@ export const boot = (config: Config) =>
       return err(demoNotReady(config.DB_PATH));
     }
     const prepared = await prepareAuth(config, db, runtime.authRunEffects);
+    await runtime.changeLog.prune();
     return ok({ db, runtime, prepared });
   });

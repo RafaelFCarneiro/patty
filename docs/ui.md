@@ -359,7 +359,7 @@ origins past its cursor, in id order, and publishes them on its local bus alone 
 change reaches the dashboard within about one poll interval; same-process changes stay immediate (a process's own writes also move its relay's `data_version`, costing one read that finds only its own, excluded, rows). A row that does not
 decode is skipped and reported on stderr; rows older than `CHANGE_EVENT_RETENTION_MS` (ten minutes) are deleted by the relay,
 so the table stays a few rows long. A process without a sidecar (`PATTY_HTTP=false`, or the port was taken) runs no relay
-but still appends. Any gap — a lost append, a relay that started after a write, a stream that dropped — is covered by the
+but still appends; every process prunes expired rows once at startup, so the log does not grow across sessions. Any gap — a lost append, a relay that started after a write, a stream that dropped — is covered by the
 resync above: the shell refetches everything it shows after a reconnect.
 
 ## Currency in `pending.html` and `cards.html`

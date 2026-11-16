@@ -303,7 +303,7 @@ table on one sibling connection that waits at most `CHANGE_EVENT_APPEND_TIMEOUT_
 (per connection, and libsql replaces a client's connection after each transaction, so the engine's handle cannot hold the reading). A
 process that serves a dashboard also runs the package's `startChangeRelay` (`startServingRelay`, with PATTY's `CHANGE_*` values from
 `models/change-events.ts`): when the token moved it reads the other origins' rows past its cursor and publishes them on the *local* bus
-alone, prunes rows past retention, and reports a row that does not decode. It starts where a dashboard is served — `composition/stdio.ts`
+alone, prunes rows past retention, and reports a row that does not decode. Every process (relay or not) also prunes once in `composition/boot.ts`, since only a relay prunes on an interval. It starts where a dashboard is served — `composition/stdio.ts`
 once the sidecar bound, `composition/http.ts` — and shuts down relay first, then the pending appends, then the store. Everything generic
 (queue, loop, scheduling, isolation) is the package's; PATTY's code is the store, `adapters/change-events.ts`' row decoding,
 `logic/change-events.ts`' `isWorthAnnouncing` (the `shouldAppend` rule), the policy constants and this wiring.

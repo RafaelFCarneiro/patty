@@ -63,6 +63,24 @@ describe('startServingRelay', () => {
 });
 
 describe('createChangeLog', () => {
+  it('prunes rows past retention once on request, and reports a failure instead of throwing', async () => {
+    const failure = new Error('database is locked');
+    const pruneBefore = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(failure);
+    const store = fakeStore({ pruneBefore });
+    mocks.changeLogStore.mockReturnValue(store);
+    const onError = vi.fn();
+    const { changeLog } = createChangeLog({} as Db, onError);
+    const before = Date.now() - CHANGE_EVENT_RETENTION_MS;
+
+    await changeLog.prune();
+    await changeLog.prune();
+
+    const [cutoff] = pruneBefore.mock.calls[0] as [string];
+    expect(Date.parse(cutoff)).toBeGreaterThanOrEqual(before);
+    expect(Date.parse(cutoff)).toBeLessThanOrEqual(Date.now() - CHANGE_EVENT_RETENTION_MS + 1000);
+    expect(onError).toHaveBeenCalledExactlyOnceWith(failure);
+  });
+
   it('close waits for the queued appends, then releases the store', async () => {
     const order: string[] = [];
     const store = fakeStore({

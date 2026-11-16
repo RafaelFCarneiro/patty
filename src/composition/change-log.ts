@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { createRelayedChangeBus, startChangeRelay, type ChangeBus, type ChangeRelay } from '@rfc0/effect-runner';
+import {
+  createRelayedChangeBus,
+  pruneCutoff,
+  startChangeRelay,
+  type ChangeBus,
+  type ChangeRelay,
+} from '@rfc0/effect-runner';
 import { changeLogStore, type SqliteChangeLog } from '../diplomat/db/change-events.js';
 import type { Db } from '../diplomat/db/driver.js';
 import { isWorthAnnouncing } from '../logic/change-events.js';
@@ -23,6 +29,8 @@ export type ChangeLog = {
   store: SqliteChangeLog;
   publishLocal: (event: ChangeEvent) => void;
   settled: () => Promise<void>;
+  /** Deletes rows past retention once, reporting a failure instead of throwing. */
+  prune: () => Promise<void>;
   close: () => Promise<void>;
 };
 
@@ -41,11 +49,15 @@ export const createChangeLog = (
     onError,
     shouldAppend: isWorthAnnouncing,
   });
+  // Only a relay prunes on an interval, and a process without a dashboard (PATTY_HTTP=false, or the port taken) runs
+  // none while it still appends: so every process prunes once when it starts.
+  const prune = (): Promise<void> =>
+    store.pruneBefore(pruneCutoff(new Date(), CHANGE_EVENT_RETENTION_MS)).catch(onError);
   const close = async (): Promise<void> => {
     await settled();
     await store.close();
   };
-  return { changeBus: bus, changeLog: { origin, store, publishLocal, settled, close } };
+  return { changeBus: bus, changeLog: { origin, store, publishLocal, settled, prune, close } };
 };
 
 /**

@@ -69,7 +69,9 @@ starts it only where a dashboard is served. A process whose HTTP sidecar is up (
   on the local bus only (never appended again, so rows do not echo between processes).
 - `/ui/events` is unchanged: it already filters each event by the stream's user and `SHARED_ENTITY_TAGS`.
 
-A process without a sidecar (`PATTY_HTTP=false`, or the port was taken) runs no relay.
+A process without a sidecar (`PATTY_HTTP=false`, or the port was taken) runs no relay; since only the relay prunes on
+an interval, every process also prunes once when it starts, so a relay-less process's rows are gone by the next start
+of any process (a long-lived one keeps only its own session's rows meanwhile).
 
 ```mermaid
 flowchart LR
