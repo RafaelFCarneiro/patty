@@ -13,20 +13,26 @@
     showDiagnosticError(e.error ? e.error.message + '\n' + e.error.stack : e.message);
   });
   window.addEventListener('unhandledrejection', function (e) {
-    showDiagnosticError('Unhandled Promise Rejection: ' + (e.reason ? (e.reason.stack || e.reason.message || e.reason) : e));
+    showDiagnosticError(
+      'Unhandled Promise Rejection: ' + (e.reason ? e.reason.stack || e.reason.message || e.reason : e),
+    );
   });
 
   function showDiagnosticError(message) {
-    console.error("DIAGNOSTIC ERROR CAUGHT:", message);
+    console.error('DIAGNOSTIC ERROR CAUGHT:', message);
     var errDiv = document.getElementById('shell-diagnostic-error');
     if (!errDiv) {
       errDiv = document.createElement('div');
       errDiv.id = 'shell-diagnostic-error';
-      errDiv.style.cssText = 'position: fixed; top: 10px; right: 10px; left: 10px; background: rgba(220, 38, 38, 0.95); color: #fff; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 12px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.5); white-space: pre-wrap; overflow-y: auto; max-height: 200px; border: 1px solid #ef4444;';
+      errDiv.style.cssText =
+        'position: fixed; top: 10px; right: 10px; left: 10px; background: rgba(220, 38, 38, 0.95); color: #fff; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 12px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.5); white-space: pre-wrap; overflow-y: auto; max-height: 200px; border: 1px solid #ef4444;';
       var closeBtn = document.createElement('button');
       closeBtn.textContent = '✕';
-      closeBtn.style.cssText = 'float: right; background: none; border: none; color: #fff; font-size: 16px; cursor: pointer; margin-left: 10px;';
-      closeBtn.onclick = function() { errDiv.remove(); };
+      closeBtn.style.cssText =
+        'float: right; background: none; border: none; color: #fff; font-size: 16px; cursor: pointer; margin-left: 10px;';
+      closeBtn.onclick = function () {
+        errDiv.remove();
+      };
       errDiv.appendChild(closeBtn);
       var pre = document.createElement('pre');
       pre.style.margin = '0';
@@ -51,8 +57,17 @@
   // Every entity tag a bundled dashboard listens for (tested against ui/dashboards/*.html); a
   // resync after a gap in the event stream sends all of them so every dashboard refetches.
   var ALL_ENTITY_TAGS = [
-    'account', 'bill', 'budget', 'category', 'creditCard', 'currency_rate',
-    'dashboard', 'recurring', 'tag', 'transaction', 'userSettings',
+    'account',
+    'bill',
+    'budget',
+    'category',
+    'creditCard',
+    'currency_rate',
+    'dashboard',
+    'recurring',
+    'tag',
+    'transaction',
+    'userSettings',
   ];
   var currentLocale = 'en';
 
@@ -66,7 +81,7 @@
     projections: 'fa-chart-line',
     comparative: 'fa-scale-balanced',
     dashboards: 'fa-sliders',
-    budget: 'fa-bullseye'
+    budget: 'fa-bullseye',
   };
 
   var LOCALIZED_TOOLTIPS = {
@@ -80,7 +95,7 @@
       projections: 'Projections',
       comparative: 'Comparative',
       dashboards: 'Dashboards Manager',
-      budget: 'Budget'
+      budget: 'Budget',
     },
     pt: {
       overview: 'Visão Geral',
@@ -92,7 +107,7 @@
       projections: 'Projeções',
       comparative: 'Comparativo',
       dashboards: 'Gerenciador de Dashboards',
-      budget: 'Orçamento'
+      budget: 'Orçamento',
     },
     es: {
       overview: 'Visión General',
@@ -104,8 +119,8 @@
       projections: 'Proyecciones',
       comparative: 'Comparativo',
       dashboards: 'Gestor de Dashboards',
-      budget: 'Presupuesto'
-    }
+      budget: 'Presupuesto',
+    },
   };
 
   // Module-scope, not local to connectEvents() — an EventSource with no surviving reference to the
@@ -260,18 +275,22 @@
     var key = dashboard.name.toLowerCase();
     var tooltipText = dashboard.name;
     var iconClass = DASHBOARD_ICONS[key] || 'fa-chart-simple';
-    
+
     var dict = LOCALIZED_TOOLTIPS[currentLocale] || LOCALIZED_TOOLTIPS['en'];
     if (dict && dict[key]) {
       tooltipText = dict[key];
     }
 
     var iconEl = h('i', { class: 'fa-solid ' + iconClass });
-    var link = h('a', {
-      href: UI_PATH_PREFIX + encodeURIComponent(dashboard.name),
-      title: tooltipText,
-      'aria-label': tooltipText
-    }, [iconEl]);
+    var link = h(
+      'a',
+      {
+        href: UI_PATH_PREFIX + encodeURIComponent(dashboard.name),
+        title: tooltipText,
+        'aria-label': tooltipText,
+      },
+      [iconEl],
+    );
 
     if (dashboard.name === activeName) {
       link.classList.add('active');
@@ -284,7 +303,7 @@
     var key = dashboard.name.toLowerCase();
     var displayText = dashboard.name;
     var iconClass = DASHBOARD_ICONS[key] || 'fa-chart-simple';
-    
+
     var dict = LOCALIZED_TOOLTIPS[currentLocale] || LOCALIZED_TOOLTIPS['en'];
     if (dict && dict[key]) {
       displayText = dict[key];
@@ -315,12 +334,12 @@
 
     // Map by name lowercase for fast lookup
     var dbMap = {};
-    dashboards.forEach(function(d) {
+    dashboards.forEach(function (d) {
       dbMap[d.name.toLowerCase()] = d;
     });
 
     // 1. Render main sequence icons
-    mainSequence.forEach(function(nameKey) {
+    mainSequence.forEach(function (nameKey) {
       var d = dbMap[nameKey];
       if (d) {
         nav.appendChild(menuLink(d, activeName));
@@ -328,7 +347,7 @@
     });
 
     // 2. Render dropdown sequence text items
-    dropdownSequence.forEach(function(nameKey) {
+    dropdownSequence.forEach(function (nameKey) {
       var d = dbMap[nameKey];
       if (d) {
         dropdown.appendChild(dropdownLink(d, activeName));
@@ -336,7 +355,7 @@
     });
 
     // 3. Render any custom (user-uploaded) dashboards inside the dropdown as well
-    var customs = dashboards.filter(function(d) {
+    var customs = dashboards.filter(function (d) {
       var key = d.name.toLowerCase();
       return d.source !== 'file' && mainSequence.indexOf(key) === -1 && dropdownSequence.indexOf(key) === -1;
     });
@@ -344,7 +363,7 @@
     if (customs.length > 0) {
       var divider = h('hr', { class: 'sidebar-divider', style: 'width: 90%; margin: 0.25rem auto;' });
       dropdown.appendChild(divider);
-      customs.forEach(function(d) {
+      customs.forEach(function (d) {
         dropdown.appendChild(dropdownLink(d, activeName));
       });
     }
@@ -451,7 +470,7 @@
     var dropdown = document.getElementById('more-dropdown');
     var moreContainer = document.getElementById('more-container');
     var moreBtn = document.getElementById('more-btn');
-    
+
     if (dropdown && moreContainer && moreBtn) {
       var setMoreOpen = function (open) {
         moreContainer.classList.toggle('open', open);
@@ -523,11 +542,13 @@
         console.error('Could not load preferences; keeping the default currency:', err);
       });
 
-    bootPromise.then(function () {
-      return loadDashboard(initialName);
-    }).then(function () {
-      connectEvents();
-    });
+    bootPromise
+      .then(function () {
+        return loadDashboard(initialName);
+      })
+      .then(function () {
+        connectEvents();
+      });
 
     bootPromise
       .then(function () {

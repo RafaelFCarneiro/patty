@@ -48,9 +48,26 @@ const boot = async (statusCode: number | typeof NETWORK_ERROR) => {
     body: makeStubElement(),
   };
   const sandbox: Record<string, unknown> = {
-    document, console: { ...console, error() {} }, fetch: fetchStatus, Intl, Number, Object, Math, Array,
-    Promise, Date, String, JSON, encodeURIComponent, setTimeout, clearTimeout, URLSearchParams,
-    EventSource: FakeSource, location, history: { pushState() {} }, addEventListener() {},
+    document,
+    console: { ...console, error() {} },
+    fetch: fetchStatus,
+    Intl,
+    Number,
+    Object,
+    Math,
+    Array,
+    Promise,
+    Date,
+    String,
+    JSON,
+    encodeURIComponent,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
+    EventSource: FakeSource,
+    location,
+    history: { pushState() {} },
+    addEventListener() {},
   };
   sandbox.window = sandbox;
   vm.createContext(sandbox);

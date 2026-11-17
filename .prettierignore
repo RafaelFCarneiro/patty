@@ -8,3 +8,5 @@ drizzle/
 *.db
 *.db-wal
 *.db-shm
+test/**/__snapshots__/**
+ui/dashboards/

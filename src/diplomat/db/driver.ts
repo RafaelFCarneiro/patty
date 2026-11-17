@@ -7,7 +7,12 @@ import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
 import type { Config } from '../../config.js';
 import { EncryptionKey } from '../../models/encryption-key.js';
 import { PRIVATE_DIRECTORY_MODE } from '../../models/export.js';
-import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_LOCKED_MESSAGE, KEYCHAIN_SERVICE, KEYCHAIN_UNAVAILABLE_MESSAGE } from '../../models/auth/sign-in.js';
+import {
+  DB_KEY_KEYCHAIN_ACCOUNT,
+  KEYCHAIN_LOCKED_MESSAGE,
+  KEYCHAIN_SERVICE,
+  KEYCHAIN_UNAVAILABLE_MESSAGE,
+} from '../../models/auth/sign-in.js';
 import { withKeyLock } from './key-lock.js';
 import * as schema from './schema.js';
 import { LOG_PREFIX } from '../../models/package.js';

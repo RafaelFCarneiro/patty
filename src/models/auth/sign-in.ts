@@ -46,8 +46,7 @@ export const KEYCHAIN_LOCKED_MESSAGE =
   'If this install already has a database, its key is in the keychain — do not generate a new one.';
 
 /** The keychain module cannot load or an entry cannot be created: there is no keychain on this machine. */
-export const KEYCHAIN_UNAVAILABLE_MESSAGE =
-  `${LOG_PREFIX} no OS keychain is available on this machine, and no key source was configured.`;
+export const KEYCHAIN_UNAVAILABLE_MESSAGE = `${LOG_PREFIX} no OS keychain is available on this machine, and no key source was configured.`;
 export const SIGN_IN_ACCOUNT_PREFIX = 'signin';
 export const DB_ID_LENGTH = 12;
 

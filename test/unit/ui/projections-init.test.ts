@@ -132,8 +132,7 @@ const loadProjectionsSandboxWithControllableStatus = () => {
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
-  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
-    `${currency} ${value}`;
+  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) => `${currency} ${value}`;
 
   const script = extractFragmentScript(readFileSync(PROJECTIONS_HTML_PATH, 'utf-8'));
   vm.runInContext(script, sandbox, { filename: PROJECTIONS_HTML_PATH });
@@ -222,7 +221,7 @@ describe("runInit's boot sequencing (ui/dashboards/projections.html)", () => {
   });
 });
 
-describe("live update after boot (ui/dashboards/projections.html)", () => {
+describe('live update after boot (ui/dashboards/projections.html)', () => {
   const bootCompleted = async () => {
     const loaded = loadProjectionsSandboxWithControllableStatus();
     let loadCount = 0;

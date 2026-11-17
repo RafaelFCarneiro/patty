@@ -181,9 +181,7 @@ describe('a stdio process whose sidecar cannot bind (the binary)', () => {
       const asked = textOf(await client.callTool({ name: 'list_accounts', arguments: {} }));
       const [, origin, code] = /(http:\/\/localhost:(?:\d+))\/ui\/connect\?code=([0-9A-Z]{4}-[0-9A-Z]{4})/.exec(asked)!;
       expect(origin).not.toContain(`:${taken}`);
-      expect(asked).toBe(
-        `PATTY: not signed in. Open ${origin}/ui/connect?code=${code} and confirm the code ${code}.`,
-      );
+      expect(asked).toBe(`PATTY: not signed in. Open ${origin}/ui/connect?code=${code} and confirm the code ${code}.`);
 
       const cookie = await logIn(origin!);
       expect((await approve(origin!, cookie, code!, 'write')).status).toBe(200);

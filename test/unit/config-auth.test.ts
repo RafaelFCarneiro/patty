@@ -112,9 +112,7 @@ describe('a reverse proxy in front makes the instance exposed even on a loopback
   });
 
   it('still allows an explicit required', () => {
-    expect(withEnv({ PUBLIC_URL: 'https://patty.example.com', PATTY_AUTH: 'required' }).PATTY_AUTH).toBe(
-      'required',
-    );
+    expect(withEnv({ PUBLIC_URL: 'https://patty.example.com', PATTY_AUTH: 'required' }).PATTY_AUTH).toBe('required');
   });
 });
 
