@@ -6,7 +6,7 @@ const EntityTagsSchema = z
     try {
       return JSON.parse(text) as unknown;
     } catch {
-      context.addIssue({ code: 'custom', message: 'entities is not valid JSON' });
+      context.issues.push({ code: 'custom', message: 'entities is not valid JSON', input: text });
       return z.NEVER;
     }
   })

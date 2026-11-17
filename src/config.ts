@@ -37,27 +37,20 @@ const DEFAULT_PORT = 51737;
  *  configured in front of it (`PUBLIC_URL` names its external origin; `TRUST_PROXY` says to believe it). A
  *  proxy typically connects to a loopback bind, so `HOST` alone would call that instance private. Only used to
  *  refuse `PATTY_AUTH=disabled` on such an instance. */
-export const isExposed = (env: {
-  HOST: string;
-  PUBLIC_URL?: string;
-  TRUST_PROXY?: boolean | string;
-}): boolean =>
+export const isExposed = (env: { HOST: string; PUBLIC_URL?: string; TRUST_PROXY?: boolean | string }): boolean =>
   !isLoopbackHost(env.HOST) ||
   env.PUBLIC_URL !== undefined ||
   (env.TRUST_PROXY !== undefined && env.TRUST_PROXY !== false);
 
 // An empty string (`PUBLIC_URL=` from a compose file or shell) means "unset", not "invalid".
 const unsetWhenEmpty = (value: unknown): unknown => (value === '' ? undefined : value);
-const optionalEnv = <T extends z.ZodTypeAny>(schema: T) => z.preprocess(unsetWhenEmpty, schema.optional());
+const optionalEnv = <T extends z.ZodType>(schema: T) => z.preprocess(unsetWhenEmpty, schema.optional());
 
 // The external origin only — it is compared verbatim against the browser's `Origin` header (CSRF) and
 // decides the cookie `Secure` flag, so a path or trailing slash would make both silently wrong.
-const PublicUrl = z
-  .string()
-  .url()
-  .refine((value) => /^https?:\/\//.test(value) && new URL(value).origin === value, {
-    message: 'PUBLIC_URL must be an http(s) origin with no path or trailing slash, e.g. https://patty.example.com',
-  });
+const PublicUrl = z.url().refine((value) => /^https?:\/\//.test(value) && new URL(value).origin === value, {
+  error: 'PUBLIC_URL must be an http(s) origin with no path or trailing slash, e.g. https://patty.example.com',
+});
 
 // Fastify's `trustProxy`: `true`/`false`, or a comma-separated list of trusted addresses/CIDRs (anything else is
 // passed through for Fastify (proxy-addr) to interpret). A hop count is refused: Fastify trusts nobody for one,
@@ -70,7 +63,7 @@ export const HOP_COUNT_REFUSED_MESSAGE =
 const TrustProxy = z
   .string()
   .min(1)
-  .refine((value) => !HOP_COUNT.test(value) || value === NO_PROXY_HOPS, { message: HOP_COUNT_REFUSED_MESSAGE })
+  .refine((value) => !HOP_COUNT.test(value) || value === NO_PROXY_HOPS, { error: HOP_COUNT_REFUSED_MESSAGE })
   .transform((value): boolean | string => {
     if (value === 'true') return true;
     if (value === 'false' || value === NO_PROXY_HOPS) return false;
@@ -83,7 +76,7 @@ const Env = z
     DB_PATH: z
       .string()
       .refine(isAbsolute, {
-        message: `DB_PATH must be an absolute path — "~" is not expanded by Node. Use a full path, e.g. ${DEFAULT_DB_PATH}`,
+        error: `DB_PATH must be an absolute path — "~" is not expanded by Node. Use a full path, e.g. ${DEFAULT_DB_PATH}`,
       })
       .optional(),
     PATTY_DB_KEY: EncryptionKey.optional(),
@@ -91,7 +84,7 @@ const Env = z
     // `docker inspect`, unlike the env var (ADR-032).
     PATTY_DB_KEY_FILE: z
       .string()
-      .refine(isAbsolute, { message: 'PATTY_DB_KEY_FILE must be an absolute path' })
+      .refine(isAbsolute, { error: 'PATTY_DB_KEY_FILE must be an absolute path' })
       .optional(),
     PATTY_LOCALE: Locale.optional(),
     PORT: z.coerce.number().default(DEFAULT_PORT),
@@ -128,11 +121,11 @@ const Env = z
   })
   .refine((env) => !(env.PATTY_DB_KEY && env.PATTY_DB_KEY_FILE), {
     path: ['PATTY_DB_KEY_FILE'],
-    message: 'PATTY_DB_KEY and PATTY_DB_KEY_FILE are both set — the key source is ambiguous; set only one',
+    error: 'PATTY_DB_KEY and PATTY_DB_KEY_FILE are both set — the key source is ambiguous; set only one',
   })
   .refine((env) => !(env.PATTY_DEMO && (env.PATTY_DB_KEY || env.PATTY_DB_KEY_FILE)), {
     path: [DEMO_ENV_VAR],
-    message: `${DEMO_ENV_VAR} fixes the database key — do not also set PATTY_DB_KEY or PATTY_DB_KEY_FILE`,
+    error: `${DEMO_ENV_VAR} fixes the database key — do not also set PATTY_DB_KEY or PATTY_DB_KEY_FILE`,
   })
   .transform((env) => ({
     ...env,
@@ -144,7 +137,7 @@ const Env = z
   )
   .refine((env) => !(env.PATTY_AUTH === AuthMode.enum.disabled && isExposed(env)), {
     path: ['PATTY_AUTH'],
-    message:
+    error:
       'PATTY_AUTH=disabled is only allowed on a loopback HOST (127.0.0.0/8, ::1, localhost) with no PUBLIC_URL ' +
       'or TRUST_PROXY — the API would be unauthenticated to everyone who can reach it (directly or through a ' +
       'reverse proxy). Remove PATTY_AUTH (it defaults to required) or drop the exposure.',

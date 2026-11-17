@@ -23,7 +23,7 @@ export const send = <T>(reply: FastifyReply, result: Result<T, AppError>, okStat
 export const unprocessable = (reply: FastifyReply, issues: string[]) =>
   reply.status(422).send({ error: { code: 'validation', issues } });
 
-export const parse = <S extends z.ZodTypeAny>(schema: S, body: unknown, reply: FastifyReply): z.output<S> | null => {
+export const parse = <S extends z.ZodType>(schema: S, body: unknown, reply: FastifyReply): z.output<S> | null => {
   const r = schema.safeParse(body);
   if (!r.success) {
     unprocessable(
@@ -41,7 +41,7 @@ const INVALID_QUERY_ISSUE = 'invalid query';
 export const invalidQueryResponse = (reply: FastifyReply, issue = INVALID_QUERY_ISSUE) => unprocessable(reply, [issue]);
 
 /** `parse`, but a failure answers with one fixed `issue` instead of the per-field zod messages. */
-export const parseOrIssue = <S extends z.ZodTypeAny>(
+export const parseOrIssue = <S extends z.ZodType>(
   schema: S,
   input: unknown,
   reply: FastifyReply,

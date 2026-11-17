@@ -8,6 +8,8 @@ import { DemoCountry } from '../../models/demo/core.js';
 
 /** The CLI's argv grammar: the commands, their subcommands, their flags and how many positionals each takes. */
 export const PASSWORD_STDIN_FLAG = 'password-stdin';
+export const DURATION_FLAG = 'duration';
+export const SCOPE_FLAG = 'scope';
 
 /** How many positional arguments each command takes: `setup` names one client, the `auth` subcommands none. */
 export const SETUP_POSITIONALS = 1;
@@ -36,7 +38,11 @@ export type ClaimOptions = z.infer<typeof ClaimOptionsSchema>;
 export const ResetOptionsSchema = z
   .object({
     [PASSWORD_STDIN_FLAG]: z.boolean().default(false),
-    user: z.string().transform(normalizeUsername).pipe(z.string().min(1).max(OPTION_MAX_LENGTH)).optional(),
+    user: z
+      .string()
+      .transform(normalizeUsername)
+      .pipe(z.string().min(1, { error: '--user must not be empty' }).max(OPTION_MAX_LENGTH))
+      .optional(),
   })
   .transform((flags) => ({ passwordStdin: flags[PASSWORD_STDIN_FLAG], user: flags.user }));
 export type ResetOptions = z.infer<typeof ResetOptionsSchema>;
@@ -64,7 +70,7 @@ export const SetupOptionsSchema = z
         !flags[PASSWORD_STDIN_FLAG] &&
         flags.username === undefined &&
         flags.profile === undefined),
-    { message: DEMO_EXCLUSIVE_MESSAGE },
+    { error: DEMO_EXCLUSIVE_MESSAGE },
   )
   .transform((flags) => ({
     passwordStdin: flags[PASSWORD_STDIN_FLAG],
@@ -80,7 +86,7 @@ export const DemoOptionsSchema = z.object({
   country: z
     .string()
     .refine((value) => DemoCountry.safeParse(value).success, {
-      message: `--country must be one of: ${DemoCountry.options.join(', ')}`,
+      error: `--country must be one of: ${DemoCountry.options.join(', ')}`,
     })
     .pipe(DemoCountry)
     .optional(),
@@ -88,12 +94,18 @@ export const DemoOptionsSchema = z.object({
 });
 export type DemoOptions = z.infer<typeof DemoOptionsSchema>;
 
+/** A flag given a value outside its choices says which flag, what it got and what is allowed. */
+const flagValueError = (flag: string, choices: readonly string[]) => (issue: { input?: unknown }) =>
+  issue.input === undefined ? undefined : `--${flag}: '${String(issue.input)}' is not one of ${choices.join(', ')}`;
+
 /** `login`: `profile` falls back to `PATTY_PROFILE` (the shell decides); `duration`/`scope` only pre-select the
  *  consent page — the person approving still chooses. */
 export const LoginOptionsSchema = z.object({
   profile: ProfileSchema.optional(),
-  duration: LoginDuration.optional(),
-  scope: TokenAccess.optional(),
+  [DURATION_FLAG]: z
+    .enum(LoginDuration.options, { error: flagValueError(DURATION_FLAG, LoginDuration.options) })
+    .optional(),
+  [SCOPE_FLAG]: z.enum(TokenAccess.options, { error: flagValueError(SCOPE_FLAG, TokenAccess.options) }).optional(),
 });
 export type LoginOptions = z.infer<typeof LoginOptionsSchema>;
 
@@ -134,7 +146,7 @@ export const IMPORT_POSITIONALS = 0;
 
 const pathOption = (flag: string) =>
   z
-    .string({ required_error: `the file is required: --${flag} <file>` })
+    .string({ error: (issue) => (issue.input === undefined ? `the file is required: --${flag} <file>` : undefined) })
     .min(1)
     .max(PATH_MAX_LENGTH);
 

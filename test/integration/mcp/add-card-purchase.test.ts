@@ -223,7 +223,7 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -253,7 +253,7 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -284,7 +284,7 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -626,7 +626,7 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(UNRECOGNIZED_KEYS_REJECTION);
+      expect(text).toMatch(UNRECOGNIZED_KEYS_REJECTION);
     } finally {
       await transport.close();
     }

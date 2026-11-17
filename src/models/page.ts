@@ -29,7 +29,7 @@ export type PageRequest = z.infer<typeof PageRequestSchema>;
 
 /** `{ items, nextCursor?, total? }` — the paginated envelope. `nextCursor` is absent on the
  *  last page; `total` is present only when the request opted in via `includeTotal`. */
-export const pageSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
+export const pageSchema = <T extends z.ZodType>(itemSchema: T) =>
   z.object({
     items: z.array(itemSchema),
     nextCursor: z.string().optional().describe('Opaque cursor for the next page; absent on the last page'),
@@ -51,7 +51,7 @@ export const CURSOR_VERSION = 1;
 /** Per-entity cursor payload: version + the sort binding it was produced under + the keyset.
  *  Opaque to clients — no encryption (local single-user app); opacity is a contract convention,
  *  not a security boundary. `sort` is the caller's own whitelisted sort-field enum. */
-export const cursorSchema = <Sort extends z.ZodTypeAny>(sort: Sort) =>
+export const cursorSchema = <Sort extends z.ZodType>(sort: Sort) =>
   z.object({ v: z.literal(CURSOR_VERSION), sort, dir: SortDirection, key: CursorKeySchema });
 
 const CURSOR_TEXT_ENCODING: BufferEncoding = 'utf8';

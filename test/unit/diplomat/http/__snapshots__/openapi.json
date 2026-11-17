@@ -1089,7 +1089,6 @@
                   },
                   "initialBalance": {
                     "type": "number",
-                    "default": 0,
                     "description": "Balance at account creation; current balance is always derived"
                   },
                   "newName": {
@@ -16478,9 +16477,11 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100,
-              "default": 50
+              "default": 50,
+              "description": "Return only the top-N rows per currency"
             },
             "required": false,
+            "description": "Return only the top-N rows per currency",
             "name": "limit",
             "in": "query"
           },

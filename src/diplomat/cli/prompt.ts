@@ -1,5 +1,5 @@
 import { err, errAsync, ok, safeTry, type Result, type ResultAsync } from 'neverthrow';
-import type { ZodType, ZodTypeDef } from 'zod';
+import type { ZodType } from 'zod';
 import { PASSWORD_STDIN_FLAG } from '../../wire/in/cli.js';
 import { isExportConfirmation } from '../../logic/auth/key-export.js';
 import { KEY_EXPORT_CONFIRMATION_ANSWER, type AdminCredentials } from '../../models/auth/key-export.js';
@@ -39,7 +39,7 @@ export const isPromptEnded = (failure: PromptFailure): failure is PromptEnded =>
 type Asked<T> = ResultAsync<T, PromptFailure>;
 
 const decode =
-  <T>(schema: ZodType<T, ZodTypeDef, string>) =>
+  <T>(schema: ZodType<T, string>) =>
   (raw: string): Answer<T> => {
     const parsed = schema.safeParse(raw);
     return parsed.success

@@ -18,29 +18,30 @@
             "description": "Positive amount in full units (reais/dollars)"
           },
           "status": {
+            "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed.",
             "type": "string",
             "enum": [
               "pending",
               "effective"
-            ],
-            "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed."
+            ]
           },
           "date": {
+            "description": "YYYY-MM-DD; defaults to today",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "YYYY-MM-DD; defaults to today"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "category": {
+            "description": "Category name; omit to auto-classify. Must match transaction type kind",
             "type": "string",
-            "minLength": 1,
-            "description": "Category name; omit to auto-classify. Must match transaction type kind"
+            "minLength": 1
           },
           "subCategory": {
+            "description": "Sub-category name (implies its parent — do not set both)",
             "type": "string",
-            "minLength": 1,
-            "description": "Sub-category name (implies its parent — do not set both)"
+            "minLength": 1
           },
           "currency": {
+            "description": "Transaction currency; resolved from account/card when omitted",
             "type": "string",
             "enum": [
               "USD",
@@ -49,44 +50,43 @@
               "COP",
               "USDC",
               "BTC"
-            ],
-            "description": "Transaction currency; resolved from account/card when omitted"
+            ]
           },
           "discriminator": {
+            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)",
             "type": "string",
-            "minLength": 1,
-            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+            "minLength": 1
           },
           "rawInput": {
-            "type": "string",
-            "description": "Original user phrasing, for audit"
+            "description": "Original user phrasing, for audit",
+            "type": "string"
           },
           "note": {
+            "description": "Free-form memo (observação)",
             "type": "string",
             "minLength": 1,
-            "maxLength": 1000,
-            "description": "Free-form memo (observação)"
+            "maxLength": 1000
           },
           "tags": {
+            "description": "Labels to attach, e.g. [\"work\", \"travel\"]",
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
-            },
-            "description": "Labels to attach, e.g. [\"work\", \"travel\"]"
+            }
           },
           "account": {
+            "description": "Account name, e.g. \"Nubank\"",
             "type": "string",
-            "minLength": 1,
-            "description": "Account name, e.g. \"Nubank\""
+            "minLength": 1
           }
         },
         "required": [
           "description",
           "amount"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -113,29 +113,30 @@
             "description": "Positive amount in full units (reais/dollars)"
           },
           "status": {
+            "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed.",
             "type": "string",
             "enum": [
               "pending",
               "effective"
-            ],
-            "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed."
+            ]
           },
           "date": {
+            "description": "YYYY-MM-DD; defaults to today",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "YYYY-MM-DD; defaults to today"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "category": {
+            "description": "Category name; omit to auto-classify. Must match transaction type kind",
             "type": "string",
-            "minLength": 1,
-            "description": "Category name; omit to auto-classify. Must match transaction type kind"
+            "minLength": 1
           },
           "subCategory": {
+            "description": "Sub-category name (implies its parent — do not set both)",
             "type": "string",
-            "minLength": 1,
-            "description": "Sub-category name (implies its parent — do not set both)"
+            "minLength": 1
           },
           "currency": {
+            "description": "Transaction currency; resolved from account/card when omitted",
             "type": "string",
             "enum": [
               "USD",
@@ -144,44 +145,43 @@
               "COP",
               "USDC",
               "BTC"
-            ],
-            "description": "Transaction currency; resolved from account/card when omitted"
+            ]
           },
           "discriminator": {
+            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)",
             "type": "string",
-            "minLength": 1,
-            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+            "minLength": 1
           },
           "rawInput": {
-            "type": "string",
-            "description": "Original user phrasing, for audit"
+            "description": "Original user phrasing, for audit",
+            "type": "string"
           },
           "note": {
+            "description": "Free-form memo (observação)",
             "type": "string",
             "minLength": 1,
-            "maxLength": 1000,
-            "description": "Free-form memo (observação)"
+            "maxLength": 1000
           },
           "tags": {
+            "description": "Labels to attach, e.g. [\"work\", \"travel\"]",
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
-            },
-            "description": "Labels to attach, e.g. [\"work\", \"travel\"]"
+            }
           },
           "account": {
+            "description": "Account name, e.g. \"Nubank\"",
             "type": "string",
-            "minLength": 1,
-            "description": "Account name, e.g. \"Nubank\""
+            "minLength": 1
           }
         },
         "required": [
           "description",
           "amount"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -198,11 +198,13 @@
         "type": "object",
         "properties": {
           "account": {
+            "description": "Account name — every item in this statement belongs to this one account; omit for unattached (e.g. cash) movements",
             "type": "string",
-            "minLength": 1,
-            "description": "Account name — every item in this statement belongs to this one account; omit for unattached (e.g. cash) movements"
+            "minLength": 1
           },
           "items": {
+            "minItems": 1,
+            "maxItems": 200,
             "type": "array",
             "items": {
               "type": "object",
@@ -226,24 +228,25 @@
                   "description": "expense | income"
                 },
                 "status": {
+                  "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed.",
                   "type": "string",
                   "enum": [
                     "pending",
                     "effective"
-                  ],
-                  "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed."
+                  ]
                 },
                 "date": {
+                  "description": "YYYY-MM-DD; defaults to today",
                   "type": "string",
-                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-                  "description": "YYYY-MM-DD; defaults to today"
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                 },
                 "category": {
+                  "description": "Category name; omit to auto-classify. Must match transaction type kind",
                   "type": "string",
-                  "minLength": 1,
-                  "description": "Category name; omit to auto-classify. Must match transaction type kind"
+                  "minLength": 1
                 },
                 "currency": {
+                  "description": "Transaction currency; resolved from account/card when omitted",
                   "type": "string",
                   "enum": [
                     "USD",
@@ -252,19 +255,18 @@
                     "COP",
                     "USDC",
                     "BTC"
-                  ],
-                  "description": "Transaction currency; resolved from account/card when omitted"
+                  ]
                 },
                 "discriminator": {
+                  "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)",
                   "type": "string",
-                  "minLength": 1,
-                  "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+                  "minLength": 1
                 },
                 "note": {
+                  "description": "Free-form memo (observação)",
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 1000,
-                  "description": "Free-form memo (observação)"
+                  "maxLength": 1000
                 }
               },
               "required": [
@@ -274,20 +276,18 @@
               ],
               "additionalProperties": false
             },
-            "minItems": 1,
-            "maxItems": 200,
             "description": "Statement lines to import"
           },
           "rawInput": {
-            "type": "string",
-            "description": "The original pasted statement text"
+            "description": "The original pasted statement text",
+            "type": "string"
           }
         },
         "required": [
           "items"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -309,62 +309,62 @@
             "description": "Transaction id"
           },
           "description": {
+            "description": "Updated description",
             "type": "string",
-            "minLength": 1,
-            "description": "Updated description"
+            "minLength": 1
           },
           "amount": {
+            "description": "Updated amount in full units",
             "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "Updated amount in full units"
+            "exclusiveMinimum": 0
           },
           "type": {
+            "description": "Updated movement type",
             "type": "string",
             "enum": [
               "expense",
               "income"
-            ],
-            "description": "Updated movement type"
+            ]
           },
           "date": {
+            "description": "Updated date (YYYY-MM-DD)",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "Updated date (YYYY-MM-DD)"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "category": {
+            "description": "New category name (user correction). Do not set with subCategory",
             "type": "string",
-            "minLength": 1,
-            "description": "New category name (user correction). Do not set with subCategory"
+            "minLength": 1
           },
           "subCategory": {
+            "description": "New sub-category name (implies parent; do not set with category)",
             "type": "string",
-            "minLength": 1,
-            "description": "New sub-category name (implies parent; do not set with category)"
+            "minLength": 1
           },
           "note": {
+            "description": "Free-form memo. Empty string clears; omit to leave unchanged",
             "type": "string",
-            "maxLength": 1000,
-            "description": "Free-form memo. Empty string clears; omit to leave unchanged"
+            "maxLength": 1000
           },
           "tags": {
+            "description": "Replaces the full tag set when provided; pass [] to remove all",
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
-            },
-            "description": "Replaces the full tag set when provided; pass [] to remove all"
+            }
           },
           "account": {
+            "description": "New account name",
             "type": "string",
-            "minLength": 1,
-            "description": "New account name"
+            "minLength": 1
           }
         },
         "required": [
           "id"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -386,16 +386,16 @@
             "description": "Transaction id"
           },
           "confirm": {
-            "type": "boolean",
             "default": false,
-            "description": "Must be true to actually delete"
+            "description": "Must be true to actually delete",
+            "type": "boolean"
           }
         },
         "required": [
           "id"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -417,6 +417,7 @@
             "description": "Account name"
           },
           "type": {
+            "default": "checking",
             "type": "string",
             "enum": [
               "checking",
@@ -425,10 +426,10 @@
               "investment",
               "credit"
             ],
-            "description": "checking | savings | wallet | investment (credit is card-managed)",
-            "default": "checking"
+            "description": "checking | savings | wallet | investment (credit is card-managed)"
           },
           "currency": {
+            "default": "USD",
             "type": "string",
             "enum": [
               "USD",
@@ -438,20 +439,19 @@
               "USDC",
               "BTC"
             ],
-            "description": "Account currency (ISO code); fixed once the account has activity",
-            "default": "USD"
+            "description": "Account currency (ISO code); fixed once the account has activity"
           },
           "initialBalance": {
-            "type": "number",
             "default": 0,
-            "description": "Balance at account creation; current balance is always derived"
+            "description": "Balance at account creation; current balance is always derived",
+            "type": "number"
           }
         },
         "required": [
           "name"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -468,8 +468,8 @@
         "type": "object",
         "properties": {
           "account": {
-            "type": "string",
-            "description": "Single account by name"
+            "description": "Single account by name",
+            "type": "string"
           },
           "type": {
             "type": "string",
@@ -482,13 +482,13 @@
             ]
           },
           "projectedAsOf": {
+            "description": "YYYY-MM-DD. When provided, also returns projectedBalance = effective balance + pending transactions dated on/before this date. The effective balance is always included.",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "YYYY-MM-DD. When provided, also returns projectedBalance = effective balance + pending transactions dated on/before this date. The effective balance is always included."
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           }
         },
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true
@@ -515,8 +515,8 @@
             ]
           }
         },
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true
@@ -561,21 +561,20 @@
             "description": "Account currency (ISO code); fixed once the account has activity"
           },
           "initialBalance": {
-            "type": "number",
-            "default": 0,
-            "description": "Balance at account creation; current balance is always derived"
+            "description": "Balance at account creation; current balance is always derived",
+            "type": "number"
           },
           "newName": {
+            "description": "New account name",
             "type": "string",
-            "minLength": 1,
-            "description": "New account name"
+            "minLength": 1
           }
         },
         "required": [
           "name"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -600,8 +599,8 @@
         "required": [
           "name"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -623,6 +622,8 @@
             "description": "Credit card name — every item in this statement is a purchase on this one card"
           },
           "items": {
+            "minItems": 1,
+            "maxItems": 200,
             "type": "array",
             "items": {
               "type": "object",
@@ -646,24 +647,25 @@
                   "description": "expense | income"
                 },
                 "status": {
+                  "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed.",
                   "type": "string",
                   "enum": [
                     "pending",
                     "effective"
-                  ],
-                  "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed."
+                  ]
                 },
                 "date": {
+                  "description": "YYYY-MM-DD; defaults to today",
                   "type": "string",
-                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-                  "description": "YYYY-MM-DD; defaults to today"
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                 },
                 "category": {
+                  "description": "Category name; omit to auto-classify. Must match transaction type kind",
                   "type": "string",
-                  "minLength": 1,
-                  "description": "Category name; omit to auto-classify. Must match transaction type kind"
+                  "minLength": 1
                 },
                 "currency": {
+                  "description": "Transaction currency; resolved from account/card when omitted",
                   "type": "string",
                   "enum": [
                     "USD",
@@ -672,31 +674,30 @@
                     "COP",
                     "USDC",
                     "BTC"
-                  ],
-                  "description": "Transaction currency; resolved from account/card when omitted"
+                  ]
                 },
                 "discriminator": {
+                  "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)",
                   "type": "string",
-                  "minLength": 1,
-                  "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+                  "minLength": 1
                 },
                 "note": {
+                  "description": "Free-form memo (observação)",
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 1000,
-                  "description": "Free-form memo (observação)"
+                  "maxLength": 1000
                 },
                 "billMonth": {
+                  "description": "Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet",
                   "type": "integer",
                   "minimum": 1,
-                  "maximum": 12,
-                  "description": "Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet"
+                  "maximum": 12
                 },
                 "billYear": {
+                  "description": "Explicit target bill cycle year; provide with billMonth",
                   "type": "integer",
                   "minimum": 2000,
-                  "maximum": 2100,
-                  "description": "Explicit target bill cycle year; provide with billMonth"
+                  "maximum": 2100
                 }
               },
               "required": [
@@ -706,21 +707,19 @@
               ],
               "additionalProperties": false
             },
-            "minItems": 1,
-            "maxItems": 200,
             "description": "Statement lines to import"
           },
           "rawInput": {
-            "type": "string",
-            "description": "The original pasted statement text"
+            "description": "The original pasted statement text",
+            "type": "string"
           }
         },
         "required": [
           "card",
           "items"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -755,29 +754,30 @@
             "description": "expense | income"
           },
           "status": {
+            "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed.",
             "type": "string",
             "enum": [
               "pending",
               "effective"
-            ],
-            "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed."
+            ]
           },
           "date": {
+            "description": "YYYY-MM-DD; defaults to today",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "YYYY-MM-DD; defaults to today"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "category": {
+            "description": "Category name; omit to auto-classify. Must match transaction type kind",
             "type": "string",
-            "minLength": 1,
-            "description": "Category name; omit to auto-classify. Must match transaction type kind"
+            "minLength": 1
           },
           "subCategory": {
+            "description": "Sub-category name (implies its parent — do not set both)",
             "type": "string",
-            "minLength": 1,
-            "description": "Sub-category name (implies its parent — do not set both)"
+            "minLength": 1
           },
           "currency": {
+            "description": "Transaction currency; resolved from account/card when omitted",
             "type": "string",
             "enum": [
               "USD",
@@ -786,31 +786,30 @@
               "COP",
               "USDC",
               "BTC"
-            ],
-            "description": "Transaction currency; resolved from account/card when omitted"
+            ]
           },
           "discriminator": {
+            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)",
             "type": "string",
-            "minLength": 1,
-            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+            "minLength": 1
           },
           "rawInput": {
-            "type": "string",
-            "description": "Original user phrasing, for audit"
+            "description": "Original user phrasing, for audit",
+            "type": "string"
           },
           "note": {
+            "description": "Free-form memo (observação)",
             "type": "string",
             "minLength": 1,
-            "maxLength": 1000,
-            "description": "Free-form memo (observação)"
+            "maxLength": 1000
           },
           "tags": {
+            "description": "Labels to attach, e.g. [\"work\", \"travel\"]",
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
-            },
-            "description": "Labels to attach, e.g. [\"work\", \"travel\"]"
+            }
           },
           "card": {
             "type": "string",
@@ -818,16 +817,16 @@
             "description": "Credit card name — joins the cycle bill"
           },
           "billMonth": {
+            "description": "Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet",
             "type": "integer",
             "minimum": 1,
-            "maximum": 12,
-            "description": "Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet"
+            "maximum": 12
           },
           "billYear": {
+            "description": "Explicit target bill cycle year; provide with billMonth",
             "type": "integer",
             "minimum": 2000,
-            "maximum": 2100,
-            "description": "Explicit target bill cycle year; provide with billMonth"
+            "maximum": 2100
           }
         },
         "required": [
@@ -836,8 +835,8 @@
           "type",
           "card"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -859,6 +858,7 @@
             "description": "Card display name"
           },
           "currency": {
+            "default": "USD",
             "type": "string",
             "enum": [
               "USD",
@@ -868,8 +868,7 @@
               "USDC",
               "BTC"
             ],
-            "description": "Card currency (ISO code); fixed at creation",
-            "default": "USD"
+            "description": "Card currency (ISO code); fixed at creation"
           },
           "closingDay": {
             "type": "integer",
@@ -884,14 +883,14 @@
             "description": "Day the bill is due for payment"
           },
           "limit": {
+            "description": "Credit limit",
             "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "Credit limit"
+            "exclusiveMinimum": 0
           },
           "paymentAccount": {
+            "description": "Default paying account name for bill payment",
             "type": "string",
-            "minLength": 1,
-            "description": "Default paying account name for bill payment"
+            "minLength": 1
           }
         },
         "required": [
@@ -899,8 +898,8 @@
           "closingDay",
           "dueDay"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -950,11 +949,12 @@
             "description": "Day the bill is due for payment"
           },
           "limit": {
+            "description": "Credit limit",
             "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "Credit limit"
+            "exclusiveMinimum": 0
           },
           "currency": {
+            "description": "Rejected: a card's currency is fixed at creation. Sending this field returns a validation error rather than silently no-oping — present only so that error can be raised, not because the currency is changeable",
             "type": "string",
             "enum": [
               "USD",
@@ -963,25 +963,24 @@
               "COP",
               "USDC",
               "BTC"
-            ],
-            "description": "Rejected: a card's currency is fixed at creation. Sending this field returns a validation error rather than silently no-oping — present only so that error can be raised, not because the currency is changeable"
+            ]
           },
           "newName": {
+            "description": "New card name",
             "type": "string",
-            "minLength": 1,
-            "description": "New card name"
+            "minLength": 1
           },
           "paymentAccount": {
+            "description": "New default paying account name for bill payment",
             "type": "string",
-            "minLength": 1,
-            "description": "New default paying account name for bill payment"
+            "minLength": 1
           }
         },
         "required": [
           "name"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1003,16 +1002,16 @@
             "description": "Card name"
           },
           "confirm": {
-            "type": "boolean",
             "default": false,
-            "description": "Must be true to actually delete"
+            "description": "Must be true to actually delete",
+            "type": "boolean"
           }
         },
         "required": [
           "card"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1051,8 +1050,8 @@
           "month",
           "year"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true
@@ -1086,14 +1085,14 @@
             "description": "Billing cycle year"
           },
           "account": {
+            "description": "Paying account name (overrides card default)",
             "type": "string",
-            "minLength": 1,
-            "description": "Paying account name (overrides card default)"
+            "minLength": 1
           },
           "paymentDate": {
+            "description": "Date the payment occurred (defaults to today); must not be in the future",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "Date the payment occurred (defaults to today); must not be in the future"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           }
         },
         "required": [
@@ -1101,8 +1100,8 @@
           "month",
           "year"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1141,8 +1140,8 @@
           "month",
           "year"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1164,74 +1163,74 @@
             "description": "Transaction id"
           },
           "description": {
+            "description": "Updated description",
             "type": "string",
-            "minLength": 1,
-            "description": "Updated description"
+            "minLength": 1
           },
           "amount": {
+            "description": "Updated amount in full units",
             "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "Updated amount in full units"
+            "exclusiveMinimum": 0
           },
           "type": {
+            "description": "Updated movement type",
             "type": "string",
             "enum": [
               "expense",
               "income"
-            ],
-            "description": "Updated movement type"
+            ]
           },
           "date": {
+            "description": "Updated date (YYYY-MM-DD)",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "Updated date (YYYY-MM-DD)"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "category": {
+            "description": "New category name (user correction). Do not set with subCategory",
             "type": "string",
-            "minLength": 1,
-            "description": "New category name (user correction). Do not set with subCategory"
+            "minLength": 1
           },
           "subCategory": {
+            "description": "New sub-category name (implies parent; do not set with category)",
             "type": "string",
-            "minLength": 1,
-            "description": "New sub-category name (implies parent; do not set with category)"
+            "minLength": 1
           },
           "note": {
+            "description": "Free-form memo. Empty string clears; omit to leave unchanged",
             "type": "string",
-            "maxLength": 1000,
-            "description": "Free-form memo. Empty string clears; omit to leave unchanged"
+            "maxLength": 1000
           },
           "tags": {
+            "description": "Replaces the full tag set when provided; pass [] to remove all",
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
-            },
-            "description": "Replaces the full tag set when provided; pass [] to remove all"
+            }
           },
           "account": {
+            "description": "Rejected: a card transaction is always funded by the card's own internal account. Sending this field returns a validation error rather than reassigning it — present only so that error can be raised, not because the account is changeable",
             "type": "string",
-            "minLength": 1,
-            "description": "Rejected: a card transaction is always funded by the card's own internal account. Sending this field returns a validation error rather than reassigning it — present only so that error can be raised, not because the account is changeable"
+            "minLength": 1
           },
           "billMonth": {
+            "description": "Reassign to this bill cycle month (1-12) — the transaction must already be a card transaction. Provide with billYear together. Rejected if the current or target bill is paid; auto-creates the target bill if that cycle has none yet",
             "type": "integer",
             "minimum": 1,
-            "maximum": 12,
-            "description": "Reassign to this bill cycle month (1-12) — the transaction must already be a card transaction. Provide with billYear together. Rejected if the current or target bill is paid; auto-creates the target bill if that cycle has none yet"
+            "maximum": 12
           },
           "billYear": {
+            "description": "Reassignment target bill cycle year; provide with billMonth",
             "type": "integer",
             "minimum": 2000,
-            "maximum": 2100,
-            "description": "Reassignment target bill cycle year; provide with billMonth"
+            "maximum": 2100
           }
         },
         "required": [
           "id"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1253,16 +1252,16 @@
             "description": "Transaction id"
           },
           "confirm": {
-            "type": "boolean",
             "default": false,
-            "description": "Must be true to actually delete"
+            "description": "Must be true to actually delete",
+            "type": "boolean"
           }
         },
         "required": [
           "id"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1313,9 +1312,9 @@
             "description": "ISO 8601 timestamp this rate was observed/sourced"
           },
           "source": {
+            "description": "Free-text provenance, e.g. \"PTAX\", \"coingecko\"",
             "type": "string",
-            "minLength": 1,
-            "description": "Free-text provenance, e.g. \"PTAX\", \"coingecko\""
+            "minLength": 1
           }
         },
         "required": [
@@ -1324,8 +1323,8 @@
           "rate",
           "asOf"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1342,6 +1341,8 @@
         "type": "object",
         "properties": {
           "rates": {
+            "minItems": 1,
+            "maxItems": 50,
             "type": "array",
             "items": {
               "type": "object",
@@ -1381,9 +1382,9 @@
                   "description": "ISO 8601 timestamp this rate was observed/sourced"
                 },
                 "source": {
+                  "description": "Free-text provenance, e.g. \"PTAX\", \"coingecko\"",
                   "type": "string",
-                  "minLength": 1,
-                  "description": "Free-text provenance, e.g. \"PTAX\", \"coingecko\""
+                  "minLength": 1
                 }
               },
               "required": [
@@ -1391,18 +1392,15 @@
                 "to",
                 "rate",
                 "asOf"
-              ],
-              "additionalProperties": false
-            },
-            "minItems": 1,
-            "maxItems": 50
+              ]
+            }
           }
         },
         "required": [
           "rates"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1440,21 +1438,21 @@
             "description": "Transaction id (from search_transactions with status: \"pending\")"
           },
           "amount": {
+            "description": "Corrected amount, applied together with the confirm — account/card movements only, rejected for a transfer/bill-payment",
             "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "Corrected amount, applied together with the confirm — account/card movements only, rejected for a transfer/bill-payment"
+            "exclusiveMinimum": 0
           },
           "date": {
+            "description": "Corrected date (YYYY-MM-DD), applied together with the confirm — account/card movements only, rejected for a transfer/bill-payment; the resolved date (this, or the existing date if omitted) must not be in the future",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "Corrected date (YYYY-MM-DD), applied together with the confirm — account/card movements only, rejected for a transfer/bill-payment; the resolved date (this, or the existing date if omitted) must not be in the future"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           }
         },
         "required": [
           "id"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1483,95 +1481,96 @@
             "description": "Filter by year, with month — alternative to from/to"
           },
           "from": {
+            "description": "Start date (inclusive, YYYY-MM-DD) — alternative to month/year",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "Start date (inclusive, YYYY-MM-DD) — alternative to month/year"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "to": {
-            "$ref": "#/properties/from",
-            "description": "End date (exclusive, YYYY-MM-DD) — alternative to month/year"
+            "description": "End date (exclusive, YYYY-MM-DD) — alternative to month/year",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "type": {
+            "description": "Filter by type (expense/income/transfer)",
             "type": "string",
             "enum": [
               "expense",
               "income",
               "transfer"
-            ],
-            "description": "Filter by type (expense/income/transfer)"
+            ]
           },
           "status": {
+            "description": "\"pending\" to list scheduled transactions; omit for all",
             "type": "string",
             "enum": [
               "pending",
               "effective"
-            ],
-            "description": "\"pending\" to list scheduled transactions; omit for all"
+            ]
           },
           "category": {
+            "description": "Filter by category name",
             "type": "string",
-            "minLength": 1,
-            "description": "Filter by category name"
+            "minLength": 1
           },
           "subCategory": {
+            "description": "Filter to transactions with this sub-category",
             "type": "string",
-            "minLength": 1,
-            "description": "Filter to transactions with this sub-category"
+            "minLength": 1
           },
           "account": {
+            "description": "Filter by account name",
             "type": "string",
-            "minLength": 1,
-            "description": "Filter by account name"
+            "minLength": 1
           },
           "text": {
-            "type": "string",
-            "description": "Free-text search in description"
+            "description": "Free-text search in description",
+            "type": "string"
           },
           "tags": {
+            "description": "Filter to transactions having any of these tags",
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
-            },
-            "description": "Filter to transactions having any of these tags"
+            }
           },
           "cursor": {
+            "description": "Opaque continuation token returned as `nextCursor` by a previous page",
             "type": "string",
-            "minLength": 1,
-            "description": "Opaque continuation token returned as `nextCursor` by a previous page"
+            "minLength": 1
           },
           "limit": {
+            "default": 50,
             "type": "integer",
             "minimum": 1,
             "maximum": 200,
-            "description": "Maximum results per page",
-            "default": 50
+            "description": "Maximum results per page"
           },
           "includeTotal": {
-            "type": "boolean",
-            "description": "When true, include `total` — the count of all items matching the filters (costs an extra COUNT query). Default false"
+            "description": "When true, include `total` — the count of all items matching the filters (costs an extra COUNT query). Default false",
+            "type": "boolean"
           },
           "sort": {
+            "default": "date",
             "type": "string",
             "enum": [
               "date",
               "amount"
             ],
-            "description": "Field to sort by: date or amount. Default: date",
-            "default": "date"
+            "description": "Field to sort by: date or amount. Default: date"
           },
           "dir": {
+            "default": "desc",
             "type": "string",
             "enum": [
               "asc",
               "desc"
             ],
-            "description": "Sort direction: asc or desc. Default: desc",
-            "default": "desc"
+            "description": "Sort direction: asc or desc. Default: desc"
           }
         },
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true
@@ -1603,26 +1602,26 @@
             "description": "Transfer amount in full units"
           },
           "status": {
+            "description": "pending | effective; omit for date-aware default",
             "type": "string",
             "enum": [
               "pending",
               "effective"
-            ],
-            "description": "pending | effective; omit for date-aware default"
+            ]
           },
           "date": {
+            "description": "YYYY-MM-DD; defaults to today",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "YYYY-MM-DD; defaults to today"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "description": {
-            "type": "string",
-            "description": "e.g. \"aporte mensal\""
+            "description": "e.g. \"aporte mensal\"",
+            "type": "string"
           },
           "discriminator": {
+            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)",
             "type": "string",
-            "minLength": 1,
-            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+            "minLength": 1
           }
         },
         "required": [
@@ -1630,8 +1629,8 @@
           "to",
           "amount"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1648,14 +1647,14 @@
         "type": "object",
         "properties": {
           "category": {
+            "description": "Category name to budget — provide exactly one of category/subCategory",
             "type": "string",
-            "minLength": 1,
-            "description": "Category name to budget — provide exactly one of category/subCategory"
+            "minLength": 1
           },
           "subCategory": {
+            "description": "Sub-category name to budget — provide exactly one of category/subCategory",
             "type": "string",
-            "minLength": 1,
-            "description": "Sub-category name to budget — provide exactly one of category/subCategory"
+            "minLength": 1
           },
           "currency": {
             "type": "string",
@@ -1675,20 +1674,20 @@
             "description": "Spending limit for the period, full units of currency"
           },
           "period": {
+            "default": "monthly",
             "type": "string",
             "enum": [
               "monthly"
             ],
-            "description": "How often the limit applies",
-            "default": "monthly"
+            "description": "How often the limit applies"
           }
         },
         "required": [
           "currency",
           "limit"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1710,23 +1709,23 @@
             "description": "Budget id, from create_budget or list_budgets"
           },
           "limit": {
+            "description": "New spending limit",
             "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "New spending limit"
+            "exclusiveMinimum": 0
           },
           "period": {
+            "description": "New period",
             "type": "string",
             "enum": [
               "monthly"
-            ],
-            "description": "New period"
+            ]
           }
         },
         "required": [
           "id"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1751,8 +1750,8 @@
         "required": [
           "id"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1797,6 +1796,7 @@
             "description": "Calendar year"
           },
           "displayCurrency": {
+            "description": "Also return a converted grand total of committed spend in this currency",
             "type": "string",
             "enum": [
               "USD",
@@ -1805,16 +1805,15 @@
               "COP",
               "USDC",
               "BTC"
-            ],
-            "description": "Also return a converted grand total of committed spend in this currency"
+            ]
           }
         },
         "required": [
           "month",
           "year"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true
@@ -1863,14 +1862,15 @@
             "description": "First due date (YYYY-MM-DD)"
           },
           "account": {
-            "type": "string",
-            "description": "Account name (resolved by name match)"
+            "description": "Account name (resolved by name match)",
+            "type": "string"
           },
           "category": {
-            "type": "string",
-            "description": "Category name (resolved by name match)"
+            "description": "Category name (resolved by name match)",
+            "type": "string"
           },
           "currency": {
+            "description": "Currency (resolved from account if omitted)",
             "type": "string",
             "enum": [
               "USD",
@@ -1879,13 +1879,12 @@
               "COP",
               "USDC",
               "BTC"
-            ],
-            "description": "Currency (resolved from account if omitted)"
+            ]
           },
           "merchant": {
+            "description": "Merchant this rule pays (e.g. \"Netflix\", the landlord) — normalized the same way as a transaction description; omit to derive it from `description` instead",
             "type": "string",
-            "minLength": 1,
-            "description": "Merchant this rule pays (e.g. \"Netflix\", the landlord) — normalized the same way as a transaction description; omit to derive it from `description` instead"
+            "minLength": 1
           }
         },
         "required": [
@@ -1895,8 +1894,8 @@
           "period",
           "startDate"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1929,13 +1928,13 @@
         "type": "object",
         "properties": {
           "through": {
+            "description": "YYYY-MM-DD horizon (default: today). Pass a future date to pre-create upcoming occurrences as pending.",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "YYYY-MM-DD horizon (default: today). Pass a future date to pre-create upcoming occurrences as pending."
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           }
         },
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -1957,21 +1956,21 @@
             "description": "Category display name"
           },
           "kind": {
+            "default": "expense",
             "type": "string",
             "enum": [
               "expense",
               "income",
               "both"
             ],
-            "description": "expense | income | both — controls which transaction types may use this category",
-            "default": "expense"
+            "description": "expense | income | both — controls which transaction types may use this category"
           }
         },
         "required": [
           "name"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -2018,8 +2017,8 @@
           "name",
           "parentId"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -2036,12 +2035,12 @@
         "type": "object",
         "properties": {
           "parentId": {
-            "type": "string",
-            "description": "Filter to sub-categories of this parent category id"
+            "description": "Filter to sub-categories of this parent category id",
+            "type": "string"
           }
         },
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true
@@ -2066,8 +2065,8 @@
         "required": [
           "name"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -2092,8 +2091,8 @@
         "required": [
           "name"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -2133,8 +2132,8 @@
         "required": [
           "name"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -2158,8 +2157,8 @@
         "required": [
           "id"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -2190,8 +2189,8 @@
           "name",
           "html"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -2232,8 +2231,8 @@
         "required": [
           "name"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -2264,8 +2263,8 @@
           "name",
           "newName"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -2292,69 +2291,70 @@
             "description": "Which correlation analysis to run"
           },
           "month": {
+            "description": "Reference month (1-12) — spending_shifts/budget_fit/merchant_concentration measure this month against its trailing baseline; not used by recurring_candidates",
             "type": "integer",
             "minimum": 1,
-            "maximum": 12,
-            "description": "Reference month (1-12) — spending_shifts/budget_fit/merchant_concentration measure this month against its trailing baseline; not used by recurring_candidates"
+            "maximum": 12
           },
           "year": {
+            "description": "Reference year — not used by recurring_candidates",
             "type": "integer",
             "minimum": 2000,
-            "maximum": 2100,
-            "description": "Reference year — not used by recurring_candidates"
+            "maximum": 2100
           },
           "baselineMonths": {
+            "default": 3,
+            "description": "Trailing window size in months averaged into the baseline (default 3)",
             "type": "integer",
             "minimum": 1,
-            "maximum": 24,
-            "description": "Trailing window size in months averaged into the baseline (default 3)",
-            "default": 3
+            "maximum": 24
           },
           "minDeltaPct": {
-            "type": "number",
-            "minimum": 0,
+            "default": 20,
             "description": "Only surface categories whose |deltaPct| is at least this percentage (default 20); a brand-new category with no baseline spend at all is always surfaced regardless of this threshold",
-            "default": 20
+            "type": "number",
+            "minimum": 0
           },
           "slackPct": {
-            "type": "number",
-            "minimum": 0,
+            "default": 20,
             "description": "budget_fit: how far below the limit the baseline can sit before the budget is \"generous\" — percentage (default 20)",
-            "default": 20
+            "type": "number",
+            "minimum": 0
           },
           "overPct": {
-            "type": "number",
-            "minimum": 0,
+            "default": 20,
             "description": "budget_fit: how far above the limit the baseline can sit before the budget is \"unrealistic\" — percentage (default 20)",
-            "default": 20
+            "type": "number",
+            "minimum": 0
           },
           "category": {
+            "description": "merchant_concentration: restrict to a single category by name (default: every category)",
             "type": "string",
-            "minLength": 1,
-            "description": "merchant_concentration: restrict to a single category by name (default: every category)"
+            "minLength": 1
           },
           "topN": {
+            "default": 5,
+            "description": "merchant_concentration: top merchants to return per category (default 5)",
             "type": "integer",
             "minimum": 1,
-            "maximum": 50,
-            "description": "merchant_concentration: top merchants to return per category (default 5)",
-            "default": 5
+            "maximum": 50
           },
           "lookbackMonths": {
+            "default": 6,
+            "description": "recurring_candidates: months of transaction history to scan for a recurring pattern, ending today (default 6)",
             "type": "integer",
             "minimum": 1,
-            "maximum": 36,
-            "description": "recurring_candidates: months of transaction history to scan for a recurring pattern, ending today (default 6)",
-            "default": 6
+            "maximum": 36
           },
           "minOccurrences": {
+            "default": 3,
+            "description": "recurring_candidates: minimum qualifying occurrences within the lookback window to flag a candidate (default 3)",
             "type": "integer",
             "minimum": 2,
-            "maximum": 24,
-            "description": "recurring_candidates: minimum qualifying occurrences within the lookback window to flag a candidate (default 3)",
-            "default": 3
+            "maximum": 24
           },
           "displayCurrency": {
+            "description": "Also return a converted grand total in this currency for spending_shifts/budget_fit/merchant_concentration (recurring_candidates is unaffected — its candidates are proposed rules, not per-currency spend totals)",
             "type": "string",
             "enum": [
               "USD",
@@ -2363,15 +2363,14 @@
               "COP",
               "USDC",
               "BTC"
-            ],
-            "description": "Also return a converted grand total in this currency for spending_shifts/budget_fit/merchant_concentration (recurring_candidates is unaffected — its candidates are proposed rules, not per-currency spend totals)"
+            ]
           }
         },
         "required": [
           "analysis"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true
@@ -2399,14 +2398,14 @@
             "description": "Dimension to group by: category, account, tag, month, or merchant"
           },
           "metric": {
+            "default": "sum",
+            "description": "Aggregation metric: sum, count, or avg of amount",
             "type": "string",
             "enum": [
               "sum",
               "count",
               "avg"
-            ],
-            "description": "Aggregation metric: sum, count, or avg of amount",
-            "default": "sum"
+            ]
           },
           "month": {
             "type": "integer",
@@ -2421,57 +2420,59 @@
             "description": "Calendar year"
           },
           "from": {
+            "description": "Start date (inclusive, YYYY-MM-DD) — alternative to month/year",
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "description": "Start date (inclusive, YYYY-MM-DD) — alternative to month/year"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "to": {
-            "$ref": "#/properties/from",
-            "description": "End date (exclusive, YYYY-MM-DD) — alternative to month/year"
+            "description": "End date (exclusive, YYYY-MM-DD) — alternative to month/year",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "account": {
+            "description": "Filter by account name",
             "type": "string",
-            "minLength": 1,
-            "description": "Filter by account name"
+            "minLength": 1
           },
           "category": {
+            "description": "Filter by category name",
             "type": "string",
-            "minLength": 1,
-            "description": "Filter by category name"
+            "minLength": 1
           },
           "type": {
+            "description": "Filter by movement type: expense or income",
             "type": "string",
             "enum": [
               "expense",
               "income"
-            ],
-            "description": "Filter by movement type: expense or income"
+            ]
           },
           "tags": {
+            "description": "Filter to transactions having any of these tags",
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
-            },
-            "description": "Filter to transactions having any of these tags"
+            }
           },
           "limit": {
+            "default": 50,
+            "description": "Return only the top-N rows per currency",
             "type": "integer",
             "minimum": 1,
-            "maximum": 100,
-            "description": "Return only the top-N rows per currency",
-            "default": 50
+            "maximum": 100
           },
           "sort": {
+            "default": "desc",
+            "description": "Sort order by metric value: asc or desc",
             "type": "string",
             "enum": [
               "asc",
               "desc"
-            ],
-            "description": "Sort order by metric value: asc or desc",
-            "default": "desc"
+            ]
           },
           "displayCurrency": {
+            "description": "Opt-in: also return a converted grand total of the per-currency block totals in this currency. Only attached when metric is sum — a block total is a genuine money quantity to convert; count/avg are not.",
             "type": "string",
             "enum": [
               "USD",
@@ -2480,15 +2481,14 @@
               "COP",
               "USDC",
               "BTC"
-            ],
-            "description": "Opt-in: also return a converted grand total of the per-currency block totals in this currency. Only attached when metric is sum — a block total is a genuine money quantity to convert; count/avg are not."
+            ]
           }
         },
         "required": [
           "groupBy"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true
@@ -2515,6 +2515,7 @@
             "maximum": 2100
           },
           "displayCurrency": {
+            "description": "Also return a converted grand total of expenses in this currency",
             "type": "string",
             "enum": [
               "USD",
@@ -2523,16 +2524,15 @@
               "COP",
               "USDC",
               "BTC"
-            ],
-            "description": "Also return a converted grand total of expenses in this currency"
+            ]
           }
         },
         "required": [
           "month",
           "year"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true
@@ -2568,8 +2568,8 @@
           "locale",
           "source"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false
@@ -2616,8 +2616,8 @@
         "required": [
           "baseCurrency"
         ],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": false

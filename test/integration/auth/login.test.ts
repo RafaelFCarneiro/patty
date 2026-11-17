@@ -259,8 +259,8 @@ describe('patty login', () => {
 
   it.each([
     [['--duration', 'session'], 'session'],
-    [['--duration', 'forever'], 'forever'],
-    [['--scope', 'admin'], 'admin'],
+    [['--duration', 'x'], "--duration: 'x' is not one of "],
+    [['--scope', 'x'], "--scope: 'x' is not one of read, write"],
     [['--profile', 'has space'], 'profile'],
     [['stray'], 'stray'],
     [['--nope'], 'nope'],

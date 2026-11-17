@@ -24,6 +24,10 @@ import { Locale, LocaleSource } from '../../models/locale.js';
 import { RecurringPeriod } from '../../models/recurring.js';
 import { ClassificationMethod, TransactionStatus } from '../../models/transaction.js';
 
+// A zod 4 enum lists its members as `T[]`; drizzle wants a non-empty tuple. A zod enum is never empty, so this only
+// tells the type system what the schema already guarantees.
+const columnValues = <T extends string>(options: readonly T[]): [T, ...T[]] => options as [T, ...T[]];
+
 // Owned rows name their user (RESTRICT); shared defaults carry null.
 const ownerColumn = () =>
   text('user_id')
@@ -155,14 +159,16 @@ export const transactions = sqliteTable(
     description: text('description').notNull(),
     amount: real('amount').notNull(),
     type: text('type', { enum: ['income', 'expense', 'transfer'] }).notNull(),
-    status: text('status', { enum: TransactionStatus.options }).notNull().default(TransactionStatus.enum.effective),
+    status: text('status', { enum: columnValues(TransactionStatus.options) })
+      .notNull()
+      .default(TransactionStatus.enum.effective),
     date: text('date').notNull(),
     currency: text('currency')
       .notNull()
       .references(() => currencies.code),
     source: text('source', { enum: ['mcp', 'rest', 'import'] }).notNull(),
     idempotencyKey: text('idempotency_key').notNull(),
-    classificationMethod: text('classification_method', { enum: ClassificationMethod.options }).notNull(),
+    classificationMethod: text('classification_method', { enum: columnValues(ClassificationMethod.options) }).notNull(),
     confidence: real('confidence').notNull(),
     rawInput: text('raw_input'),
     fromAccountId: text('from_account_id').references(() => accounts.id),
@@ -207,7 +213,7 @@ export const recurringRules = sqliteTable('recurring_rules', {
   description: text('description').notNull(),
   amount: real('amount').notNull(),
   type: text('type', { enum: ['income', 'expense'] }).notNull(),
-  period: text('period', { enum: RecurringPeriod.options }).notNull(),
+  period: text('period', { enum: columnValues(RecurringPeriod.options) }).notNull(),
   nextDue: text('next_due').notNull(),
   currency: text('currency')
     .notNull()
@@ -227,7 +233,9 @@ export const dashboards = sqliteTable(
     // Nullable — a source: 'file' row resolves content from `path` at read time instead
     // (ADR-027 Phase 2); exactly one of html/path is non-null per source, enforced below.
     html: text('html'),
-    source: text('source', { enum: DashboardSource.options }).notNull().default(DashboardSource.enum.inline),
+    source: text('source', { enum: columnValues(DashboardSource.options) })
+      .notNull()
+      .default(DashboardSource.enum.inline),
     path: text('path'),
     updatedAt: text('updated_at').notNull(),
     version: integer('version').notNull().default(0),
@@ -265,7 +273,9 @@ export const budgets = sqliteTable(
       .notNull()
       .references(() => currencies.code),
     limitAmount: real('limit_amount').notNull(),
-    period: text('period', { enum: BudgetPeriod.options }).notNull().default(BudgetPeriod.enum.monthly),
+    period: text('period', { enum: columnValues(BudgetPeriod.options) })
+      .notNull()
+      .default(BudgetPeriod.enum.monthly),
     version: integer('version').notNull().default(0),
     userId: ownerColumn(),
   },
@@ -278,10 +288,14 @@ export const budgets = sqliteTable(
 // `demo_country` is the data set it seeded (null off the demo, and on a demo seeded before it was recorded).
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
-  maxSignInDuration: text('max_sign_in_duration', { enum: SignInCap.options }).notNull().default(DEFAULT_SIGN_IN_CAP),
-  instanceKind: text('instance_kind', { enum: InstanceKind.options }).notNull().default(DEFAULT_INSTANCE_KIND),
+  maxSignInDuration: text('max_sign_in_duration', { enum: columnValues(SignInCap.options) })
+    .notNull()
+    .default(DEFAULT_SIGN_IN_CAP),
+  instanceKind: text('instance_kind', { enum: columnValues(InstanceKind.options) })
+    .notNull()
+    .default(DEFAULT_INSTANCE_KIND),
   demoSeededAt: text('demo_seeded_at'),
-  demoCountry: text('demo_country', { enum: DemoCountry.options }),
+  demoCountry: text('demo_country', { enum: columnValues(DemoCountry.options) }),
   version: integer('version').notNull().default(0),
 });
 
@@ -290,8 +304,12 @@ export const userSettings = sqliteTable('user_settings', {
   userId: text('user_id')
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
-  locale: text('locale', { enum: Locale.options }).notNull().default(Locale.enum.en),
-  localeSource: text('locale_source', { enum: LocaleSource.options }).notNull().default(LocaleSource.enum.default),
+  locale: text('locale', { enum: columnValues(Locale.options) })
+    .notNull()
+    .default(Locale.enum.en),
+  localeSource: text('locale_source', { enum: columnValues(LocaleSource.options) })
+    .notNull()
+    .default(LocaleSource.enum.default),
   // Nullable — unset means "derive from locale" (pt->BRL, en/es->USD), resolved at read time by
   // logic/locale.ts's resolveBaseCurrency (ADR-026 Phase 2); no DB default, unlike locale/localeSource,
   // since there is no third "explicit vs inferred" source to track here.
@@ -327,7 +345,7 @@ export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   username: text('username').unique(),
   passwordHash: text('password_hash'),
-  role: text('role', { enum: UserRole.options }).notNull(),
+  role: text('role', { enum: columnValues(UserRole.options) }).notNull(),
   createdAt: text('created_at').notNull(),
   disabledAt: text('disabled_at'),
   lastLoginAt: text('last_login_at'),
@@ -381,7 +399,9 @@ export const accessTokens = sqliteTable('access_tokens', {
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  kind: text('kind', { enum: AccessTokenKind.options }).notNull().default(AccessTokenKind.enum.pat),
+  kind: text('kind', { enum: columnValues(AccessTokenKind.options) })
+    .notNull()
+    .default(AccessTokenKind.enum.pat),
   clientName: text('client_name'),
   profile: text('profile'),
   name: text('name').notNull(),
@@ -416,10 +436,14 @@ export const clientGrants = sqliteTable(
     clientName: text('client_name').notNull(),
     clientVersion: text('client_version').notNull(),
     profile: text('profile').notNull(),
-    channel: text('channel', { enum: GrantChannel.options }).notNull().default(GrantChannel.enum.stdio),
+    channel: text('channel', { enum: columnValues(GrantChannel.options) })
+      .notNull()
+      .default(GrantChannel.enum.stdio),
     hintAccess: text('hint_access').$type<TokenAccess>(),
     hintDuration: text('hint_duration').$type<SignInDuration>(),
-    status: text('status', { enum: GrantStatus.options }).notNull().default(GrantStatus.enum.pending),
+    status: text('status', { enum: columnValues(GrantStatus.options) })
+      .notNull()
+      .default(GrantStatus.enum.pending),
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     scopes: text('scopes', { mode: 'json' }).$type<Scope[]>(),
     duration: text('duration').$type<SignInDuration>(),

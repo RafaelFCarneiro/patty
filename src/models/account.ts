@@ -40,13 +40,15 @@ export const accountTypeLabels: LabelMap<AccountType> = {
 // Defaults split by intent: integrity defaults (a value that must exist for the entity to be
 // valid, e.g. initialBalance → 0) live here; quality-of-life convenience defaults live at the
 // wire boundary (see wire/in/accounts.ts), keeping the domain contract honest about what is required.
+const INITIAL_BALANCE_DESCRIPTION = 'Balance at account creation; current balance is always derived';
+
 export const AccountSchema = z.object({
   id: Id,
   name: z.string().min(1).describe('Account name'),
   type: AccountType.describe('checking | savings | wallet | investment (credit is card-managed)'),
   typeLabel: z.string().optional(),
   currency: CurrencyCode.describe('Account currency (ISO code); fixed once the account has activity'),
-  initialBalance: z.number().default(0).describe('Balance at account creation; current balance is always derived'),
+  initialBalance: z.number().default(0).describe(INITIAL_BALANCE_DESCRIPTION),
 });
 export type Account = z.infer<typeof AccountSchema>;
 
@@ -69,8 +71,13 @@ export const CreateAccountSchema = AccountSchema.omit({ id: true, typeLabel: tru
 export type CreateAccount = z.infer<typeof CreateAccountSchema>;
 
 export const UpdateAccountSchema = AccountSchema.omit({ id: true, typeLabel: true })
-  .partial({ initialBalance: true, type: true, currency: true })
-  .extend({ newName: z.string().min(1).optional().describe('New account name') });
+  .partial({ type: true, currency: true })
+  // zod 4 applies a default inside `.partial()`, so an update that omits the balance would reset it to 0:
+  // the balance is restated as plainly optional (an omitted field means "leave it as it is").
+  .extend({
+    initialBalance: z.number().optional().describe(INITIAL_BALANCE_DESCRIPTION),
+    newName: z.string().min(1).optional().describe('New account name'),
+  });
 export type UpdateAccount = z.infer<typeof UpdateAccountSchema>;
 
 export const AccountBalanceSchema = AccountSchema.extend({
@@ -107,16 +114,16 @@ export type AccountBalancesResult = z.infer<typeof AccountBalancesResultSchema>;
  *  vocabulary never reaches this schema at all, since the core no longer carries it). `account`
  *  stays optional: an omitted account records an unattached (e.g. cash) movement. Depends on the
  *  transaction core's schema (aggregate → core, the allowed direction) — never the reverse.
- *  `.strict()`: `card`/`type`/`billMonth`/`billYear` are meaningful fields on the sibling aggregate
+ *  `z.strictObject`: `card`/`type`/`billMonth`/`billYear` are meaningful fields on the sibling aggregate
  *  schema (`AddCardPurchaseSchema`), not server-managed ones — a caller who mistakenly sends them
  *  here should get a validation error, not have them silently stripped by zod's default unknown-key
  *  behavior (REST boundary only; the MCP tool's inputSchema is a raw shape, which the MCP SDK
  *  reconstructs into its own non-strict object internally). */
-export const AddAccountMovementSchema = CreateTransactionSchema.extend({
-  account: z.string().min(1).optional().describe('Account name, e.g. "Nubank"'),
-})
-  .omit({ type: true })
-  .strict();
+export const AddAccountMovementSchema = z.strictObject(
+  CreateTransactionSchema.extend({
+    account: z.string().min(1).optional().describe('Account name, e.g. "Nubank"'),
+  }).omit({ type: true }).shape,
+);
 export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
 
 /** A single line of an `import_account_statement` request: the transaction core's minimal
@@ -125,11 +132,13 @@ export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
  *  `card`/`billMonth`/`billYear` (card/bill-assignment vocabulary the core never carries). Unlike
  *  `AddAccountMovementSchema`, `type` stays required — a statement line still needs its own
  *  expense-vs-income marker, since the movement kind isn't fixed by which tool was called. */
-export const ImportAccountStatementItemSchema = CreateTransactionSchema.omit({
-  rawInput: true,
-  subCategory: true,
-  tags: true,
-}).strict();
+export const ImportAccountStatementItemSchema = z.strictObject(
+  CreateTransactionSchema.omit({
+    rawInput: true,
+    subCategory: true,
+    tags: true,
+  }).shape,
+);
 export type ImportAccountStatementItem = z.infer<typeof ImportAccountStatementItemSchema>;
 
 /** Account statement import: single-source — every item is an expense or income (per item's
@@ -152,18 +161,20 @@ export type ImportAccountStatement = z.infer<typeof ImportAccountStatementSchema
 /** Account-aggregate update schema: `.extend`s the core's minimal `UpdateTransactionSchema` with
  *  `account` — the core no longer carries bill-assignment (`billMonth`/`billYear`) at all, so it
  *  structurally can't reach this schema (mirrors `AddAccountMovementSchema`'s create-side shape).
- *  `.strict()`: same REST-boundary-only reasoning as `AddAccountMovementSchema` above. */
-export const UpdateAccountTransactionSchema = UpdateTransactionSchema.extend({
-  account: z.string().min(1).optional().describe('New account name'),
-}).strict();
+ *  `z.strictObject`: same REST-boundary-only reasoning as `AddAccountMovementSchema` above. */
+export const UpdateAccountTransactionSchema = z.strictObject(
+  UpdateTransactionSchema.extend({
+    account: z.string().min(1).optional().describe('New account name'),
+  }).shape,
+);
 export type UpdateAccountTransaction = z.infer<typeof UpdateAccountTransactionSchema>;
 
 /** Natural input for a transfer: account-context vocabulary — a transfer request is an
  *  account-aggregate concern even though it persists as a transaction row via the shared core
- *  primitive (account → core, the allowed direction). `.strict()`: same REST-boundary-only
+ *  primitive (account → core, the allowed direction). `z.strictObject`: same REST-boundary-only
  *  reasoning as `AddAccountMovementSchema` above. */
-export const CreateTransferSchema = z
-  .object({
+export const CreateTransferSchema = z.strictObject(
+  z.object({
     from: z.string().min(1).describe('Source account name'),
     to: z.string().min(1).describe('Destination account name'),
     amount: Money.describe('Transfer amount in full units'),
@@ -171,8 +182,8 @@ export const CreateTransferSchema = z
     date: IsoDate.optional().describe('YYYY-MM-DD; defaults to today'),
     description: z.string().optional().describe('e.g. "aporte mensal"'),
     discriminator: z.string().min(1).optional().describe(DISCRIMINATOR_DESCRIPTION),
-  })
-  .strict();
+  }).shape,
+);
 export type CreateTransfer = z.infer<typeof CreateTransferSchema>;
 
 /**

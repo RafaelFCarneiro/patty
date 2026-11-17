@@ -1,5 +1,5 @@
 import type { CallToolResult, GetPromptResult, ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
-import type { z, ZodRawShape, ZodTypeAny } from 'zod';
+import type { z, ZodRawShape } from 'zod';
 import type { Scoped } from '../../controllers/deps.js';
 import type { PromptName } from '../../models/prompts.js';
 import type { ToolName } from './tool-name.js';
@@ -12,7 +12,7 @@ import type { McpContext } from './context.js';
  * The handler is handed the caller's already-scoped dependencies; the generic registrar (`register.ts`) resolves
  * them from the principal the scope guard put on the callback, so no handler touches `extra`.
  */
-type Args<Shape extends ZodRawShape> = z.objectOutputType<Shape, ZodTypeAny>;
+type Args<Shape extends ZodRawShape> = z.output<z.ZodObject<Shape>>;
 
 export type ToolDefinition<Shape extends ZodRawShape = ZodRawShape> = {
   name: ToolName;
