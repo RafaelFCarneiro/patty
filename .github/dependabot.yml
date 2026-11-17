@@ -8,6 +8,9 @@ updates:
       prefix: 'fix(deps)'
       prefix-development: 'chore(deps-dev)'
     groups:
+      # Packages that must move in lockstep (exact peer), majors included. First match wins.
+      vitest:
+        patterns: ['vitest', '@vitest/*']
       dev-minor-patch:
         dependency-type: development
         update-types: [minor, patch]
