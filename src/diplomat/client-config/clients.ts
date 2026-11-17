@@ -98,9 +98,7 @@ const readJsoncDocument = (path: string): Result<JsoncDocument, ClientConfigFail
 };
 
 const writeJsonc = (path: string, text: string): Result<void, ClientConfigFailure> =>
-  writeText(path, withFinalNewline(text)).mapErr((cause) =>
-    clientConfigFailures.writeFailed(path, cause),
-  );
+  writeText(path, withFinalNewline(text)).mapErr((cause) => clientConfigFailures.writeFailed(path, cause));
 
 // ---------------------------------------------------------------------------
 // Platform-aware config path helpers
@@ -145,8 +143,7 @@ const nothingToRemove = (reason: string): ConfigReport => ok({ warnings: [], lin
 const demoRemoval = {
   noFile: (configPath: string): ConfigReport =>
     nothingToRemove(`No demo entry to remove: ${configPath} does not exist`),
-  noEntry: (configPath: string): ConfigReport =>
-    nothingToRemove(`No ${DEMO_SERVER_NAME} entry in ${configPath}`),
+  noEntry: (configPath: string): ConfigReport => nothingToRemove(`No ${DEMO_SERVER_NAME} entry in ${configPath}`),
   removed: (configPath: string, next: string): ClientSetupReport => ({
     warnings: [],
     lines: [`  Removed ${DEMO_SERVER_NAME} from ${configPath}`, next],
@@ -203,9 +200,10 @@ const jsoncClient = ({ label, path, entry, next }: JsoncClient): ClientConfig =>
   const setEntry = (name: string, withEnv: Record<string, unknown>): ConfigReport => {
     const configPath = path();
     return readJsoncDocument(configPath).andThen(({ text }) =>
-      writeJsonc(configPath, withServerText(text, name, withEnv)).map(
-        (): ClientSetupReport => ({ warnings: [], lines: [`  Updated: ${configPath}`, next] }),
-      ),
+      writeJsonc(configPath, withServerText(text, name, withEnv)).map((): ClientSetupReport => ({
+        warnings: [],
+        lines: [`  Updated: ${configPath}`, next],
+      })),
     );
   };
   return {

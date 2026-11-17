@@ -79,7 +79,10 @@ export default tseslint.config(
         },
       ],
       // A type is imported as a type, and one module is imported once — `import { a, type B } from 'm'`.
-      '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports', fixStyle: 'inline-type-imports' }],
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
+      ],
       'no-duplicate-imports': 'error',
       // Declarative over imperative (docs/architecture.md § Conventions in this repo, remeda table): the `xs.filter(...)[0]`
       // smell — taking the first match by index instead of R.find / R.firstBy.
@@ -88,7 +91,8 @@ export default tseslint.config(
         {
           selector:
             "MemberExpression[computed=true][property.type='Literal'][property.value=0] > CallExpression[callee.property.name='filter']",
-          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/architecture.md § Conventions in this repo, remeda table).',
+          message:
+            'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/architecture.md § Conventions in this repo, remeda table).',
         },
         SWITCH_TOO_LARGE,
       ],
@@ -120,7 +124,8 @@ export default tseslint.config(
         {
           selector:
             "MemberExpression[computed=true][property.type='Literal'][property.value=0] > CallExpression[callee.property.name='filter']",
-          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/architecture.md § Conventions in this repo, remeda table).',
+          message:
+            'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/architecture.md § Conventions in this repo, remeda table).',
         },
         SWITCH_TOO_LARGE,
         ...[

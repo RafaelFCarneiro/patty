@@ -26,30 +26,58 @@ const tagsOf = (dashboard: string): string[] | null => {
 // dashboard → the entity tags its /api calls read (docs/ui.md § Live update).
 const EXPECTED_TAGS = {
   accounts: [
-    ACCOUNT_ENTITY_TAG, TRANSACTION_ENTITY_TAG, CATEGORY_ENTITY_TAG, TAG_ENTITY_TAG, CURRENCY_RATE_ENTITY_TAG,
+    ACCOUNT_ENTITY_TAG,
+    TRANSACTION_ENTITY_TAG,
+    CATEGORY_ENTITY_TAG,
+    TAG_ENTITY_TAG,
+    CURRENCY_RATE_ENTITY_TAG,
     USER_SETTINGS_ENTITY_TAG,
   ],
   budget: [
-    BUDGET_ENTITY_TAG, TRANSACTION_ENTITY_TAG, CATEGORY_ENTITY_TAG, RECURRING_ENTITY_TAG, USER_SETTINGS_ENTITY_TAG,
-    ACCOUNT_ENTITY_TAG, CURRENCY_RATE_ENTITY_TAG,
+    BUDGET_ENTITY_TAG,
+    TRANSACTION_ENTITY_TAG,
+    CATEGORY_ENTITY_TAG,
+    RECURRING_ENTITY_TAG,
+    USER_SETTINGS_ENTITY_TAG,
+    ACCOUNT_ENTITY_TAG,
+    CURRENCY_RATE_ENTITY_TAG,
   ],
   cards: [
-    CREDIT_CARD_ENTITY_TAG, TRANSACTION_ENTITY_TAG, ACCOUNT_ENTITY_TAG, BILL_ENTITY_TAG, CATEGORY_ENTITY_TAG,
+    CREDIT_CARD_ENTITY_TAG,
+    TRANSACTION_ENTITY_TAG,
+    ACCOUNT_ENTITY_TAG,
+    BILL_ENTITY_TAG,
+    CATEGORY_ENTITY_TAG,
     TAG_ENTITY_TAG,
   ],
   categories: [CATEGORY_ENTITY_TAG],
   comparative: [TRANSACTION_ENTITY_TAG, CATEGORY_ENTITY_TAG],
   dashboards: [DASHBOARD_ENTITY_TAG],
   overview: [
-    TRANSACTION_ENTITY_TAG, ACCOUNT_ENTITY_TAG, CATEGORY_ENTITY_TAG, RECURRING_ENTITY_TAG,
-    CURRENCY_RATE_ENTITY_TAG, USER_SETTINGS_ENTITY_TAG, CREDIT_CARD_ENTITY_TAG, BILL_ENTITY_TAG,
+    TRANSACTION_ENTITY_TAG,
+    ACCOUNT_ENTITY_TAG,
+    CATEGORY_ENTITY_TAG,
+    RECURRING_ENTITY_TAG,
+    CURRENCY_RATE_ENTITY_TAG,
+    USER_SETTINGS_ENTITY_TAG,
+    CREDIT_CARD_ENTITY_TAG,
+    BILL_ENTITY_TAG,
   ],
   pending: [
-    TRANSACTION_ENTITY_TAG, RECURRING_ENTITY_TAG, ACCOUNT_ENTITY_TAG, CATEGORY_ENTITY_TAG, CREDIT_CARD_ENTITY_TAG,
-    TAG_ENTITY_TAG, USER_SETTINGS_ENTITY_TAG,
+    TRANSACTION_ENTITY_TAG,
+    RECURRING_ENTITY_TAG,
+    ACCOUNT_ENTITY_TAG,
+    CATEGORY_ENTITY_TAG,
+    CREDIT_CARD_ENTITY_TAG,
+    TAG_ENTITY_TAG,
+    USER_SETTINGS_ENTITY_TAG,
   ],
   projections: [
-    TRANSACTION_ENTITY_TAG, RECURRING_ENTITY_TAG, ACCOUNT_ENTITY_TAG, CATEGORY_ENTITY_TAG, USER_SETTINGS_ENTITY_TAG,
+    TRANSACTION_ENTITY_TAG,
+    RECURRING_ENTITY_TAG,
+    ACCOUNT_ENTITY_TAG,
+    CATEGORY_ENTITY_TAG,
+    USER_SETTINGS_ENTITY_TAG,
   ],
   tags: [TAG_ENTITY_TAG],
 } as const;
@@ -68,7 +96,10 @@ describe('bundled dashboards live-update listeners', () => {
 
   describe('the shell resync list (ALL_ENTITY_TAGS)', () => {
     const shell = readFileSync(`${UI_DASHBOARDS_ROOT}/../app.js`, 'utf8').match(/ALL_ENTITY_TAGS = \[([^\]]*)\]/)?.[1];
-    const shellTags = (shell ?? '').split(',').map((tag) => tag.trim().replace(/^'|'$/g, '')).filter(Boolean);
+    const shellTags = (shell ?? '')
+      .split(',')
+      .map((tag) => tag.trim().replace(/^'|'$/g, ''))
+      .filter(Boolean);
 
     it('holds every tag any dashboard listens for', () => {
       const listened = Object.keys(EXPECTED_TAGS).flatMap((dashboard) => tagsOf(dashboard) ?? []);

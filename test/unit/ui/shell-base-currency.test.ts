@@ -41,8 +41,22 @@ const bootShell = async (routes: Routes, { demo = false }: { demo?: boolean } = 
     body,
   };
   const sandbox: Record<string, unknown> = {
-    document, console: { ...console, error() {} }, fetch: respond, Intl, Number, Object, Math, Array, Promise,
-    Date, String, JSON, encodeURIComponent, setTimeout, clearTimeout, URLSearchParams,
+    document,
+    console: { ...console, error() {} },
+    fetch: respond,
+    Intl,
+    Number,
+    Object,
+    Math,
+    Array,
+    Promise,
+    Date,
+    String,
+    JSON,
+    encodeURIComponent,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
     EventSource: class {
       constructor() {
         return stream;

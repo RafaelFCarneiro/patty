@@ -221,9 +221,9 @@ describe('CSRF', () => {
     expect(cookie).not.toBe('');
     expect((await unsafe(ctx, cookie, { origin: publicUrl, host: 'patty.example.com' })).statusCode).toBe(201);
     expect((await unsafe(ctx, cookie, { origin: LOOPBACK_ORIGIN })).statusCode).toBe(409);
-    expect(
-      (await unsafe(ctx, cookie, { origin: 'https://evil.example', host: 'patty.example.com' })).statusCode,
-    ).toBe(403);
+    expect((await unsafe(ctx, cookie, { origin: 'https://evil.example', host: 'patty.example.com' })).statusCode).toBe(
+      403,
+    );
   });
 
   it('refuses unsafe cookie requests when no origin can be established (non-loopback Host)', async () => {

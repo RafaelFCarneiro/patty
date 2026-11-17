@@ -61,7 +61,9 @@
     if (!symbol) return formatter.format(amount);
     return formatter
       .formatToParts(amount)
-      .map(function (part) { return part.type === 'currency' ? symbol : part.value; })
+      .map(function (part) {
+        return part.type === 'currency' ? symbol : part.value;
+      })
       .join('');
   }
 
@@ -124,7 +126,9 @@
   window.primaryCurrencyOf = function (map) {
     var all = Object.keys(map || {});
     if (window.BASE_CURRENCY && all.indexOf(window.BASE_CURRENCY) !== -1) return window.BASE_CURRENCY;
-    var keys = all.filter(function (c) { return map[c]; });
+    var keys = all.filter(function (c) {
+      return map[c];
+    });
     if (keys.length === 0) keys = all;
     keys.sort(function (a, b) {
       var activity = (map[b] ? 1 : 0) - (map[a] ? 1 : 0);
@@ -138,7 +142,9 @@
   // Row/category sort order or "any activity" flag only, never a number shown to the user — a
   // plain sum of raw units across currencies (deliberately not a currency conversion).
   window.magnitudeOf = function (map) {
-    return Object.keys(map || {}).reduce(function (sum, c) { return sum + (Number(map[c]) || 0); }, 0);
+    return Object.keys(map || {}).reduce(function (sum, c) {
+      return sum + (Number(map[c]) || 0);
+    }, 0);
   };
 
   // Additively merges any number of currency maps — Object.assign/spread would silently overwrite
@@ -148,7 +154,9 @@
     var maps = Array.prototype.slice.call(arguments);
     var result = {};
     maps.forEach(function (map) {
-      Object.keys(map || {}).forEach(function (c) { window.addMultiCurrency(result, c, map[c]); });
+      Object.keys(map || {}).forEach(function (c) {
+        window.addMultiCurrency(result, c, map[c]);
+      });
     });
     return result;
   };
@@ -168,8 +176,14 @@
       if (b === window.DEFAULT_CURRENCY) return 1;
       return a.localeCompare(b);
     });
-    var nonZeroKeys = keys.filter(function (c) { return map[c]; });
+    var nonZeroKeys = keys.filter(function (c) {
+      return map[c];
+    });
     var keysToShow = nonZeroKeys.length > 0 ? nonZeroKeys : keys;
-    return keysToShow.map(function (c) { return formatFn(map[c], c); }).join(delimiter);
+    return keysToShow
+      .map(function (c) {
+        return formatFn(map[c], c);
+      })
+      .join(delimiter);
   };
 })();

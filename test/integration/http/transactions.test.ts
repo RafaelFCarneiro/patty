@@ -233,9 +233,7 @@ describe('POST /api/accounts/statement', () => {
   });
 
   it('re-imports are treated as duplicates', async () => {
-    const items = [
-      { description: 'Bulk Dup', amount: 10, type: 'expense', date: '2026-06-01' },
-    ];
+    const items = [{ description: 'Bulk Dup', amount: 10, type: 'expense', date: '2026-06-01' }];
     await inject({ method: 'POST', url: '/api/accounts/statement', payload: { items } });
     const res = await inject({ method: 'POST', url: '/api/accounts/statement', payload: { items } });
     expect(res.statusCode).toBe(201);
@@ -359,7 +357,11 @@ describe('PATCH /api/accounts/transactions/:id', () => {
       payload: { description: 'Updatable', amount: 7, date: '2026-06-01' },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { description: 'Updated' } });
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/accounts/transactions/${id}`,
+      payload: { description: 'Updated' },
+    });
     expect(res.statusCode).toBe(200);
   });
 
@@ -377,7 +379,11 @@ describe('PATCH /api/accounts/transactions/:id', () => {
       },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { tags: ['tag-b'] } });
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/accounts/transactions/${id}`,
+      payload: { tags: ['tag-b'] },
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().tags).toContain('tag-b');
     expect(res.json().tags).not.toContain('tag-a');
@@ -412,7 +418,11 @@ describe('PATCH /api/accounts/transactions/:id', () => {
     expect(set.json().note).toBe('added');
     const clear = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { note: '' } });
     expect(clear.json().note).toBeUndefined();
-    const unchanged = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { amount: 10 } });
+    const unchanged = await inject({
+      method: 'PATCH',
+      url: `/api/accounts/transactions/${id}`,
+      payload: { amount: 10 },
+    });
     expect(unchanged.json().note).toBeUndefined();
   });
 
@@ -433,7 +443,11 @@ describe('PATCH /api/accounts/transactions/:id', () => {
       payload: { description: 'Sub clear', amount: 15, subCategory: 'Clear Sub' },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { category: 'Transport' } });
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/accounts/transactions/${id}`,
+      payload: { category: 'Transport' },
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().categoryName).toBe('Transport');
     expect(res.json().subCategoryId).toBeUndefined();
@@ -477,7 +491,11 @@ describe('PATCH /api/accounts/transactions/:id', () => {
       payload: { from: 'Xfer Cat Src', to: 'Xfer Cat Dst', amount: 50 },
     });
     const id = xferRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { category: 'Food' } });
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/accounts/transactions/${id}`,
+      payload: { category: 'Food' },
+    });
     expect(res.statusCode).toBe(422);
   });
 
@@ -498,7 +516,11 @@ describe('PATCH /api/accounts/transactions/:id', () => {
       payload: { from: 'Xfer Type Src', to: 'Xfer Type Dst', amount: 50 },
     });
     const id = xferRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { type: 'expense' } });
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/accounts/transactions/${id}`,
+      payload: { type: 'expense' },
+    });
     expect(res.statusCode).toBe(422);
   });
 
@@ -509,7 +531,11 @@ describe('PATCH /api/accounts/transactions/:id', () => {
       payload: { description: 'Exp', amount: 50 },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { category: 'Salary' } });
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/accounts/transactions/${id}`,
+      payload: { category: 'Salary' },
+    });
     expect(res.statusCode).toBe(422);
     expect(res.json().error.code).toBe('category_kind_mismatch');
   });
@@ -521,7 +547,11 @@ describe('PATCH /api/accounts/transactions/:id', () => {
       payload: { description: 'Wire type', amount: 20 },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { type: 'transfer' } });
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/accounts/transactions/${id}`,
+      payload: { type: 'transfer' },
+    });
     expect(res.statusCode).toBe(422);
   });
 

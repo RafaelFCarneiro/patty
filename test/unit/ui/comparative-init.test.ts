@@ -132,8 +132,7 @@ const loadComparativeSandboxWithControllableStatus = () => {
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
-  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
-    `${currency} ${value}`;
+  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) => `${currency} ${value}`;
 
   const script = extractFragmentScript(readFileSync(COMPARATIVE_HTML_PATH, 'utf-8'));
   vm.runInContext(script, sandbox, { filename: COMPARATIVE_HTML_PATH });
@@ -222,7 +221,7 @@ describe("runInit's boot sequencing (ui/dashboards/comparative.html)", () => {
   });
 });
 
-describe("live update after boot (ui/dashboards/comparative.html)", () => {
+describe('live update after boot (ui/dashboards/comparative.html)', () => {
   const bootCompleted = async () => {
     const loaded = loadComparativeSandboxWithControllableStatus();
     let loadCount = 0;

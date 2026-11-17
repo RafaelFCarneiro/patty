@@ -54,7 +54,6 @@ describe('notSignedInMessage', () => {
       STDIO_MESSAGES.ownerUnclaimedHint,
       STDIO_MESSAGES.invalidEnvToken,
     ].join('\n');
-    for (const [command] of wording.matchAll(/npx [^\s`]+/g))
-      expect(command).toBe('npx @rfc0/patty@latest');
+    for (const [command] of wording.matchAll(/npx [^\s`]+/g)) expect(command).toBe('npx @rfc0/patty@latest');
   });
 });

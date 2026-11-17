@@ -52,9 +52,7 @@ describe('readJsonOrEmpty', () => {
 
     expect(readJsonOrEmpty(configPath)._unsafeUnwrap()).toEqual({
       config: {},
-      warnings: [
-        `patty setup: ${configPath} does not contain a JSON object at the root — replacing it during setup.`,
-      ],
+      warnings: [`patty setup: ${configPath} does not contain a JSON object at the root — replacing it during setup.`],
     });
     expect(errorSpy).not.toHaveBeenCalled(); // it reports; the setup command prints
   });
@@ -66,9 +64,7 @@ describe('readJsonOrEmpty', () => {
 
     expect(readJsonOrEmpty(configPath)._unsafeUnwrap()).toEqual({
       config: {},
-      warnings: [
-        `patty setup: ${configPath} does not contain a JSON object at the root — replacing it during setup.`,
-      ],
+      warnings: [`patty setup: ${configPath} does not contain a JSON object at the root — replacing it during setup.`],
     });
   });
 
@@ -321,11 +317,7 @@ describe('OpenCode (JSONC-safe)', () => {
   ])('refuses %s and leaves the file byte-identical, for every operation', async (_name, content) => {
     const client = await opencode();
     seed(jsonFile(), content);
-    const operations = [
-      () => client.run('default'),
-      () => client.addDemo('/tmp/demo.db'),
-      () => client.removeDemo(),
-    ];
+    const operations = [() => client.run('default'), () => client.addDemo('/tmp/demo.db'), () => client.removeDemo()];
     operations.forEach((operation) => {
       const failure = operation()._unsafeUnwrapErr();
       expect(failure).toMatchObject({ code: ClientConfigFailureCode.enum.read_failed, path: jsonFile() });
