@@ -5,7 +5,7 @@ import { createClient } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as KeyLock from '../../../../src/diplomat/db/key-lock.js';
 import { acquireKeyLockForTest, keyLockPathForTest } from '../../fixtures/key-lock.js';
-import { KEYCHAIN_UNREADABLE_MESSAGE } from '../../../../src/models/auth/sign-in.js';
+import { KEYCHAIN_LOCKED_MESSAGE, KEYCHAIN_UNAVAILABLE_MESSAGE } from '../../../../src/models/auth/sign-in.js';
 import {
   enableWal,
   findEncryptionKey,
@@ -19,6 +19,7 @@ const keychain = vi.hoisted(() => ({
   loaded: vi.fn(),
   getPassword: vi.fn<() => string | null>(),
   setPassword: vi.fn(),
+  entryFails: false,
 }));
 
 // The factory runs on first import of the module, so `loaded` records whether it was ever loaded.
@@ -26,6 +27,9 @@ vi.mock('@napi-rs/keyring', () => {
   keychain.loaded();
   return {
     Entry: class {
+      constructor() {
+        if (keychain.entryFails) throw new Error('no keychain on this machine');
+      }
       getPassword = keychain.getPassword;
       setPassword = keychain.setPassword;
     },
@@ -55,6 +59,7 @@ describe('resolveEncryptionKey (ADR-032)', () => {
     vi.resetModules();
     keychain.getPassword.mockReset();
     keychain.setPassword.mockReset();
+    keychain.entryFails = false;
   });
 
   afterEach(() => {
@@ -148,12 +153,20 @@ describe('resolveEncryptionKey (ADR-032)', () => {
     expect(keychain.setPassword).not.toHaveBeenCalled();
   });
 
-  it('fails fast with an actionable error when no source is set and the keychain is unavailable', async () => {
+  it('a locked keychain says so — not the key-generation hint — and never generates a key', async () => {
     keychain.getPassword.mockImplementation(() => {
       throw new Error('no secret service');
     });
+    const failure = await resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH }).catch((cause: unknown) => cause);
+    expect((failure as Error).message).toContain(KEYCHAIN_LOCKED_MESSAGE);
+    expect((failure as Error).message).not.toContain('openssl rand');
+    expect(keychain.setPassword).not.toHaveBeenCalled();
+  });
+
+  it('no keychain on this machine (an entry cannot be created) points at a key file', async () => {
+    keychain.entryFails = true;
     await expect(resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH })).rejects.toThrow(
-      /keychain.*openssl rand -hex 32.*PATTY_DB_KEY_FILE.*PATTY_DB_KEY/s,
+      new RegExp(`${KEYCHAIN_UNAVAILABLE_MESSAGE}.*openssl rand -hex 32.*PATTY_DB_KEY_FILE.*PATTY_DB_KEY`, 's'),
     );
     expect(keychain.setPassword).not.toHaveBeenCalled();
   });
@@ -247,25 +260,25 @@ describe('the keychain key helpers (key import)', () => {
     it('startup says so, keeps the cause, and never generates or stores a key', async () => {
       locked();
       const failure = await resolveEncryptionKey({ DB_PATH, KEY_LOCK_PATH }).catch((cause: unknown) => cause);
-      expect((failure as Error).message).toContain(KEYCHAIN_UNREADABLE_MESSAGE);
+      expect((failure as Error).message).toContain(KEYCHAIN_LOCKED_MESSAGE);
       expect(((failure as Error).cause as Error).message).toBe('keychain locked');
       expect(keychain.setPassword).not.toHaveBeenCalled();
     });
 
     it('keychainHoldsKey fails with the same message instead of answering "no"', async () => {
       locked();
-      await expect(keychainHoldsKey()).rejects.toThrow(KEYCHAIN_UNREADABLE_MESSAGE);
+      await expect(keychainHoldsKey()).rejects.toThrow(KEYCHAIN_LOCKED_MESSAGE);
     });
 
     it('storeKeychainKeyIfAbsent never writes after a failed read', async () => {
       locked();
-      await expect(storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH)).rejects.toThrow(KEYCHAIN_UNREADABLE_MESSAGE);
+      await expect(storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH)).rejects.toThrow(KEYCHAIN_LOCKED_MESSAGE);
       expect(keychain.setPassword).not.toHaveBeenCalled();
     });
 
     it('findEncryptionKey fails with the same message instead of answering null', async () => {
       locked();
-      await expect(findEncryptionKey({ KEY_LOCK_PATH, DB_PATH })).rejects.toThrow(KEYCHAIN_UNREADABLE_MESSAGE);
+      await expect(findEncryptionKey({ KEY_LOCK_PATH, DB_PATH })).rejects.toThrow(KEYCHAIN_LOCKED_MESSAGE);
       expect(keychain.setPassword).not.toHaveBeenCalled();
     });
 
@@ -275,7 +288,7 @@ describe('the keychain key helpers (key import)', () => {
         throw new Error('access denied');
       });
       const failure = await storeKeychainKeyIfAbsent(FILE_KEY, KEY_LOCK_PATH).catch((cause: unknown) => cause);
-      expect((failure as Error).message).toContain(KEYCHAIN_UNREADABLE_MESSAGE);
+      expect((failure as Error).message).toContain(KEYCHAIN_LOCKED_MESSAGE);
       expect((failure as Error).message).not.toContain(FILE_KEY);
     });
   });

@@ -7,7 +7,7 @@ import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
 import type { Config } from '../../config.js';
 import { EncryptionKey } from '../../models/encryption-key.js';
 import { PRIVATE_DIRECTORY_MODE } from '../../models/export.js';
-import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE, KEYCHAIN_UNREADABLE_MESSAGE } from '../../models/auth/sign-in.js';
+import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_LOCKED_MESSAGE, KEYCHAIN_SERVICE, KEYCHAIN_UNAVAILABLE_MESSAGE } from '../../models/auth/sign-in.js';
 import { withKeyLock } from './key-lock.js';
 import * as schema from './schema.js';
 import { LOG_PREFIX } from '../../models/package.js';
@@ -78,19 +78,25 @@ const validateStoredKey = (stored: string): string => {
   return parsed.data;
 };
 
+// No keychain on this machine: the module will not load or an entry cannot be created. A key file is the way forward.
 const keychainEntry = async () => {
-  const { Entry } = await loadKeyring();
-  return new Entry(KEYCHAIN_SERVICE, DB_KEY_KEYCHAIN_ACCOUNT);
+  try {
+    const { Entry } = await loadKeyring();
+    return new Entry(KEYCHAIN_SERVICE, DB_KEY_KEYCHAIN_ACCOUNT);
+  } catch (cause) {
+    throw new Error(`${KEYCHAIN_UNAVAILABLE_MESSAGE} ${KEY_GENERATION_HINT}`, { cause });
+  }
 };
 
 type KeychainEntry = Awaited<ReturnType<typeof keychainEntry>>;
 
-// Every keychain access goes through here: the native module throws on a failed store, and that is never "absent".
+// Every store operation (getPassword/setPassword) goes through here: the native module throws when the store is
+// locked or denied, and that is never "absent" — so never a reason to generate a key, and never the generation hint.
 const inKeychain = async <T>(work: () => T | Promise<T>): Promise<T> => {
   try {
     return await work();
   } catch (cause) {
-    throw new Error(`${KEYCHAIN_UNREADABLE_MESSAGE} ${KEY_GENERATION_HINT}`, { cause });
+    throw new Error(KEYCHAIN_LOCKED_MESSAGE, { cause });
   }
 };
 
@@ -109,7 +115,7 @@ const generateKeychainKey = (entry: KeychainEntry, keyLockPath: string): Promise
 };
 
 const resolveKeychainKey = async (keyLockPath: string): Promise<string> => {
-  const entry = await inKeychain(keychainEntry);
+  const entry = await keychainEntry();
   const existing = await inKeychain(() => entry.getPassword());
   return existing || generateKeychainKey(entry, keyLockPath);
 };
@@ -133,11 +139,13 @@ const configuredKey = (config: DbConfig): string | null => {
 export const resolveEncryptionKey = async (config: DbConfig): Promise<string> =>
   configuredKey(config) ?? validateStoredKey(await resolveKeychainKey(config.KEY_LOCK_PATH));
 
-export const keychainHoldsKey = (): Promise<boolean> =>
-  inKeychain(async () => Boolean((await keychainEntry()).getPassword()));
+export const keychainHoldsKey = async (): Promise<boolean> => {
+  const entry = await keychainEntry();
+  return inKeychain(() => Boolean(entry.getPassword()));
+};
 
 export const storeKeychainKeyIfAbsent = async (key: string, keyLockPath: string): Promise<boolean> => {
-  const entry = await inKeychain(keychainEntry);
+  const entry = await keychainEntry();
   return withKeyLock(
     () =>
       inKeychain(() => {
@@ -152,7 +160,8 @@ export const storeKeychainKeyIfAbsent = async (key: string, keyLockPath: string)
 export const findEncryptionKey = async (config: DbConfig): Promise<string | null> => {
   const configured = configuredKey(config);
   if (configured !== null) return configured;
-  const stored = await inKeychain(async () => (await keychainEntry()).getPassword());
+  const entry = await keychainEntry();
+  const stored = await inKeychain(() => entry.getPassword());
   return stored ? validateStoredKey(stored) : null;
 };
 

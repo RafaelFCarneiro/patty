@@ -25,7 +25,7 @@ import { closeDatabase, openDatabase } from '../../../src/diplomat/db/driver.js'
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migration-barrier.js';
 import { accounts, transactions } from '../../../src/diplomat/db/schema.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
-import { KEYCHAIN_UNREADABLE_MESSAGE } from '../../../src/models/auth/sign-in.js';
+import { KEYCHAIN_LOCKED_MESSAGE } from '../../../src/models/auth/sign-in.js';
 import { PRIVATE_FILE_MODE } from '../../../src/models/export.js';
 import { KeyImportRefusal } from '../../../src/models/key-import.js';
 import type * as KeyLock from '../../../src/diplomat/db/key-lock.js';
@@ -296,7 +296,7 @@ describe('patty key import', () => {
   it('fails cleanly, printing no key, when the keychain cannot be read', async () => {
     keychain.broken = true;
     expect(await run('key', 'import', '--from', keyFile)).toBe(EXIT_FAILURE);
-    expect(err.join('\n')).toContain(KEYCHAIN_UNREADABLE_MESSAGE);
+    expect(err.join('\n')).toContain(KEYCHAIN_LOCKED_MESSAGE);
     expect(keychain.stored).toBeNull();
     expect(everythingPrinted()).not.toContain(KEY);
   });
@@ -366,7 +366,7 @@ describe('patty db import', () => {
   it('fails with the keychain message, writing nothing, when the keychain cannot be read', async () => {
     keychain.broken = true;
     expect(await run('db', 'import', '--from', snapshot)).toBe(EXIT_FAILURE);
-    expect(err.join('\n')).toContain(KEYCHAIN_UNREADABLE_MESSAGE);
+    expect(err.join('\n')).toContain(KEYCHAIN_LOCKED_MESSAGE);
     expect(existsSync(installDatabase)).toBe(false);
   });
 

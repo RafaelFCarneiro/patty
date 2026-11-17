@@ -37,12 +37,17 @@ export const KEYCHAIN_SERVICE = 'patty';
 
 export const DB_KEY_KEYCHAIN_ACCOUNT = 'db-encryption-key';
 
-/** What every failed keychain access says (@napi-rs/keyring 2 throws on a locked or denied store; `null` only
- *  ever means "nothing stored"): a failed read is never "no key", so nothing is generated, stored or imported
- *  after one. */
-export const KEYCHAIN_UNREADABLE_MESSAGE =
-  `${LOG_PREFIX} the OS keychain could not be read (locked or access denied): ` +
-  'unlock it and try again; nothing was written.';
+/** A keychain operation failed (@napi-rs/keyring 2 throws on a locked or denied store; `null` only ever means
+ *  "nothing stored"). A failed read is never "no key": nothing is generated, stored or imported after one, and an
+ *  install that already has a database must not be given a new key. */
+export const KEYCHAIN_LOCKED_MESSAGE =
+  `${LOG_PREFIX} the OS keychain could not be read or written (locked or access denied): ` +
+  'unlock it and try again; nothing was written. ' +
+  'If this install already has a database, its key is in the keychain — do not generate a new one.';
+
+/** The keychain module cannot load or an entry cannot be created: there is no keychain on this machine. */
+export const KEYCHAIN_UNAVAILABLE_MESSAGE =
+  `${LOG_PREFIX} no OS keychain is available on this machine, and no key source was configured.`;
 export const SIGN_IN_ACCOUNT_PREFIX = 'signin';
 export const DB_ID_LENGTH = 12;
 
