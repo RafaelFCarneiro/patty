@@ -178,7 +178,7 @@ Consequences for releases:
 
 Dependabot (`.github/dependabot.yml`) checks npm weekly and GitHub Actions monthly. Minor and patch updates arrive
 grouped (one PR for dev dependencies, one for production ones); every major is its own PR, and `zod`'s and
-`typescript`'s majors are ignored there because each has a planned PR of its own. A production update ships as a
+`typescript`'s majors are ignored there because each has a planned PR of its own. Packages that must move in lockstep (`vitest` and `@vitest/*`, whose peer is an exact version) are grouped, majors included. A production update ships as a
 `fix(deps):` (patch). `package.json` `overrides` are only for advisories in **dev-only transitive** dependencies that
 `npm audit fix` cannot resolve within range, pinned to the first fixed version, one entry each with the advisory
 named in the PR that adds it; review them whenever their parent package updates and drop the ones it no longer needs.
