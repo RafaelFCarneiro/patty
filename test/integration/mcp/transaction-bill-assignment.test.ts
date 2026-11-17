@@ -215,7 +215,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(UNRECOGNIZED_KEYS_REJECTION);
+      expect(text).toMatch(UNRECOGNIZED_KEYS_REJECTION);
     } finally {
       await transport.close();
     }

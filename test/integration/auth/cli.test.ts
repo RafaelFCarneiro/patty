@@ -338,7 +338,7 @@ describe('patty auth (arguments)', () => {
     [['reset-password', '--username', 'x'], 'username'],
     [['reset-password', 'ana'], 'unexpected argument "ana"'],
     [['setup', 'claude-code'], 'unexpected argument "claude-code"'],
-    [['reset-password', '--user', '   ', '--password-stdin'], 'at least 1'],
+    [['reset-password', '--user', '   ', '--password-stdin'], '--user must not be empty'],
   ])('rejects %j without touching the database', async (args, mention) => {
     const ctx = await createApp();
     const { run, err } = harness(ctx, { stdin: PASSWORD });

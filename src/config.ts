@@ -7,7 +7,6 @@ import { DEFAULT_PROFILE, ProfileSchema } from './models/auth/sign-in.js';
 import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from './models/demo/core.js';
 import { EncryptionKey } from './models/encryption-key.js';
 import { Locale } from './models/locale.js';
-import './common/zod-wording.js';
 
 export const McpTransport = z.enum(['stdio', 'http']);
 

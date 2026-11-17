@@ -12,7 +12,6 @@ import type { DemoOptions } from '../../wire/in/cli.js';
 import { CLI_MESSAGES } from './messages.js';
 import { isPromptEnded, PROMPT_MESSAGES, type PromptFailure } from './prompt.js';
 import { PROMPT_ABORTED_MESSAGE, PromptEnd, type Terminal } from './terminal.js';
-import '../../common/zod-wording.js';
 
 export const EXIT_OK = 0;
 export const EXIT_FAILURE = 1;

@@ -36,7 +36,7 @@ export type ClaimOptions = z.infer<typeof ClaimOptionsSchema>;
 export const ResetOptionsSchema = z
   .object({
     [PASSWORD_STDIN_FLAG]: z.boolean().default(false),
-    user: z.string().transform(normalizeUsername).pipe(z.string().min(1).max(OPTION_MAX_LENGTH)).optional(),
+    user: z.string().transform(normalizeUsername).pipe(z.string().min(1, { error: '--user must not be empty' }).max(OPTION_MAX_LENGTH)).optional(),
   })
   .transform((flags) => ({ passwordStdin: flags[PASSWORD_STDIN_FLAG], user: flags.user }));
 export type ResetOptions = z.infer<typeof ResetOptionsSchema>;
@@ -88,12 +88,16 @@ export const DemoOptionsSchema = z.object({
 });
 export type DemoOptions = z.infer<typeof DemoOptionsSchema>;
 
+/** A flag given a value outside its choices says which flag, what it got and what is allowed. */
+const flagValueError = (flag: string, choices: readonly string[]) => (issue: { input?: unknown }) =>
+  issue.input === undefined ? undefined : `--${flag}: '${String(issue.input)}' is not one of ${choices.join(', ')}`;
+
 /** `login`: `profile` falls back to `PATTY_PROFILE` (the shell decides); `duration`/`scope` only pre-select the
  *  consent page — the person approving still chooses. */
 export const LoginOptionsSchema = z.object({
   profile: ProfileSchema.optional(),
-  duration: LoginDuration.optional(),
-  scope: TokenAccess.optional(),
+  duration: z.enum(LoginDuration.options, { error: flagValueError('duration', LoginDuration.options) }).optional(),
+  scope: z.enum(TokenAccess.options, { error: flagValueError('scope', TokenAccess.options) }).optional(),
 });
 export type LoginOptions = z.infer<typeof LoginOptionsSchema>;
 

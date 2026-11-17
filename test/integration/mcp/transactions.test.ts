@@ -189,7 +189,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -209,7 +209,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -245,7 +245,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -281,7 +281,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -313,7 +313,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -330,7 +330,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -363,7 +363,7 @@ describe('MCP integration > transactions', () => {
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }

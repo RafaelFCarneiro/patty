@@ -5,7 +5,6 @@ import { isExportConfirmation } from '../../logic/auth/key-export.js';
 import { KEY_EXPORT_CONFIRMATION_ANSWER, type AdminCredentials } from '../../models/auth/key-export.js';
 import { normalizeUsername, PasswordSchema, UsernameSchema } from '../../models/auth/password.js';
 import { invalidAnswer, PromptFailureCode, type InvalidAnswer, type PromptEnded, type Terminal } from './terminal.js';
-import '../../common/zod-wording.js';
 
 export const MAX_PROMPT_ATTEMPTS = 3;
 

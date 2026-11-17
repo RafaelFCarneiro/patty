@@ -6,7 +6,6 @@ import { ConfirmQuerySchema, IdParamSchema, NameParamSchema } from '../../wire/i
 import { ConflictErrorOut, NotFoundErrorOut, ValidationErrorOut } from '../../wire/out/errors.js';
 import { okResponse } from './openapi.js';
 import { withRouteHint } from './remedy.js';
-import '../../common/zod-wording.js';
 
 /** Shared HTTP response helpers (ADR-025) — one implementation for every route module. */
 

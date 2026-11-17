@@ -155,7 +155,7 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -183,7 +183,7 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }
@@ -213,7 +213,7 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
       );
       expect(result.isError).toBe(true);
       const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain(EMPTY_STRING_REJECTION);
+      expect(text).toMatch(EMPTY_STRING_REJECTION);
     } finally {
       await transport.close();
     }

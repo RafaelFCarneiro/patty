@@ -3,7 +3,6 @@ import { isEmpty } from 'remeda';
 import { z } from 'zod';
 import type { McpContext } from './context.js';
 import type { PromptDefinition, ResourceDefinition, ToolDefinition } from './definition.js';
-import '../../common/zod-wording.js';
 
 /**
  * A tool's arguments are advertised as a closed object (`additionalProperties: false`) while an unknown argument is
@@ -12,7 +11,7 @@ import '../../common/zod-wording.js';
  * arguments never carried the keyword, and still does not.
  */
 const toolInputSchema = (shape: ToolDefinition['config']['inputSchema']) =>
-  isEmpty(Object.keys(shape)) ? z.object(shape) : z.object(shape).meta({ additionalProperties: false });
+  isEmpty(shape) ? z.object(shape) : z.object(shape).meta({ additionalProperties: false });
 
 export type EdgeDefinitions = {
   prompts: readonly PromptDefinition[];
