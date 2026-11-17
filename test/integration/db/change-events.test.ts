@@ -12,6 +12,7 @@ import {
 } from '../../../src/diplomat/db/change-events.js';
 import { BUSY_TIMEOUT_MS, closeDatabase, openDatabase, openSibling, type Db } from '../../../src/diplomat/db/driver.js';
 import type { ChangeEvent } from '../../../src/models/tenancy.js';
+import { holdWriteLock } from '../../unit/fixtures/write-lock.js';
 import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 
 let tmpDir: string;
@@ -160,11 +161,11 @@ describe('changeLogStore — the SQLite ChangeLogStore', () => {
     // Another connection holds the write lock, as a long write of another process would.
     const holdingTheWriteLock = async (work: () => Promise<void>): Promise<void> => {
       const holder = await openSibling(db, BUSY_TIMEOUT_MS);
-      await holder.run(sql`BEGIN IMMEDIATE`);
+      const held = await holdWriteLock(holder);
       try {
         await work();
       } finally {
-        await holder.run(sql`COMMIT`);
+        await held.release();
         closeDatabase(holder);
       }
     };
@@ -210,9 +211,9 @@ describe('changeLogStore — the SQLite ChangeLogStore', () => {
       await store.append(record(['warm up the connection']));
       const releaseAfterMs = CHANGE_EVENT_APPEND_BACKOFF_MS[0]! + CHANGE_EVENT_APPEND_BACKOFF_MS[1]!;
       const holder = await openSibling(db, BUSY_TIMEOUT_MS);
-      await holder.run(sql`BEGIN IMMEDIATE`);
+      const held = await holdWriteLock(holder);
       const released = pause(releaseAfterMs).then(async () => {
-        await holder.run(sql`COMMIT`);
+        await held.release();
         closeDatabase(holder);
       });
 

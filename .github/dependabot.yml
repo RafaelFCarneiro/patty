@@ -14,6 +14,8 @@ updates:
       prod-minor-patch:
         dependency-type: production
         update-types: [minor, patch]
+        # 0.x minors can break; each comes as its own PR.
+        exclude-patterns: ['@libsql/*']
     ignore:
       # Each has its own planned PR.
       - dependency-name: zod
