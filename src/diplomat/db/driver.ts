@@ -7,7 +7,7 @@ import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
 import type { Config } from '../../config.js';
 import { EncryptionKey } from '../../models/encryption-key.js';
 import { PRIVATE_DIRECTORY_MODE } from '../../models/export.js';
-import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE } from '../../models/auth/sign-in.js';
+import { DB_KEY_KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE, KEYCHAIN_UNREADABLE_MESSAGE } from '../../models/auth/sign-in.js';
 import { withKeyLock } from './key-lock.js';
 import * as schema from './schema.js';
 import { LOG_PREFIX } from '../../models/package.js';
@@ -85,14 +85,12 @@ const keychainEntry = async () => {
 
 type KeychainEntry = Awaited<ReturnType<typeof keychainEntry>>;
 
+// Every keychain access goes through here: the native module throws on a failed store, and that is never "absent".
 const inKeychain = async <T>(work: () => T | Promise<T>): Promise<T> => {
   try {
     return await work();
   } catch (cause) {
-    throw new Error(
-      `${LOG_PREFIX} cannot read or write the database encryption key in the OS keychain, and no key source was configured. ${KEY_GENERATION_HINT}`,
-      { cause },
-    );
+    throw new Error(`${KEYCHAIN_UNREADABLE_MESSAGE} ${KEY_GENERATION_HINT}`, { cause });
   }
 };
 
@@ -135,21 +133,26 @@ const configuredKey = (config: DbConfig): string | null => {
 export const resolveEncryptionKey = async (config: DbConfig): Promise<string> =>
   configuredKey(config) ?? validateStoredKey(await resolveKeychainKey(config.KEY_LOCK_PATH));
 
-export const keychainHoldsKey = async (): Promise<boolean> => Boolean((await keychainEntry()).getPassword());
+export const keychainHoldsKey = (): Promise<boolean> =>
+  inKeychain(async () => Boolean((await keychainEntry()).getPassword()));
 
 export const storeKeychainKeyIfAbsent = async (key: string, keyLockPath: string): Promise<boolean> => {
-  const entry = await keychainEntry();
-  return withKeyLock(async () => {
-    if (entry.getPassword()) return false;
-    entry.setPassword(key);
-    return true;
-  }, keyLockPath);
+  const entry = await inKeychain(keychainEntry);
+  return withKeyLock(
+    () =>
+      inKeychain(() => {
+        if (entry.getPassword()) return false;
+        entry.setPassword(key);
+        return true;
+      }),
+    keyLockPath,
+  );
 };
 
 export const findEncryptionKey = async (config: DbConfig): Promise<string | null> => {
   const configured = configuredKey(config);
   if (configured !== null) return configured;
-  const stored = (await keychainEntry()).getPassword();
+  const stored = await inKeychain(async () => (await keychainEntry()).getPassword());
   return stored ? validateStoredKey(stored) : null;
 };
 

@@ -11,7 +11,8 @@ const loadKeyring = () => import('@napi-rs/keyring');
 
 type Entry = Awaited<ReturnType<typeof loadKeyring>>['Entry']['prototype'];
 
-/** The one place the throwing native module is called: whatever it does with an entry becomes a `Result`. */
+/** The one place the native module is called: it throws on a store failure (locked, denied), and that becomes
+ *  `unavailable` — never "no sign-in", which is `null` from a successful read. */
 const useEntry = <T>(account: string, action: (entry: Entry) => T): ResultAsync<T, KeychainFailure> =>
   ResultAsync.fromPromise(
     loadKeyring().then(({ Entry }) => action(new Entry(KEYCHAIN_SERVICE, account))),
@@ -35,7 +36,8 @@ export const keychainSignInStore = (
       },
     ),
 
-  // Nothing saved, or the keychain is unavailable: either way there is nothing left to remove.
+  // keyring 2 throws when the store fails and answers `false` when there was nothing to delete: either way there is
+  // nothing left for this process to remove, so neither is an error.
   clear: () =>
     useEntry(account, (entry) => entry.deletePassword()).match(
       () => undefined,

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { reasonOf } from '../error.js';
+import { LOG_PREFIX } from '../package.js';
 import { SECOND_MS } from './time.js';
 
 /** How often a pending sign-in is checked for its approval. */
@@ -35,6 +36,13 @@ export const PROFILE_ENV_VAR = 'PATTY_PROFILE';
 export const KEYCHAIN_SERVICE = 'patty';
 
 export const DB_KEY_KEYCHAIN_ACCOUNT = 'db-encryption-key';
+
+/** What every failed keychain access says (@napi-rs/keyring 2 throws on a locked or denied store; `null` only
+ *  ever means "nothing stored"): a failed read is never "no key", so nothing is generated, stored or imported
+ *  after one. */
+export const KEYCHAIN_UNREADABLE_MESSAGE =
+  `${LOG_PREFIX} the OS keychain could not be read (locked or access denied): ` +
+  'unlock it and try again; nothing was written.';
 export const SIGN_IN_ACCOUNT_PREFIX = 'signin';
 export const DB_ID_LENGTH = 12;
 
