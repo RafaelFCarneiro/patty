@@ -16,9 +16,15 @@ const COMPACT_OFFSET = /([+-]\d{2})(\d{2})?$/;
 export const IsoTimestamp = z
   .string()
   .meta({ format: 'date-time' })
-  .refine((text) => strictTimestamp.safeParse(text.replace(COMPACT_OFFSET, (_, h, m) => `${h}:${m ?? '00'}`)).success, {
-    error: 'Invalid datetime',
-  });
+  .refine(
+    (text) =>
+      strictTimestamp.safeParse(
+        text.replace(COMPACT_OFFSET, (_: string, hours: string, minutes?: string) => `${hours}:${minutes ?? '00'}`),
+      ).success,
+    {
+      error: 'Invalid datetime',
+    },
+  );
 
 /** Agent/scheduler-supplied external data (ADR-026 Phase 2) — decoded at the boundary like any
  *  other input, never treated as authoritative beyond its own `asOf`. */

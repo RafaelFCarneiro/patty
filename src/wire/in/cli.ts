@@ -8,6 +8,8 @@ import { DemoCountry } from '../../models/demo/core.js';
 
 /** The CLI's argv grammar: the commands, their subcommands, their flags and how many positionals each takes. */
 export const PASSWORD_STDIN_FLAG = 'password-stdin';
+export const DURATION_FLAG = 'duration';
+export const SCOPE_FLAG = 'scope';
 
 /** How many positional arguments each command takes: `setup` names one client, the `auth` subcommands none. */
 export const SETUP_POSITIONALS = 1;
@@ -36,7 +38,11 @@ export type ClaimOptions = z.infer<typeof ClaimOptionsSchema>;
 export const ResetOptionsSchema = z
   .object({
     [PASSWORD_STDIN_FLAG]: z.boolean().default(false),
-    user: z.string().transform(normalizeUsername).pipe(z.string().min(1, { error: '--user must not be empty' }).max(OPTION_MAX_LENGTH)).optional(),
+    user: z
+      .string()
+      .transform(normalizeUsername)
+      .pipe(z.string().min(1, { error: '--user must not be empty' }).max(OPTION_MAX_LENGTH))
+      .optional(),
   })
   .transform((flags) => ({ passwordStdin: flags[PASSWORD_STDIN_FLAG], user: flags.user }));
 export type ResetOptions = z.infer<typeof ResetOptionsSchema>;
@@ -96,8 +102,10 @@ const flagValueError = (flag: string, choices: readonly string[]) => (issue: { i
  *  consent page — the person approving still chooses. */
 export const LoginOptionsSchema = z.object({
   profile: ProfileSchema.optional(),
-  duration: z.enum(LoginDuration.options, { error: flagValueError('duration', LoginDuration.options) }).optional(),
-  scope: z.enum(TokenAccess.options, { error: flagValueError('scope', TokenAccess.options) }).optional(),
+  [DURATION_FLAG]: z
+    .enum(LoginDuration.options, { error: flagValueError(DURATION_FLAG, LoginDuration.options) })
+    .optional(),
+  [SCOPE_FLAG]: z.enum(TokenAccess.options, { error: flagValueError(SCOPE_FLAG, TokenAccess.options) }).optional(),
 });
 export type LoginOptions = z.infer<typeof LoginOptionsSchema>;
 

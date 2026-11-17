@@ -12,7 +12,7 @@ export const preferredAccount = process.env.MCP_SMOKE_ACCOUNT;
 /** An input the schema rejects answers `isError: true` with `-32602` and names the field; our handler never runs.
  *  The wording is zod's own, so the contract is the kind of issue (a too_small string, an unrecognized key), not its
  *  phrasing: these match the kind, never an exact sentence. */
-export const EMPTY_STRING_REJECTION = /too small|at least 1 character/i;
+export const EMPTY_STRING_REJECTION = /too small/i;
 export const UNRECOGNIZED_KEYS_REJECTION = /unrecognized key/i;
 
 export function ensure(condition: unknown, message: string): asserts condition {
