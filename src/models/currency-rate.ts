@@ -7,13 +7,26 @@ import type { ValidationError } from './error.js';
 // Entity tag for this aggregate's `Persistable`s.
 export const CURRENCY_RATE_ENTITY_TAG = 'currency_rate';
 
+const strictTimestamp = z.iso.datetime({ offset: true });
+const COMPACT_OFFSET = /([+-]\d{2})(\d{2})?$/;
+
+/** An ISO 8601 timestamp with an offset. zod 3 also accepted the compact offsets `+0200` and `+02`, and rates stored
+ *  with them are reparsed on every read, so they stay valid (ADR-037 §3: no behavior change): the offset is only
+ *  normalized to `+02:00` for the check, the value itself is never rewritten. */
+export const IsoTimestamp = z
+  .string()
+  .meta({ format: 'date-time' })
+  .refine((text) => strictTimestamp.safeParse(text.replace(COMPACT_OFFSET, (_, h, m) => `${h}:${m ?? '00'}`)).success, {
+    error: 'Invalid datetime',
+  });
+
 /** Agent/scheduler-supplied external data (ADR-026 Phase 2) — decoded at the boundary like any
  *  other input, never treated as authoritative beyond its own `asOf`. */
 export const SetExchangeRateSchema = z.object({
   from: CurrencyCode.describe('Base currency — 1 unit of this equals `rate` units of `to`'),
   to: CurrencyCode.describe('Quote currency — the unit `rate` is expressed in'),
   rate: z.number().positive().describe('1 unit of `from` = `rate` units of `to`, as of `asOf`'),
-  asOf: z.iso.datetime({ offset: true }).describe('ISO 8601 timestamp this rate was observed/sourced'),
+  asOf: IsoTimestamp.describe('ISO 8601 timestamp this rate was observed/sourced'),
   source: z.string().min(1).optional().describe('Free-text provenance, e.g. "PTAX", "coingecko"'),
 });
 export type SetExchangeRateInput = z.infer<typeof SetExchangeRateSchema>;
@@ -25,7 +38,7 @@ export const CurrencyRateSchema = z.object({
   fromCode: CurrencyCode.describe('Base currency — 1 unit of this equals `rate` units of toCode'),
   toCode: CurrencyCode.describe('Quote currency — the unit `rate` is expressed in'),
   rate: z.number().positive().describe('1 unit of fromCode = `rate` units of toCode, as of `asOf`'),
-  asOf: z.iso.datetime({ offset: true }).describe('ISO 8601 timestamp this rate was observed/sourced (agent-supplied)'),
+  asOf: IsoTimestamp.describe('ISO 8601 timestamp this rate was observed/sourced (agent-supplied)'),
   source: z
     .string()
     .min(1)
@@ -45,7 +58,7 @@ export const CurrencyRateViewSchema = z.object({
   from: CurrencyCode.describe('Base currency'),
   to: CurrencyCode.describe('Quote currency'),
   rate: z.number().positive().describe('1 unit of `from` = `rate` units of `to`, as of `asOf`'),
-  asOf: z.iso.datetime({ offset: true }).describe('ISO 8601 timestamp this rate was observed/sourced'),
+  asOf: IsoTimestamp.describe('ISO 8601 timestamp this rate was observed/sourced'),
   source: z.string().min(1).optional().describe('Free-text provenance, e.g. "PTAX", "coingecko"'),
 });
 export type CurrencyRateView = z.infer<typeof CurrencyRateViewSchema>;
@@ -56,7 +69,7 @@ export const ConvertedValueSchema = z.object({
   baseCurrency: CurrencyCode.describe('The currency this value is expressed in'),
   value: z.number().describe('Amount converted to baseCurrency, rounded to its own decimals'),
   rate: z.number().positive().describe('Exchange rate applied (1 when the source currency already is baseCurrency)'),
-  asOf: z.iso.datetime({ offset: true }).describe('When the applied rate was observed/sourced'),
+  asOf: IsoTimestamp.describe('When the applied rate was observed/sourced'),
   stale: z.boolean().describe('True when the rate is older than its class staleness threshold'),
 });
 export type ConvertedValue = z.infer<typeof ConvertedValueSchema>;
@@ -80,10 +93,7 @@ export const ConvertedTotalSchema = z.object({
   displayCurrency: CurrencyCode.describe('Currency the grand total is expressed in'),
   total: z.number().describe('Sum of every convertible per-currency amount, rounded to displayCurrency decimals'),
   stale: z.boolean().describe('True when any contributing rate is older than its class staleness threshold'),
-  asOf: z.iso
-    .datetime({ offset: true })
-    .nullable()
-    .describe('Oldest contributing rate timestamp, or null when nothing was converted'),
+  asOf: IsoTimestamp.nullable().describe('Oldest contributing rate timestamp, or null when nothing was converted'),
   excluded: z.array(ExcludedCurrencySchema).describe('Currencies with no rate to displayCurrency, left out of total'),
 });
 export type ConvertedTotal = z.infer<typeof ConvertedTotalSchema>;
