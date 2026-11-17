@@ -86,22 +86,24 @@ export type UpdateCreditCard = z.infer<typeof UpdateCreditCardSchema>;
  *  `CreateTransactionSchema` (ADR-019) plus `card` (required — the card's own internal liability
  *  account is always the destination) and bill-assignment (`billMonth`/`billYear`) — both are
  *  credit-card-only vocabulary the core no longer carries. Depends on the transaction core's schema
- *  (aggregate → core, the allowed direction) — never the reverse. `.strict()`: `account` is a
+ *  (aggregate → core, the allowed direction) — never the reverse. `z.strictObject`: `account` is a
  *  meaningful field on the sibling aggregate schema (`AddAccountMovementSchema`), not a
  *  server-managed one — a caller who mistakenly sends it here should get a validation error, not
  *  have it silently stripped by zod's default unknown-key behavior (REST boundary only; the MCP
  *  tool's inputSchema is a raw shape, which the MCP SDK reconstructs into its own non-strict object
  *  internally). */
-export const AddCardPurchaseSchema = CreateTransactionSchema.extend({
-  card: z.string().min(1).describe('Credit card name — joins the cycle bill'),
-  billMonth: BillQuerySchema.shape.month
-    .optional()
-    .describe(
-      'Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. ' +
-        'Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet',
-    ),
-  billYear: BillQuerySchema.shape.year.optional().describe('Explicit target bill cycle year; provide with billMonth'),
-}).strict();
+export const AddCardPurchaseSchema = z.strictObject(
+  CreateTransactionSchema.extend({
+    card: z.string().min(1).describe('Credit card name — joins the cycle bill'),
+    billMonth: BillQuerySchema.shape.month
+      .optional()
+      .describe(
+        'Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. ' +
+          'Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet',
+      ),
+    billYear: BillQuerySchema.shape.year.optional().describe('Explicit target bill cycle year; provide with billMonth'),
+  }).shape,
+);
 export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
 
 /** A single line of an `import_card_statement` request (ADR-017 step 2): same shape as
@@ -110,12 +112,14 @@ export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
  *  belongs to the whole pasted statement, and bulk import classifies automatically rather than
  *  taking a sub-category or tags per line — the same reduced shape the retired god bulk item
  *  carried). */
-export const ImportCardStatementItemSchema = AddCardPurchaseSchema.omit({
-  card: true,
-  rawInput: true,
-  subCategory: true,
-  tags: true,
-}).strict();
+export const ImportCardStatementItemSchema = z.strictObject(
+  AddCardPurchaseSchema.omit({
+    card: true,
+    rawInput: true,
+    subCategory: true,
+    tags: true,
+  }).shape,
+);
 export type ImportCardStatementItem = z.infer<typeof ImportCardStatementItemSchema>;
 
 /** Credit-card statement import (ADR-017 step 2): single-source — every item is a purchase on the
@@ -132,30 +136,32 @@ export type ImportCardStatement = z.infer<typeof ImportCardStatementSchema>;
 /** Card-aggregate update schema (ADR-017/ADR-019): `.extend`s the core's minimal
  *  `UpdateTransactionSchema` with `account` — kept reachable (not omitted) so it can be explicitly
  *  rejected with a helpful message (`cardErrors.accountChangeRejectedForCard`) rather than a generic
- *  `.strict()` unrecognized-key error — and `billMonth`/`billYear`, genuine card-only reassignment
- *  vocabulary. `.strict()` still rejects truly foreign fields at the REST boundary (MCP tool args
+ *  `z.strictObject` unrecognized-key error — and `billMonth`/`billYear`, genuine card-only reassignment
+ *  vocabulary. `z.strictObject` still rejects truly foreign fields at the REST boundary (MCP tool args
  *  are reconstructed as a non-strict shape by the SDK). */
-export const UpdateCardTransactionSchema = UpdateTransactionSchema.extend({
-  account: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      "Rejected: a card transaction is always funded by the card's own internal account. Sending this " +
-        'field returns a validation error rather than reassigning it — present only so that error can be ' +
-        'raised, not because the account is changeable',
-    ),
-  billMonth: BillQuerySchema.shape.month
-    .optional()
-    .describe(
-      'Reassign to this bill cycle month (1-12) — the transaction must already be a card transaction. ' +
-        'Provide with billYear together. Rejected if the current or target bill is paid; auto-creates the ' +
-        'target bill if that cycle has none yet',
-    ),
-  billYear: BillQuerySchema.shape.year
-    .optional()
-    .describe('Reassignment target bill cycle year; provide with billMonth'),
-}).strict();
+export const UpdateCardTransactionSchema = z.strictObject(
+  UpdateTransactionSchema.extend({
+    account: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Rejected: a card transaction is always funded by the card's own internal account. Sending this " +
+          'field returns a validation error rather than reassigning it — present only so that error can be ' +
+          'raised, not because the account is changeable',
+      ),
+    billMonth: BillQuerySchema.shape.month
+      .optional()
+      .describe(
+        'Reassign to this bill cycle month (1-12) — the transaction must already be a card transaction. ' +
+          'Provide with billYear together. Rejected if the current or target bill is paid; auto-creates the ' +
+          'target bill if that cycle has none yet',
+      ),
+    billYear: BillQuerySchema.shape.year
+      .optional()
+      .describe('Reassignment target bill cycle year; provide with billMonth'),
+  }).shape,
+);
 export type UpdateCardTransaction = z.infer<typeof UpdateCardTransactionSchema>;
 
 /** `deleteCreditCard`'s dry-run response (`controllers/credit-card/credit-card.ts`) — named so the

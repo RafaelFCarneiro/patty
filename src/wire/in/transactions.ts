@@ -13,7 +13,7 @@ export const ConfirmTransactionSchema = modelTransaction.ConfirmTransactionSchem
 export type ConfirmTransaction = z.infer<typeof ConfirmTransactionSchema>;
 
 // Pre-transform query shape — a plain ZodObject, so it can also serve as the route's
-// OpenAPI query schema (routes.ts), which needs a ZodObject rather than the ZodEffects
+// OpenAPI query schema (routes.ts), which needs a ZodObject rather than the pipe
 // that .transform() produces below. QoL defaults (limit → 50, sort → date, dir → desc) are
 // applied by the transform below, per the defaults-by-intent rule (domain stays honest about
 // what's genuinely required). `includeTotal` arrives as a query string, not a real boolean.

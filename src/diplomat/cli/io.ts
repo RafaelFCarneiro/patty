@@ -1,6 +1,6 @@
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import type { Result, ResultAsync } from 'neverthrow';
-import type { ZodType, ZodTypeDef } from 'zod';
+import type { ZodType } from 'zod';
 import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter, StepUpSecrets } from '../../controllers/deps.js';
 import type { UserEntity } from '../../models/auth/owner.js';
 import { reasonOf } from '../../models/error.js';
@@ -12,6 +12,7 @@ import type { DemoOptions } from '../../wire/in/cli.js';
 import { CLI_MESSAGES } from './messages.js';
 import { isPromptEnded, PROMPT_MESSAGES, type PromptFailure } from './prompt.js';
 import { PROMPT_ABORTED_MESSAGE, PromptEnd, type Terminal } from './terminal.js';
+import '../../common/zod-wording.js';
 
 export const EXIT_OK = 0;
 export const EXIT_FAILURE = 1;
@@ -148,7 +149,7 @@ export const exitCodeOf = (succeeded: boolean): number => (succeeded ? EXIT_OK :
 export const parseFlags = <T>(
   args: readonly string[],
   options: ParseArgsConfig['options'],
-  schema: ZodType<T, ZodTypeDef, unknown>,
+  schema: ZodType<T, unknown>,
   maxPositionals: number,
 ): { positionals: string[]; options: T } | { error: string } => {
   try {

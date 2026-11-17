@@ -114,7 +114,7 @@ const redirectToUsers = (_value: unknown, _req: FastifyRequest, reply: FastifyRe
   reply.redirect(USERS_PATH, SEE_OTHER);
 
 type StepUpAction<P, F extends { password: string }, T> = {
-  form: z.ZodType<F, z.ZodTypeDef, unknown>;
+  form: z.ZodType<F, unknown>;
   /** The flow, given the actor (who typed the password), the path parameters and the form without the password. */
   run: (actor: Actor, params: P, input: Omit<F, 'password'>) => ResultAsync<T, AppError>;
   onSuccess: (value: T, req: FastifyRequest, reply: FastifyReply) => FastifyReply | Promise<FastifyReply>;
@@ -124,10 +124,7 @@ type StepUpAction<P, F extends { password: string }, T> = {
 type UserParams = z.infer<typeof UserParamsSchema>;
 type NoParams = Record<string, never>;
 
-const NO_PARAMS: z.ZodType<NoParams, z.ZodTypeDef, unknown> = z
-  .object({})
-  .strip()
-  .transform(() => ({}));
+const NO_PARAMS: z.ZodType<NoParams, unknown> = z.object({}).transform(() => ({}));
 
 /**
  * One state-changing admin action: decode the path parameters and the form, run the flow as the typed-password actor
@@ -137,7 +134,7 @@ const NO_PARAMS: z.ZodType<NoParams, z.ZodTypeDef, unknown> = z
 const stepUpAction =
   <P, F extends { password: string }, T>(
     pages: UserPages,
-    params: z.ZodType<P, z.ZodTypeDef, unknown>,
+    params: z.ZodType<P, unknown>,
     action: StepUpAction<P, F, T>,
   ): Replier =>
   async (req, reply) => {

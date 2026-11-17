@@ -64,7 +64,7 @@ export const SetupOptionsSchema = z
         !flags[PASSWORD_STDIN_FLAG] &&
         flags.username === undefined &&
         flags.profile === undefined),
-    { message: DEMO_EXCLUSIVE_MESSAGE },
+    { error: DEMO_EXCLUSIVE_MESSAGE },
   )
   .transform((flags) => ({
     passwordStdin: flags[PASSWORD_STDIN_FLAG],
@@ -80,7 +80,7 @@ export const DemoOptionsSchema = z.object({
   country: z
     .string()
     .refine((value) => DemoCountry.safeParse(value).success, {
-      message: `--country must be one of: ${DemoCountry.options.join(', ')}`,
+      error: `--country must be one of: ${DemoCountry.options.join(', ')}`,
     })
     .pipe(DemoCountry)
     .optional(),
@@ -134,7 +134,7 @@ export const IMPORT_POSITIONALS = 0;
 
 const pathOption = (flag: string) =>
   z
-    .string({ required_error: `the file is required: --${flag} <file>` })
+    .string({ error: (issue) => (issue.input === undefined ? `the file is required: --${flag} <file>` : undefined) })
     .min(1)
     .max(PATH_MAX_LENGTH);
 

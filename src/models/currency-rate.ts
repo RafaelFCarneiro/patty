@@ -13,7 +13,7 @@ export const SetExchangeRateSchema = z.object({
   from: CurrencyCode.describe('Base currency — 1 unit of this equals `rate` units of `to`'),
   to: CurrencyCode.describe('Quote currency — the unit `rate` is expressed in'),
   rate: z.number().positive().describe('1 unit of `from` = `rate` units of `to`, as of `asOf`'),
-  asOf: z.string().datetime({ offset: true }).describe('ISO 8601 timestamp this rate was observed/sourced'),
+  asOf: z.iso.datetime({ offset: true }).describe('ISO 8601 timestamp this rate was observed/sourced'),
   source: z.string().min(1).optional().describe('Free-text provenance, e.g. "PTAX", "coingecko"'),
 });
 export type SetExchangeRateInput = z.infer<typeof SetExchangeRateSchema>;
@@ -25,10 +25,7 @@ export const CurrencyRateSchema = z.object({
   fromCode: CurrencyCode.describe('Base currency — 1 unit of this equals `rate` units of toCode'),
   toCode: CurrencyCode.describe('Quote currency — the unit `rate` is expressed in'),
   rate: z.number().positive().describe('1 unit of fromCode = `rate` units of toCode, as of `asOf`'),
-  asOf: z
-    .string()
-    .datetime({ offset: true })
-    .describe('ISO 8601 timestamp this rate was observed/sourced (agent-supplied)'),
+  asOf: z.iso.datetime({ offset: true }).describe('ISO 8601 timestamp this rate was observed/sourced (agent-supplied)'),
   source: z
     .string()
     .min(1)
@@ -48,7 +45,7 @@ export const CurrencyRateViewSchema = z.object({
   from: CurrencyCode.describe('Base currency'),
   to: CurrencyCode.describe('Quote currency'),
   rate: z.number().positive().describe('1 unit of `from` = `rate` units of `to`, as of `asOf`'),
-  asOf: z.string().datetime({ offset: true }).describe('ISO 8601 timestamp this rate was observed/sourced'),
+  asOf: z.iso.datetime({ offset: true }).describe('ISO 8601 timestamp this rate was observed/sourced'),
   source: z.string().min(1).optional().describe('Free-text provenance, e.g. "PTAX", "coingecko"'),
 });
 export type CurrencyRateView = z.infer<typeof CurrencyRateViewSchema>;
@@ -59,7 +56,7 @@ export const ConvertedValueSchema = z.object({
   baseCurrency: CurrencyCode.describe('The currency this value is expressed in'),
   value: z.number().describe('Amount converted to baseCurrency, rounded to its own decimals'),
   rate: z.number().positive().describe('Exchange rate applied (1 when the source currency already is baseCurrency)'),
-  asOf: z.string().datetime({ offset: true }).describe('When the applied rate was observed/sourced'),
+  asOf: z.iso.datetime({ offset: true }).describe('When the applied rate was observed/sourced'),
   stale: z.boolean().describe('True when the rate is older than its class staleness threshold'),
 });
 export type ConvertedValue = z.infer<typeof ConvertedValueSchema>;
@@ -83,8 +80,7 @@ export const ConvertedTotalSchema = z.object({
   displayCurrency: CurrencyCode.describe('Currency the grand total is expressed in'),
   total: z.number().describe('Sum of every convertible per-currency amount, rounded to displayCurrency decimals'),
   stale: z.boolean().describe('True when any contributing rate is older than its class staleness threshold'),
-  asOf: z
-    .string()
+  asOf: z.iso
     .datetime({ offset: true })
     .nullable()
     .describe('Oldest contributing rate timestamp, or null when nothing was converted'),

@@ -98,9 +98,9 @@ export const buildOpenApiDocument = (definitions: RouteDefinition[], version: st
 
 // ─── OpenAPI response-config formatting — presentation glue, not domain/wire shapes ───
 
-const jsonContent = (schema: z.ZodTypeAny) => ({ 'application/json': { schema } });
-export const jsonBody = (schema: z.ZodTypeAny) => ({ content: jsonContent(schema) });
-export const okResponse = (description: string, schema: z.ZodTypeAny) => ({
+const jsonContent = (schema: z.ZodType) => ({ 'application/json': { schema } });
+export const jsonBody = (schema: z.ZodType) => ({ content: jsonContent(schema) });
+export const okResponse = (description: string, schema: z.ZodType) => ({
   description,
   content: jsonContent(schema),
 });
