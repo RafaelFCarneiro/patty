@@ -4,10 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const execute = vi.fn();
 const close = vi.fn();
+const transaction = vi.fn();
 
 vi.mock('@libsql/client', async (importOriginal) => ({
   ...(await importOriginal<typeof LibsqlClient>()),
-  createClient: () => ({ execute, close }),
+  createClient: () => ({ execute, close, transaction }),
 }));
 
 const { withMigrationLock } = await import('../../../../src/diplomat/db/migration-lock.js');
@@ -26,18 +27,17 @@ afterEach(() => {
   vi.useRealTimers();
   execute.mockReset();
   close.mockReset();
+  transaction.mockReset();
 });
 
 describe('withMigrationLock — failure paths', () => {
   it('rethrows a failure that is not "busy" at once, never retrying it, and closes the client', async () => {
     const failure = new Error('disk I/O error');
-    execute.mockImplementation(async (sql: string) => {
-      if (sql === 'BEGIN EXCLUSIVE') throw failure;
-    });
+    transaction.mockRejectedValue(failure);
     const work = vi.fn();
 
     await expect(withMigrationLock('/data/patty.db', work)).rejects.toBe(failure);
-    expect(execute.mock.calls.filter(([sql]) => sql === 'BEGIN EXCLUSIVE')).toHaveLength(1);
+    expect(transaction).toHaveBeenCalledOnce();
     expect(work).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledOnce();
   });
@@ -45,9 +45,7 @@ describe('withMigrationLock — failure paths', () => {
   it('gives up after 60 seconds of busy, naming the lock file and keeping the busy error as cause', async () => {
     vi.useFakeTimers();
     const lastBusy = busy();
-    execute.mockImplementation(async (sql: string) => {
-      if (sql === 'BEGIN EXCLUSIVE') throw lastBusy;
-    });
+    transaction.mockRejectedValue(lastBusy);
     const work = vi.fn();
 
     const outcome = failureOf(withMigrationLock('/data/patty.db', work));
@@ -60,7 +58,6 @@ describe('withMigrationLock — failure paths', () => {
     );
     expect(failure.cause).toBe(lastBusy);
     expect(work).not.toHaveBeenCalled();
-    const attempts = execute.mock.calls.filter(([sql]) => sql === 'BEGIN EXCLUSIVE').length;
-    expect(close).toHaveBeenCalledTimes(attempts);
+    expect(close).toHaveBeenCalledTimes(transaction.mock.calls.length);
   });
 });

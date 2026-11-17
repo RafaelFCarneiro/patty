@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import { createClient, type Client } from '@libsql/client';
+import { createClient, type Client, type Transaction } from '@libsql/client';
 import { isSqliteBusy } from './sqlite-errors.js';
 import { sleep } from '../../common/time.js';
 import { NEVER_BLOCK_IN_SQLITE_MS } from './driver.js';
@@ -17,14 +17,14 @@ export const openLockFile = async (lockPath: string): Promise<Client> => {
   }
 };
 
-export type ExclusiveAttempt = { acquired: true } | { acquired: false; cause: unknown };
+export type WriteAttempt = { acquired: true; tx: Transaction } | { acquired: false; cause: unknown };
 
-/** One attempt at the exclusive transaction: `cause` is the busy error when another holder has it; any other failure
- *  is thrown. */
-export const tryBeginExclusive = async (client: Client): Promise<ExclusiveAttempt> => {
+/** One attempt at the lock: the client's write transaction (BEGIN IMMEDIATE on a connection of its own, which holds
+ *  across statements on every driver version — a raw `execute('BEGIN EXCLUSIVE')` stopped holding in 0.18). `cause` is
+ *  the busy error when another holder has it, answered at once; any other failure is thrown. */
+export const tryBeginWrite = async (client: Client): Promise<WriteAttempt> => {
   try {
-    await client.execute('BEGIN EXCLUSIVE');
-    return { acquired: true };
+    return { acquired: true, tx: await client.transaction('write') };
   } catch (cause) {
     if (isSqliteBusy(cause)) return { acquired: false, cause };
     throw cause;
@@ -32,9 +32,9 @@ export const tryBeginExclusive = async (client: Client): Promise<ExclusiveAttemp
 };
 
 /** A failed rollback must never hide the error the caller is already throwing. */
-export const rollbackQuietly = async (client: Client): Promise<void> => {
+export const rollbackQuietly = async (tx: Transaction): Promise<void> => {
   try {
-    await client.execute('ROLLBACK');
+    await tx.rollback();
   } catch {
     // closing the client ends the transaction and frees the lock either way
   }
@@ -46,20 +46,18 @@ type LockAttempt = { lock: ExclusiveLock } | { lock: null; cause: unknown };
 // lock held until the process exits.
 const attemptExclusiveLock = async (lockPath: string): Promise<LockAttempt> => {
   const client = await openLockFile(lockPath);
-  try {
-    const attempt = await tryBeginExclusive(client);
-    if (!attempt.acquired) {
-      client.close();
-      return { lock: null, cause: attempt.cause };
-    }
-  } catch (cause) {
+  const attempt = await tryBeginWrite(client).catch((cause: unknown) => {
     client.close();
     throw cause;
+  });
+  if (!attempt.acquired) {
+    client.close();
+    return { lock: null, cause: attempt.cause };
   }
   return {
     lock: {
       release: async () => {
-        await rollbackQuietly(client);
+        await rollbackQuietly(attempt.tx);
         client.close();
       },
     },
