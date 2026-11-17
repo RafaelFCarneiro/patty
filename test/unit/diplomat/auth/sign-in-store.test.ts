@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KEYCHAIN_SERVICE, KeychainFailureCode } from '../../../../src/models/auth/sign-in.js';
 
 const keyring = vi.hoisted(() => {
-  const state = { password: null as string | null, constructed: [] as Array<[string, string]>, failing: false };
+  const state = {
+    password: null as string | null,
+    constructed: [] as Array<[string, string]>,
+    failing: false,
+    deleted: true,
+  };
   class Entry {
     constructor(service: string, account: string) {
       state.constructed.push([service, account]);
@@ -18,7 +23,7 @@ const keyring = vi.hoisted(() => {
     deletePassword(): boolean {
       if (state.failing) throw new Error('keychain locked');
       state.password = null;
-      return true;
+      return state.deleted;
     }
   }
   return { state, Entry };
@@ -34,6 +39,7 @@ beforeEach(() => {
   keyring.state.password = null;
   keyring.state.constructed = [];
   keyring.state.failing = false;
+  keyring.state.deleted = true;
 });
 
 describe('keychainSignInStore', () => {
@@ -70,6 +76,11 @@ describe('keychainSignInStore', () => {
     expect(saved).toBe(false);
     expect(reported).toHaveLength(1);
     expect(reported[0]).not.toContain('ptk_secret');
+  });
+
+  it('treats "nothing to delete" (deletePassword false) as already clear', async () => {
+    keyring.state.deleted = false;
+    await expect(keychainSignInStore(ACCOUNT, () => undefined).clear()).resolves.toBeUndefined();
   });
 
   it('survives a failing clear', async () => {

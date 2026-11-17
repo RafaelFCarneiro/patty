@@ -540,6 +540,8 @@ cannot read your OS keychain, so the key goes to a file it mounts as a secret. T
   current build once to migrate it, then export. It resolves the key the way the server does (file, then env var, then keychain),
   proves it by opening your database with it and reading once, and only then writes. The file is created owner-only (`0600`), is never overwritten (there is no `--force`), and cannot be in
   the database's own directory or under it (real paths are compared, so a relative path or a symlink does not get around it).
+  A keychain that cannot be read or written (locked, access denied) is an error — `KEYCHAIN_LOCKED_MESSAGE`, with nothing written — never "no key":
+  no key is generated, stored or imported after a failed read (`@napi-rs/keyring` 2 throws on a store failure; `null` means only "nothing stored").
   The key is never printed, logged or put in an error. The check "the keychain is empty" and the store are one step under
   a per-user key lock (`~/.patty/db-key.lock`, held by the OS, so a dead process lets go), the same lock the server
   takes when it generates a key on first start: another process that writes a key in the gap is never replaced, and the
