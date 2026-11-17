@@ -6,7 +6,14 @@ import { loadFragment, type StubElement } from './fragment-sandbox.js';
 const optionValues = (select: StubElement) => [...select.innerHTML.matchAll(/value="([^"]+)"/g)].map((m) => m[1]);
 const ALL_CURRENCIES = ['BRL', 'BTC', 'COP', 'MXN', 'USD', 'USDC'].sort();
 
-const card = (currency: string) => ({ id: `card-${currency}`, name: `Card ${currency}`, currency, limit: 1000, closingDay: 5, dueDay: 15 });
+const card = (currency: string) => ({
+  id: `card-${currency}`,
+  name: `Card ${currency}`,
+  currency,
+  limit: 1000,
+  closingDay: 5,
+  dueDay: 15,
+});
 
 describe('cards.html currency handling', () => {
   it('lists every seeded currency in the add form and preselects the base currency', () => {

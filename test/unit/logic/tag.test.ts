@@ -75,13 +75,13 @@ describe('tagSetPersistable — builds the transaction tag-set insert (ADR-023 d
   });
 });
 
-describe('overlayResolvedTags — gated on the tag-set outcome, never the transaction write\'s (review fix)', () => {
+describe("overlayResolvedTags — gated on the tag-set outcome, never the transaction write's (review fix)", () => {
   it('overlays the matched names when the tag-set Persistable applied', () => {
     const outcomes: PersistOutcome[] = [{ entity: TRANSACTION_TAG_ENTITY_TAG, applied: true }];
     expect(overlayResolvedTags({ tags: ['stale'] }, ['work'], outcomes)).toEqual({ tags: ['work'] });
   });
 
-  it('leaves the view untouched when the tag set no-op\'d — whatever the reason', () => {
+  it("leaves the view untouched when the tag set no-op'd — whatever the reason", () => {
     // Covers both a duplicate replay AND a tag deleted concurrently between resolution and the
     // batch committing: `transactionTagApplier` reports `applied: false` for either, and this
     // must not be read as "these names are attached" regardless of cause.

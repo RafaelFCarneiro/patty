@@ -448,7 +448,8 @@ describe('GET /api/aggregate', () => {
       const res = await inject({
         method: 'GET',
         url:
-          '/api/aggregate?groupBy=category&metric=count&month=3&year=2025&account=AggDcCountAcct&displayCurrency=USD',
+          '/api/aggregate?groupBy=category&metric=count&month=3&year=2025&account=AggDcCountAcct' +
+          '&displayCurrency=USD',
       });
       expect(res.statusCode).toBe(200);
       expect(res.json()).not.toHaveProperty('converted');

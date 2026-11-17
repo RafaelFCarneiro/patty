@@ -78,10 +78,7 @@ describe('pending.html currency handling', () => {
   });
 
   it('defaults the selector to the most active currency when no base currency is set', () => {
-    const { sandbox } = loadPending([
-      tx({ amount: 10, currency: 'BRL' }),
-      tx({ amount: 900, currency: 'USD' }),
-    ]);
+    const { sandbox } = loadPending([tx({ amount: 10, currency: 'BRL' }), tx({ amount: 900, currency: 'USD' })]);
     expect(sandbox.primary).toBe('USD');
     expect(sandbox.chartCurrency).toBe('USD');
   });

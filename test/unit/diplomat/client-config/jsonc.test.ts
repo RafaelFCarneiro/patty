@@ -53,7 +53,7 @@ describe('detectLayout', () => {
 });
 
 describe('withServerText / withoutServerText', () => {
-  it('uses the document\'s own line ending', () => {
+  it("uses the document's own line ending", () => {
     const text = withServerText('{\r\n  "a": 1\r\n}\r\n', 'patty', { type: 'local' });
     expect(text).toContain('\r\n');
     expect(text).not.toMatch(/(?<!\r)\n/);

@@ -8,3 +8,4 @@ drizzle/
 *.db
 *.db-wal
 *.db-shm
+test/**/__snapshots__/**

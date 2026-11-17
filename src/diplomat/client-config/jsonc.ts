@@ -74,9 +74,12 @@ const LAYOUT_REFUSALS = {
 export const layoutRefusal = (layout: McpLayout): string | null => LAYOUT_REFUSALS[layout];
 
 const editAt = (text: string, name: string, value: unknown): string =>
-  applyEdits(text, modify(text, [...SERVERS_PATH, name], value, {
+  applyEdits(
+    text,
+    modify(text, [...SERVERS_PATH, name], value, {
       formattingOptions: { insertSpaces: true, tabSize: 2, eol: lineEnding(text) },
-    }));
+    }),
+  );
 
 /** The document with `mcp.servers.<name>` set to `entry`; comments, other keys and formatting stay as they were. */
 export const withServerText = (text: string, name: string, entry: Record<string, unknown>): string =>

@@ -66,9 +66,7 @@ describe('StdioSession — a sidecar that is not serving a link of its own', () 
     const code = userCodeIn(asked);
 
     expect(temporary.counts).toEqual({ started: 1, closed: 0 });
-    expect(message).toBe(
-      `PATTY: not signed in. Open ${origin}/ui/connect?code=${code} and confirm the code ${code}.`,
-    );
+    expect(message).toBe(`PATTY: not signed in. Open ${origin}/ui/connect?code=${code} and confirm the code ${code}.`);
     expect(await answerAt(origin, code, { decision: 'approve', access: 'write' })).toBe(200);
     const signedIn = await session.resolve();
     expect(signedIn).toMatchObject({ kind: 'granted', principal: { via: 'stdio', userId: 'user-owner' } });

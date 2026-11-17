@@ -1,13 +1,13 @@
 <style>
-.dashboard-container {
+  .dashboard-container {
     max-width: 1400px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
-}
+  }
 
-.controls-area {
+  .controls-area {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -18,23 +18,23 @@
     padding: 0.75rem 1.25rem;
     border-radius: 16px;
     backdrop-filter: blur(12px);
-}
+  }
 
-.controls-group {
+  .controls-group {
     display: flex;
     align-items: center;
     gap: 1rem;
-}
+  }
 
-.controls-area label {
+  .controls-area label {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-}
+  }
 
-.select-custom {
+  .select-custom {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--panel-border);
     color: var(--text-main);
@@ -50,14 +50,14 @@
     background-repeat: no-repeat;
     background-position: right 8px center;
     background-size: 16px;
-}
+  }
 
-.select-custom:focus {
+  .select-custom:focus {
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 2px var(--accent-primary-glow);
-}
+  }
 
-.refresh-btn {
+  .refresh-btn {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--panel-border);
     color: var(--text-main);
@@ -69,27 +69,27 @@
     align-items: center;
     gap: 0.5rem;
     transition: var(--transition-smooth);
-}
+  }
 
-.refresh-btn:hover {
+  .refresh-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     border-color: var(--accent-primary);
-}
+  }
 
-/* KPI Summary Cards */
-.kpis-row {
+  /* KPI Summary Cards */
+  .kpis-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
-}
+  }
 
-@media (max-width: 1024px) {
+  @media (max-width: 1024px) {
     .kpis-row {
-        grid-template-columns: 1fr;
+      grid-template-columns: 1fr;
     }
-}
+  }
 
-.kpi-card {
+  .kpi-card {
     background: var(--panel-bg);
     border: 1px solid var(--panel-border);
     border-radius: 20px;
@@ -101,22 +101,28 @@
     gap: 0.75rem;
     position: relative;
     overflow: hidden;
-}
+  }
 
-.kpi-card::before {
+  .kpi-card::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
     width: 4px;
     height: 100%;
-}
+  }
 
-.kpi-income::before { background: var(--income-color, #10b981); }
-.kpi-expense::before { background: var(--expense-color, #f43f5e); }
-.kpi-balance::before { background: var(--accent-primary, #8b5cf6); }
+  .kpi-income::before {
+    background: var(--income-color, #10b981);
+  }
+  .kpi-expense::before {
+    background: var(--expense-color, #f43f5e);
+  }
+  .kpi-balance::before {
+    background: var(--accent-primary, #8b5cf6);
+  }
 
-.kpi-title {
+  .kpi-title {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-muted);
@@ -125,48 +131,62 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-}
+  }
 
-.kpi-value {
+  .kpi-value {
     font-size: 1.8rem;
     font-weight: 800;
     color: #fff;
-}
+  }
 
-.kpi-income .kpi-value { color: var(--income-color, #10b981) !important; }
-.kpi-expense .kpi-value { color: var(--expense-color, #f43f5e) !important; }
-.kpi-balance .kpi-value { color: var(--income-color, #10b981) !important; }
-.kpi-balance.negative .kpi-value { color: var(--expense-color, #f43f5e) !important; }
+  .kpi-income .kpi-value {
+    color: var(--income-color, #10b981) !important;
+  }
+  .kpi-expense .kpi-value {
+    color: var(--expense-color, #f43f5e) !important;
+  }
+  .kpi-balance .kpi-value {
+    color: var(--income-color, #10b981) !important;
+  }
+  .kpi-balance.negative .kpi-value {
+    color: var(--expense-color, #f43f5e) !important;
+  }
 
-.kpi-details {
+  .kpi-details {
     font-size: 0.8rem;
     color: var(--text-muted);
     display: flex;
     gap: 1rem;
     flex-wrap: wrap;
-}
+  }
 
-.kpi-details span strong { color: #fff; }
+  .kpi-details span strong {
+    color: #fff;
+  }
 
-.kpi-converted {
+  .kpi-converted {
     font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: 0.5rem;
     padding-top: 0.5rem;
     border-top: 1px dashed var(--panel-border);
-}
+  }
 
-.kpi-converted strong { color: #fff; }
+  .kpi-converted strong {
+    color: #fff;
+  }
 
-.kpi-converted.stale strong { color: #f59e0b; }
+  .kpi-converted.stale strong {
+    color: #f59e0b;
+  }
 
-.kpi-converted .kpi-converted-excluded {
+  .kpi-converted .kpi-converted-excluded {
     display: block;
     margin-top: 0.15rem;
     color: #f59e0b;
-}
+  }
 
-.kpi-converted .stale-flag {
+  .kpi-converted .stale-flag {
     background: none;
     border: none;
     padding: 0;
@@ -174,28 +194,28 @@
     color: inherit;
     font: inherit;
     cursor: help;
-}
+  }
 
-.kpi-converted .stale-flag:focus-visible {
+  .kpi-converted .stale-flag:focus-visible {
     outline: 2px solid #f59e0b;
     outline-offset: 2px;
     border-radius: 2px;
-}
+  }
 
-/* Charts Grid */
-.charts-grid {
+  /* Charts Grid */
+  .charts-grid {
     display: grid;
     grid-template-columns: 3fr 5fr;
     gap: 1.5rem;
-}
+  }
 
-@media (max-width: 1024px) {
+  @media (max-width: 1024px) {
     .charts-grid {
-        grid-template-columns: 1fr;
+      grid-template-columns: 1fr;
     }
-}
+  }
 
-.chart-card {
+  .chart-card {
     background: var(--panel-bg);
     border: 1px solid var(--panel-border);
     border-radius: 20px;
@@ -206,39 +226,39 @@
     flex-direction: column;
     gap: 1rem;
     min-height: 340px;
-}
+  }
 
-.chart-card-title {
+  .chart-card-title {
     font-size: 1rem;
     font-weight: 600;
     color: var(--text-main);
     display: flex;
     align-items: center;
     gap: 0.5rem;
-}
+  }
 
-.chart-container-inner {
+  .chart-container-inner {
     position: relative;
     flex: 1;
     width: 100%;
     height: 100%;
     min-height: 250px;
-}
+  }
 
-/* Category Panels */
-.categories-grid {
+  /* Category Panels */
+  .categories-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
-}
+  }
 
-@media (max-width: 900px) {
+  @media (max-width: 900px) {
     .categories-grid {
-        grid-template-columns: 1fr;
+      grid-template-columns: 1fr;
     }
-}
+  }
 
-.category-panel {
+  .category-panel {
     background: var(--panel-bg);
     border: 1px solid var(--panel-border);
     border-radius: 24px;
@@ -248,28 +268,32 @@
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
-}
+  }
 
-.category-panel-header {
+  .category-panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--panel-border);
     padding-bottom: 0.75rem;
-}
+  }
 
-.category-panel-title {
+  .category-panel-title {
     font-size: 1.1rem;
     font-weight: 700;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-}
+  }
 
-.category-panel-title.income { color: var(--income-color, #10b981); }
-.category-panel-title.expense { color: var(--expense-color, #f43f5e); }
+  .category-panel-title.income {
+    color: var(--income-color, #10b981);
+  }
+  .category-panel-title.expense {
+    color: var(--expense-color, #f43f5e);
+  }
 
-.category-total-badge {
+  .category-total-badge {
     font-size: 1rem;
     font-weight: 800;
     color: #fff;
@@ -277,71 +301,70 @@
     padding: 0.25rem 0.75rem;
     border-radius: 12px;
     border: 1px solid var(--panel-border);
-}
+  }
 
-.categories-list {
+  .categories-list {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-}
+  }
 
-.category-row-container {
+  .category-row-container {
     border: 1px solid var(--panel-border);
     border-radius: 14px;
     overflow: hidden;
     background: rgba(0, 0, 0, 0.1);
     transition: var(--transition-smooth);
-}
+  }
 
-.category-row-container:hover {
+  .category-row-container:hover {
     border-color: rgba(255, 255, 255, 0.15);
-}
+  }
 
-
-.category-row-header {
+  .category-row-header {
     padding: 1rem;
     cursor: pointer;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     user-select: none;
-}
+  }
 
-.cat-meta-info {
+  .cat-meta-info {
     display: flex;
     justify-content: space-between;
     align-items: center;
-}
+  }
 
-.cat-name-label {
+  .cat-name-label {
     font-size: 0.95rem;
     font-weight: 600;
     color: #fff;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-}
+  }
 
-.cat-name-label i {
+  .cat-name-label i {
     font-size: 0.8rem;
     color: var(--text-muted);
     transition: transform 0.3s ease;
-}
+  }
 
-.category-row-container.open .cat-name-label i {
+  .category-row-container.open .cat-name-label i {
     transform: rotate(180deg);
     color: var(--accent-primary, #8b5cf6);
-}
+  }
 
-.cat-val-label {
+  .cat-val-label {
     font-size: 0.95rem;
     font-weight: 700;
     color: #fff;
     display: inline-flex;
     align-items: center;
-}
+  }
 
-.cat-pct-label {
+  .cat-pct-label {
     font-size: 0.72rem;
     color: var(--text-muted);
     margin-left: 0.5rem;
@@ -349,123 +372,139 @@
     background: rgba(255, 255, 255, 0.06);
     padding: 2px 6px;
     border-radius: 4px;
-}
+  }
 
-.cat-pct-label.over {
+  .cat-pct-label.over {
     background: rgba(244, 63, 94, 0.2);
     color: #f43f5e;
-}
+  }
 
-.proportion-bar-container {
+  .proportion-bar-container {
     width: 100%;
     height: 8px;
     background: rgba(255, 255, 255, 0.04);
     border-radius: 4px;
     overflow: hidden;
     display: flex;
-}
+  }
 
-.bar-segment {
+  .bar-segment {
     height: 100%;
     transition: width 0.5s ease;
-}
+  }
 
-.bar-segment.effective-inc { background: var(--income-color, #10b981); }
-.bar-segment.pending-inc {
+  .bar-segment.effective-inc {
+    background: var(--income-color, #10b981);
+  }
+  .bar-segment.pending-inc {
     background: repeating-linear-gradient(
-        45deg,
-        rgba(16, 185, 129, 0.25) 0px,
-        rgba(16, 185, 129, 0.25) 8px,
-        rgba(16, 185, 129, 0.45) 8px,
-        rgba(16, 185, 129, 0.45) 16px
+      45deg,
+      rgba(16, 185, 129, 0.25) 0px,
+      rgba(16, 185, 129, 0.25) 8px,
+      rgba(16, 185, 129, 0.45) 8px,
+      rgba(16, 185, 129, 0.45) 16px
     );
-}
+  }
 
-.bar-segment.effective-exp { background: var(--expense-color, #f43f5e); }
-.bar-segment.pending-exp {
+  .bar-segment.effective-exp {
+    background: var(--expense-color, #f43f5e);
+  }
+  .bar-segment.pending-exp {
     background: repeating-linear-gradient(
-        45deg,
-        rgba(244, 63, 94, 0.25) 0px,
-        rgba(244, 63, 94, 0.25) 8px,
-        rgba(244, 63, 94, 0.45) 8px,
-        rgba(244, 63, 94, 0.45) 16px
+      45deg,
+      rgba(244, 63, 94, 0.25) 0px,
+      rgba(244, 63, 94, 0.25) 8px,
+      rgba(244, 63, 94, 0.45) 8px,
+      rgba(244, 63, 94, 0.45) 16px
     );
-}
-.bar-segment.budget-ok-eff { background: #10b981; }
-.bar-segment.budget-ok-pend {
+  }
+  .bar-segment.budget-ok-eff {
+    background: #10b981;
+  }
+  .bar-segment.budget-ok-pend {
     background: repeating-linear-gradient(
-        45deg,
-        rgba(16, 185, 129, 0.25) 0px,
-        rgba(16, 185, 129, 0.25) 8px,
-        rgba(16, 185, 129, 0.45) 8px,
-        rgba(16, 185, 129, 0.45) 16px
+      45deg,
+      rgba(16, 185, 129, 0.25) 0px,
+      rgba(16, 185, 129, 0.25) 8px,
+      rgba(16, 185, 129, 0.45) 8px,
+      rgba(16, 185, 129, 0.45) 16px
     );
-}
-.bar-segment.budget-warn-eff { background: #f59e0b; }
-.bar-segment.budget-warn-pend {
+  }
+  .bar-segment.budget-warn-eff {
+    background: #f59e0b;
+  }
+  .bar-segment.budget-warn-pend {
     background: repeating-linear-gradient(
-        45deg,
-        rgba(245, 158, 11, 0.25) 0px,
-        rgba(245, 158, 11, 0.25) 8px,
-        rgba(245, 158, 11, 0.45) 8px,
-        rgba(245, 158, 11, 0.45) 16px
+      45deg,
+      rgba(245, 158, 11, 0.25) 0px,
+      rgba(245, 158, 11, 0.25) 8px,
+      rgba(245, 158, 11, 0.45) 8px,
+      rgba(245, 158, 11, 0.45) 16px
     );
-}
-.bar-segment.budget-over-eff { background: #f43f5e; }
-.bar-segment.budget-over-pend {
+  }
+  .bar-segment.budget-over-eff {
+    background: #f43f5e;
+  }
+  .bar-segment.budget-over-pend {
     background: repeating-linear-gradient(
-        45deg,
-        rgba(244, 63, 94, 0.25) 0px,
-        rgba(244, 63, 94, 0.25) 8px,
-        rgba(244, 63, 94, 0.45) 8px,
-        rgba(244, 63, 94, 0.45) 16px
+      45deg,
+      rgba(244, 63, 94, 0.25) 0px,
+      rgba(244, 63, 94, 0.25) 8px,
+      rgba(244, 63, 94, 0.45) 8px,
+      rgba(244, 63, 94, 0.45) 16px
     );
-}
+  }
 
-.cat-breakdown-text {
+  .cat-breakdown-text {
     display: flex;
     justify-content: space-between;
     font-size: 0.72rem;
     color: var(--text-muted);
     padding: 0 0.1rem;
-}
+  }
 
-.cat-breakdown-text span strong { color: var(--text-main); }
+  .cat-breakdown-text span strong {
+    color: var(--text-main);
+  }
 
-.category-tx-details {
+  .category-tx-details {
     display: none;
     border-top: 1px solid var(--panel-border);
     background: rgba(0, 0, 0, 0.25);
     padding: 0.75rem 1rem;
     overflow-x: auto;
-}
+  }
 
-.category-tx-table {
+  .category-tx-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.82rem;
     text-align: left;
-}
+  }
 
-.category-tx-table th {
+  .category-tx-table th {
     padding: 0.4rem 0.6rem;
     color: var(--text-muted);
     font-weight: 600;
     border-bottom: 1px solid var(--panel-border);
-}
+  }
 
-.category-tx-table td {
+  .category-tx-table td {
     padding: 0.45rem 0.6rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-}
+  }
 
-.tx-status-icon {
+  .tx-status-icon {
     font-size: 0.85rem;
-}
-.tx-status-icon.effective { color: var(--income-color, #10b981); }
-.tx-status-icon.pending { color: #f59e0b; }
+  }
+  .tx-status-icon.effective {
+    color: var(--income-color, #10b981);
+  }
+  .tx-status-icon.pending {
+    color: #f59e0b;
+  }
 
-.state-container {
+  .state-container {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -474,500 +513,547 @@
     gap: 0.75rem;
     color: var(--text-muted);
     text-align: center;
-}
+  }
 
-.state-container i {
+  .state-container i {
     font-size: 1.8rem;
-}
+  }
 </style>
 
 <div class="dashboard-container">
-    <!-- Header -->
-    <header>
-        <div class="header-title-area">
-            <h1><i class="fa-solid fa-bullseye"></i> <span data-i18n="header_title">Monthly Budget</span></h1>
-            <p data-i18n="header_subtitle">Monitor your monthly limits, committed spending, and category balance</p>
-        </div>
-        <div class="controls-area">
-            <div class="controls-group">
-                <label for="month-select" data-i18n="reference_label">Reference:</label>
-                <select id="month-select" class="select-custom" onchange="onFilterChange()">
-                    <option value="1">January</option>
-                    <option value="2">February</option>
-                    <option value="3">March</option>
-                    <option value="4">April</option>
-                    <option value="5">May</option>
-                    <option value="6">June</option>
-                    <option value="7">July</option>
-                    <option value="8" selected>August</option>
-                    <option value="9">September</option>
-                    <option value="10">October</option>
-                    <option value="11">November</option>
-                    <option value="12">December</option>
-                </select>
-                <select id="year-select" class="select-custom" onchange="onFilterChange()">
-                    <option value="2025">2025</option>
-                    <option value="2026" selected>2026</option>
-                    <option value="2027">2027</option>
-                </select>
-            </div>
-            <div class="controls-group">
-                <label for="currency-select" data-i18n="currency_label">Currency:</label>
-                <select id="currency-select" class="select-custom" onchange="onCurrencyChange()">
-                    <option value="" data-i18n="currency_none">No conversion</option>
-                </select>
-            </div>
-        </div>
-    </header>
+  <!-- Header -->
+  <header>
+    <div class="header-title-area">
+      <h1><i class="fa-solid fa-bullseye"></i> <span data-i18n="header_title">Monthly Budget</span></h1>
+      <p data-i18n="header_subtitle">Monitor your monthly limits, committed spending, and category balance</p>
+    </div>
+    <div class="controls-area">
+      <div class="controls-group">
+        <label for="month-select" data-i18n="reference_label">Reference:</label>
+        <select id="month-select" class="select-custom" onchange="onFilterChange()">
+          <option value="1">January</option>
+          <option value="2">February</option>
+          <option value="3">March</option>
+          <option value="4">April</option>
+          <option value="5">May</option>
+          <option value="6">June</option>
+          <option value="7">July</option>
+          <option value="8" selected>August</option>
+          <option value="9">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
+        <select id="year-select" class="select-custom" onchange="onFilterChange()">
+          <option value="2025">2025</option>
+          <option value="2026" selected>2026</option>
+          <option value="2027">2027</option>
+        </select>
+      </div>
+      <div class="controls-group">
+        <label for="currency-select" data-i18n="currency_label">Currency:</label>
+        <select id="currency-select" class="select-custom" onchange="onCurrencyChange()">
+          <option value="" data-i18n="currency_none">No conversion</option>
+        </select>
+      </div>
+    </div>
+  </header>
 
-    <!-- KPIs Row -->
-    <div class="kpis-row">
-        <!-- Total Incomes -->
-        <div class="kpi-card kpi-income">
-            <div class="kpi-title" data-i18n="kpi_income_total">
-                <i class="fa-solid fa-circle-arrow-up"></i> Total Incomes
-            </div>
-            <div class="kpi-value" id="kpi-income-val">$ 0.00</div>
-            <div class="kpi-details">
-                <span><span data-i18n="kpi_effective">Effective:</span> <strong id="kpi-income-eff" style="color: var(--income-color,#10b981)">$ 0.00</strong></span>
-                <span><span data-i18n="kpi_pending">Pending:</span> <strong id="kpi-income-pend" style="color: #f59e0b">$ 0.00</strong></span>
-            </div>
-        </div>
-
-        <!-- Budget Limits -->
-        <div class="kpi-card kpi-expense">
-            <div class="kpi-title" data-i18n="kpi_budget_limits">
-                <i class="fa-solid fa-bullseye"></i> Budget Limits
-            </div>
-            <div class="kpi-value" id="kpi-budget-limit-val">$ 0.00</div>
-            <div class="kpi-details">
-                <span><span data-i18n="kpi_committed">Committed:</span> <strong id="kpi-budget-comm-val" style="color: var(--expense-color,#f43f5e)">$ 0.00</strong></span>
-                <span><span data-i18n="kpi_usage">Usage:</span> <strong id="kpi-budget-pct-val">0%</strong></span>
-            </div>
-            <div class="kpi-converted" id="kpi-budget-converted" style="display:none;"></div>
-        </div>
-
-        <!-- Planned Balance -->
-        <div class="kpi-card kpi-balance" id="kpi-balance-card">
-            <div class="kpi-title" data-i18n="kpi_planned_balance">
-                <i class="fa-solid fa-scale-balanced"></i> Planned Balance (Income - Budget)
-            </div>
-            <div class="kpi-value" id="kpi-balance-val">$ 0.00</div>
-            <div class="kpi-details">
-                <span data-i18n="kpi_balance_desc">Estimated monthly net result based on active budgets</span>
-            </div>
-        </div>
+  <!-- KPIs Row -->
+  <div class="kpis-row">
+    <!-- Total Incomes -->
+    <div class="kpi-card kpi-income">
+      <div class="kpi-title" data-i18n="kpi_income_total">
+        <i class="fa-solid fa-circle-arrow-up"></i> Total Incomes
+      </div>
+      <div class="kpi-value" id="kpi-income-val">$ 0.00</div>
+      <div class="kpi-details">
+        <span
+          ><span data-i18n="kpi_effective">Effective:</span>
+          <strong id="kpi-income-eff" style="color: var(--income-color, #10b981)">$ 0.00</strong></span
+        >
+        <span
+          ><span data-i18n="kpi_pending">Pending:</span>
+          <strong id="kpi-income-pend" style="color: #f59e0b">$ 0.00</strong></span
+        >
+      </div>
     </div>
 
-    <!-- Charts Grid -->
-    <div class="charts-grid">
-        <!-- Monthly Comparison (Incomes vs Budget) -->
-        <div class="chart-card">
-            <div class="chart-card-title" data-i18n="chart_compare_title">
-                <i class="fa-solid fa-chart-column"></i> Monthly Comparison (Incomes vs Budget)
-            </div>
-            <div class="chart-container-inner" id="monthly-compare-container">
-                <canvas id="monthlyCompareChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Projected Cash Flow Trend -->
-        <div class="chart-card">
-            <div class="chart-card-title" data-i18n="chart_trend_title">
-                <i class="fa-solid fa-chart-line"></i> Projected Cash Flow Trend
-            </div>
-            <div class="chart-container-inner" id="trend-container">
-                <canvas id="trendChart"></canvas>
-            </div>
-        </div>
+    <!-- Budget Limits -->
+    <div class="kpi-card kpi-expense">
+      <div class="kpi-title" data-i18n="kpi_budget_limits"><i class="fa-solid fa-bullseye"></i> Budget Limits</div>
+      <div class="kpi-value" id="kpi-budget-limit-val">$ 0.00</div>
+      <div class="kpi-details">
+        <span
+          ><span data-i18n="kpi_committed">Committed:</span>
+          <strong id="kpi-budget-comm-val" style="color: var(--expense-color, #f43f5e)">$ 0.00</strong></span
+        >
+        <span><span data-i18n="kpi_usage">Usage:</span> <strong id="kpi-budget-pct-val">0%</strong></span>
+      </div>
+      <div class="kpi-converted" id="kpi-budget-converted" style="display: none"></div>
     </div>
 
-    <!-- Dual Category Breakdown Panels -->
-    <div class="categories-grid">
-        <!-- Incomes by Category -->
-        <div class="category-panel">
-            <div class="category-panel-header">
-                <div class="category-panel-title income" data-i18n="panel_income_cat_title">
-                    <i class="fa-solid fa-circle-arrow-up"></i> Incomes by Category
-                </div>
-                <div class="category-total-badge" id="income-categories-total">$ 0.00</div>
-            </div>
-            <div id="income-categories-list" class="categories-list">
-                <div class="state-container">
-                    <i class="fa-solid fa-spinner fa-spin"></i>
-                    <div data-i18n="loading_incomes">Loading incomes...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Expenses vs Budget by Category -->
-        <div class="category-panel">
-            <div class="category-panel-header">
-                <div class="category-panel-title expense" data-i18n="panel_expense_budget_title">
-                    <i class="fa-solid fa-bullseye"></i> Expenses vs Budget by Category
-                </div>
-                <div class="category-total-badge" id="expense-categories-total">$ 0.00</div>
-            </div>
-            <div id="expense-categories-list" class="categories-list">
-                <div class="state-container">
-                    <i class="fa-solid fa-spinner fa-spin"></i>
-                    <div data-i18n="loading_budgets">Loading budgets...</div>
-                </div>
-            </div>
-        </div>
+    <!-- Planned Balance -->
+    <div class="kpi-card kpi-balance" id="kpi-balance-card">
+      <div class="kpi-title" data-i18n="kpi_planned_balance">
+        <i class="fa-solid fa-scale-balanced"></i> Planned Balance (Income - Budget)
+      </div>
+      <div class="kpi-value" id="kpi-balance-val">$ 0.00</div>
+      <div class="kpi-details">
+        <span data-i18n="kpi_balance_desc">Estimated monthly net result based on active budgets</span>
+      </div>
     </div>
+  </div>
+
+  <!-- Charts Grid -->
+  <div class="charts-grid">
+    <!-- Monthly Comparison (Incomes vs Budget) -->
+    <div class="chart-card">
+      <div class="chart-card-title" data-i18n="chart_compare_title">
+        <i class="fa-solid fa-chart-column"></i> Monthly Comparison (Incomes vs Budget)
+      </div>
+      <div class="chart-container-inner" id="monthly-compare-container">
+        <canvas id="monthlyCompareChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Projected Cash Flow Trend -->
+    <div class="chart-card">
+      <div class="chart-card-title" data-i18n="chart_trend_title">
+        <i class="fa-solid fa-chart-line"></i> Projected Cash Flow Trend
+      </div>
+      <div class="chart-container-inner" id="trend-container">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dual Category Breakdown Panels -->
+  <div class="categories-grid">
+    <!-- Incomes by Category -->
+    <div class="category-panel">
+      <div class="category-panel-header">
+        <div class="category-panel-title income" data-i18n="panel_income_cat_title">
+          <i class="fa-solid fa-circle-arrow-up"></i> Incomes by Category
+        </div>
+        <div class="category-total-badge" id="income-categories-total">$ 0.00</div>
+      </div>
+      <div id="income-categories-list" class="categories-list">
+        <div class="state-container">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <div data-i18n="loading_incomes">Loading incomes...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Expenses vs Budget by Category -->
+    <div class="category-panel">
+      <div class="category-panel-header">
+        <div class="category-panel-title expense" data-i18n="panel_expense_budget_title">
+          <i class="fa-solid fa-bullseye"></i> Expenses vs Budget by Category
+        </div>
+        <div class="category-total-badge" id="expense-categories-total">$ 0.00</div>
+      </div>
+      <div id="expense-categories-list" class="categories-list">
+        <div class="state-container">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <div data-i18n="loading_budgets">Loading budgets...</div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
-var TRANSLATIONS = {
+  var TRANSLATIONS = {
     en: {
-        reference_label: "Reference:",
-        header_title: "Monthly Budget",
-        header_subtitle: "Monitor your monthly limits, committed spending, and category balance",
-        period_label: "Period:",
-        currency_label: "Currency:",
-        currency_none: "No conversion",
-        kpi_converted_label: "Converted total:",
-        kpi_converted_excluded: "{n} currency(ies) excluded (no rate)",
-        rate_stale_tooltip: "Outdated exchange rate",
-        btn_update: "Update",
-        kpi_income_total: "Total Incomes",
-        kpi_budget_limits: "Budget Limits",
-        kpi_planned_balance: "Planned Balance (Income - Budget)",
-        kpi_effective: "Effective:",
-        kpi_pending: "Pending:",
-        kpi_remaining: "Remaining:",
-        kpi_committed: "Committed:",
-        kpi_usage: "Usage:",
-        kpi_balance_desc: "Estimated monthly net result based on active budgets",
-        chart_compare_title: "Monthly Comparison (Incomes vs Budget)",
-        chart_trend_title: "Projected Cash Flow Trend",
-        panel_income_cat_title: "Incomes by Category",
-        panel_expense_budget_title: "Expenses vs Budget by Category",
-        cat_no_limit: "No Limit",
-        week: "Week",
-        day_label: "Day",
-        to_range: "to",
-        cumulative: "Cumulative",
-        col_date: "Date",
-        col_description: "Description",
-        col_account: "Account",
-        col_status: "Status",
-        col_value: "Value",
-        status_effective: "Effective",
-        status_pending: "Pending",
-        loading_incomes: "Loading incomes by category...",
-        loading_budgets: "Loading budgets and expenses by category...",
-        no_incomes_month: "No incomes recorded in this month.",
-        no_budgets_period: "No budgets configured for this period.",
-        no_txs_period: "No transactions in this period.",
-        error_loading_income: "Error loading income data.",
-        error_loading_budget: "Error loading budget data.",
-        chart_lbl_planned: "Planned / Limit",
-        chart_lbl_committed: "Currently Committed",
-        chart_lbl_proj_income: "Projected Incomes",
-        chart_lbl_budget_exp: "Budgeted Expenses",
-        chart_lbl_net_balance: "Projected Net Balance",
-        january: "January", february: "February", march: "March", april: "April",
-        may: "May", june: "June", july: "July", august: "August",
-        september: "September", october: "October", november: "November", december: "December"
+      reference_label: 'Reference:',
+      header_title: 'Monthly Budget',
+      header_subtitle: 'Monitor your monthly limits, committed spending, and category balance',
+      period_label: 'Period:',
+      currency_label: 'Currency:',
+      currency_none: 'No conversion',
+      kpi_converted_label: 'Converted total:',
+      kpi_converted_excluded: '{n} currency(ies) excluded (no rate)',
+      rate_stale_tooltip: 'Outdated exchange rate',
+      btn_update: 'Update',
+      kpi_income_total: 'Total Incomes',
+      kpi_budget_limits: 'Budget Limits',
+      kpi_planned_balance: 'Planned Balance (Income - Budget)',
+      kpi_effective: 'Effective:',
+      kpi_pending: 'Pending:',
+      kpi_remaining: 'Remaining:',
+      kpi_committed: 'Committed:',
+      kpi_usage: 'Usage:',
+      kpi_balance_desc: 'Estimated monthly net result based on active budgets',
+      chart_compare_title: 'Monthly Comparison (Incomes vs Budget)',
+      chart_trend_title: 'Projected Cash Flow Trend',
+      panel_income_cat_title: 'Incomes by Category',
+      panel_expense_budget_title: 'Expenses vs Budget by Category',
+      cat_no_limit: 'No Limit',
+      week: 'Week',
+      day_label: 'Day',
+      to_range: 'to',
+      cumulative: 'Cumulative',
+      col_date: 'Date',
+      col_description: 'Description',
+      col_account: 'Account',
+      col_status: 'Status',
+      col_value: 'Value',
+      status_effective: 'Effective',
+      status_pending: 'Pending',
+      loading_incomes: 'Loading incomes by category...',
+      loading_budgets: 'Loading budgets and expenses by category...',
+      no_incomes_month: 'No incomes recorded in this month.',
+      no_budgets_period: 'No budgets configured for this period.',
+      no_txs_period: 'No transactions in this period.',
+      error_loading_income: 'Error loading income data.',
+      error_loading_budget: 'Error loading budget data.',
+      chart_lbl_planned: 'Planned / Limit',
+      chart_lbl_committed: 'Currently Committed',
+      chart_lbl_proj_income: 'Projected Incomes',
+      chart_lbl_budget_exp: 'Budgeted Expenses',
+      chart_lbl_net_balance: 'Projected Net Balance',
+      january: 'January',
+      february: 'February',
+      march: 'March',
+      april: 'April',
+      may: 'May',
+      june: 'June',
+      july: 'July',
+      august: 'August',
+      september: 'September',
+      october: 'October',
+      november: 'November',
+      december: 'December',
     },
     pt: {
-        reference_label: "Referência:",
-        header_title: "Orçamento Mensal",
-        header_subtitle: "Monitore seus limites mensais, despesas comprometidas e saldo por categoria",
-        period_label: "Período:",
-        currency_label: "Moeda:",
-        currency_none: "Sem conversão",
-        kpi_converted_label: "Total convertido:",
-        kpi_converted_excluded: "{n} moeda(s) excluída(s) (sem cotação)",
-        rate_stale_tooltip: "Cotação desatualizada",
-        btn_update: "Atualizar",
-        kpi_income_total: "Receitas Totais",
-        kpi_budget_limits: "Despesas Orçadas (Limites)",
-        kpi_planned_balance: "Saldo Planejado (Receita - Orçamento)",
-        kpi_effective: "Efetivado:",
-        kpi_pending: "Pendente:",
-        kpi_remaining: "Restante:",
-        kpi_committed: "Comprometido:",
-        kpi_usage: "Uso:",
-        kpi_balance_desc: "Resultado mensal estimado com base no orçamento estipulado",
-        chart_compare_title: "Comparativo Mensal (Receitas x Orçamento)",
-        chart_trend_title: "Tendência de Fluxo de Caixa Projetado",
-        panel_income_cat_title: "Receitas por Categoria",
-        panel_expense_budget_title: "Despesas vs Orçamento por Categoria",
-        cat_no_limit: "Sem Limite",
-        week: "Semana",
-        day_label: "Dia",
-        to_range: "a",
-        cumulative: "Acumulado",
-        col_date: "Data",
-        col_description: "Descrição",
-        col_account: "Conta",
-        col_status: "Status",
-        col_value: "Valor",
-        status_effective: "Efetivado",
-        status_pending: "Pendente",
-        loading_incomes: "Carregando receitas por categoria...",
-        loading_budgets: "Carregando orçamento e despesas por categoria...",
-        no_incomes_month: "Nenhuma receita registrada neste mês.",
-        no_budgets_period: "Nenhum orçamento configurado para este período.",
-        no_txs_period: "Nenhum lançamento no período.",
-        error_loading_income: "Erro ao carregar dados de receita.",
-        error_loading_budget: "Erro ao carregar dados de orçamento.",
-        chart_lbl_planned: "Planejado / Teto",
-        chart_lbl_committed: "Comprometido Atual",
-        chart_lbl_proj_income: "Receitas Projetadas",
-        chart_lbl_budget_exp: "Despesa Orçada",
-        chart_lbl_net_balance: "Saldo Líquido Orçado",
-        january: "Janeiro", february: "Fevereiro", march: "Março", april: "Abril",
-        may: "Maio", june: "Junho", july: "Julho", august: "Agosto",
-        september: "Setembro", october: "Outubro", november: "Novembro", december: "Dezembro"
+      reference_label: 'Referência:',
+      header_title: 'Orçamento Mensal',
+      header_subtitle: 'Monitore seus limites mensais, despesas comprometidas e saldo por categoria',
+      period_label: 'Período:',
+      currency_label: 'Moeda:',
+      currency_none: 'Sem conversão',
+      kpi_converted_label: 'Total convertido:',
+      kpi_converted_excluded: '{n} moeda(s) excluída(s) (sem cotação)',
+      rate_stale_tooltip: 'Cotação desatualizada',
+      btn_update: 'Atualizar',
+      kpi_income_total: 'Receitas Totais',
+      kpi_budget_limits: 'Despesas Orçadas (Limites)',
+      kpi_planned_balance: 'Saldo Planejado (Receita - Orçamento)',
+      kpi_effective: 'Efetivado:',
+      kpi_pending: 'Pendente:',
+      kpi_remaining: 'Restante:',
+      kpi_committed: 'Comprometido:',
+      kpi_usage: 'Uso:',
+      kpi_balance_desc: 'Resultado mensal estimado com base no orçamento estipulado',
+      chart_compare_title: 'Comparativo Mensal (Receitas x Orçamento)',
+      chart_trend_title: 'Tendência de Fluxo de Caixa Projetado',
+      panel_income_cat_title: 'Receitas por Categoria',
+      panel_expense_budget_title: 'Despesas vs Orçamento por Categoria',
+      cat_no_limit: 'Sem Limite',
+      week: 'Semana',
+      day_label: 'Dia',
+      to_range: 'a',
+      cumulative: 'Acumulado',
+      col_date: 'Data',
+      col_description: 'Descrição',
+      col_account: 'Conta',
+      col_status: 'Status',
+      col_value: 'Valor',
+      status_effective: 'Efetivado',
+      status_pending: 'Pendente',
+      loading_incomes: 'Carregando receitas por categoria...',
+      loading_budgets: 'Carregando orçamento e despesas por categoria...',
+      no_incomes_month: 'Nenhuma receita registrada neste mês.',
+      no_budgets_period: 'Nenhum orçamento configurado para este período.',
+      no_txs_period: 'Nenhum lançamento no período.',
+      error_loading_income: 'Erro ao carregar dados de receita.',
+      error_loading_budget: 'Erro ao carregar dados de orçamento.',
+      chart_lbl_planned: 'Planejado / Teto',
+      chart_lbl_committed: 'Comprometido Atual',
+      chart_lbl_proj_income: 'Receitas Projetadas',
+      chart_lbl_budget_exp: 'Despesa Orçada',
+      chart_lbl_net_balance: 'Saldo Líquido Orçado',
+      january: 'Janeiro',
+      february: 'Fevereiro',
+      march: 'Março',
+      april: 'Abril',
+      may: 'Maio',
+      june: 'Junho',
+      july: 'Julho',
+      august: 'Agosto',
+      september: 'Setembro',
+      october: 'Outubro',
+      november: 'Novembro',
+      december: 'Dezembro',
     },
     es: {
-        reference_label: "Referencia:",
-        header_title: "Presupuesto Mensual",
-        header_subtitle: "Monitoree sus límites mensuales, gastos comprometidos y saldo por categoría",
-        period_label: "Período:",
-        currency_label: "Moneda:",
-        currency_none: "Sin conversión",
-        kpi_converted_label: "Total convertido:",
-        kpi_converted_excluded: "{n} moneda(s) excluida(s) (sin cotización)",
-        rate_stale_tooltip: "Tipo de cambio desactualizado",
-        btn_update: "Actualizar",
-        kpi_income_total: "Ingresos Totales",
-        kpi_budget_limits: "Presupuestos (Límites)",
-        kpi_planned_balance: "Saldo Planificado (Ingreso - Presupuesto)",
-        kpi_effective: "Efectuado:",
-        kpi_pending: "Pendiente:",
-        kpi_remaining: "Restante:",
-        kpi_committed: "Comprometido:",
-        kpi_usage: "Uso:",
-        kpi_balance_desc: "Resultado mensual estimado según presupuesto activo",
-        chart_compare_title: "Comparativo Mensual (Ingresos vs Presupuesto)",
-        chart_trend_title: "Tendencia de Flujo de Caja Proyectado",
-        panel_income_cat_title: "Ingresos por Categoría",
-        panel_expense_budget_title: "Gastos vs Presupuesto por Categoría",
-        cat_no_limit: "Sin Límite",
-        week: "Semana",
-        day_label: "Día",
-        to_range: "a",
-        cumulative: "Acumulado",
-        col_date: "Fecha",
-        col_description: "Descripción",
-        col_account: "Cuenta",
-        col_status: "Estado",
-        col_value: "Valor",
-        status_effective: "Efectuado",
-        status_pending: "Pendiente",
-        loading_incomes: "Cargando ingresos...",
-        loading_budgets: "Cargando presupuesto...",
-        no_incomes_month: "No hay ingresos registrados en este mes.",
-        no_budgets_period: "No hay presupuestos configurados para este período.",
-        no_txs_period: "Sin transacciones en este período.",
-        error_loading_income: "Error al cargar datos de ingresos.",
-        error_loading_budget: "Error al cargar datos de presupuesto.",
-        chart_lbl_planned: "Planificado / Límite",
-        chart_lbl_committed: "Comprometido Actual",
-        chart_lbl_proj_income: "Ingresos Proyectados",
-        chart_lbl_budget_exp: "Gasto Presupuestado",
-        chart_lbl_net_balance: "Saldo Neto Proyectado",
-        january: "Enero", february: "Febrero", march: "Marzo", april: "Abril",
-        may: "Mayo", june: "Junio", july: "Julio", august: "Agosto",
-        september: "Septiembre", october: "Octubre", november: "Noviembre", december: "Diciembre"
-    }
-};
+      reference_label: 'Referencia:',
+      header_title: 'Presupuesto Mensual',
+      header_subtitle: 'Monitoree sus límites mensuales, gastos comprometidos y saldo por categoría',
+      period_label: 'Período:',
+      currency_label: 'Moneda:',
+      currency_none: 'Sin conversión',
+      kpi_converted_label: 'Total convertido:',
+      kpi_converted_excluded: '{n} moneda(s) excluida(s) (sin cotización)',
+      rate_stale_tooltip: 'Tipo de cambio desactualizado',
+      btn_update: 'Actualizar',
+      kpi_income_total: 'Ingresos Totales',
+      kpi_budget_limits: 'Presupuestos (Límites)',
+      kpi_planned_balance: 'Saldo Planificado (Ingreso - Presupuesto)',
+      kpi_effective: 'Efectuado:',
+      kpi_pending: 'Pendiente:',
+      kpi_remaining: 'Restante:',
+      kpi_committed: 'Comprometido:',
+      kpi_usage: 'Uso:',
+      kpi_balance_desc: 'Resultado mensual estimado según presupuesto activo',
+      chart_compare_title: 'Comparativo Mensual (Ingresos vs Presupuesto)',
+      chart_trend_title: 'Tendencia de Flujo de Caja Proyectado',
+      panel_income_cat_title: 'Ingresos por Categoría',
+      panel_expense_budget_title: 'Gastos vs Presupuesto por Categoría',
+      cat_no_limit: 'Sin Límite',
+      week: 'Semana',
+      day_label: 'Día',
+      to_range: 'a',
+      cumulative: 'Acumulado',
+      col_date: 'Fecha',
+      col_description: 'Descripción',
+      col_account: 'Cuenta',
+      col_status: 'Estado',
+      col_value: 'Valor',
+      status_effective: 'Efectuado',
+      status_pending: 'Pendiente',
+      loading_incomes: 'Cargando ingresos...',
+      loading_budgets: 'Cargando presupuesto...',
+      no_incomes_month: 'No hay ingresos registrados en este mes.',
+      no_budgets_period: 'No hay presupuestos configurados para este período.',
+      no_txs_period: 'Sin transacciones en este período.',
+      error_loading_income: 'Error al cargar datos de ingresos.',
+      error_loading_budget: 'Error al cargar datos de presupuesto.',
+      chart_lbl_planned: 'Planificado / Límite',
+      chart_lbl_committed: 'Comprometido Actual',
+      chart_lbl_proj_income: 'Ingresos Proyectados',
+      chart_lbl_budget_exp: 'Gasto Presupuestado',
+      chart_lbl_net_balance: 'Saldo Neto Proyectado',
+      january: 'Enero',
+      february: 'Febrero',
+      march: 'Marzo',
+      april: 'Abril',
+      may: 'Mayo',
+      june: 'Junio',
+      july: 'Julio',
+      august: 'Agosto',
+      september: 'Septiembre',
+      october: 'Octubre',
+      november: 'Noviembre',
+      december: 'Diciembre',
+    },
+  };
 
-var compareChart = null;
-var trendChart = null;
-var currentLocale = 'en';
-var currentDisplayCurrency = '';
-// True once the person picks a currency; until then the selection follows the base currency.
-var displayCurrencyChosen = false;
+  var compareChart = null;
+  var trendChart = null;
+  var currentLocale = 'en';
+  var currentDisplayCurrency = '';
+  // True once the person picks a currency; until then the selection follows the base currency.
+  var displayCurrencyChosen = false;
 
-// Sync the reference selectors to ?month&year query params (deep links) or today's date, instead
-// of always loading the HTML's static placeholder selection — mirrors pending.html's pattern.
-(function initDefaultPeriod() {
+  // Sync the reference selectors to ?month&year query params (deep links) or today's date, instead
+  // of always loading the HTML's static placeholder selection — mirrors pending.html's pattern.
+  (function initDefaultPeriod() {
     var params = new URLSearchParams(window.location.search);
     var now = new Date();
-    var defaultMonth = parseInt(params.get('month'), 10) || (now.getMonth() + 1);
+    var defaultMonth = parseInt(params.get('month'), 10) || now.getMonth() + 1;
     var defaultYear = parseInt(params.get('year'), 10) || now.getFullYear();
     var monthSelect = document.getElementById('month-select');
     var yearSelect = document.getElementById('year-select');
     if (monthSelect) monthSelect.value = String(defaultMonth);
     if (yearSelect) yearSelect.value = String(defaultYear);
-})();
+  })();
 
-function t(key) {
+  function t(key) {
     const dict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
     return dict[key] || key;
-}
+  }
 
-async function checkLocale() {
+  async function checkLocale() {
     try {
-        const res = await fetch('/api/status');
-        if (res.ok) {
-            const statusData = await res.json();
-            if (statusData.locale && TRANSLATIONS[statusData.locale]) {
-                currentLocale = statusData.locale;
-            }
+      const res = await fetch('/api/status');
+      if (res.ok) {
+        const statusData = await res.json();
+        if (statusData.locale && TRANSLATIONS[statusData.locale]) {
+          currentLocale = statusData.locale;
         }
+      }
     } catch (e) {
-        console.error('Failed to load status:', e);
+      console.error('Failed to load status:', e);
     }
     translatePage();
-}
+  }
 
-function translatePage() {
+  function translatePage() {
     const dict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
 
     // 1. Static text elements
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if (dict[key]) {
-            const icon = el.querySelector('i');
-            if (icon) {
-                el.innerHTML = icon.outerHTML + ' ' + dict[key];
-            } else {
-                el.textContent = dict[key];
-            }
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      const key = el.getAttribute('data-i18n');
+      if (dict[key]) {
+        const icon = el.querySelector('i');
+        if (icon) {
+          el.innerHTML = icon.outerHTML + ' ' + dict[key];
+        } else {
+          el.textContent = dict[key];
         }
+      }
     });
 
     // 2. Month dropdown options
     const monthSelect = document.getElementById('month-select');
     if (monthSelect) {
-        const monthKeys = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-        Array.from(monthSelect.options).forEach((opt, idx) => {
-            const key = monthKeys[idx];
-            if (dict[key]) {
-                opt.textContent = dict[key];
-            }
-        });
+      const monthKeys = [
+        'january',
+        'february',
+        'march',
+        'april',
+        'may',
+        'june',
+        'july',
+        'august',
+        'september',
+        'october',
+        'november',
+        'december',
+      ];
+      Array.from(monthSelect.options).forEach((opt, idx) => {
+        const key = monthKeys[idx];
+        if (dict[key]) {
+          opt.textContent = dict[key];
+        }
+      });
     }
-}
+  }
 
-// window.__appCurrencies is populated by the shell (ui/app.js) before this script runs.
-// Defaults the selection to the base currency so the converted total shows without an extra click.
-async function initCurrencySelector() {
+  // window.__appCurrencies is populated by the shell (ui/app.js) before this script runs.
+  // Defaults the selection to the base currency so the converted total shows without an extra click.
+  async function initCurrencySelector() {
     const select = document.getElementById('currency-select');
     if (!select) return;
 
     const codes = Object.keys(window.__appCurrencies || {}).sort();
-    codes.forEach(code => {
-        const opt = document.createElement('option');
-        opt.value = code;
-        opt.textContent = code;
-        select.appendChild(opt);
+    codes.forEach((code) => {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = code;
+      select.appendChild(opt);
     });
 
     try {
-        const res = await fetch('/api/preferences');
-        if (res.ok) {
-            const prefs = await res.json();
-            if (prefs.baseCurrency && codes.indexOf(prefs.baseCurrency) !== -1) {
-                select.value = prefs.baseCurrency;
-            }
+      const res = await fetch('/api/preferences');
+      if (res.ok) {
+        const prefs = await res.json();
+        if (prefs.baseCurrency && codes.indexOf(prefs.baseCurrency) !== -1) {
+          select.value = prefs.baseCurrency;
         }
+      }
     } catch (e) {
-        console.error('Failed to load preferences:', e);
+      console.error('Failed to load preferences:', e);
     }
 
     currentDisplayCurrency = select.value;
-}
+  }
 
-// addMultiCurrency/valueIn/primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/formatMultiCurrencyWith/
-// DEFAULT_CURRENCY are shared globals from ui/money.js (loaded before this fragment's script — see
-// docs/ui.md) rather than defined here. formatCurrency stays local — and formatMultiCurrency is
-// just a 1-line delegate to formatMultiCurrencyWith passing it — because they need this fragment's
-// own resolved currentLocale, which the shell-loaded, load-once money.js has no access to.
-function formatMultiCurrency(map, delimiter) {
+  // addMultiCurrency/valueIn/primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/formatMultiCurrencyWith/
+  // DEFAULT_CURRENCY are shared globals from ui/money.js (loaded before this fragment's script — see
+  // docs/ui.md) rather than defined here. formatCurrency stays local — and formatMultiCurrency is
+  // just a 1-line delegate to formatMultiCurrencyWith passing it — because they need this fragment's
+  // own resolved currentLocale, which the shell-loaded, load-once money.js has no access to.
+  function formatMultiCurrency(map, delimiter) {
     return window.formatMultiCurrencyWith(map, formatCurrency, delimiter);
-}
+  }
 
-function formatCurrency(val, currency = DEFAULT_CURRENCY) {
+  function formatCurrency(val, currency = DEFAULT_CURRENCY) {
     const code = currency || DEFAULT_CURRENCY;
-    const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
+    const loc = currentLocale === 'pt' ? 'pt-BR' : currentLocale === 'es' ? 'es-ES' : 'en-US';
     return window.formatMoney(val || 0, code, { locale: loc });
-}
+  }
 
-function formatPct(val) {
+  function formatPct(val) {
     return `${((val || 0) * 100).toFixed(1)}%`;
-}
+  }
 
-function onFilterChange() {
+  function onFilterChange() {
     const currencySelect = document.getElementById('currency-select');
     currentDisplayCurrency = currencySelect ? currencySelect.value : '';
     loadDashboardData();
-}
+  }
 
-// Only the currency selector counts as a choice; changing the month or year leaves the default following the base.
-function onCurrencyChange() {
+  // Only the currency selector counts as a choice; changing the month or year leaves the default following the base.
+  function onCurrencyChange() {
     displayCurrencyChosen = true;
     onFilterChange();
-}
+  }
 
-// The shell has already refreshed window.BASE_CURRENCY when a userSettings event reaches this fragment.
-function followBaseCurrency() {
+  // The shell has already refreshed window.BASE_CURRENCY when a userSettings event reaches this fragment.
+  function followBaseCurrency() {
     const select = document.getElementById('currency-select');
     if (displayCurrencyChosen || !select || !window.BASE_CURRENCY) return;
     if (!Object.prototype.hasOwnProperty.call(window.__appCurrencies || {}, window.BASE_CURRENCY)) return;
     select.value = window.BASE_CURRENCY;
     currentDisplayCurrency = select.value;
-}
+  }
 
-async function fetchBudgetStatus(month, year, displayCurrency) {
+  async function fetchBudgetStatus(month, year, displayCurrency) {
     try {
-        const params = new URLSearchParams({ month: String(month), year: String(year) });
-        if (displayCurrency) params.set('displayCurrency', displayCurrency);
-        const res = await fetch(`/api/budgets/status?${params.toString()}`);
-        if (!res.ok) return null;
-        return await res.json();
+      const params = new URLSearchParams({ month: String(month), year: String(year) });
+      if (displayCurrency) params.set('displayCurrency', displayCurrency);
+      const res = await fetch(`/api/budgets/status?${params.toString()}`);
+      if (!res.ok) return null;
+      return await res.json();
     } catch (err) {
-        console.error('Error fetching budget status:', err);
-        return null;
+      console.error('Error fetching budget status:', err);
+      return null;
     }
-}
+  }
 
-async function fetchAllTransactionsForMonth(year, month) {
+  async function fetchAllTransactionsForMonth(year, month) {
     let items = [];
     let cursor = null;
 
     try {
-        while (true) {
-            const params = new URLSearchParams({
-                month: String(month),
-                year: String(year),
-                sort: 'date',
-                dir: 'desc'
-            });
-            if (cursor) params.set('cursor', cursor);
+      while (true) {
+        const params = new URLSearchParams({
+          month: String(month),
+          year: String(year),
+          sort: 'date',
+          dir: 'desc',
+        });
+        if (cursor) params.set('cursor', cursor);
 
-            const res = await fetch(`/api/transactions?${params.toString()}`);
-            if (!res.ok) break;
-            const data = await res.json();
-            
-            if (data && Array.isArray(data.items)) {
-                items = items.concat(data.items);
-                if (data.nextCursor) {
-                    cursor = data.nextCursor;
-                } else {
-                    break;
-                }
-            } else if (Array.isArray(data)) {
-                items = data;
-                break;
-            } else {
-                break;
-            }
+        const res = await fetch(`/api/transactions?${params.toString()}`);
+        if (!res.ok) break;
+        const data = await res.json();
+
+        if (data && Array.isArray(data.items)) {
+          items = items.concat(data.items);
+          if (data.nextCursor) {
+            cursor = data.nextCursor;
+          } else {
+            break;
+          }
+        } else if (Array.isArray(data)) {
+          items = data;
+          break;
+        } else {
+          break;
         }
+      }
     } catch (err) {
-        console.error('Error fetching transactions:', err);
+      console.error('Error fetching transactions:', err);
     }
     return items;
-}
+  }
 
-async function loadDashboardData() {
+  async function loadDashboardData() {
     const month = parseInt(document.getElementById('month-select').value);
     const year = parseInt(document.getElementById('year-select').value);
 
@@ -986,209 +1072,208 @@ async function loadDashboardData() {
         </div>`;
 
     try {
-        const [budgetStatus, txItems] = await Promise.all([
-            fetchBudgetStatus(month, year, currentDisplayCurrency),
-            fetchAllTransactionsForMonth(year, month)
-        ]);
+      const [budgetStatus, txItems] = await Promise.all([
+        fetchBudgetStatus(month, year, currentDisplayCurrency),
+        fetchAllTransactionsForMonth(year, month),
+      ]);
 
-        // Calculate Income totals and categories
-        const incomeTotalEff = {};
-        const incomeTotalPend = {};
-        const incomeCats = {};
+      // Calculate Income totals and categories
+      const incomeTotalEff = {};
+      const incomeTotalPend = {};
+      const incomeCats = {};
 
-        txItems.forEach(tx => {
-            if (tx.type === 'income') {
-                const amt = Number(tx.amount) || 0;
-                const curr = tx.currency || DEFAULT_CURRENCY;
-                const catName = tx.categoryName || 'Uncategorized';
-                
-                if (!incomeCats[catName]) {
-                    incomeCats[catName] = { effective: {}, pending: {}, total: {}, txs: [] };
-                }
-                
-                incomeCats[catName].txs.push(tx);
-                addMultiCurrency(incomeCats[catName].total, curr, amt);
-                
-                if (tx.status === 'effective') {
-                    addMultiCurrency(incomeTotalEff, curr, amt);
-                    addMultiCurrency(incomeCats[catName].effective, curr, amt);
-                } else {
-                    addMultiCurrency(incomeTotalPend, curr, amt);
-                    addMultiCurrency(incomeCats[catName].pending, curr, amt);
-                }
+      txItems.forEach((tx) => {
+        if (tx.type === 'income') {
+          const amt = Number(tx.amount) || 0;
+          const curr = tx.currency || DEFAULT_CURRENCY;
+          const catName = tx.categoryName || 'Uncategorized';
+
+          if (!incomeCats[catName]) {
+            incomeCats[catName] = { effective: {}, pending: {}, total: {}, txs: [] };
+          }
+
+          incomeCats[catName].txs.push(tx);
+          addMultiCurrency(incomeCats[catName].total, curr, amt);
+
+          if (tx.status === 'effective') {
+            addMultiCurrency(incomeTotalEff, curr, amt);
+            addMultiCurrency(incomeCats[catName].effective, curr, amt);
+          } else {
+            addMultiCurrency(incomeTotalPend, curr, amt);
+            addMultiCurrency(incomeCats[catName].pending, curr, amt);
+          }
+        }
+      });
+
+      // Compute totalIncome map
+      const totalIncome = {};
+      for (var c in incomeTotalEff) {
+        addMultiCurrency(totalIncome, c, incomeTotalEff[c]);
+      }
+      for (var c in incomeTotalPend) {
+        addMultiCurrency(totalIncome, c, incomeTotalPend[c]);
+      }
+
+      // Process Budget Status (fetched via REST, GET /api/budgets/status) for all currencies
+      const totalBudgetLimit = {};
+      const totalBudgetCommitted = {};
+      const totalBudgetEffective = {};
+      const totalBudgetPending = {};
+
+      const budgetCategoryMap = {};
+
+      if (budgetStatus && Array.isArray(budgetStatus.categories)) {
+        budgetStatus.categories.forEach((catGroup) => {
+          const catName = catGroup.category;
+          const lines = catGroup.lines || [];
+
+          lines.forEach((line) => {
+            const curr = line.currency || DEFAULT_CURRENCY;
+            const limit = Number(line.limit) || 0;
+            const committed = Number(line.committed?.amount) || 0;
+            const effective = Number(line.effective?.amount) || 0;
+            const pending = Number(line.pending?.amount) || 0;
+            const remaining = Number(line.remaining) || 0;
+
+            addMultiCurrency(totalBudgetLimit, curr, limit);
+            addMultiCurrency(totalBudgetCommitted, curr, committed);
+            addMultiCurrency(totalBudgetEffective, curr, effective);
+            addMultiCurrency(totalBudgetPending, curr, pending);
+
+            if (!budgetCategoryMap[catName]) {
+              budgetCategoryMap[catName] = {
+                limit: {},
+                committed: {},
+                effective: {},
+                pending: {},
+                remaining: {},
+                txs: [],
+              };
             }
+
+            addMultiCurrency(budgetCategoryMap[catName].limit, curr, limit);
+            addMultiCurrency(budgetCategoryMap[catName].committed, curr, committed);
+            addMultiCurrency(budgetCategoryMap[catName].effective, curr, effective);
+            addMultiCurrency(budgetCategoryMap[catName].pending, curr, pending);
+            addMultiCurrency(budgetCategoryMap[catName].remaining, curr, remaining);
+          });
         });
+      }
 
-        // Compute totalIncome map
-        const totalIncome = {};
-        for (var c in incomeTotalEff) {
-            addMultiCurrency(totalIncome, c, incomeTotalEff[c]);
-        }
-        for (var c in incomeTotalPend) {
-            addMultiCurrency(totalIncome, c, incomeTotalPend[c]);
-        }
+      // Add expense transactions and populate txs lists
+      txItems.forEach((tx) => {
+        if (tx.type === 'expense') {
+          const catName = tx.categoryName || 'Other';
+          const curr = tx.currency || DEFAULT_CURRENCY;
+          const amt = Number(tx.amount) || 0;
 
-        // Process Budget Status (fetched via REST, GET /api/budgets/status) for all currencies
-        const totalBudgetLimit = {};
-        const totalBudgetCommitted = {};
-        const totalBudgetEffective = {};
-        const totalBudgetPending = {};
+          if (!budgetCategoryMap[catName]) {
+            budgetCategoryMap[catName] = {
+              limit: {},
+              committed: {},
+              effective: {},
+              pending: {},
+              remaining: {},
+              txs: [],
+            };
+          }
 
-        const budgetCategoryMap = {};
+          budgetCategoryMap[catName].txs.push(tx);
 
-        if (budgetStatus && Array.isArray(budgetStatus.categories)) {
-            budgetStatus.categories.forEach(catGroup => {
-                const catName = catGroup.category;
-                const lines = catGroup.lines || [];
-
-                lines.forEach(line => {
-                    const curr = line.currency || DEFAULT_CURRENCY;
-                    const limit = Number(line.limit) || 0;
-                    const committed = Number(line.committed?.amount) || 0;
-                    const effective = Number(line.effective?.amount) || 0;
-                    const pending = Number(line.pending?.amount) || 0;
-                    const remaining = Number(line.remaining) || 0;
-
-                    addMultiCurrency(totalBudgetLimit, curr, limit);
-                    addMultiCurrency(totalBudgetCommitted, curr, committed);
-                    addMultiCurrency(totalBudgetEffective, curr, effective);
-                    addMultiCurrency(totalBudgetPending, curr, pending);
-
-                    if (!budgetCategoryMap[catName]) {
-                        budgetCategoryMap[catName] = {
-                            limit: {},
-                            committed: {},
-                            effective: {},
-                            pending: {},
-                            remaining: {},
-                            txs: []
-                        };
-                    }
-
-                    addMultiCurrency(budgetCategoryMap[catName].limit, curr, limit);
-                    addMultiCurrency(budgetCategoryMap[catName].committed, curr, committed);
-                    addMultiCurrency(budgetCategoryMap[catName].effective, curr, effective);
-                    addMultiCurrency(budgetCategoryMap[catName].pending, curr, pending);
-                    addMultiCurrency(budgetCategoryMap[catName].remaining, curr, remaining);
-                });
-            });
-        }
-
-        // Add expense transactions and populate txs lists
-        txItems.forEach(tx => {
-            if (tx.type === 'expense') {
-                const catName = tx.categoryName || 'Other';
-                const curr = tx.currency || DEFAULT_CURRENCY;
-                const amt = Number(tx.amount) || 0;
-
-                if (!budgetCategoryMap[catName]) {
-                    budgetCategoryMap[catName] = {
-                        limit: {},
-                        committed: {},
-                        effective: {},
-                        pending: {},
-                        remaining: {},
-                        txs: []
-                    };
-                }
-
-                budgetCategoryMap[catName].txs.push(tx);
-
-                // If this category didn't have budget lines from budgetStatus, accumulate transaction amounts
-                if (Object.keys(budgetCategoryMap[catName].limit).length === 0) {
-                    addMultiCurrency(budgetCategoryMap[catName].committed, curr, amt);
-                    if (tx.status === 'effective') {
-                        addMultiCurrency(budgetCategoryMap[catName].effective, curr, amt);
-                    } else {
-                        addMultiCurrency(budgetCategoryMap[catName].pending, curr, amt);
-                    }
-                    addMultiCurrency(budgetCategoryMap[catName].remaining, curr, -amt);
-                }
+          // If this category didn't have budget lines from budgetStatus, accumulate transaction amounts
+          if (Object.keys(budgetCategoryMap[catName].limit).length === 0) {
+            addMultiCurrency(budgetCategoryMap[catName].committed, curr, amt);
+            if (tx.status === 'effective') {
+              addMultiCurrency(budgetCategoryMap[catName].effective, curr, amt);
+            } else {
+              addMultiCurrency(budgetCategoryMap[catName].pending, curr, amt);
             }
-        });
-
-        // Render KPI Cards
-        document.getElementById('kpi-income-val').textContent = formatMultiCurrency(totalIncome);
-        document.getElementById('kpi-income-eff').textContent = formatMultiCurrency(incomeTotalEff);
-        document.getElementById('kpi-income-pend').textContent = formatMultiCurrency(incomeTotalPend);
-
-        document.getElementById('kpi-budget-limit-val').textContent = formatMultiCurrency(totalBudgetLimit, ' / ');
-        document.getElementById('kpi-budget-comm-val').textContent = formatMultiCurrency(totalBudgetCommitted);
-
-        // "Usage" is a single percentage, so it can only read one real currency's own limit/committed
-        // — never a blended total across currencies.
-        const budgetCurrency = primaryCurrencyOf(totalBudgetLimit);
-        const budgetLimitInCurrency = valueIn(totalBudgetLimit, budgetCurrency);
-        const budgetCommittedInCurrency = valueIn(totalBudgetCommitted, budgetCurrency);
-        const overallBudgetPct = budgetLimitInCurrency > 0 ? (budgetCommittedInCurrency / budgetLimitInCurrency) : 0;
-        document.getElementById('kpi-budget-pct-val').textContent = formatPct(overallBudgetPct);
-
-        renderConvertedTotal(budgetStatus && budgetStatus.converted);
-
-        // Planned Balance (Income map - Limit map), kept per-currency — never combined into one total.
-        const plannedBalance = {};
-        const allCurrs = new Set([...Object.keys(totalIncome), ...Object.keys(totalBudgetLimit)]);
-        allCurrs.forEach(c => {
-            plannedBalance[c] = (totalIncome[c] || 0) - (totalBudgetLimit[c] || 0);
-        });
-
-        const balanceCard = document.getElementById('kpi-balance-card');
-        const balanceValEl = document.getElementById('kpi-balance-val');
-        balanceValEl.textContent = formatMultiCurrency(plannedBalance, ' / ');
-
-        const primaryBalanceCurrency = primaryCurrencyOf(plannedBalance);
-        if (valueIn(plannedBalance, primaryBalanceCurrency) < 0) {
-            balanceCard.classList.add('negative');
-        } else {
-            balanceCard.classList.remove('negative');
+            addMultiCurrency(budgetCategoryMap[catName].remaining, curr, -amt);
+          }
         }
+      });
 
-        document.getElementById('income-categories-total').textContent = formatMultiCurrency(totalIncome);
-        document.getElementById('expense-categories-total').textContent = formatMultiCurrency(totalBudgetCommitted);
+      // Render KPI Cards
+      document.getElementById('kpi-income-val').textContent = formatMultiCurrency(totalIncome);
+      document.getElementById('kpi-income-eff').textContent = formatMultiCurrency(incomeTotalEff);
+      document.getElementById('kpi-income-pend').textContent = formatMultiCurrency(incomeTotalPend);
 
-        // Render Income Categories List
-        renderIncomeCategories(incomeCats, totalIncome);
+      document.getElementById('kpi-budget-limit-val').textContent = formatMultiCurrency(totalBudgetLimit, ' / ');
+      document.getElementById('kpi-budget-comm-val').textContent = formatMultiCurrency(totalBudgetCommitted);
 
-        // Render Expense vs Budget Categories List
-        renderExpenseBudgetCategories(budgetCategoryMap);
+      // "Usage" is a single percentage, so it can only read one real currency's own limit/committed
+      // — never a blended total across currencies.
+      const budgetCurrency = primaryCurrencyOf(totalBudgetLimit);
+      const budgetLimitInCurrency = valueIn(totalBudgetLimit, budgetCurrency);
+      const budgetCommittedInCurrency = valueIn(totalBudgetCommitted, budgetCurrency);
+      const overallBudgetPct = budgetLimitInCurrency > 0 ? budgetCommittedInCurrency / budgetLimitInCurrency : 0;
+      document.getElementById('kpi-budget-pct-val').textContent = formatPct(overallBudgetPct);
 
-        // Render Charts — Chart.js needs single numeric series, so pick ONE real currency (never a
-        // converted/blended total; the KPI cards above already show every currency correctly).
-        const compareChartCurrency = primaryCurrencyOf(mergeCurrencyMaps(totalIncome, totalBudgetLimit));
-        renderMonthlyCompareChart({
-            currency: compareChartCurrency,
-            effIncome: valueIn(incomeTotalEff, compareChartCurrency),
-            pendIncome: valueIn(incomeTotalPend, compareChartCurrency),
-            limitExpense: valueIn(totalBudgetLimit, compareChartCurrency),
-            effExpense: valueIn(totalBudgetEffective, compareChartCurrency),
-            pendExpense: valueIn(totalBudgetPending, compareChartCurrency)
-        });
-        renderTrendChart(year, month);
+      renderConvertedTotal(budgetStatus && budgetStatus.converted);
 
+      // Planned Balance (Income map - Limit map), kept per-currency — never combined into one total.
+      const plannedBalance = {};
+      const allCurrs = new Set([...Object.keys(totalIncome), ...Object.keys(totalBudgetLimit)]);
+      allCurrs.forEach((c) => {
+        plannedBalance[c] = (totalIncome[c] || 0) - (totalBudgetLimit[c] || 0);
+      });
+
+      const balanceCard = document.getElementById('kpi-balance-card');
+      const balanceValEl = document.getElementById('kpi-balance-val');
+      balanceValEl.textContent = formatMultiCurrency(plannedBalance, ' / ');
+
+      const primaryBalanceCurrency = primaryCurrencyOf(plannedBalance);
+      if (valueIn(plannedBalance, primaryBalanceCurrency) < 0) {
+        balanceCard.classList.add('negative');
+      } else {
+        balanceCard.classList.remove('negative');
+      }
+
+      document.getElementById('income-categories-total').textContent = formatMultiCurrency(totalIncome);
+      document.getElementById('expense-categories-total').textContent = formatMultiCurrency(totalBudgetCommitted);
+
+      // Render Income Categories List
+      renderIncomeCategories(incomeCats, totalIncome);
+
+      // Render Expense vs Budget Categories List
+      renderExpenseBudgetCategories(budgetCategoryMap);
+
+      // Render Charts — Chart.js needs single numeric series, so pick ONE real currency (never a
+      // converted/blended total; the KPI cards above already show every currency correctly).
+      const compareChartCurrency = primaryCurrencyOf(mergeCurrencyMaps(totalIncome, totalBudgetLimit));
+      renderMonthlyCompareChart({
+        currency: compareChartCurrency,
+        effIncome: valueIn(incomeTotalEff, compareChartCurrency),
+        pendIncome: valueIn(incomeTotalPend, compareChartCurrency),
+        limitExpense: valueIn(totalBudgetLimit, compareChartCurrency),
+        effExpense: valueIn(totalBudgetEffective, compareChartCurrency),
+        pendExpense: valueIn(totalBudgetPending, compareChartCurrency),
+      });
+      renderTrendChart(year, month);
     } catch (err) {
-        console.error('Error loading budget dashboard:', err);
-        incomeListEl.innerHTML = `
+      console.error('Error loading budget dashboard:', err);
+      incomeListEl.innerHTML = `
             <div class="state-container" style="color: #f43f5e">
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <div>${t('error_loading_income')}</div>
             </div>`;
-        expenseListEl.innerHTML = `
+      expenseListEl.innerHTML = `
             <div class="state-container" style="color: #f43f5e">
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <div>${t('error_loading_budget')}</div>
             </div>`;
     }
-}
+  }
 
-// `converted` is a cross-currency grand total — deliberately not a replacement for the per-currency
-// figures rendered elsewhere on this page, which stay the source of truth.
-function renderConvertedTotal(converted) {
+  // `converted` is a cross-currency grand total — deliberately not a replacement for the per-currency
+  // figures rendered elsewhere on this page, which stay the source of truth.
+  function renderConvertedTotal(converted) {
     const el = document.getElementById('kpi-budget-converted');
     if (!el) return;
     if (!converted) {
-        el.style.display = 'none';
-        el.classList.remove('stale');
-        return;
+      el.style.display = 'none';
+      el.classList.remove('stale');
+      return;
     }
 
     const totalText = formatCurrency(converted.total, converted.displayCurrency);
@@ -1198,49 +1283,53 @@ function renderConvertedTotal(converted) {
     // hover, and `title` isn't reliably announced) — the warning icon is a real focusable button
     // with an aria-label carrying the same text, so it's reachable and announced either way.
     const staleFlag = converted.stale
-        ? ` <button type="button" class="stale-flag" title="${staleLabel}" aria-label="${staleLabel}">` +
-          '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></button>'
-        : '';
+      ? ` <button type="button" class="stale-flag" title="${staleLabel}" aria-label="${staleLabel}">` +
+        '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></button>'
+      : '';
 
     el.classList.toggle('stale', converted.stale);
     el.innerHTML = `
         <span>${t('kpi_converted_label')} <strong>${totalText}</strong>${staleFlag}</span>
-        ${excludedCount > 0
+        ${
+          excludedCount > 0
             ? `<span class="kpi-converted-excluded">${t('kpi_converted_excluded').replace('{n}', String(excludedCount))}</span>`
-            : ''}
+            : ''
+        }
     `;
     el.style.display = 'block';
-}
+  }
 
-function renderIncomeCategories(incomeCats, totalIncome) {
+  function renderIncomeCategories(incomeCats, totalIncome) {
     const listEl = document.getElementById('income-categories-list');
-    const sortedCatNames = Object.keys(incomeCats).sort((a, b) => magnitudeOf(incomeCats[b].total) - magnitudeOf(incomeCats[a].total));
+    const sortedCatNames = Object.keys(incomeCats).sort(
+      (a, b) => magnitudeOf(incomeCats[b].total) - magnitudeOf(incomeCats[a].total),
+    );
 
     if (sortedCatNames.length === 0) {
-        listEl.innerHTML = `
+      listEl.innerHTML = `
             <div class="state-container">
                 <i class="fa-regular fa-folder-open"></i>
                 <div>${t('no_incomes_month')}</div>
             </div>`;
-        return;
+      return;
     }
 
     let html = '';
     sortedCatNames.forEach((catName, idx) => {
-        const data = incomeCats[catName];
-        // A displayed percentage can only compare amounts in the same currency — this category's
-        // own share of that same currency's total income, never a blend across currencies.
-        const rowCurrency = primaryCurrencyOf(data.total);
-        const rowTotal = valueIn(data.total, rowCurrency);
-        const rowEffective = valueIn(data.effective, rowCurrency);
-        const rowPending = valueIn(data.pending, rowCurrency);
-        const pct = valueIn(totalIncome, rowCurrency) > 0 ? (rowTotal / valueIn(totalIncome, rowCurrency)) * 100 : 0;
-        const effPct = rowTotal > 0 ? (rowEffective / rowTotal) * 100 : 0;
-        const pendPct = rowTotal > 0 ? (rowPending / rowTotal) * 100 : 0;
+      const data = incomeCats[catName];
+      // A displayed percentage can only compare amounts in the same currency — this category's
+      // own share of that same currency's total income, never a blend across currencies.
+      const rowCurrency = primaryCurrencyOf(data.total);
+      const rowTotal = valueIn(data.total, rowCurrency);
+      const rowEffective = valueIn(data.effective, rowCurrency);
+      const rowPending = valueIn(data.pending, rowCurrency);
+      const pct = valueIn(totalIncome, rowCurrency) > 0 ? (rowTotal / valueIn(totalIncome, rowCurrency)) * 100 : 0;
+      const effPct = rowTotal > 0 ? (rowEffective / rowTotal) * 100 : 0;
+      const pendPct = rowTotal > 0 ? (rowPending / rowTotal) * 100 : 0;
 
-        const rowId = `inc-cat-${idx}`;
+      const rowId = `inc-cat-${idx}`;
 
-        html += `
+      html += `
             <div class="category-row-container" id="${rowId}">
                 <div class="category-row-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion('${rowId}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAccordion('${rowId}'); }">
                     <div class="cat-meta-info">
@@ -1268,62 +1357,62 @@ function renderIncomeCategories(incomeCats, totalIncome) {
     });
 
     listEl.innerHTML = html;
-}
+  }
 
-function renderExpenseBudgetCategories(budgetCategoryMap) {
+  function renderExpenseBudgetCategories(budgetCategoryMap) {
     const listEl = document.getElementById('expense-categories-list');
     const catNames = Object.keys(budgetCategoryMap).sort((a, b) => {
-        const bVal = magnitudeOf(budgetCategoryMap[b].committed) || magnitudeOf(budgetCategoryMap[b].limit);
-        const aVal = magnitudeOf(budgetCategoryMap[a].committed) || magnitudeOf(budgetCategoryMap[a].limit);
-        return bVal - aVal;
+      const bVal = magnitudeOf(budgetCategoryMap[b].committed) || magnitudeOf(budgetCategoryMap[b].limit);
+      const aVal = magnitudeOf(budgetCategoryMap[a].committed) || magnitudeOf(budgetCategoryMap[a].limit);
+      return bVal - aVal;
     });
 
     if (catNames.length === 0) {
-        listEl.innerHTML = `
+      listEl.innerHTML = `
             <div class="state-container">
                 <i class="fa-regular fa-folder-open"></i>
                 <div>${t('no_budgets_period')}</div>
             </div>`;
-        return;
+      return;
     }
 
     let html = '';
     catNames.forEach((catName, idx) => {
-        const data = budgetCategoryMap[catName];
-        // A displayed pct/over-budget flag/progress bar can only read one real currency's own
-        // limit-vs-committed — never a blended total across currencies (formatMultiCurrency below
-        // still shows every currency correctly as text).
-        const rowCurrency = primaryCurrencyOf(mergeCurrencyMaps(data.limit, data.committed));
-        const rowLimit = valueIn(data.limit, rowCurrency);
-        const rowCommitted = valueIn(data.committed, rowCurrency);
-        const rowRemaining = valueIn(data.remaining, rowCurrency);
-        const isOver = rowLimit > 0 && rowCommitted > rowLimit;
-        const pctUsed = rowLimit > 0 ? (rowCommitted / rowLimit) * 100 : 0;
+      const data = budgetCategoryMap[catName];
+      // A displayed pct/over-budget flag/progress bar can only read one real currency's own
+      // limit-vs-committed — never a blended total across currencies (formatMultiCurrency below
+      // still shows every currency correctly as text).
+      const rowCurrency = primaryCurrencyOf(mergeCurrencyMaps(data.limit, data.committed));
+      const rowLimit = valueIn(data.limit, rowCurrency);
+      const rowCommitted = valueIn(data.committed, rowCurrency);
+      const rowRemaining = valueIn(data.remaining, rowCurrency);
+      const isOver = rowLimit > 0 && rowCommitted > rowLimit;
+      const pctUsed = rowLimit > 0 ? (rowCommitted / rowLimit) * 100 : 0;
 
-        const rowEffective = valueIn(data.effective, rowCurrency);
-        const rowPending = valueIn(data.pending, rowCurrency);
+      const rowEffective = valueIn(data.effective, rowCurrency);
+      const rowPending = valueIn(data.pending, rowCurrency);
 
-        let effPct = rowLimit > 0 ? (rowEffective / rowLimit) * 100 : 0;
-        let pendPct = rowLimit > 0 ? (rowPending / rowLimit) * 100 : 0;
+      let effPct = rowLimit > 0 ? (rowEffective / rowLimit) * 100 : 0;
+      let pendPct = rowLimit > 0 ? (rowPending / rowLimit) * 100 : 0;
 
-        if (effPct > 100) {
-            effPct = 100;
-            pendPct = 0;
-        } else if (effPct + pendPct > 100) {
-            pendPct = 100 - effPct;
-        }
+      if (effPct > 100) {
+        effPct = 100;
+        pendPct = 0;
+      } else if (effPct + pendPct > 100) {
+        pendPct = 100 - effPct;
+      }
 
-        let barClass = 'budget-ok';
-        if (pctUsed > 100) barClass = 'budget-over';
-        else if (pctUsed > 80) barClass = 'budget-warn';
+      let barClass = 'budget-ok';
+      if (pctUsed > 100) barClass = 'budget-over';
+      else if (pctUsed > 80) barClass = 'budget-warn';
 
-        const rowId = `exp-cat-${idx}`;
-        const hasLimit = Object.values(data.limit).some(v => v > 0);
-        const limitStr = hasLimit ? `/ ${formatMultiCurrency(data.limit)}` : '';
-        const valLabel = `${formatMultiCurrency(data.committed)} ${limitStr}`;
-        const pctLabel = hasLimit ? pctUsed.toFixed(1) + '%' : t('cat_no_limit');
+      const rowId = `exp-cat-${idx}`;
+      const hasLimit = Object.values(data.limit).some((v) => v > 0);
+      const limitStr = hasLimit ? `/ ${formatMultiCurrency(data.limit)}` : '';
+      const valLabel = `${formatMultiCurrency(data.committed)} ${limitStr}`;
+      const pctLabel = hasLimit ? pctUsed.toFixed(1) + '%' : t('cat_no_limit');
 
-        html += `
+      html += `
             <div class="category-row-container ${isOver ? 'over-budget' : ''}" id="${rowId}">
                 <div class="category-row-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion('${rowId}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAccordion('${rowId}'); }">
                     <div class="cat-meta-info">
@@ -1352,20 +1441,20 @@ function renderExpenseBudgetCategories(budgetCategoryMap) {
     });
 
     listEl.innerHTML = html;
-}
+  }
 
-function renderTransactionsTable(txs) {
+  function renderTransactionsTable(txs) {
     if (!txs || txs.length === 0) {
-        return `<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.5rem;">${t('no_txs_period')}</div>`;
+      return `<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.5rem;">${t('no_txs_period')}</div>`;
     }
 
     let rows = '';
-    txs.forEach(tx => {
-        const isEff = tx.status === 'effective';
-        const dateStr = tx.date ? tx.date.split('-').reverse().join('/') : '-';
-        const valStr = formatCurrency(tx.amount, tx.currency || DEFAULT_CURRENCY);
+    txs.forEach((tx) => {
+      const isEff = tx.status === 'effective';
+      const dateStr = tx.date ? tx.date.split('-').reverse().join('/') : '-';
+      const valStr = formatCurrency(tx.amount, tx.currency || DEFAULT_CURRENCY);
 
-        rows += `
+      rows += `
             <tr>
                 <td>${dateStr}</td>
                 <td>${escapeHtml(tx.description || '-')}</td>
@@ -1394,9 +1483,9 @@ function renderTransactionsTable(txs) {
                 ${rows}
             </tbody>
         </table>`;
-}
+  }
 
-function toggleAccordion(rowId) {
+  function toggleAccordion(rowId) {
     const el = document.getElementById(rowId);
     if (!el) return;
     const isOpen = el.classList.contains('open');
@@ -1405,162 +1494,158 @@ function toggleAccordion(rowId) {
     const details = el.querySelector('.category-tx-details');
     const header = el.querySelector('.category-row-header');
     if (isOpen) {
-        el.classList.remove('open');
-        if (details) details.style.display = 'none';
-        if (header) header.setAttribute('aria-expanded', 'false');
+      el.classList.remove('open');
+      if (details) details.style.display = 'none';
+      if (header) header.setAttribute('aria-expanded', 'false');
     } else {
-        el.classList.add('open');
-        if (details) details.style.display = 'block';
-        if (header) header.setAttribute('aria-expanded', 'true');
+      el.classList.add('open');
+      if (details) details.style.display = 'block';
+      if (header) header.setAttribute('aria-expanded', 'true');
     }
-}
+  }
 
-function renderMonthlyCompareChart(data) {
+  function renderMonthlyCompareChart(data) {
     const ctx = document.getElementById('monthlyCompareChart');
     if (!ctx) return;
 
     if (compareChart) {
-        compareChart.destroy();
+      compareChart.destroy();
     }
 
     var remainingExpense = Math.max(0, data.limitExpense - (data.effExpense + data.pendExpense));
 
     compareChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: [t('chart_lbl_proj_income'), t('chart_lbl_budget_exp')],
-            datasets: [
-                {
-                    label: t('kpi_effective'),
-                    data: [data.effIncome, data.effExpense],
-                    backgroundColor: ['#10b981', '#f43f5e'],
-                    borderRadius: 8,
-                    maxBarThickness: 80
-                },
-                {
-                    label: t('kpi_pending'),
-                    data: [data.pendIncome, data.pendExpense],
-                    backgroundColor: ['#064e3b', '#9f1239'],
-                    borderRadius: 8,
-                    maxBarThickness: 80
-                },
-                {
-                    label: t('kpi_remaining') || 'Restante',
-                    data: [null, remainingExpense],
-                    backgroundColor: ['rgba(0, 0, 0, 0)', 'rgba(244, 63, 94, 0.25)'],
-                    borderRadius: 8,
-                    maxBarThickness: 80
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    onClick: null,
-                    labels: {
-                        color: '#9ca3af',
-                        font: { family: 'Inter, sans-serif' },
-                        boxWidth: 12,
-                        generateLabels: function(chart) {
-                            return [
-                                {
-                                    text: t('kpi_effective'),
-                                    fillStyle: '#10b981',
-                                    strokeStyle: '#10b981',
-                                    lineWidth: 0,
-                                    hidden: false,
-                                    fontColor: '#9ca3af',
-                                    color: '#9ca3af'
-                                },
-                                {
-                                    text: t('kpi_pending'),
-                                    fillStyle: '#064e3b',
-                                    strokeStyle: '#064e3b',
-                                    lineWidth: 0,
-                                    hidden: false,
-                                    fontColor: '#9ca3af',
-                                    color: '#9ca3af'
-                                },
-                                {
-                                    text: t('kpi_remaining'),
-                                    fillStyle: 'rgba(244, 63, 94, 0.5)',
-                                    strokeStyle: 'rgba(244, 63, 94, 0.5)',
-                                    lineWidth: 0,
-                                    hidden: false,
-                                    fontColor: '#9ca3af',
-                                    color: '#9ca3af'
-                                }
-                            ];
-                        }
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(ctx) {
-                            if (ctx.raw === null || ctx.raw === undefined) return '';
-                            var val = ctx.raw;
-                            var label = ctx.dataset.label || '';
-                            
-                            var dataIndex = ctx.dataIndex;
-                            var datasetIndex = ctx.datasetIndex;
-                            
-                            var v0 = ctx.chart.data.datasets[0].data[dataIndex] || 0;
-                            var v1 = ctx.chart.data.datasets[1].data[dataIndex] || 0;
-                            var v2 = (ctx.chart.data.datasets[2] && ctx.chart.data.datasets[2].data[dataIndex]) || 0;
-                            
-                            var separator = label.endsWith(':') ? ' ' : ': ';
-                            var individualStr = label + separator + formatCurrency(val, data.currency);
-
-                            var accumLabel = t('cumulative') || 'Acumulado';
-                            var accumSeparator = accumLabel.endsWith(':') ? ' ' : ': ';
-
-                            if (datasetIndex === 0) {
-                                return individualStr;
-                            } else if (datasetIndex === 1) {
-                                var cum = v0 + v1;
-                                return [
-                                    individualStr,
-                                    '• ' + accumLabel + accumSeparator + formatCurrency(cum, data.currency)
-                                ];
-                            } else if (datasetIndex === 2) {
-                                var cum = v0 + v1 + v2;
-                                return [
-                                    individualStr,
-                                    '• ' + accumLabel + accumSeparator + formatCurrency(cum, data.currency)
-                                ];
-                            }
-                            return individualStr;
-                        }
-                    }
-                }
+      type: 'bar',
+      data: {
+        labels: [t('chart_lbl_proj_income'), t('chart_lbl_budget_exp')],
+        datasets: [
+          {
+            label: t('kpi_effective'),
+            data: [data.effIncome, data.effExpense],
+            backgroundColor: ['#10b981', '#f43f5e'],
+            borderRadius: 8,
+            maxBarThickness: 80,
+          },
+          {
+            label: t('kpi_pending'),
+            data: [data.pendIncome, data.pendExpense],
+            backgroundColor: ['#064e3b', '#9f1239'],
+            borderRadius: 8,
+            maxBarThickness: 80,
+          },
+          {
+            label: t('kpi_remaining') || 'Restante',
+            data: [null, remainingExpense],
+            backgroundColor: ['rgba(0, 0, 0, 0)', 'rgba(244, 63, 94, 0.25)'],
+            borderRadius: 8,
+            maxBarThickness: 80,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            onClick: null,
+            labels: {
+              color: '#9ca3af',
+              font: { family: 'Inter, sans-serif' },
+              boxWidth: 12,
+              generateLabels: function (chart) {
+                return [
+                  {
+                    text: t('kpi_effective'),
+                    fillStyle: '#10b981',
+                    strokeStyle: '#10b981',
+                    lineWidth: 0,
+                    hidden: false,
+                    fontColor: '#9ca3af',
+                    color: '#9ca3af',
+                  },
+                  {
+                    text: t('kpi_pending'),
+                    fillStyle: '#064e3b',
+                    strokeStyle: '#064e3b',
+                    lineWidth: 0,
+                    hidden: false,
+                    fontColor: '#9ca3af',
+                    color: '#9ca3af',
+                  },
+                  {
+                    text: t('kpi_remaining'),
+                    fillStyle: 'rgba(244, 63, 94, 0.5)',
+                    strokeStyle: 'rgba(244, 63, 94, 0.5)',
+                    lineWidth: 0,
+                    hidden: false,
+                    fontColor: '#9ca3af',
+                    color: '#9ca3af',
+                  },
+                ];
+              },
             },
-            scales: {
-                x: {
-                    stacked: true,
-                    grid: { display: false },
-                    ticks: { color: '#9ca3af' }
-                },
-                y: {
-                    stacked: true,
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                    ticks: {
-                        color: '#9ca3af',
-                        callback: function(val) { return formatCurrency(val, data.currency); }
-                    }
-                }
-            }
-        }
-    });
-}
+          },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                if (ctx.raw === null || ctx.raw === undefined) return '';
+                var val = ctx.raw;
+                var label = ctx.dataset.label || '';
 
-async function renderTrendChart(selectedYear, selectedMonth) {
+                var dataIndex = ctx.dataIndex;
+                var datasetIndex = ctx.datasetIndex;
+
+                var v0 = ctx.chart.data.datasets[0].data[dataIndex] || 0;
+                var v1 = ctx.chart.data.datasets[1].data[dataIndex] || 0;
+                var v2 = (ctx.chart.data.datasets[2] && ctx.chart.data.datasets[2].data[dataIndex]) || 0;
+
+                var separator = label.endsWith(':') ? ' ' : ': ';
+                var individualStr = label + separator + formatCurrency(val, data.currency);
+
+                var accumLabel = t('cumulative') || 'Acumulado';
+                var accumSeparator = accumLabel.endsWith(':') ? ' ' : ': ';
+
+                if (datasetIndex === 0) {
+                  return individualStr;
+                } else if (datasetIndex === 1) {
+                  var cum = v0 + v1;
+                  return [individualStr, '• ' + accumLabel + accumSeparator + formatCurrency(cum, data.currency)];
+                } else if (datasetIndex === 2) {
+                  var cum = v0 + v1 + v2;
+                  return [individualStr, '• ' + accumLabel + accumSeparator + formatCurrency(cum, data.currency)];
+                }
+                return individualStr;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            ticks: { color: '#9ca3af' },
+          },
+          y: {
+            stacked: true,
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: {
+              color: '#9ca3af',
+              callback: function (val) {
+                return formatCurrency(val, data.currency);
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  async function renderTrendChart(selectedYear, selectedMonth) {
     const ctx = document.getElementById('trendChart');
     if (!ctx) return;
 
     if (trendChart) {
-        trendChart.destroy();
+      trendChart.destroy();
     }
 
     // Days in the selected month
@@ -1571,18 +1656,18 @@ async function renderTrendChart(selectedYear, selectedMonth) {
     const bStatus = await fetchBudgetStatus(selectedMonth, selectedYear);
     const monthlyLimitByCurrency = {};
     if (bStatus && Array.isArray(bStatus.categories)) {
-        bStatus.categories.forEach(cg => {
-            (cg.lines || []).forEach(l => {
-                addMultiCurrency(monthlyLimitByCurrency, l.currency, Number(l.limit) || 0);
-            });
+      bStatus.categories.forEach((cg) => {
+        (cg.lines || []).forEach((l) => {
+          addMultiCurrency(monthlyLimitByCurrency, l.currency, Number(l.limit) || 0);
         });
+      });
     }
 
     // Fetch all transactions for the selected month
     const txs = await fetchAllTransactionsForMonth(selectedYear, selectedMonth);
     const monthlyIncomeByCurrency = {};
-    txs.forEach(tx => {
-        if (tx.type === 'income') addMultiCurrency(monthlyIncomeByCurrency, tx.currency, Number(tx.amount) || 0);
+    txs.forEach((tx) => {
+      if (tx.type === 'income') addMultiCurrency(monthlyIncomeByCurrency, tx.currency, Number(tx.amount) || 0);
     });
 
     // A line chart needs a single numeric series, so pick ONE real currency (never a
@@ -1590,7 +1675,7 @@ async function renderTrendChart(selectedYear, selectedMonth) {
     const trendCurrency = primaryCurrencyOf(mergeCurrencyMaps(monthlyLimitByCurrency, monthlyIncomeByCurrency));
     const totalMonthlyLimit = valueIn(monthlyLimitByCurrency, trendCurrency);
 
-    const labels = ["1"];
+    const labels = ['1'];
     const incomeData = [0];
     const budgetData = [totalMonthlyLimit];
     const actualExpenseData = [0];
@@ -1600,135 +1685,139 @@ async function renderTrendChart(selectedYear, selectedMonth) {
     let accumExpense = 0;
 
     for (let w = 1; w <= numWeeks; w++) {
-        const startDay = (w - 1) * 7 + 1;
-        const endDay = w === 5 ? daysInMonth : Math.min(w * 7, daysInMonth);
+      const startDay = (w - 1) * 7 + 1;
+      const endDay = w === 5 ? daysInMonth : Math.min(w * 7, daysInMonth);
 
-        labels.push(endDay.toString());
+      labels.push(endDay.toString());
 
-        // Filter transactions for this week, restricted to the chart's single currency
-        const weekTxs = txs.filter(tx => {
-            if (!tx.date) return false;
-            if ((tx.currency || DEFAULT_CURRENCY) !== trendCurrency) return false;
-            const parts = tx.date.split('T')[0].split('-');
-            const day = parseInt(parts[2], 10);
-            return day >= startDay && day <= endDay;
-        });
+      // Filter transactions for this week, restricted to the chart's single currency
+      const weekTxs = txs.filter((tx) => {
+        if (!tx.date) return false;
+        if ((tx.currency || DEFAULT_CURRENCY) !== trendCurrency) return false;
+        const parts = tx.date.split('T')[0].split('-');
+        const day = parseInt(parts[2], 10);
+        return day >= startDay && day <= endDay;
+      });
 
-        const weeklyIncome = weekTxs
-            .filter(t => t.type === 'income')
-            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      const weeklyIncome = weekTxs
+        .filter((t) => t.type === 'income')
+        .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-        const weeklyActualExpense = weekTxs
-            .filter(t => t.type === 'expense')
-            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      const weeklyActualExpense = weekTxs
+        .filter((t) => t.type === 'expense')
+        .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-        accumIncome += weeklyIncome;
-        accumExpense += weeklyActualExpense;
+      accumIncome += weeklyIncome;
+      accumExpense += weeklyActualExpense;
 
-        incomeData.push(accumIncome);
-        budgetData.push(totalMonthlyLimit);
-        actualExpenseData.push(accumExpense);
-        balanceData.push(accumIncome - accumExpense);
+      incomeData.push(accumIncome);
+      budgetData.push(totalMonthlyLimit);
+      actualExpenseData.push(accumExpense);
+      balanceData.push(accumIncome - accumExpense);
     }
 
     trendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: t('chart_lbl_proj_income'),
-                    data: incomeData,
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.3,
-                    fill: false
-                },
-                {
-                    label: t('chart_lbl_budget_exp'),
-                    data: budgetData,
-                    borderColor: '#f43f5e',
-                    backgroundColor: 'rgba(244, 63, 94, 0.1)',
-                    tension: 0.3,
-                    fill: false
-                },
-                {
-                    label: t('chart_lbl_committed'),
-                    data: actualExpenseData,
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                    tension: 0.3,
-                    fill: false
-                },
-                {
-                    label: t('chart_lbl_net_balance'),
-                    data: balanceData,
-                    borderColor: '#8b5cf6',
-                    borderDash: [5, 5],
-                    tension: 0.3,
-                    fill: false
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    labels: { color: '#9ca3af', font: { family: 'Inter, sans-serif' } }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(ctx) {
-                            return `${ctx.dataset.label}: ${formatCurrency(ctx.raw, trendCurrency)}`;
-                        }
-                    }
-                }
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: t('chart_lbl_proj_income'),
+            data: incomeData,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            tension: 0.3,
+            fill: false,
+          },
+          {
+            label: t('chart_lbl_budget_exp'),
+            data: budgetData,
+            borderColor: '#f43f5e',
+            backgroundColor: 'rgba(244, 63, 94, 0.1)',
+            tension: 0.3,
+            fill: false,
+          },
+          {
+            label: t('chart_lbl_committed'),
+            data: actualExpenseData,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            tension: 0.3,
+            fill: false,
+          },
+          {
+            label: t('chart_lbl_net_balance'),
+            data: balanceData,
+            borderColor: '#8b5cf6',
+            borderDash: [5, 5],
+            tension: 0.3,
+            fill: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: { color: '#9ca3af', font: { family: 'Inter, sans-serif' } },
+          },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                return `${ctx.dataset.label}: ${formatCurrency(ctx.raw, trendCurrency)}`;
+              },
             },
-            scales: {
-                x: {
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                    ticks: { color: '#9ca3af' }
-                },
-                y: {
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                    ticks: {
-                        color: '#9ca3af',
-                        callback: function(val) { return formatCurrency(val, trendCurrency); }
-                    }
-                }
-            }
-        }
+          },
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#9ca3af' },
+          },
+          y: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: {
+              color: '#9ca3af',
+              callback: function (val) {
+                return formatCurrency(val, trendCurrency);
+              },
+            },
+          },
+        },
+      },
     });
-}
+  }
 
-function escapeHtml(str) {
+  function escapeHtml(str) {
     if (!str) return '';
     return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 
-// Initial boot with locale detection
-(async function init() {
+  // Initial boot with locale detection
+  (async function init() {
     await checkLocale();
     await initCurrencySelector();
     loadDashboardData();
-})();
+  })();
 
-// ADR-027 Live-update listener
-window.onAppDataChanged = function(entities) {
-    var affected = entities.some(function(tag) {
-        return ['budget', 'transaction', 'category', 'recurring', 'userSettings', 'account', 'currency_rate'].indexOf(tag) !== -1;
+  // ADR-027 Live-update listener
+  window.onAppDataChanged = function (entities) {
+    var affected = entities.some(function (tag) {
+      return (
+        ['budget', 'transaction', 'category', 'recurring', 'userSettings', 'account', 'currency_rate'].indexOf(tag) !==
+        -1
+      );
     });
     if (affected) {
-        if (entities.indexOf('userSettings') !== -1) followBaseCurrency();
-        console.log("budget refetching due to entity change:", entities);
-        loadDashboardData();
+      if (entities.indexOf('userSettings') !== -1) followBaseCurrency();
+      console.log('budget refetching due to entity change:', entities);
+      loadDashboardData();
     }
-};
-
+  };
 </script>

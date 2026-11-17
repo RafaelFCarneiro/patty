@@ -16,7 +16,7 @@ describe('the demo marker shared with ui/', () => {
   it('app.css styles the banner and the attribute the server writes', () => {
     const css = read('app.css');
     expect(css).toContain('.demo-banner');
-    expect(css).toContain(`body[${INSTANCE_KIND_ATTRIBUTE}="${InstanceKind.enum.demo}"]`);
+    expect(css.replaceAll("'", '"')).toContain(`body[${INSTANCE_KIND_ATTRIBUTE}="${InstanceKind.enum.demo}"]`);
   });
 
   it('keeps the banner above every other z-index in ui/', () => {

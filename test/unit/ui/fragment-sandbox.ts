@@ -90,21 +90,36 @@ export type FragmentSandbox = {
   charts: { type: string; data: { labels: string[]; datasets: { data: number[]; label?: string }[] } }[];
 };
 
-export const loadFragment = (
-  name: string,
-  { baseCurrency }: { baseCurrency?: string } = {},
-): FragmentSandbox => {
+export const loadFragment = (name: string, { baseCurrency }: { baseCurrency?: string } = {}): FragmentSandbox => {
   const document = makeStubDocument();
   const charts: FragmentSandbox['charts'] = [];
   const sandbox: Record<string, unknown> = {
     document,
     console: { ...console, log() {} },
-    Date, Math, Number, String, Array, JSON, Set, Map, Promise, RegExp, Object,
-    parseInt, parseFloat, isNaN, encodeURIComponent, URLSearchParams, Intl,
-    setTimeout, clearTimeout,
+    Date,
+    Math,
+    Number,
+    String,
+    Array,
+    JSON,
+    Set,
+    Map,
+    Promise,
+    RegExp,
+    Object,
+    parseInt,
+    parseFloat,
+    isNaN,
+    encodeURIComponent,
+    URLSearchParams,
+    Intl,
+    setTimeout,
+    clearTimeout,
     fetch: () => new Promise(() => {}),
     flatpickr() {},
-    MutationObserver: class { observe() {} },
+    MutationObserver: class {
+      observe() {}
+    },
     Chart: class {
       constructor(_ctx: unknown, config: FragmentSandbox['charts'][number]) {
         charts.push(config);
