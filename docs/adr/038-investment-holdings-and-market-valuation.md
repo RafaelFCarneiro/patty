@@ -171,7 +171,7 @@ optional `discriminator`; a dividend is a transaction and uses the existing deri
 
 ## Plan
 
-1. [ ] **MVP — holdings, prices, valuation, net worth** (`feat/investment-holdings`): `assets`, `asset_prices`,
+1. [x] **MVP — holdings, prices, valuation, net worth** (`feat/investment-holdings`, #281): `assets`, `asset_prices`,
        `investment_events` with `opening` only; `register_asset`, `list_assets`, `set_asset_prices`,
        `open_position` (with the §7 conversion), `list_investment_events`, `update/delete_investment_event`,
        `get_portfolio`; `get_account_balances` includes holdings; manual assets; the `refresh_quotes` prompt.
