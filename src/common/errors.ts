@@ -1,6 +1,7 @@
 import type { AuthError } from '../models/auth/errors.js';
 import { AUTH_MESSAGES } from '../models/auth/message.js';
 import type { AccountError } from '../models/account.js';
+import type { AssetError } from '../models/asset.js';
 import type { BillError } from '../models/bill.js';
 import type { BudgetError } from '../models/budget.js';
 import type { CategoryError } from '../models/category.js';
@@ -8,6 +9,7 @@ import type { CardError } from '../models/credit-card.js';
 import type { CurrencyRateError } from '../models/currency-rate.js';
 import type { DashboardError } from '../models/dashboard.js';
 import type { Conflict } from '../models/error.js';
+import type { InvestmentError } from '../models/investment.js';
 import type { LocaleError } from '../models/locale.js';
 import type { TagError } from '../models/tag.js';
 import type { Remedy } from '../models/remedy.js';
@@ -24,6 +26,8 @@ export type AppError =
   | TagError
   | LocaleError
   | CurrencyRateError
+  | AssetError
+  | InvestmentError
   | DashboardError
   | AuthError
   | Conflict;
@@ -54,6 +58,9 @@ const LOOKUP_FORMATTERS = {
   ambiguous_card: formatCandidates,
   unknown_dashboard: formatCandidates,
   unknown_budget: formatCandidates,
+  unknown_asset: formatCandidates,
+  ambiguous_asset: formatCandidates,
+  unknown_investment_event: formatCandidates,
 };
 
 const DOMAIN_FORMATTERS = {
@@ -62,7 +69,7 @@ const DOMAIN_FORMATTERS = {
   duplicate_name: (e) => withCode(e.code, `${e.entity} "${e.name}"`),
   in_use: (e) =>
     e.entity === 'account'
-      ? `${e.code}: ${e.entity} "${e.name}" (transactions: ${e.references.transactions}, recurring: ${e.references.recurring}, cards: ${e.references.cards})`
+      ? `${e.code}: ${e.entity} "${e.name}" (transactions: ${e.references.transactions}, recurring: ${e.references.recurring}, cards: ${e.references.cards}, investmentEvents: ${e.references.investmentEvents})`
       : `${e.code}: ${e.entity} "${e.name}" (transactions: ${e.references.transactions}, recurring: ${e.references.recurring}, subCategories: ${e.references.subCategories})`,
   unknown_transaction: (e) => withCode(e.code, e.id),
   unknown_bill: (e) => withCode(e.code, `${e.card} ${e.year}-${String(e.month).padStart(2, '0')}`),
@@ -131,6 +138,8 @@ const HTTP_STATUS = {
   unknown_bill: STATUS.notFound,
   unknown_dashboard: STATUS.notFound,
   unknown_budget: STATUS.notFound,
+  unknown_asset: STATUS.notFound,
+  unknown_investment_event: STATUS.notFound,
   unknown_token: STATUS.notFound,
   unknown_user: STATUS.notFound,
   invalid_grant: STATUS.notFound,
@@ -149,6 +158,7 @@ const HTTP_STATUS = {
   ambiguous_category: STATUS.conflict,
   ambiguous_sub_category: STATUS.conflict,
   ambiguous_card: STATUS.conflict,
+  ambiguous_asset: STATUS.conflict,
   duplicate_name: STATUS.conflict,
   duplicate_budget: STATUS.conflict,
   in_use: STATUS.conflict,

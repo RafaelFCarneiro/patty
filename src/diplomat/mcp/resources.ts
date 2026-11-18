@@ -1,4 +1,5 @@
 import { listAccounts } from '../../controllers/account/account.js';
+import { listAssets } from '../../controllers/investment/assets.js';
 import { listCategories } from '../../controllers/categories.js';
 import { listCurrencies } from '../../controllers/currencies.js';
 import { listExchangeRates } from '../../controllers/currency-rates.js';
@@ -68,6 +69,18 @@ const exchangeRatesResource: ResourceDefinition = {
   read: async (uri, { deps }) => jsonResource(uri, await listExchangeRates(deps)),
 };
 
+const assetsDescription =
+  'All registered assets (stocks, ETFs, REITs, BDRs, fixed income) with their latest price, as_of and staleness — ' +
+  `the same data list_assets returns. ${PRODUCT_NAME} never fetches prices itself (ADR-038); read this to see ` +
+  'which are missing or stale before refreshing them with set_asset_prices.';
+
+const assetsResource: ResourceDefinition = {
+  name: 'assets',
+  uri: 'patty://assets',
+  config: { title: 'Assets', description: assetsDescription, mimeType: 'application/json' },
+  read: async (uri, { deps }) => jsonResource(uri, await listAssets(deps, {})),
+};
+
 const tagsResource: ResourceDefinition = {
   name: 'tags',
   uri: 'patty://tags',
@@ -112,6 +125,7 @@ export const resourceDefinitions = (openApiDocument: unknown): ResourceDefinitio
   accountsResource,
   currenciesResource,
   exchangeRatesResource,
+  assetsResource,
   tagsResource,
   creditCardsResource,
   merchantsTopResource,

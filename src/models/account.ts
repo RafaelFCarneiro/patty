@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { ConvertedValueSchema } from './currency-rate.js';
+import { AccountHoldingsSchema, NetWorthHoldingsSchema } from './investment.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
@@ -90,6 +91,10 @@ export const AccountBalanceSchema = AccountSchema.extend({
   converted: ConvertedValueSchema.optional().describe(
     'Read-time valuation of balance in the base currency (ADR-026); absent when no exchange rate is on file',
   ),
+  holdings: AccountHoldingsSchema.optional().describe(
+    'Only on an investment account with positions (ADR-038): its cash balance, the market value of its holdings in ' +
+      'the base currency, and their total. `balance` stays the cash balance',
+  ),
 });
 export type AccountBalance = z.infer<typeof AccountBalanceSchema>;
 
@@ -99,6 +104,10 @@ export const ConsolidatedNetWorthSchema = z.object({
   excluded: z
     .array(Id)
     .describe('Account ids left out of total because no exchange rate is on file for their currency'),
+  holdings: NetWorthHoldingsSchema.optional().describe(
+    'Only when an account holds positions (ADR-038): the market value of the holdings, already part of `total`, and ' +
+      'the positions left out of it (no price or no exchange rate)',
+  ),
 });
 export type ConsolidatedNetWorth = z.infer<typeof ConsolidatedNetWorthSchema>;
 
@@ -191,7 +200,7 @@ export type CreateTransfer = z.infer<typeof CreateTransferSchema>;
  * destructive/structural changes (delete, type/currency edits). The repo populates the counts;
  * `logic/account.ts` predicates interpret them.
  */
-export type AccountReferences = { transactions: number; recurring: number; cards: number };
+export type AccountReferences = { transactions: number; recurring: number; cards: number; investmentEvents: number };
 
 export type AccountError =
   | NotFound<'account'>
@@ -218,6 +227,10 @@ export const accountErrors = {
   typeImmutable: (transactions: number): AccountError => ({
     code: 'validation',
     issues: [`type cannot be changed — account has ${transactions} transaction(s)`],
+  }),
+  typeImmutableHoldings: (investmentEvents: number): AccountError => ({
+    code: 'validation',
+    issues: [`type cannot be changed — account has ${investmentEvents} investment event(s)`],
   }),
   currencyImmutableTransactions: (transactions: number): AccountError => ({
     code: 'validation',

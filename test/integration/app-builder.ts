@@ -60,6 +60,8 @@ export const REQUIRED_AUTH: AuthConfig = {
   PATTY_LOCALE: undefined,
   FIAT_RATE_STALE_HOURS: 24,
   CRYPTO_RATE_STALE_HOURS: 1,
+  PRICE_STALE_HOURS: 72,
+  MANUAL_PRICE_STALE_DAYS: 31,
 };
 
 export const buildApp = async (opts?: {
@@ -89,7 +91,13 @@ export const buildApp = async (opts?: {
   };
   const runtime = createRuntime(
     db,
-    { PATTY_LOCALE: undefined, FIAT_RATE_STALE_HOURS: 24, CRYPTO_RATE_STALE_HOURS: 1 },
+    {
+      PATTY_LOCALE: undefined,
+      FIAT_RATE_STALE_HOURS: 24,
+      CRYPTO_RATE_STALE_HOURS: 1,
+      PRICE_STALE_HOURS: 72,
+      MANUAL_PRICE_STALE_DAYS: 31,
+    },
     { onChangeError: opts?.onChangeError, clock: () => now() },
   );
   const scopedAs: AppContext['scopedAs'] = (principal) => scopedFor(runtime, { ...OWNER_PRINCIPAL, ...principal });

@@ -39,7 +39,12 @@ import { InstanceKind } from '../../../src/models/instance.js';
 
 const TODAY = new Date(2026, 9, 26, 9);
 const OTHER_KEY = 'a'.repeat(64);
-const CONFIG = { FIAT_RATE_STALE_HOURS: 24, CRYPTO_RATE_STALE_HOURS: 1 };
+const CONFIG = {
+  FIAT_RATE_STALE_HOURS: 24,
+  CRYPTO_RATE_STALE_HOURS: 1,
+  PRICE_STALE_HOURS: 72,
+  MANUAL_PRICE_STALE_DAYS: 31,
+};
 const { real_database, not_demo, interrupted, seed_failed, port_in_use, busy } = DemoFailureCode.enum;
 
 let dir: string;

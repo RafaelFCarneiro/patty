@@ -4,7 +4,7 @@ import type { Account, AccountEntity, AccountReferences } from '../../../models/
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
 import { BalancePartsRow } from '../../../wire/db/accounts.js';
 import type { Db } from '../driver.js';
-import { accounts, creditCards, recurringRules, transactions } from '../schema.js';
+import { accounts, creditCards, investmentEvents, recurringRules, transactions } from '../schema.js';
 import { ownedTableApplier, type EntityApplier } from '../effects.js';
 import { ownedBy, ownedWhere, type RepoScope } from '../queries/scope.js';
 
@@ -102,10 +102,15 @@ const countReferences = async (
     .select({ count: sql<number>`count(*)` })
     .from(creditCards)
     .where(ownedWhere(creditCards.userId, userId, eq(creditCards.paymentAccountId, accountId)));
+  const [eventRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(investmentEvents)
+    .where(ownedWhere(investmentEvents.userId, userId, eq(investmentEvents.accountId, accountId)));
   return {
     transactions: txRow?.count ?? 0,
     recurring: recRow?.count ?? 0,
     cards: cardRow?.count ?? 0,
+    investmentEvents: eventRow?.count ?? 0,
   };
 };
 

@@ -211,6 +211,13 @@
       "when": 1794689469307,
       "tag": "0029_change_events",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1794999627140,
+      "tag": "0030_investment_holdings",
+      "breakpoints": true
     }
   ]
 }

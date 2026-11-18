@@ -21,6 +21,9 @@ const foodCategory: Category = { id: 'cat-food', name: 'Food', kind: CategoryKin
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   accounts: {} as Deps['accounts'],
   bills: {} as Deps['bills'],
+  assets: {} as Deps['assets'],
+  assetPrices: {} as Deps['assetPrices'],
+  investments: {} as Deps['investments'],
   budgets: { list: async () => [] } as unknown as Deps['budgets'],
   categories: { list: async () => [foodCategory] } as unknown as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
@@ -47,6 +50,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   newId: () => 'id-1',
   locale: async () => Locale.enum.en,
   rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+  priceStaleness: { marketHours: 72, manualDays: 31 },
   ...overrides,
 });
 

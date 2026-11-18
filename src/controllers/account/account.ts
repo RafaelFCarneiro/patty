@@ -14,8 +14,7 @@ import {
 } from '../../logic/account.js';
 import { computeBalance, computeProjectedBalance } from '../../logic/balance.js';
 import { consolidateNetWorth, valueAccount } from '../../logic/currency-rate.js';
-import { resolveBaseCurrency } from '../../logic/locale.js';
-import { decimalsLookup } from '../../logic/money.js';
+import { netWorthHoldings, withAccountHoldings, withNetWorthHoldings } from '../../logic/investment.js';
 import * as persistence from '../../logic/persistence.js';
 import { resolveByName } from '../../logic/resolve.js';
 import {
@@ -29,11 +28,12 @@ import {
   type UpdateAccount,
 } from '../../models/account.js';
 import { notFound } from '../../models/error.js';
-import { Locale } from '../../models/locale.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
+import { valueHoldings } from '../investment/portfolio.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
+import { loadValuationBasis } from '../valuation.js';
 
 const assertNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
   !(await deps.accounts.findByName(name));
@@ -53,6 +53,15 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     return ok({ persist, response: account });
   });
 
+const balanceOf = async (deps: Deps, account: Account, projectedAsOf?: string): Promise<AccountBalance> => {
+  const parts = await deps.accounts.balanceParts(account.id);
+  const balance = computeBalance({ initialBalance: account.initialBalance, ...parts });
+  const projectedBalance = projectedAsOf
+    ? computeProjectedBalance(balance, await deps.transactions.pendingBalanceParts(account.id, projectedAsOf))
+    : undefined;
+  return { ...account, ...parts, balance, projectedBalance };
+};
+
 export const getAccountBalances = (
   deps: Deps,
   filter?: { account?: string; type?: AccountType; projectedAsOf?: string },
@@ -63,33 +72,21 @@ export const getAccountBalances = (
       ? [yield* resolutionToResult(resolveByName(candidates, filter.account), 'account')]
       : candidates;
 
-    const balances: AccountBalance[] = await Promise.all(
-      accounts.map(async (account) => {
-        const parts = await deps.accounts.balanceParts(account.id);
-        const balance = computeBalance({ initialBalance: account.initialBalance, ...parts });
-        const projectedBalance = filter?.projectedAsOf
-          ? computeProjectedBalance(
-              balance,
-              await deps.transactions.pendingBalanceParts(account.id, filter.projectedAsOf),
-            )
-          : undefined;
-        return { ...account, ...parts, balance, projectedBalance };
-      }),
+    const balances = await Promise.all(accounts.map((account) => balanceOf(deps, account, filter?.projectedAsOf)));
+    const { baseCurrency, baseDecimals, context } = await loadValuationBasis(deps);
+    const valued = balances.map((b) =>
+      valueAccount(b, baseCurrency, context.rates, context.now, baseDecimals, deps.rateStaleness),
     );
+    const holdings = await valueHoldings(deps, accounts, context);
 
-    const [settingsRow, currencies, rates] = await Promise.all([
-      deps.settings.getLocale(),
-      deps.currencies.list(),
-      deps.currencyRates.list(),
-    ]);
-    const baseCurrency = resolveBaseCurrency(settingsRow?.baseCurrency, settingsRow?.locale ?? Locale.enum.en);
-    const baseDecimals = decimalsLookup(currencies)(baseCurrency);
-    const now = deps.clock();
-
-    const valued = balances.map((b) => valueAccount(b, baseCurrency, rates, now, baseDecimals, deps.rateStaleness));
-    const consolidatedNetWorth = consolidateNetWorth(valued, baseCurrency, baseDecimals);
-
-    return ok({ balances: valued, consolidatedNetWorth });
+    return ok({
+      balances: withAccountHoldings(valued, holdings, baseCurrency, baseDecimals),
+      consolidatedNetWorth: withNetWorthHoldings(
+        consolidateNetWorth(valued, baseCurrency, baseDecimals),
+        netWorthHoldings(holdings, baseCurrency, baseDecimals),
+        baseDecimals,
+      ),
+    });
   });
 
 export const deleteAccount = (deps: Deps, name: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>

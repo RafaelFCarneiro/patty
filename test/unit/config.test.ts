@@ -136,6 +136,28 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow();
   });
 
+  it('price staleness defaults to 72 h for a market price and 31 days for a manual one', () => {
+    delete process.env['PRICE_STALE_HOURS'];
+    delete process.env['MANUAL_PRICE_STALE_DAYS'];
+    expect(loadConfig()).toMatchObject({ PRICE_STALE_HOURS: 72, MANUAL_PRICE_STALE_DAYS: 31 });
+  });
+
+  it('PRICE_STALE_HOURS and MANUAL_PRICE_STALE_DAYS env overrides are respected', () => {
+    process.env['PRICE_STALE_HOURS'] = '96';
+    process.env['MANUAL_PRICE_STALE_DAYS'] = '7.5';
+    expect(loadConfig()).toMatchObject({ PRICE_STALE_HOURS: 96, MANUAL_PRICE_STALE_DAYS: 7.5 });
+  });
+
+  it.each(['PRICE_STALE_HOURS', 'MANUAL_PRICE_STALE_DAYS'])(
+    '%s rejects a zero, negative or non-numeric value',
+    (name) => {
+      for (const value of ['0', '-1', 'soon']) {
+        process.env[name] = value;
+        expect(() => loadConfig(), `${name}=${value}`).toThrow();
+      }
+    },
+  );
+
   it('CRYPTO_RATE_STALE_HOURS defaults to 1 when omitted', () => {
     delete process.env['CRYPTO_RATE_STALE_HOURS'];
     expect(loadConfig().CRYPTO_RATE_STALE_HOURS).toBe(1);

@@ -307,6 +307,32 @@ describe('who hears about a change (the change bus and /ui/events)', () => {
     await settle();
     expect(heardA.received()).toContain('"entities":["currency_rate"]');
 
+    // …and so does an asset's price. B's holdings stay B's: A's stream never hears an investment event.
+    await callTool(ctx.app, b, 'set_asset_prices', {
+      prices: [{ asset: 'ZZNU', price: 6.5, asOf: '2026-10-16T00:00:00.000Z' }],
+    });
+    await settle();
+    expect(heardA.received()).toContain('"entities":["asset_price"]');
+    await callTool(ctx.app, b, 'register_asset', {
+      symbol: 'ZZB2',
+      exchange: 'ZZX',
+      name: 'Zed Bee Two',
+      assetClass: 'etf',
+      currency: 'USD',
+      pricing: 'market',
+    });
+    const opened = await callTool(ctx.app, b, 'open_position', {
+      account: WORLD_B.inv.name,
+      asset: 'ZZB2',
+      quantity: 3,
+      avgCost: 2,
+    });
+    expect(opened.failed, opened.text).toBe(false);
+    await settle();
+    expect(heardA.received()).toContain('"entities":["asset"]');
+    expect(heardB.received()).toContain('investment_event');
+    expect(heardA.received()).not.toContain('investment_event');
+
     controllerA.abort();
     controllerB.abort();
   });

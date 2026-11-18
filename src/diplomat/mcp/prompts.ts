@@ -87,6 +87,22 @@ export const importStatementPromptText = (source: ImportStatementSource | undefi
   'error counts, then walk each needs_review item with the user one at a time so they can confirm or ' +
   'correct its category before moving on.';
 
+/** The price effect keeps the old rate and the FX effect keeps the new price, so the two add up to the whole change
+ *  (qty·p₁·fx₁ − qty·p₀·fx₀ = qty·(p₁−p₀)·fx₀ + qty·p₁·(fx₁−fx₀)). */
+export const refreshQuotesPromptText = (): string =>
+  `You are refreshing the user's quotes and exchange rates. Call ${T.get_portfolio} first and keep what it returns ` +
+  `(per position: quantity, price, the base-currency value and rate) as the "before". Then call ${T.list_assets} with ` +
+  `staleOnly true: those are the assets whose price is missing or stale. The FX pairs you need are one rate per ` +
+  `distinct position currency other than the portfolio's baseCurrency, from that currency to the base — check them ` +
+  `with ${T.list_exchange_rates}. Source current quotes and rates yourself (the web); ${PRODUCT_NAME} never fetches ` +
+  `them. For a manual asset (a CDB, a pension fund) ask the user for today's value. Upsert the prices with ` +
+  `${T.set_asset_prices} and the rates with ${T.set_exchange_rates}, saying where each came from in "source". ` +
+  `Prices and rates are market data: never record a change as income or an expense. Then call ${T.get_portfolio} ` +
+  'again as the "after" and report, in prose: the portfolio total before and after; per position the change split ' +
+  'into the price effect qty·(p1−p0)·fx0 and the FX effect qty·p1·(fx1−fx0), where p is the price in the asset ' +
+  'currency and fx the rate to the base currency; and anything still stale, without a price or without a rate. ' +
+  `${CURRENCY_RULE}`;
+
 const periodPrompt =
   (text: (period: Period) => string) =>
   async ({ month, year }: PeriodArgs, { deps }: Scoped) => ({
@@ -136,6 +152,19 @@ const importStatementPrompt = definePrompt({
   }),
 });
 
+const refreshQuotesPrompt = definePrompt({
+  name: PromptName.enum.refresh_quotes,
+  config: {
+    title: 'Refresh quotes and exchange rates',
+    description:
+      'List the stale prices and the FX pairs the held assets need, have the agent source and post them, then ' +
+      'report how the portfolio changed — split into price effect and FX effect.',
+  },
+  handle: async () => ({
+    messages: [{ role: 'user', content: { type: 'text', text: refreshQuotesPromptText() } }],
+  }),
+});
+
 /** Takes no arguments: the demo's language, country and trip come from the database (Feature Design 022 §6). */
 const tourPrompt = definePrompt({
   name: PromptName.enum.tour,
@@ -155,5 +184,6 @@ export const promptDefinitions: PromptDefinition[] = [
   monthlyReviewPrompt,
   budgetCheckupPrompt,
   importStatementPrompt,
+  refreshQuotesPrompt,
   tourPrompt,
 ];

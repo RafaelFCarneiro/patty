@@ -1,3 +1,4 @@
+import { ASSET_ENTITY_TAG, ASSET_PRICE_ENTITY_TAG } from './asset.js';
 import { CURRENCY_RATE_ENTITY_TAG } from './currency-rate.js';
 import { validation, type ValidationError } from './error.js';
 
@@ -13,5 +14,9 @@ export const sharedDefaultErrors = {
 /** A committed change: the entity tags touched and whose they are (`null` = instance bookkeeping, heard by no one). */
 export type ChangeEvent = { userId: string | null; entities: readonly string[] };
 
-/** Entities every user sees (rates move everyone's valuations): any user's change to them is heard by all. */
-export const SHARED_ENTITY_TAGS: readonly string[] = [CURRENCY_RATE_ENTITY_TAG];
+/** Entities every user sees (rates and prices move everyone's valuations): a change to one is heard by all. */
+export const SHARED_ENTITY_TAGS: readonly string[] = [
+  CURRENCY_RATE_ENTITY_TAG,
+  ASSET_ENTITY_TAG,
+  ASSET_PRICE_ENTITY_TAG,
+];

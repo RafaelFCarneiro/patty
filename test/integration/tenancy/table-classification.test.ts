@@ -18,11 +18,12 @@ const OWNED = [
   'tags',
   'budgets',
   'recurring_rules',
+  'investment_events',
   'user_settings',
   'transaction_tags',
 ];
 const SHARED_DEFAULT = ['categories', 'merchant_category', 'dashboards'];
-const SHARED_REFERENCE = ['merchants', 'currencies', 'currency_rates', 'settings'];
+const SHARED_REFERENCE = ['merchants', 'currencies', 'currency_rates', 'assets', 'asset_prices', 'settings'];
 const IDENTITY = ['users', 'invites', 'sessions', 'access_tokens', 'setup_codes', 'client_grants'];
 const INFRASTRUCTURE: Record<string, string> = {
   change_events:

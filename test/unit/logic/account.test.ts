@@ -8,6 +8,7 @@ import {
   guardPinnedFields,
   guardTransferMutability,
   hasNoCards,
+  hasNoInvestmentEvents,
   hasNoRecurring,
   hasNoTransactions,
   isAccountOwnedType,
@@ -113,7 +114,15 @@ describe('reference predicates', () => {
     transactions: 0,
     recurring: 0,
     cards: 0,
+    investmentEvents: 0,
     ...over,
+  });
+
+  it('an account with investment events is referenced, whatever else it has', () => {
+    expect(hasNoInvestmentEvents(refs())).toBe(true);
+    expect(hasNoInvestmentEvents(refs({ investmentEvents: 1 }))).toBe(false);
+    expect(isUnreferenced(refs({ investmentEvents: 1 }))).toBe(false);
+    expect(isUnreferenced(refs())).toBe(true);
   });
 
   it('hasNoTransactions / hasNoRecurring / hasNoCards reflect their single count', () => {
@@ -192,7 +201,7 @@ describe('isRename', () => {
 });
 
 describe('pinned fields — type and currency once the account has activity', () => {
-  const none: AccountReferences = { transactions: 0, recurring: 0, cards: 0 };
+  const none: AccountReferences = { transactions: 0, recurring: 0, cards: 0, investmentEvents: 0 };
 
   it('only a type or currency in the patch touches a pinned field', () => {
     expect(changesPinnedField({})).toBe(false);
@@ -207,7 +216,7 @@ describe('pinned fields — type and currency once the account has activity', ()
   });
 
   it('allows an empty patch whatever the references', () => {
-    expect(guardPinnedFields({ transactions: 3, recurring: 1, cards: 1 }, {}).isOk()).toBe(true);
+    expect(guardPinnedFields({ ...none, transactions: 3, recurring: 1, cards: 1 }, {}).isOk()).toBe(true);
   });
 
   it('refuses a type change once there are transactions', () => {
@@ -215,11 +224,20 @@ describe('pinned fields — type and currency once the account has activity', ()
     expect(result._unsafeUnwrapErr()).toEqual(accountErrors.typeImmutable(2));
   });
 
+  it('refuses a type change once the account holds investment events, naming how many', () => {
+    const result = guardPinnedFields({ ...none, investmentEvents: 2 }, { type: AccountType.enum.savings });
+    expect(result._unsafeUnwrapErr()).toEqual(accountErrors.typeImmutableHoldings(2));
+  });
+
+  it('still allows a currency change on an account whose only activity is investment events', () => {
+    expect(guardPinnedFields({ ...none, investmentEvents: 2 }, { currency: CurrencyCode.enum.USD }).isOk()).toBe(true);
+  });
+
   it('refuses a currency change for transactions, then recurring rules, then cards — first violation wins', () => {
     const currency = { currency: CurrencyCode.enum.USD };
-    expect(guardPinnedFields({ transactions: 4, recurring: 1, cards: 1 }, currency)._unsafeUnwrapErr()).toEqual(
-      accountErrors.currencyImmutableTransactions(4),
-    );
+    expect(
+      guardPinnedFields({ ...none, transactions: 4, recurring: 1, cards: 1 }, currency)._unsafeUnwrapErr(),
+    ).toEqual(accountErrors.currencyImmutableTransactions(4));
     expect(guardPinnedFields({ ...none, recurring: 1, cards: 1 }, currency)._unsafeUnwrapErr()).toEqual(
       accountErrors.currencyImmutableRecurring,
     );

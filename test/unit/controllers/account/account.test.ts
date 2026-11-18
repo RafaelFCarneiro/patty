@@ -31,10 +31,14 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
   transactions: {} as Deps['transactions'],
+  assets: {} as Deps['assets'],
+  assetPrices: {} as Deps['assetPrices'],
+  investments: { list: async () => [] } as unknown as Deps['investments'],
   clock: () => new Date('2026-06-01'),
   newId: () => 'account-id-1',
   locale: async () => Locale.enum.en,
   rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+  priceStaleness: { marketHours: 72, manualDays: 31 },
   ...overrides,
 });
 
@@ -140,7 +144,7 @@ const makeAccountsRepo = (overrides: Partial<Deps['accounts']> = {}): Deps['acco
   ({
     list: async () => [account()],
     findByName: async () => null,
-    countReferences: async () => ({ transactions: 0, recurring: 0, cards: 0 }),
+    countReferences: async () => ({ transactions: 0, recurring: 0, cards: 0, investmentEvents: 0 }),
     findRawById: async () => accountEntity(),
     ...overrides,
   }) as unknown as Deps['accounts'];
@@ -177,7 +181,9 @@ describe('deleteAccount — functional core (ADR-021 phase 3a)', () => {
 
   it('rejects when the account is still referenced (in_use), building no Persistable', async () => {
     const deps = makeDeps({
-      accounts: makeAccountsRepo({ countReferences: async () => ({ transactions: 2, recurring: 0, cards: 0 }) }),
+      accounts: makeAccountsRepo({
+        countReferences: async () => ({ transactions: 2, recurring: 0, cards: 0, investmentEvents: 0 }),
+      }),
     });
 
     const result = await deleteAccount(deps, 'Nubank');
@@ -187,7 +193,7 @@ describe('deleteAccount — functional core (ADR-021 phase 3a)', () => {
       code: 'in_use',
       entity: 'account',
       name: 'Nubank',
-      references: { transactions: 2, recurring: 0, cards: 0 },
+      references: { transactions: 2, recurring: 0, cards: 0, investmentEvents: 0 },
     });
   });
 });
@@ -254,7 +260,7 @@ describe('updateAccount — functional core (ADR-021 phase 3a)', () => {
     const findRawById = vi.fn();
     const deps = makeDeps({
       accounts: makeAccountsRepo({
-        countReferences: async () => ({ transactions: 1, recurring: 0, cards: 0 }),
+        countReferences: async () => ({ transactions: 1, recurring: 0, cards: 0, investmentEvents: 0 }),
         findRawById,
       }),
     });

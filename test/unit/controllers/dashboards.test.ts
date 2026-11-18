@@ -44,10 +44,14 @@ const makeDeps = (overrides?: Partial<Deps['dashboards']>): Deps => ({
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
   transactions: {} as Deps['transactions'],
+  assets: {} as Deps['assets'],
+  assetPrices: {} as Deps['assetPrices'],
+  investments: {} as Deps['investments'],
   clock: () => FIXED_CLOCK,
   newId: () => 'test-id',
   locale: async () => 'en',
   rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+  priceStaleness: { marketHours: 72, manualDays: 31 },
 });
 
 describe('saveDashboard', () => {

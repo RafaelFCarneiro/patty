@@ -41,6 +41,9 @@ const makeDeps = (opts: { rows?: SummaryRow[]; rates?: CurrencyRateEntity[] } = 
   ({
     accounts: {} as Deps['accounts'],
     bills: {} as Deps['bills'],
+    assets: {} as Deps['assets'],
+    assetPrices: {} as Deps['assetPrices'],
+    investments: {} as Deps['investments'],
     budgets: {} as Deps['budgets'],
     categories: {} as Deps['categories'],
     subCategories: {} as Deps['subCategories'],
@@ -62,6 +65,7 @@ const makeDeps = (opts: { rows?: SummaryRow[]; rates?: CurrencyRateEntity[] } = 
     newId: () => 'id-1',
     locale: async () => Locale.enum.en,
     rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+    priceStaleness: { marketHours: 72, manualDays: 31 },
   }) as Deps;
 
 describe('getSpendingSummary — displayCurrency', () => {

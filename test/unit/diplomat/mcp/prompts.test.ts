@@ -4,6 +4,7 @@ import {
   ImportStatementPromptArgsSchema,
   importStatementPromptText,
   monthlyReviewPromptText,
+  refreshQuotesPromptText,
   PeriodPromptArgsSchema,
   resolvePromptPeriod,
 } from '../../../../src/diplomat/mcp/prompts.js';
@@ -117,5 +118,34 @@ describe('importStatementPromptText', () => {
     const text = importStatementPromptText(undefined);
     expect(text).toMatch(/paste the statement text/);
     expect(text).toContain('needs_review');
+  });
+});
+
+describe('refreshQuotesPromptText', () => {
+  const text = refreshQuotesPromptText();
+
+  it('reads the portfolio before and after, around the refresh', () => {
+    expect(text.indexOf('get_portfolio')).toBeGreaterThanOrEqual(0);
+    expect(text.lastIndexOf('get_portfolio')).toBeGreaterThan(text.indexOf('get_portfolio'));
+    expect(text.indexOf('set_asset_prices')).toBeGreaterThan(text.indexOf('get_portfolio'));
+    expect(text.lastIndexOf('get_portfolio')).toBeGreaterThan(text.indexOf('set_exchange_rates'));
+  });
+
+  it('lists the stale prices and the FX pairs the held assets need, and upserts both kinds of data', () => {
+    expect(text).toContain('list_assets');
+    expect(text).toContain('staleOnly');
+    expect(text).toContain('list_exchange_rates');
+    expect(text).toContain('set_asset_prices');
+    expect(text).toContain('set_exchange_rates');
+  });
+
+  it('splits the change into the price effect and the FX effect', () => {
+    expect(text).toContain('price effect qty·(p1−p0)·fx0');
+    expect(text).toContain('FX effect qty·p1·(fx1−fx0)');
+  });
+
+  it('never records a market move as income or an expense, and never sums across currencies', () => {
+    expect(text).toMatch(/never record a change as income or an expense/);
+    expect(text).toMatch(/never sum across currencies/);
   });
 });

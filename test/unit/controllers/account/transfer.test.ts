@@ -11,6 +11,9 @@ import { SEEDED_CURRENCIES } from '../../fixtures/currencies.js';
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   accounts: { list: async () => [] } as unknown as Deps['accounts'],
   bills: {} as Deps['bills'],
+  assets: {} as Deps['assets'],
+  assetPrices: {} as Deps['assetPrices'],
+  investments: {} as Deps['investments'],
   budgets: {} as Deps['budgets'],
   categories: {} as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
@@ -30,6 +33,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   newId: () => 'transfer-id',
   locale: async () => Locale.enum.en,
   rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+  priceStaleness: { marketHours: 72, manualDays: 31 },
   ...overrides,
 });
 

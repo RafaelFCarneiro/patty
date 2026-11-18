@@ -1694,6 +1694,9 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     const deps: Deps = {
       accounts: accountsR,
       bills: billsR,
+      assets: {} as Deps['assets'],
+      assetPrices: {} as Deps['assetPrices'],
+      investments: {} as Deps['investments'],
       budgets: {} as Deps['budgets'],
       categories: {} as Deps['categories'],
       subCategories: {} as Deps['subCategories'],
@@ -1713,6 +1716,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
       newId: () => randomUUID(),
       locale: async () => Locale.enum.en,
       rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+      priceStaleness: { marketHours: 72, manualDays: 31 },
     };
 
     return { deps, cardName };
@@ -2486,6 +2490,9 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
     const deps: Deps = {
       accounts: accountsR,
       bills: billsR,
+      assets: {} as Deps['assets'],
+      assetPrices: {} as Deps['assetPrices'],
+      investments: {} as Deps['investments'],
       budgets: {} as Deps['budgets'],
       categories: {} as Deps['categories'],
       subCategories: {} as Deps['subCategories'],
@@ -2505,6 +2512,7 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       newId: () => randomUUID(),
       locale: async () => Locale.enum.en,
       rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+      priceStaleness: { marketHours: 72, manualDays: 31 },
     };
 
     return { deps, cardName, payerId };

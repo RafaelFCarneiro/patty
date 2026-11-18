@@ -4,7 +4,13 @@ import { LOG_PREFIX } from '../../../src/models/package.js';
 import { createRuntime } from '../../../src/composition/runtime.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
 
-const CONFIG = { PATTY_LOCALE: undefined, FIAT_RATE_STALE_HOURS: 36, CRYPTO_RATE_STALE_HOURS: 2 };
+const CONFIG = {
+  PATTY_LOCALE: undefined,
+  FIAT_RATE_STALE_HOURS: 36,
+  CRYPTO_RATE_STALE_HOURS: 2,
+  PRICE_STALE_HOURS: 48,
+  MANUAL_PRICE_STALE_DAYS: 10,
+};
 const principal = { userId: 'user-1' } as never;
 
 afterEach(() => vi.restoreAllMocks());

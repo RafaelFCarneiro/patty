@@ -53,10 +53,14 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
   transactions: {} as Deps['transactions'],
+  assets: {} as Deps['assets'],
+  assetPrices: {} as Deps['assetPrices'],
+  investments: {} as Deps['investments'],
   clock: () => new Date('2026-07-01'),
   newId: () => 'budget-id-1',
   locale: async () => Locale.enum.en,
   rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+  priceStaleness: { marketHours: 72, manualDays: 31 },
   ...overrides,
 });
 
