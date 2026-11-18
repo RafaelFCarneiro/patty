@@ -3,7 +3,7 @@ import {
   INVESTMENT_EVENT_ENTITY_TAG,
   InvestmentEventEntitySchema,
   type InvestmentEventEntity,
-} from '../models/investment.js';
+} from '../models/investment/core.js';
 import type { InvestmentEventRow } from '../wire/db/investment-events.js';
 
 export const dbToEntity = (row: InvestmentEventRow): InvestmentEventEntity =>
@@ -20,8 +20,6 @@ export const dbToEntity = (row: InvestmentEventRow): InvestmentEventEntity =>
     version: row.version,
   });
 
-// Identity: a versioned InvestmentEventEntity is already row-shaped; the scoped applier stamps the owner and merges the
-// idempotency key on the way in.
 export const modelToDb = (entity: InvestmentEventEntity): InvestmentEventRow => entity;
 
 export const { persistableToDb, outcomeToDb } = persistence.entityDbAdapter(INVESTMENT_EVENT_ENTITY_TAG, modelToDb);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { investmentTools } from '../../../../src/diplomat/mcp/tools/investment.js';
 import { ToolName } from '../../../../src/diplomat/mcp/tool-name.js';
-import { DEFAULT_MANUAL_PRICE_STALE_DAYS, DEFAULT_PRICE_STALE_HOURS } from '../../../../src/models/asset.js';
+import { DEFAULT_MANUAL_PRICE_STALE_DAYS, DEFAULT_PRICE_STALE_HOURS } from '../../../../src/models/investment/asset.js';
 
 describe('investment tool descriptions', () => {
   it('state the staleness defaults from the configuration constants, never a copy of the numbers', () => {

@@ -3,20 +3,14 @@ import * as R from 'remeda';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { AppError } from '../../common/errors.js';
 import { okOr } from '../../common/result.js';
-import { latestPrice } from '../../logic/asset.js';
-import {
-  cashToRestore,
-  eventView,
-  isOpening,
-  mergeEventPatch,
-  openingResult,
-  planOpening,
-  type OpeningPlan,
-} from '../../logic/investment.js';
+import { latestPrice } from '../../logic/investment/asset.js';
+import { cashToRestore, eventView, mergeEventPatch, openingResult } from '../../logic/investment/events.js';
+import { isOpening } from '../../logic/investment/positions.js';
+import { planOpening } from '../../logic/investment/opening.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { ACCOUNT_ENTITY_TAG, type Account } from '../../models/account.js';
-import type { Asset } from '../../models/asset.js';
+import type { Asset } from '../../models/investment/asset.js';
 import { notFound } from '../../models/error.js';
 import {
   INVESTMENT_EVENT_ENTITY_TAG,
@@ -24,17 +18,17 @@ import {
   type DeleteInvestmentEventInput,
   type DeleteInvestmentEventResult,
   type InvestmentEvent,
+  type EventRow,
   type InvestmentEventEntity,
   type InvestmentEventView,
   type ListInvestmentEventsInput,
   type OpenPositionInput,
   type OpenPositionResult,
+  type OpeningPlan,
   type UpdateInvestmentEventInput,
-} from '../../models/investment.js';
+} from '../../models/investment/core.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveAssetRef, resolveDecimals } from '../resolve.js';
-
-type EventRow = { event: InvestmentEvent; account: Account | undefined; asset: Asset | undefined };
 
 const isDisplayable = (row: EventRow): row is { event: InvestmentEvent; account: Account; asset: Asset } =>
   row.account !== undefined && row.asset !== undefined;
@@ -69,9 +63,7 @@ const gatherOpening = async (deps: Deps, input: OpenPositionInput, account: Acco
   };
 };
 
-/** The account's cash after the conversion is written in the same batch as the event (ADR-038 §7), so the old static
- *  balance and the holding are never both counted. An account already at that cash is not rewritten. */
-const cashWrites = async (
+const remainingCashWrite = async (
   deps: Deps,
   account: Account,
   plan: OpeningPlan,
@@ -92,7 +84,7 @@ export const openPosition = (
     const asset = yield* resolveAssetRef(deps, input.asset);
     const facts = await gatherOpening(deps, input, account, asset);
     const plan = yield* planOpening(facts);
-    const cash = yield* await cashWrites(deps, account, plan);
+    const cash = yield* await remainingCashWrite(deps, account, plan);
     const event = persistence.insert({
       entity: INVESTMENT_EVENT_ENTITY_TAG,
       model: plan.event,
@@ -127,9 +119,7 @@ export const updateInvestmentEvent = (
     return ok({ persist, response });
   });
 
-/** Deleting an opening that replaced some of the account's cash gives it back in the same batch (ADR-038 §7): the
- *  account's `initialBalance` is rewritten, version-guarded, ahead of the event's removal. */
-const restoreWrites = async (
+const restoreReplacedCash = async (
   deps: Deps,
   event: InvestmentEventEntity,
 ): Promise<Result<{ writes: Persistable[]; restored?: DeleteInvestmentEventResult['restoredCash'] }, AppError>> => {
@@ -142,7 +132,6 @@ const restoreWrites = async (
   }));
 };
 
-/** Idempotent by design, like `deleteTag`: an id that is not the caller's (or is gone) deletes nothing. */
 export const deleteInvestmentEvent = (
   deps: Deps,
   input: DeleteInvestmentEventInput,
@@ -150,7 +139,7 @@ export const deleteInvestmentEvent = (
   safeTry(async function* () {
     const existing = await deps.investments.findById(input.id);
     if (existing === null) return ok({ persist: [], response: { deleted: false } });
-    const { writes, restored } = yield* await restoreWrites(deps, existing);
+    const { writes, restored } = yield* await restoreReplacedCash(deps, existing);
     const removal = persistence.remove({
       entity: INVESTMENT_EVENT_ENTITY_TAG,
       id: existing.id,

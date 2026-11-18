@@ -1,21 +1,17 @@
 import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
-import type { Ambiguous, NotFound, ValidationError } from './error.js';
-import { Id } from './id.js';
-import { CurrencyCode } from './money.js';
+import type { Ambiguous, NotFound, ValidationError } from '../error.js';
+import { Id } from '../id.js';
+import { CurrencyCode } from '../money.js';
 
-/** Entity tags for the shared reference data of ADR-038: one instrument and one price series per instance. */
 export const ASSET_ENTITY_TAG = 'asset';
 export const ASSET_PRICE_ENTITY_TAG = 'asset_price';
 
-/** A price's instant: strict ISO 8601 with an offset, so it always parses and can be stored as canonical UTC (the text
- *  order of stored prices is then their time order). Exchange rates accept compact offsets too; prices never did. */
 export const AssetTimestamp = z.iso.datetime({ offset: true });
 
 export const AssetClass = z.enum(['stock', 'etf', 'reit', 'bdr', 'fixed_income']);
 export type AssetClass = z.infer<typeof AssetClass>;
 
-/** `market`: a public quote exists. `manual`: the agent posts the value itself (a CDB, a pension fund). */
 export const AssetPricing = z.enum(['market', 'manual']);
 export type AssetPricing = z.infer<typeof AssetPricing>;
 
@@ -48,7 +44,6 @@ export type AssetPrice = z.infer<typeof AssetPriceSchema>;
 export const AssetPriceEntitySchema = withPersistenceMeta(AssetPriceSchema);
 export type AssetPriceEntity = z.infer<typeof AssetPriceEntitySchema>;
 
-/** Agent-supplied external data, decoded at the boundary like an exchange rate (ADR-026, ADR-038 §1). */
 export const SetAssetPriceSchema = z.object({
   asset: z.string().min(1).describe('Asset symbol (e.g. "NU"), or "EXCHANGE:SYMBOL" (e.g. "NYSE:NU") when ambiguous'),
   price: z.number().positive().describe('Price of ONE unit in the asset currency, as of `asOf`'),
@@ -66,7 +61,6 @@ export const ListAssetsSchema = z.object({
 });
 export type ListAssetsInput = z.infer<typeof ListAssetsSchema>;
 
-/** The newest price of an asset, with the flags a reader needs to trust it. */
 export const AssetViewSchema = AssetSchema.extend({
   price: z.number().positive().nullable().describe('Latest price of one unit; null when none was ever posted'),
   priceAsOf: AssetTimestamp.nullable().describe('When the latest price was observed'),
@@ -95,14 +89,13 @@ export type AssetPriceBulkItem<E = unknown> =
 
 export type AssetError = NotFound<'asset'> | Ambiguous<'asset'> | ValidationError;
 
-/** The reference a person types for an asset, split into its parts. */
 export type AssetRef = { symbol: string; exchange: string | null };
 
-/** How long a price stays fresh unless configured otherwise: a Friday close is still fresh on Monday (72 h), a
- *  manually valued asset (a CDB, a pension fund) is revalued about monthly (31 days). */
 export const DEFAULT_PRICE_STALE_HOURS = 72;
 export const DEFAULT_MANUAL_PRICE_STALE_DAYS = 31;
 
-/** How long a price stays fresh: market quotes in hours (a Friday close is still fresh on Monday), manual values in
- *  days (a CDB is revalued monthly). */
 export type PriceStalenessThresholds = { marketHours: number; manualDays: number };
+
+export type RegisterPlan = { asset: Asset; created: boolean; renamed: boolean; warnings: string[] };
+
+export type PricePlan = { price: AssetPrice; view: AssetPriceView };

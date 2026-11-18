@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { isUniqueConstraintViolation } from '../../../src/diplomat/db/sqlite-errors.js';
 import { accounts, assets, investmentEvents } from '../../../src/diplomat/db/schema.js';
-import { InvestmentEventType } from '../../../src/models/investment.js';
+import { InvestmentEventType } from '../../../src/models/investment/core.js';
 import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 

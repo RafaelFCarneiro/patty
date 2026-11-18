@@ -14,7 +14,7 @@ import {
 } from '../../logic/account.js';
 import { computeBalance, computeProjectedBalance } from '../../logic/balance.js';
 import { consolidateNetWorth, valueAccount } from '../../logic/currency-rate.js';
-import { netWorthHoldings, withAccountHoldings, withNetWorthHoldings } from '../../logic/investment.js';
+import { netWorthHoldings, withAccountHoldings, withNetWorthHoldings } from '../../logic/investment/net-worth.js';
 import * as persistence from '../../logic/persistence.js';
 import { resolveByName } from '../../logic/resolve.js';
 import {

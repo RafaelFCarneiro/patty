@@ -8,7 +8,7 @@ import {
   type ReadBack as EngineReadBack,
 } from '@rfc0/effect-runner';
 import type { Tx } from './driver.js';
-import { isForeignKeyConstraintViolation } from './sqlite-errors.js';
+import { isForeignKeyConstraintViolation, isUniqueConstraintViolation } from './sqlite-errors.js';
 
 export { VersionConflict };
 
@@ -189,3 +189,15 @@ export const ownedTableApplier = <T extends OwnedTable>(
   userId: string,
   config: VersionedTableConfig = {},
 ): EntityApplier => applierFor(table, { userId }, config);
+
+export const uniqueViolationAsConflict = (applier: EntityApplier): EntityApplier => ({
+  ...applier,
+  insert: async (tx, model, idempotencyKey) => {
+    try {
+      return await applier.insert(tx, model, idempotencyKey);
+    } catch (cause) {
+      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
+      throw cause;
+    }
+  },
+});

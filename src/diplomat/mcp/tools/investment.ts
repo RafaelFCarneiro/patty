@@ -10,20 +10,20 @@ import {
   updateInvestmentEvent,
 } from '../../../controllers/investment/events.js';
 import { getPortfolio } from '../../../controllers/investment/portfolio.js';
-import { buildBulkResult } from '../../../logic/asset.js';
+import { buildBulkResult } from '../../../logic/investment/asset.js';
 import {
   DEFAULT_MANUAL_PRICE_STALE_DAYS,
   DEFAULT_PRICE_STALE_HOURS,
   ListAssetsSchema,
   RegisterAssetSchema,
-} from '../../../models/asset.js';
+} from '../../../models/investment/asset.js';
 import {
   DeleteInvestmentEventSchema,
   GetPortfolioSchema,
   ListInvestmentEventsSchema,
   OpenPositionSchema,
   UpdateInvestmentEventSchema,
-} from '../../../models/investment.js';
+} from '../../../models/investment/core.js';
 import { SetAssetPricesSchema } from '../../../wire/in/assets.js';
 import { PRODUCT_NAME } from '../../../models/package.js';
 import { defineTool } from '../definition.js';
@@ -86,7 +86,6 @@ const setAssetPricesTool = defineTool({
       PRICE_SOURCING_NOTE,
     inputSchema: SetAssetPricesSchema.shape,
   },
-  // Orchestration (run each item → bulk result) that belongs in a controller; kept as one named step here.
   handle: async (args, { deps, runEffectsSequence }) => {
     const outcomes = await runEffectsSequence(
       args.prices,

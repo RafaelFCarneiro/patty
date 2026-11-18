@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ASSET_ENTITY_TAG, ASSET_PRICE_ENTITY_TAG } from '../../../src/models/asset.js';
+import { ASSET_ENTITY_TAG, ASSET_PRICE_ENTITY_TAG } from '../../../src/models/investment/asset.js';
 import { CURRENCY_RATE_ENTITY_TAG } from '../../../src/models/currency-rate.js';
-import { INVESTMENT_EVENT_ENTITY_TAG } from '../../../src/models/investment.js';
+import { INVESTMENT_EVENT_ENTITY_TAG } from '../../../src/models/investment/core.js';
 import { SHARED_ENTITY_TAGS } from '../../../src/models/tenancy.js';
 
 describe('SHARED_ENTITY_TAGS — the entities every user hears about', () => {

@@ -1,7 +1,11 @@
 import { AccountType, type Account } from '../../../src/models/account.js';
-import { AssetClass, AssetPricing, type Asset, type AssetPrice } from '../../../src/models/asset.js';
+import { AssetClass, AssetPricing, type Asset, type AssetPrice } from '../../../src/models/investment/asset.js';
 import type { CurrencyRate } from '../../../src/models/currency-rate.js';
-import { InvestmentEventType, type InvestmentEvent } from '../../../src/models/investment.js';
+import {
+  InvestmentEventType,
+  type InvestmentEvent,
+  type ValuationContext,
+} from '../../../src/models/investment/core.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 
 const { USD, BRL } = CurrencyCode.enum;
@@ -89,3 +93,18 @@ export const THRESHOLDS = {
   rateThresholds: { fiatHours: 24, cryptoHours: 1 },
   priceThresholds: { marketHours: 72, manualDays: 31 },
 };
+
+export const FRESH = '2026-11-18T12:00:00.000Z';
+
+export const hoursBeforeNow = (hours: number): string => new Date(NOW.getTime() - hours * 3_600_000).toISOString();
+
+const DECIMALS = { USD: 2, BRL: 2, BTC: 8 } as const;
+
+export const valuationContext = (overrides: Partial<ValuationContext> = {}): ValuationContext => ({
+  rates: [rateOf(USD, BRL, 5, FRESH), rateOf(BRL, USD, 0.2, FRESH)],
+  baseCurrency: BRL,
+  decimalsOf: (code) => DECIMALS[code as keyof typeof DECIMALS] ?? 2,
+  now: NOW,
+  ...THRESHOLDS,
+  ...overrides,
+});

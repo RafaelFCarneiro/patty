@@ -1,5 +1,6 @@
 import type { Result } from 'neverthrow';
 import * as R from 'remeda';
+import type { BulkItemShape } from '../models/bulk.js';
 import type { CurrencyCode } from '../models/money.js';
 import {
   ExclusionReason,
@@ -18,7 +19,7 @@ import {
   type CurrencyAmount,
   type ConsolidatedInCurrency,
 } from '../models/currency-rate.js';
-import { buildBulkItems, toBulkItem as toGenericBulkItem, type BulkItemShape } from './bulk-item.js';
+import { buildBulkItems, toBulkItem as toGenericBulkItem } from './bulk-item.js';
 import { roundToDecimals } from './money.js';
 
 const bulkShape = <E>(): BulkItemShape<

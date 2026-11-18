@@ -15,10 +15,10 @@ import {
   resolveAsset,
   toBulkItem,
   withLatestPrice,
-} from '../../../src/logic/asset.js';
-import { AssetClass, AssetPricing, type AssetPriceEntity } from '../../../src/models/asset.js';
-import { CurrencyCode } from '../../../src/models/money.js';
-import { cdbAsset, kncrAsset, NOW, nuAsset, priceOf } from '../fixtures/investment.js';
+} from '../../../../src/logic/investment/asset.js';
+import { AssetClass, AssetPricing, type AssetPriceEntity } from '../../../../src/models/investment/asset.js';
+import { CurrencyCode } from '../../../../src/models/money.js';
+import { cdbAsset, kncrAsset, NOW, nuAsset, priceOf } from '../../fixtures/investment.js';
 
 const THRESHOLDS = { marketHours: 72, manualDays: 31 };
 const HOUR_MS = 60 * 60 * 1000;

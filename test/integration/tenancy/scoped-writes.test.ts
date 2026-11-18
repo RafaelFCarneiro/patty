@@ -12,7 +12,7 @@ import { BUDGET_ENTITY_TAG } from '../../../src/models/budget.js';
 import { CATEGORY_ENTITY_TAG } from '../../../src/models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from '../../../src/models/credit-card.js';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
-import { INVESTMENT_EVENT_ENTITY_TAG } from '../../../src/models/investment.js';
+import { INVESTMENT_EVENT_ENTITY_TAG } from '../../../src/models/investment/core.js';
 import { USER_SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { RECURRING_ENTITY_TAG } from '../../../src/models/recurring.js';

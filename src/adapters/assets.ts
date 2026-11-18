@@ -9,7 +9,7 @@ import {
   type AssetEntity,
   type AssetPriceBulkItem,
   type AssetPriceEntity,
-} from '../models/asset.js';
+} from '../models/investment/asset.js';
 import type { AssetPriceRow, AssetRow } from '../wire/db/assets.js';
 import { BulkSetAssetPricesOut, type BulkAssetPriceItemOut } from '../wire/out/assets.js';
 
@@ -25,7 +25,6 @@ export const dbToEntity = (row: AssetRow): AssetEntity =>
     version: row.version,
   });
 
-// Identity: a versioned AssetEntity is already row-shaped.
 export const modelToDb = (entity: AssetEntity): AssetRow => entity;
 
 export const priceDbToEntity = (row: AssetPriceRow): AssetPriceEntity =>

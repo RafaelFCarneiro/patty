@@ -1,17 +1,22 @@
 import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
-import { AssetClass, AssetPricing, AssetTimestamp } from './asset.js';
-import { IsoTimestamp } from './currency-rate.js';
-import { IsoDate } from './date.js';
-import type { NotFound, ValidationError } from './error.js';
-import { Id } from './id.js';
-import { CurrencyCode } from './money.js';
+import type { Account } from '../account.js';
+import {
+  AssetClass,
+  AssetPricing,
+  AssetTimestamp,
+  type Asset,
+  type AssetPrice,
+  type PriceStalenessThresholds,
+} from './asset.js';
+import { IsoTimestamp, type CurrencyRate, type StalenessThresholds } from '../currency-rate.js';
+import { IsoDate } from '../date.js';
+import type { NotFound, ValidationError } from '../error.js';
+import { Id } from '../id.js';
+import { CurrencyCode, type DecimalsFor } from '../money.js';
 
-/** Entity tag for an owned investment event (ADR-038 §1). */
 export const INVESTMENT_EVENT_ENTITY_TAG = 'investment_event';
 
-/** Every kind of event the schema can hold; step 1's flows accept only `opening` (buy/sell/split arrive with ADR-038
- *  step 2, which therefore needs no migration). */
 export const InvestmentEventType = z.enum(['opening', 'buy', 'sell', 'split']);
 export type InvestmentEventType = z.infer<typeof InvestmentEventType>;
 
@@ -111,7 +116,6 @@ export const OpenPositionResultSchema = InvestmentEventViewSchema.extend({
 });
 export type OpenPositionResult = z.infer<typeof OpenPositionResultSchema>;
 
-/** What the fold of an account's and asset's events says is held — derived, never stored (ADR-038 §2). */
 export type Position = { accountId: string; assetId: string; quantity: number; avgCost: number };
 
 export const PositionExclusionReason = z.enum(['no_price', 'no_rate']);
@@ -126,7 +130,6 @@ export const ExcludedPositionSchema = z.object({
 });
 export type ExcludedPosition = z.infer<typeof ExcludedPositionSchema>;
 
-/** A position valued in the base currency; absent (null on the valuation) when no rate converts it. */
 export const BaseValuationSchema = z.object({
   currency: CurrencyCode.describe('The base currency these figures are expressed in'),
   rate: z.number().positive().describe('Exchange rate applied (1 when the asset already is in the base currency)'),
@@ -195,7 +198,6 @@ export const GetPortfolioSchema = z.object({
 });
 export type GetPortfolioInput = z.infer<typeof GetPortfolioSchema>;
 
-/** What an investment account adds to a balance once it holds positions (ADR-038 §6): its cash and its holdings. */
 export const AccountHoldingsSchema = z.object({
   cashBalance: z.number().describe('The cash balance in the account currency — the same figure as `balance`'),
   holdingsValue: z.number().describe('Market value of the positions in the base currency'),
@@ -207,7 +209,6 @@ export const AccountHoldingsSchema = z.object({
 });
 export type AccountHoldings = z.infer<typeof AccountHoldingsSchema>;
 
-/** Holdings inside the consolidated net worth: already part of its `total`. */
 export const NetWorthHoldingsSchema = z.object({
   value: z.number().describe('Market value of the valued positions in the base currency'),
   stale: z.boolean(),
@@ -241,3 +242,64 @@ export const investmentWarnings = {
   costFromPrice: (asset: string, price: number, asOf: string): string =>
     `no avgCost given: P&L for ${asset} starts at the latest price (${price} as of ${asOf})`,
 };
+
+export type PositionState = Pick<Position, 'quantity' | 'avgCost'>;
+
+export type InvestmentEventIdentity = Pick<
+  InvestmentEvent,
+  'accountId' | 'assetId' | 'type' | 'date' | 'quantity' | 'unitCost'
+>;
+
+export type OpeningFacts = {
+  id: string;
+  today: string;
+  input: OpenPositionInput;
+  account: Pick<Account, 'id' | 'name' | 'type' | 'initialBalance'>;
+  asset: Asset;
+  price: AssetPrice | undefined;
+  hasOpening: boolean;
+  decimals: number;
+};
+
+export type OpeningPlan = {
+  event: InvestmentEvent;
+  idempotencyKey: string;
+  initialBalance: number;
+  warnings: string[];
+};
+
+export type CostResolution = { unitCost: number; warnings: string[] };
+
+export type ValuationContext = {
+  rates: readonly CurrencyRate[];
+  baseCurrency: CurrencyCode;
+  decimalsOf: DecimalsFor;
+  now: Date;
+  rateThresholds: StalenessThresholds;
+  priceThresholds: PriceStalenessThresholds;
+};
+
+export type ValuationBasis = { baseCurrency: CurrencyCode; baseDecimals: number; context: ValuationContext };
+
+export type PositionFacts = {
+  position: Position;
+  account: Pick<Account, 'id' | 'name'>;
+  asset: Asset;
+  price: AssetPrice | undefined;
+};
+
+export type AssetFigures = Pick<PositionValuation, 'costBasis' | 'marketValue' | 'unrealized'>;
+
+export type BaseFigures = { base: BaseValuation; rateStale: boolean };
+
+export type PriceReading = Pick<PositionValuation, 'price' | 'priceAsOf' | 'noPrice' | 'stale'>;
+
+export type RateReading = Pick<PositionValuation, 'base' | 'noRate'> & { stale: boolean };
+
+export type ValuedPosition = PositionValuation & { base: BaseValuation & { marketValue: number } };
+
+export type BaseCurrencyFacts = { currency: CurrencyCode; decimals: number };
+
+export type HoldingsHost = { id: string; balance: number; converted?: { value: number } };
+
+export type EventRow = { event: InvestmentEvent; account: Account | undefined; asset: Asset | undefined };

@@ -87,8 +87,6 @@ export const importStatementPromptText = (source: ImportStatementSource | undefi
   'error counts, then walk each needs_review item with the user one at a time so they can confirm or ' +
   'correct its category before moving on.';
 
-/** The price effect keeps the old rate and the FX effect keeps the new price, so the two add up to the whole change
- *  (qty·p₁·fx₁ − qty·p₀·fx₀ = qty·(p₁−p₀)·fx₀ + qty·p₁·(fx₁−fx₀)). */
 export const refreshQuotesPromptText = (): string =>
   `You are refreshing the user's quotes and exchange rates. Call ${T.get_portfolio} first and keep what it returns ` +
   `(per position: quantity, price, the base-currency value and rate) as the "before". Then call ${T.list_assets} with ` +

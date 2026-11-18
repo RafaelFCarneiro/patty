@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { getAccountBalances } from '../../../../src/controllers/account/account.js';
 import { getPortfolio } from '../../../../src/controllers/investment/portfolio.js';
 import { AccountType, type AccountEntity } from '../../../../src/models/account.js';
-import type { AssetEntity, AssetPriceEntity } from '../../../../src/models/asset.js';
+import type { AssetEntity, AssetPriceEntity } from '../../../../src/models/investment/asset.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
-import type { InvestmentEventEntity } from '../../../../src/models/investment.js';
+import type { InvestmentEventEntity } from '../../../../src/models/investment/core.js';
 import { investmentDeps } from '../../fixtures/investment-deps.js';
 import {
   cdbAsset,
@@ -79,14 +79,40 @@ describe('getPortfolio', () => {
     expect(portfolio.totals.marketValue).toBe(1000);
   });
 
-  it('has no positions to show for an account without events, and reads nothing else', async () => {
+  it('has no positions to show for an account without events, and never reads assets or prices', async () => {
+    const reads = { assets: 0, prices: 0 };
     const deps = investmentDeps({ accounts: [account()], assets: [asset()] });
+    const assetsList = deps.assets.list;
+    const pricesLatest = deps.assetPrices.latest;
     deps.assets.list = async () => {
-      throw new Error('assets must not be read when there are no events');
+      reads.assets += 1;
+      return assetsList();
+    };
+    deps.assetPrices.latest = async () => {
+      reads.prices += 1;
+      return pricesLatest();
     };
     const portfolio = (await getPortfolio(deps, {}))._unsafeUnwrap();
     expect(portfolio.positions).toEqual([]);
     expect(portfolio.totals).toMatchObject({ marketValue: 0, costBasis: 0, excluded: [] });
+    expect(reads).toEqual({ assets: 0, prices: 0 });
+  });
+
+  it('reads assets and prices once when there are events', async () => {
+    const reads = { assets: 0, prices: 0 };
+    const deps = investmentDeps(world);
+    const assetsList = deps.assets.list;
+    const pricesLatest = deps.assetPrices.latest;
+    deps.assets.list = async () => {
+      reads.assets += 1;
+      return assetsList();
+    };
+    deps.assetPrices.latest = async () => {
+      reads.prices += 1;
+      return pricesLatest();
+    };
+    await getPortfolio(deps, {});
+    expect(reads).toEqual({ assets: 1, prices: 1 });
   });
 
   it('narrows to one account by name; an unknown account is refused', async () => {

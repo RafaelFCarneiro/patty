@@ -6,16 +6,17 @@ import {
   openPosition,
   updateInvestmentEvent,
 } from '../../../../src/controllers/investment/events.js';
-import { deriveInvestmentEventKey } from '../../../../src/logic/investment.js';
+import { deriveInvestmentEventKey } from '../../../../src/logic/investment/idempotency.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../../src/models/account.js';
-import type { AssetEntity } from '../../../../src/models/asset.js';
+import type { AssetEntity } from '../../../../src/models/investment/asset.js';
 import {
   INVESTMENT_EVENT_ENTITY_TAG,
   InvestmentEventType,
   OpenPositionSchema,
+  UpdateInvestmentEventSchema,
   investmentErrors,
   type InvestmentEventEntity,
-} from '../../../../src/models/investment.js';
+} from '../../../../src/models/investment/core.js';
 import { decided, investmentDeps } from '../../fixtures/investment-deps.js';
 import { investmentAccount, kncrAsset, NOW, nuAsset, openingEvent, priceOf } from '../../fixtures/investment.js';
 
@@ -156,6 +157,21 @@ describe('openPosition', () => {
     const { persist } = await decided(openPosition(investmentDeps(world), { ...OPEN, date: '2026-10-05' }));
     expect(persist[1]).toMatchObject({ model: { date: '2026-10-05' } });
     expect(NOW.toISOString().slice(0, 10)).toBe('2026-11-18');
+  });
+});
+
+describe('no flow accepts buy, sell or split yet', () => {
+  it('open_position records an opening whatever it is asked, and has no field to ask for another type', async () => {
+    expect(Object.keys(OpenPositionSchema.shape)).not.toContain('type');
+    const { persist } = await decided(
+      openPosition(investmentDeps({ accounts: [account()], assets: [asset()], ids: ['event-new'] }), OPEN),
+    );
+    const event = persist.find((p) => p.entity === INVESTMENT_EVENT_ENTITY_TAG);
+    expect(event).toMatchObject({ model: { type: InvestmentEventType.enum.opening } });
+  });
+
+  it('an update has no field to change the type', () => {
+    expect(Object.keys(UpdateInvestmentEventSchema.shape)).not.toContain('type');
   });
 });
 

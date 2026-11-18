@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { ConvertedValueSchema } from './currency-rate.js';
-import { AccountHoldingsSchema, NetWorthHoldingsSchema } from './investment.js';
+import { AccountHoldingsSchema, NetWorthHoldingsSchema } from './investment/core.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';

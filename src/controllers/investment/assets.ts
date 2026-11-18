@@ -11,9 +11,7 @@ import {
   registerResult,
   toAsset,
   withLatestPrice,
-  type PricePlan,
-  type RegisterPlan,
-} from '../../logic/asset.js';
+} from '../../logic/investment/asset.js';
 import * as persistence from '../../logic/persistence.js';
 import {
   ASSET_ENTITY_TAG,
@@ -22,15 +20,16 @@ import {
   type AssetPriceEntity,
   type AssetPriceView,
   type AssetView,
+  type PricePlan,
+  type RegisterPlan,
   type ListAssetsInput,
   type RegisterAsset,
   type RegisterAssetResult,
   type SetAssetPriceInput,
-} from '../../models/asset.js';
+} from '../../models/investment/asset.js';
 import type { Deps } from '../deps.js';
 import { resolveAssetRef } from '../resolve.js';
 
-/** A new asset is inserted; an existing one is only ever renamed (version-guarded), never replaced. */
 const registrationWrites = (plan: RegisterPlan, existing: AssetEntity | null): Persistable[] => {
   if (plan.created) return [persistence.insert({ entity: ASSET_ENTITY_TAG, model: plan.asset })];
   return existing && plan.renamed
@@ -51,7 +50,6 @@ export const registerAsset = (
   );
 };
 
-/** A price at an instant that is already on file is revised (version-guarded); otherwise it joins the history. */
 const priceWrite = (plan: PricePlan, existing: AssetPriceEntity | null): Persistable =>
   existing
     ? persistence.update({ entity: ASSET_PRICE_ENTITY_TAG, model: { ...plan.price, version: existing.version } })

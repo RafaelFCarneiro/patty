@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PersistOp } from '@rfc0/effect-runner';
 import { listAssets, registerAsset, setAssetPrice } from '../../../../src/controllers/investment/assets.js';
-import { buildBulkResult } from '../../../../src/logic/asset.js';
+import { buildBulkResult } from '../../../../src/logic/investment/asset.js';
 import {
   ASSET_ENTITY_TAG,
   ASSET_PRICE_ENTITY_TAG,
@@ -11,7 +11,7 @@ import {
   type AssetEntity,
   type AssetPriceEntity,
   type AssetPriceView,
-} from '../../../../src/models/asset.js';
+} from '../../../../src/models/investment/asset.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
 import { SetAssetPricesSchema } from '../../../../src/wire/in/assets.js';
 import { decided, investmentDeps } from '../../fixtures/investment-deps.js';

@@ -35,7 +35,7 @@ import type { SessionsRepo } from '../diplomat/db/repos/sessions.js';
 import type { SetupCodesRepo } from '../diplomat/db/repos/setup-codes.js';
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
 import type { UsersRepo } from '../diplomat/db/repos/users.js';
-import type { PriceStalenessThresholds } from '../models/asset.js';
+import type { PriceStalenessThresholds } from '../models/investment/asset.js';
 import type { StalenessThresholds } from '../models/currency-rate.js';
 
 export type Deps = {
