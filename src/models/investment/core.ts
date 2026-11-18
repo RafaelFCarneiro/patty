@@ -303,3 +303,8 @@ export type BaseCurrencyFacts = { currency: CurrencyCode; decimals: number };
 export type HoldingsHost = { id: string; balance: number; converted?: { value: number } };
 
 export type EventRow = { event: InvestmentEvent; account: Account | undefined; asset: Asset | undefined };
+
+export type OpeningRule = readonly [
+  isViolated: (facts: OpeningFacts) => boolean,
+  refusal: (facts: OpeningFacts) => InvestmentError,
+];

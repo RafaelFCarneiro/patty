@@ -10,14 +10,10 @@ import {
   type InvestmentEvent,
   type OpeningFacts,
   type OpeningPlan,
+  type OpeningRule,
 } from '../../models/investment/core.js';
 import { assetLabel } from './asset.js';
 import { deriveInvestmentEventKey } from './idempotency.js';
-
-type OpeningRule = readonly [
-  isViolated: (facts: OpeningFacts) => boolean,
-  refusal: (facts: OpeningFacts) => InvestmentError,
-];
 
 const isNotInvestmentAccount = ({ account }: OpeningFacts): boolean => account.type !== AccountType.enum.investment;
 
