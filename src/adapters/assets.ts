@@ -1,4 +1,5 @@
 import { formatAppError, type AppError } from '../common/errors.js';
+import { BulkItemStatus } from '../models/bulk.js';
 import * as persistence from '../logic/persistence.js';
 import {
   ASSET_ENTITY_TAG,
@@ -46,7 +47,9 @@ export const { persistableToDb, outcomeToDb } = assetAdapter;
 export const { persistableToDb: pricePersistableToDb, outcomeToDb: priceOutcomeToDb } = priceAdapter;
 
 const bulkItemToWireOut = (item: AssetPriceBulkItem<AppError>): BulkAssetPriceItemOut =>
-  item.status === 'error' ? { status: 'error', asset: item.asset, error: formatAppError(item.error) } : item;
+  item.status === BulkItemStatus.enum.error
+    ? { status: BulkItemStatus.enum.error, asset: item.asset, error: formatAppError(item.error) }
+    : item;
 
 export const bulkResultToWireOut = (items: AssetPriceBulkItem<AppError>[]): BulkSetAssetPricesOut =>
   BulkSetAssetPricesOut.parse({ items: items.map(bulkItemToWireOut) });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   accountHoldings,
+  cashToRestore,
   consolidatePortfolio,
   deriveInvestmentEventKey,
   eventView,
@@ -166,10 +167,42 @@ describe('planOpening', () => {
       quantity: 10,
       unitCost: 8,
       note: null,
+      replacedCash: null,
     });
     expect(plan.initialBalance).toBe(0);
     expect(plan.warnings).toEqual([]);
     expect(plan.idempotencyKey).toBe(deriveInvestmentEventKey(plan.event, 2));
+  });
+
+  it('remembers the account cash it replaces, so deleting the opening can give it back', () => {
+    const plan = (cash: number, remainingCash?: number) =>
+      planOpening(
+        facts({
+          account: investmentAccount({ initialBalance: cash }),
+          input: { account: 'x', asset: 'NU', quantity: 1, avgCost: 1, remainingCash },
+        }),
+      )._unsafeUnwrap();
+    expect(plan(500, 85).event.replacedCash).toBe(500);
+    expect(plan(500).event.replacedCash).toBe(500);
+    expect(plan(0, 85).event.replacedCash).toBe(0);
+  });
+
+  it('replaces nothing — and so restores nothing — when the cash is already what the caller leaves', () => {
+    const plan = (cash: number, remainingCash?: number) =>
+      planOpening(
+        facts({
+          account: investmentAccount({ initialBalance: cash }),
+          input: { account: 'x', asset: 'NU', quantity: 1, avgCost: 1, remainingCash },
+        }),
+      )._unsafeUnwrap();
+    expect(plan(85, 85).event.replacedCash).toBeNull();
+    expect(plan(0).event.replacedCash).toBeNull();
+  });
+
+  it('does not let the replaced cash change the idempotency key', () => {
+    const base = planOpening(facts())._unsafeUnwrap();
+    const replacing = planOpening(facts({ account: investmentAccount({ initialBalance: 9 }) }))._unsafeUnwrap();
+    expect(replacing.idempotencyKey).toBe(base.idempotencyKey);
   });
 
   it('carries the date, the note and the remaining cash the caller gave', () => {
@@ -235,6 +268,21 @@ describe('planOpening', () => {
   });
 });
 
+describe('cashToRestore — what deleting an event gives back (ADR-038 §7)', () => {
+  it('is the cash an opening replaced', () => {
+    expect(cashToRestore(openingEvent({ replacedCash: 500 }))).toBe(500);
+    expect(cashToRestore(openingEvent({ replacedCash: 0 }))).toBe(0);
+  });
+
+  it('is nothing for an opening that replaced nothing', () => {
+    expect(cashToRestore(openingEvent({ replacedCash: null }))).toBeNull();
+  });
+
+  it('is nothing for an event that is not an opening, whatever it holds', () => {
+    expect(cashToRestore(openingEvent({ type: InvestmentEventType.enum.buy, replacedCash: 500 }))).toBeNull();
+  });
+});
+
 describe('events: views and patches', () => {
   const entity: InvestmentEventEntity = { ...openingEvent(), version: 2 };
 
@@ -248,6 +296,7 @@ describe('events: views and patches', () => {
       quantity: 10,
       avgCost: 8,
       note: null,
+      replacedCash: null,
     });
   });
 

@@ -11,6 +11,7 @@ import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../..
 import type { AssetEntity } from '../../../../src/models/asset.js';
 import {
   INVESTMENT_EVENT_ENTITY_TAG,
+  InvestmentEventType,
   OpenPositionSchema,
   investmentErrors,
   type InvestmentEventEntity,
@@ -55,6 +56,7 @@ describe('openPosition', () => {
           quantity: 10,
           unitCost: 8,
           note: null,
+          replacedCash: 500,
         },
         idempotencyKey: deriveInvestmentEventKey(
           { accountId: 'acc-inv', assetId: 'asset-nu', type: 'opening', date: '2026-11-18', quantity: 10, unitCost: 8 },
@@ -71,6 +73,7 @@ describe('openPosition', () => {
       quantity: 10,
       avgCost: 8,
       note: null,
+      replacedCash: 500,
       costBasis: 80,
       warnings: [],
     });
@@ -219,9 +222,9 @@ describe('updateInvestmentEvent', () => {
 });
 
 describe('deleteInvestmentEvent', () => {
-  const deps = investmentDeps({ events: [eventEntity()] });
+  const deps = investmentDeps({ accounts: [account({ initialBalance: 85 })], events: [eventEntity()] });
 
-  it('emits a version-guarded remove', async () => {
+  it('emits a version-guarded remove; an opening that replaced nothing restores nothing', async () => {
     const { persist, response } = await decided(deleteInvestmentEvent(deps, { id: 'event-1' }));
     expect(persist).toEqual([
       { op: PersistOp.enum.delete, entity: INVESTMENT_EVENT_ENTITY_TAG, id: 'event-1', version: 5 },
@@ -229,7 +232,47 @@ describe('deleteInvestmentEvent', () => {
     expect(response).toEqual({ deleted: true });
   });
 
-  it('is idempotent: an id that is not the caller’s deletes nothing', async () => {
+  it('gives back the cash an opening replaced, in the same batch: the account update, then the removal', async () => {
+    const withCash = investmentDeps({
+      accounts: [account({ initialBalance: 85, version: 7 })],
+      events: [eventEntity({ replacedCash: 500 })],
+    });
+    const { persist, response } = await decided(deleteInvestmentEvent(withCash, { id: 'event-1' }));
+    expect(persist).toEqual([
+      {
+        op: PersistOp.enum.update,
+        entity: ACCOUNT_ENTITY_TAG,
+        model: { ...investmentAccount(), initialBalance: 500, version: 7 },
+      },
+      { op: PersistOp.enum.delete, entity: INVESTMENT_EVENT_ENTITY_TAG, id: 'event-1', version: 5 },
+    ]);
+    expect(response).toEqual({
+      deleted: true,
+      restoredCash: { account: 'Nu Holdings (NYSE:NU)', initialBalance: 500 },
+    });
+  });
+
+  it('restores a replaced cash of 0 too', async () => {
+    const zero = investmentDeps({
+      accounts: [account({ initialBalance: 85 })],
+      events: [eventEntity({ replacedCash: 0 })],
+    });
+    const { persist, response } = await decided(deleteInvestmentEvent(zero, { id: 'event-1' }));
+    expect(persist[0]).toMatchObject({ entity: ACCOUNT_ENTITY_TAG, model: { initialBalance: 0 } });
+    expect(response.restoredCash?.initialBalance).toBe(0);
+  });
+
+  it('leaves the account alone when the event is not an opening, whatever cash it holds', async () => {
+    const other = investmentDeps({
+      accounts: [account()],
+      events: [eventEntity({ type: InvestmentEventType.enum.buy, replacedCash: 500 })],
+    });
+    const { persist, response } = await decided(deleteInvestmentEvent(other, { id: 'event-1' }));
+    expect(persist.map((p) => p.entity)).toEqual([INVESTMENT_EVENT_ENTITY_TAG]);
+    expect(response).toEqual({ deleted: true });
+  });
+
+  it('is idempotent: an id that is not the caller’s deletes nothing and restores nothing', async () => {
     const { persist, response } = await decided(deleteInvestmentEvent(deps, { id: 'someone-elses' }));
     expect(persist).toEqual([]);
     expect(response).toEqual({ deleted: false });

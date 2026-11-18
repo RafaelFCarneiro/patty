@@ -114,7 +114,7 @@ export type OpeningFacts = {
   id: string;
   today: string;
   input: OpenPositionInput;
-  account: Pick<Account, 'id' | 'name' | 'type'>;
+  account: Pick<Account, 'id' | 'name' | 'type' | 'initialBalance'>;
   asset: Asset;
   price: AssetPrice | undefined;
   hasOpening: boolean;
@@ -150,7 +150,12 @@ const guardOpening = (facts: OpeningFacts): Result<void, InvestmentError> => {
     : ok(undefined);
 };
 
-const openingEvent = (facts: OpeningFacts, unitCost: number): InvestmentEvent => ({
+/** The account cash an opening replaces and must give back when deleted: the balance it had, or nothing when the
+ *  opening leaves the account at the cash it already held. */
+const replacedCashOf = (account: Pick<Account, 'initialBalance'>, initialBalance: number): number | null =>
+  account.initialBalance === initialBalance ? null : account.initialBalance;
+
+const openingEvent = (facts: OpeningFacts, unitCost: number, replacedCash: number | null): InvestmentEvent => ({
   id: facts.id,
   accountId: facts.account.id,
   assetId: facts.asset.id,
@@ -159,6 +164,7 @@ const openingEvent = (facts: OpeningFacts, unitCost: number): InvestmentEvent =>
   quantity: facts.input.quantity,
   unitCost,
   note: facts.input.note ?? null,
+  replacedCash,
 });
 
 /** Decides an opening: the account must be an investment account without an opening for the asset yet, and the average
@@ -167,13 +173,9 @@ export const planOpening = (facts: OpeningFacts): Result<OpeningPlan, Investment
   guardOpening(facts)
     .andThen(() => resolveUnitCost(facts))
     .map(({ unitCost, warnings }) => {
-      const event = openingEvent(facts, unitCost);
-      return {
-        event,
-        idempotencyKey: deriveInvestmentEventKey(event, facts.decimals),
-        initialBalance: facts.input.remainingCash ?? 0,
-        warnings,
-      };
+      const initialBalance = facts.input.remainingCash ?? 0;
+      const event = openingEvent(facts, unitCost, replacedCashOf(facts.account, initialBalance));
+      return { event, idempotencyKey: deriveInvestmentEventKey(event, facts.decimals), initialBalance, warnings };
     });
 
 // ── Events: views and patches ────────────────────────────────────────────────────────────────────────────────────
@@ -191,7 +193,12 @@ export const eventView = (
   quantity: event.quantity,
   avgCost: event.unitCost,
   note: event.note,
+  replacedCash: event.replacedCash,
 });
+
+/** The account cash that deleting this event gives back: only an opening that replaced some (ADR-038 §7). */
+export const cashToRestore = (event: Pick<InvestmentEvent, 'type' | 'replacedCash'>): number | null =>
+  isOpening(event) ? event.replacedCash : null;
 
 export const openingResult = (
   plan: OpeningPlan,

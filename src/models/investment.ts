@@ -24,6 +24,10 @@ export const InvestmentEventSchema = z.object({
   quantity: z.number().positive().describe('Units; fractional shares allowed'),
   unitCost: z.number().nonnegative().describe('Cost of one unit in the asset currency (the average cost, for opening)'),
   note: z.string().nullable().describe('Free-text note, or null'),
+  replacedCash: z
+    .number()
+    .nullable()
+    .describe('The account initialBalance this opening replaced (given back when it is deleted); null if none'),
 });
 export type InvestmentEvent = z.infer<typeof InvestmentEventSchema>;
 
@@ -71,6 +75,18 @@ export const UpdateInvestmentEventSchema = z.object({
 });
 export type UpdateInvestmentEventInput = z.infer<typeof UpdateInvestmentEventSchema>;
 
+export const DeleteInvestmentEventResultSchema = z.object({
+  deleted: z.boolean(),
+  restoredCash: z
+    .object({
+      account: z.string().describe('Account name'),
+      initialBalance: z.number().describe('The initialBalance the account was given back'),
+    })
+    .optional()
+    .describe('Present when deleting an opening gave back the account cash that opening had replaced'),
+});
+export type DeleteInvestmentEventResult = z.infer<typeof DeleteInvestmentEventResultSchema>;
+
 export const DeleteInvestmentEventSchema = z.object({
   id: Id.describe('Event id, from the investment event list'),
 });
@@ -85,6 +101,7 @@ export const InvestmentEventViewSchema = z.object({
   quantity: z.number(),
   avgCost: z.number().describe('Unit cost in the asset currency'),
   note: z.string().nullable(),
+  replacedCash: z.number().nullable().describe('The account cash this opening replaced; deleting it restores it'),
 });
 export type InvestmentEventView = z.infer<typeof InvestmentEventViewSchema>;
 

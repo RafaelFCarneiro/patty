@@ -5,6 +5,7 @@ import { isLoopbackHost, LOOPBACK_HOST } from './common/net.js';
 import { AuthMode, DEFAULT_AUTH_MODE } from './models/auth/mode.js';
 import { DEFAULT_PROFILE, ProfileSchema } from './models/auth/sign-in.js';
 import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from './models/demo/core.js';
+import { DEFAULT_MANUAL_PRICE_STALE_DAYS, DEFAULT_PRICE_STALE_HOURS } from './models/asset.js';
 import { EncryptionKey } from './models/encryption-key.js';
 import { Locale } from './models/locale.js';
 
@@ -120,8 +121,8 @@ const Env = z
     CRYPTO_RATE_STALE_HOURS: z.coerce.number().positive().default(1),
     // Staleness windows for asset_prices (ADR-038 §4): a Friday close is still fresh on Monday (72 h); a manually
     // valued asset (a CDB, a pension fund) is revalued about monthly (31 days).
-    PRICE_STALE_HOURS: z.coerce.number().positive().default(72),
-    MANUAL_PRICE_STALE_DAYS: z.coerce.number().positive().default(31),
+    PRICE_STALE_HOURS: z.coerce.number().positive().default(DEFAULT_PRICE_STALE_HOURS),
+    MANUAL_PRICE_STALE_DAYS: z.coerce.number().positive().default(DEFAULT_MANUAL_PRICE_STALE_DAYS),
   })
   .refine((env) => !(env.PATTY_DB_KEY && env.PATTY_DB_KEY_FILE), {
     path: ['PATTY_DB_KEY_FILE'],

@@ -98,6 +98,11 @@ export type AssetError = NotFound<'asset'> | Ambiguous<'asset'> | ValidationErro
 /** The reference a person types for an asset, split into its parts. */
 export type AssetRef = { symbol: string; exchange: string | null };
 
+/** How long a price stays fresh unless configured otherwise: a Friday close is still fresh on Monday (72 h), a
+ *  manually valued asset (a CDB, a pension fund) is revalued about monthly (31 days). */
+export const DEFAULT_PRICE_STALE_HOURS = 72;
+export const DEFAULT_MANUAL_PRICE_STALE_DAYS = 31;
+
 /** How long a price stays fresh: market quotes in hours (a Friday close is still fresh on Monday), manual values in
  *  days (a CDB is revalued monthly). */
 export type PriceStalenessThresholds = { marketHours: number; manualDays: number };

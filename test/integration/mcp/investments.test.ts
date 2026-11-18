@@ -232,7 +232,7 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
     });
   });
 
-  it('lists, updates and deletes events; a deleted opening drops the position and leaves the cash', async () => {
+  it('lists, updates and deletes events; a deleted opening drops the position and gives the cash back', async () => {
     await tool('create_account', { name: 'Brokerage E', type: 'investment', currency: 'USD', initialBalance: 0 });
     await registerNu('EEE');
     await tool('set_asset_prices', { prices: [{ asset: 'EEE', price: 10, asOf: ASOF }] });
@@ -261,10 +261,13 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
       marketValue: 60,
     });
 
-    expect(await tool('delete_investment_event', { id: opened.id })).toEqual({ deleted: true });
+    expect(await tool('delete_investment_event', { id: opened.id })).toEqual({
+      deleted: true,
+      restoredCash: { account: 'Brokerage E', initialBalance: 0 },
+    });
     expect(await tool('delete_investment_event', { id: opened.id })).toEqual({ deleted: false });
     expect(((await tool('get_portfolio', { account: 'Brokerage E' })) as Portfolio).positions).toEqual([]);
-    expect((await balancesOf('Brokerage E')).balances[0]).toMatchObject({ balance: 30 });
+    expect((await balancesOf('Brokerage E')).balances[0]).toMatchObject({ balance: 0 });
     expect(errorCode(await toolError('update_investment_event', { id: opened.id, quantity: 1 }))).toBe(
       'unknown_investment_event',
     );
@@ -308,6 +311,63 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
     const { contents } = await client.readResource({ uri: 'patty://assets' });
     const listed = JSON.parse((contents[0] as { text: string }).text) as AssetRow[];
     expect(listed.map((a) => a.symbol)).toEqual(expect.arrayContaining(['AAA', 'GGG', 'CDB-X']));
+  });
+
+  it('is reversible: deleting an opening gives back the cash it replaced, in the same write', async () => {
+    await tool('create_account', { name: 'Brokerage R', type: 'investment', currency: 'USD', initialBalance: 700 });
+    await registerNu('RRR');
+    const opened = (await tool('open_position', {
+      account: 'Brokerage R',
+      asset: 'RRR',
+      quantity: 2,
+      avgCost: 3,
+      remainingCash: 85,
+    })) as { id: string; replacedCash: number };
+    expect(opened.replacedCash).toBe(700);
+    expect((await balancesOf('Brokerage R')).balances[0]).toMatchObject({ balance: 85 });
+
+    expect(await tool('delete_investment_event', { id: opened.id })).toEqual({
+      deleted: true,
+      restoredCash: { account: 'Brokerage R', initialBalance: 700 },
+    });
+    const after = await balancesOf('Brokerage R');
+    expect(after.balances[0]).toMatchObject({ balance: 700 });
+    expect(after.balances[0]!.holdings).toBeUndefined();
+  });
+
+  it('an opening that replaced nothing restores nothing when deleted', async () => {
+    await tool('create_account', { name: 'Brokerage S', type: 'investment', currency: 'USD', initialBalance: 40 });
+    await registerNu('SSS');
+    const opened = (await tool('open_position', {
+      account: 'Brokerage S',
+      asset: 'SSS',
+      quantity: 1,
+      avgCost: 3,
+      remainingCash: 40,
+    })) as { id: string; replacedCash: number | null };
+    expect(opened.replacedCash).toBeNull();
+    await tool('update_account', { name: 'Brokerage S', initialBalance: 55 });
+
+    expect(await tool('delete_investment_event', { id: opened.id })).toEqual({ deleted: true });
+    expect((await balancesOf('Brokerage S')).balances[0]).toMatchObject({ balance: 55 });
+  });
+
+  it('lets exactly one of two concurrent openings of a position win; the other gets the ordinary error', async () => {
+    await tool('create_account', { name: 'Brokerage T', type: 'investment', currency: 'USD', initialBalance: 0 });
+    await registerNu('TTT');
+    const open = (quantity: number) =>
+      callTool(client, {
+        name: 'open_position',
+        args: { account: 'Brokerage T', asset: 'TTT', quantity, avgCost: 1 },
+      });
+
+    const settled = await Promise.allSettled([open(1), open(2)]);
+    const won = settled.filter((outcome) => outcome.status === 'fulfilled');
+    const lost = settled.filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected');
+    expect(won).toHaveLength(1);
+    expect(lost).toHaveLength(1);
+    expect(String(lost[0]!.reason)).toContain('already has an opening for NYSE:TTT');
+    expect(((await tool('list_investment_events', { account: 'Brokerage T' })) as unknown[]).length).toBe(1);
   });
 
   it('serves the refresh_quotes prompt', async () => {

@@ -18,6 +18,7 @@ import {
   type SetAssetPriceInput,
 } from '../models/asset.js';
 import type { Resolution } from '../models/resolution.js';
+import { buildBulkItems, toBulkItem as toGenericBulkItem, type BulkItemShape } from './bulk-item.js';
 import { fold } from './resolve.js';
 import { isStale } from './currency-rate.js';
 
@@ -137,20 +138,24 @@ export const planAssetPrice = (
   return { price, view: { asset: assetLabel(asset), price: input.price, asOf, source: input.source } };
 };
 
+const bulkShape = <E>(): BulkItemShape<
+  SetAssetPriceInput,
+  AssetPriceView,
+  E,
+  { price: AssetPriceView },
+  { asset: string; error: E }
+> => ({
+  applied: (price) => ({ price }),
+  refused: (input, error) => ({ asset: input.asset, error }),
+});
+
 export const toBulkItem = <E>(input: SetAssetPriceInput, result: Result<AssetPriceView, E>): AssetPriceBulkItem<E> =>
-  result.match(
-    (price) => ({ status: 'ok', price }),
-    (error) => ({ status: 'error', asset: input.asset, error }),
-  );
+  toGenericBulkItem(input, result, bulkShape<E>());
 
 export const buildBulkResult = <E>(
   items: readonly SetAssetPriceInput[],
   outcomes: readonly Result<AssetPriceView, E>[],
-): AssetPriceBulkItem<E>[] =>
-  R.pipe(
-    R.zip(items, outcomes),
-    R.map(([input, outcome]) => toBulkItem(input, outcome)),
-  );
+): AssetPriceBulkItem<E>[] => buildBulkItems(items, outcomes, bulkShape<E>());
 
 /** The newest price of one asset's history, by instant. */
 export const latestPrice = <P extends Pick<AssetPrice, 'assetId' | 'asOf'>>(

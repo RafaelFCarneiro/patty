@@ -139,6 +139,14 @@ describe('refreshQuotesPromptText', () => {
     expect(text).toContain('set_exchange_rates');
   });
 
+  it('takes the FX pairs from the held positions and from every account, the unconverted or stale ones', () => {
+    expect(text).toContain('distinct currency other than the base');
+    expect(text).toContain('held positions');
+    expect(text).toContain('AND among every account');
+    expect(text).toContain('get_account_balances');
+    expect(text).toMatch(/unconverted \(no converted block\) or whose converted block is stale/);
+  });
+
   it('splits the change into the price effect and the FX effect', () => {
     expect(text).toContain('price effect qty·(p1−p0)·fx0');
     expect(text).toContain('FX effect qty·p1·(fx1−fx0)');

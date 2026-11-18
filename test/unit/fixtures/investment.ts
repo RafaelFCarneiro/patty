@@ -72,6 +72,7 @@ export const openingEvent = (overrides: Partial<InvestmentEvent> = {}): Investme
   quantity: 10,
   unitCost: 8,
   note: null,
+  replacedCash: null,
   ...overrides,
 });
 

@@ -1,4 +1,5 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, max } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import * as assetAdapters from '../../../adapters/assets.js';
 import type { AssetPriceEntity } from '../../../models/asset.js';
 import type { Db } from '../driver.js';
@@ -15,12 +16,15 @@ export type AssetPricesRepo = {
 
 export const assetPricesRepo = (db: Db): AssetPricesRepo => ({
   latest: async () => {
+    const newer = alias(assetPrices, 'newer_prices');
+    const newestOfAsset = db
+      .select({ asOf: max(newer.asOf) })
+      .from(newer)
+      .where(eq(newer.assetId, assetPrices.assetId));
     const rows = await db
       .select()
       .from(assetPrices)
-      .where(
-        sql`${assetPrices.asOf} = (SELECT MAX(p2.as_of) FROM asset_prices p2 WHERE p2.asset_id = ${assetPrices.assetId})`,
-      )
+      .where(eq(assetPrices.asOf, newestOfAsset))
       .orderBy(assetPrices.assetId);
     return rows.map(assetAdapters.priceDbToEntity);
   },

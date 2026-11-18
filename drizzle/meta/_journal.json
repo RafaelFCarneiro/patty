@@ -218,6 +218,13 @@
       "when": 1794999627140,
       "tag": "0030_investment_holdings",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1795040606230,
+      "tag": "0031_investment_reversible_opening",
+      "breakpoints": true
     }
   ]
 }

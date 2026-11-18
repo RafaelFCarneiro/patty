@@ -394,11 +394,18 @@ export const investmentEvents = sqliteTable(
     unitCost: real('unit_cost').notNull(),
     idempotencyKey: text('idempotency_key').notNull(),
     note: text('note'),
+    // ADR-038 §7: the account's `initialBalance` an opening replaced, so deleting the opening can give it back; null
+    // when the opening replaced nothing.
+    replacedCash: real('replaced_cash'),
     version: integer('version').notNull().default(0),
     userId: ownerColumn(),
   },
   (t) => [
     uniqueIndex('investment_events_user_idempotency_key').on(t.userId, t.idempotencyKey),
+    // One opening per position, enforced by the database: a concurrent second `open_position` loses here.
+    uniqueIndex('investment_events_one_opening')
+      .on(t.userId, t.accountId, t.assetId)
+      .where(sql`${t.type} = ${sql.raw(`'${InvestmentEventType.enum.opening}'`)}`),
     index('idx_investment_events_user_account').on(t.userId, t.accountId),
     index('idx_investment_events_asset').on(t.assetId),
   ],

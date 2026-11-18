@@ -92,8 +92,10 @@ export const importStatementPromptText = (source: ImportStatementSource | undefi
 export const refreshQuotesPromptText = (): string =>
   `You are refreshing the user's quotes and exchange rates. Call ${T.get_portfolio} first and keep what it returns ` +
   `(per position: quantity, price, the base-currency value and rate) as the "before". Then call ${T.list_assets} with ` +
-  `staleOnly true: those are the assets whose price is missing or stale. The FX pairs you need are one rate per ` +
-  `distinct position currency other than the portfolio's baseCurrency, from that currency to the base — check them ` +
+  `staleOnly true: those are the assets whose price is missing or stale. The FX pairs you need are one rate, from ` +
+  `the currency to the base currency, for each distinct currency other than the base among the held positions ` +
+  `(the portfolio's position currencies) AND among every account: call ${T.get_account_balances} and take the ` +
+  `accounts that come back unconverted (no converted block) or whose converted block is stale. Check what is cached ` +
   `with ${T.list_exchange_rates}. Source current quotes and rates yourself (the web); ${PRODUCT_NAME} never fetches ` +
   `them. For a manual asset (a CDB, a pension fund) ask the user for today's value. Upsert the prices with ` +
   `${T.set_asset_prices} and the rates with ${T.set_exchange_rates}, saying where each came from in "source". ` +

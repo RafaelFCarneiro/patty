@@ -18,25 +18,29 @@ import {
   type CurrencyAmount,
   type ConsolidatedInCurrency,
 } from '../models/currency-rate.js';
+import { buildBulkItems, toBulkItem as toGenericBulkItem, type BulkItemShape } from './bulk-item.js';
 import { roundToDecimals } from './money.js';
+
+const bulkShape = <E>(): BulkItemShape<
+  SetExchangeRateInput,
+  CurrencyRateView,
+  E,
+  { rate: CurrencyRateView },
+  { from: CurrencyCode; to: CurrencyCode; error: E }
+> => ({
+  applied: (rate) => ({ rate }),
+  refused: (input, error) => ({ from: input.from, to: input.to, error }),
+});
 
 export const toBulkItem = <E>(
   input: SetExchangeRateInput,
   result: Result<CurrencyRateView, E>,
-): CurrencyRateBulkItem<E> =>
-  result.match(
-    (rate) => ({ status: 'ok', rate }),
-    (error) => ({ status: 'error', from: input.from, to: input.to, error }),
-  );
+): CurrencyRateBulkItem<E> => toGenericBulkItem(input, result, bulkShape<E>());
 
 export const buildBulkResult = <E>(
   items: readonly SetExchangeRateInput[],
   outcomes: readonly Result<CurrencyRateView, E>[],
-): CurrencyRateBulkItem<E>[] =>
-  R.pipe(
-    R.zip(items, outcomes),
-    R.map(([input, outcome]) => toBulkItem(input, outcome)),
-  );
+): CurrencyRateBulkItem<E>[] => buildBulkItems(items, outcomes, bulkShape<E>());
 
 export const isCryptoPair = (from: CurrencyCode, to: CurrencyCode): boolean =>
   CRYPTO_CURRENCIES.has(from) || CRYPTO_CURRENCIES.has(to);

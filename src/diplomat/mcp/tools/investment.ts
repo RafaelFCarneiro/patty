@@ -11,7 +11,12 @@ import {
 } from '../../../controllers/investment/events.js';
 import { getPortfolio } from '../../../controllers/investment/portfolio.js';
 import { buildBulkResult } from '../../../logic/asset.js';
-import { ListAssetsSchema, RegisterAssetSchema } from '../../../models/asset.js';
+import {
+  DEFAULT_MANUAL_PRICE_STALE_DAYS,
+  DEFAULT_PRICE_STALE_HOURS,
+  ListAssetsSchema,
+  RegisterAssetSchema,
+} from '../../../models/asset.js';
 import {
   DeleteInvestmentEventSchema,
   GetPortfolioSchema,
@@ -59,8 +64,9 @@ const listAssetsTool = defineTool({
     title: 'List assets',
     description:
       'Registered assets with their latest price, `priceAsOf`, `stale` and `noPrice`. Staleness is per pricing ' +
-      'class: market quotes after PRICE_STALE_HOURS (default 72 h, so a Friday close is still fresh on Monday), ' +
-      'manual values after MANUAL_PRICE_STALE_DAYS (default 31). Filter by `assetClass`, or pass `staleOnly` for the ' +
+      `class: market quotes after PRICE_STALE_HOURS (default ${DEFAULT_PRICE_STALE_HOURS} h, so a Friday close is ` +
+      `still fresh on Monday), manual values after MANUAL_PRICE_STALE_DAYS (default ${DEFAULT_MANUAL_PRICE_STALE_DAYS}). ` +
+      'Filter by `assetClass`, or pass `staleOnly` for the ' +
       `assets that need a fresh price. ${PRICE_SOURCING_NOTE}`,
     inputSchema: ListAssetsSchema.shape,
   },
@@ -100,7 +106,8 @@ const openPositionTool = defineTool({
       'investment account, at an average cost (default: the latest price, with a warning that P&L starts there; ' +
       'with no price either the call is refused — set a price or give avgCost). `remainingCash` (default 0) ' +
       "becomes the account's initialBalance in the SAME write, so the old static value and the holding are never " +
-      `counted together. One opening per account and asset: edit it with ${T.update_investment_event}. Not a ` +
+      'counted together; the cash it replaced is remembered, so deleting the opening gives it back. One opening ' +
+      `per account and asset (enforced by the database): edit it with ${T.update_investment_event}. Not a ` +
       'transaction — nothing here touches spending summaries. Positions are derived from events, never stored; ' +
       `read them with ${T.get_portfolio}.`,
     inputSchema: OpenPositionSchema.shape,
@@ -147,8 +154,10 @@ const deleteInvestmentEventTool = defineTool({
     title: 'Delete investment event',
     description:
       `Delete an event by id; the position it opened disappears from ${T.get_portfolio}. The cash that stayed in the ` +
-      `account (its initialBalance) is untouched — adjust it with ${T.update_account} if needed. An id that isn't yours ` +
-      'or is already gone deletes nothing ({ deleted: false }).',
+      'account (its initialBalance) stays as it is, except that deleting an opening gives back, in the same write, ' +
+      'the initialBalance that opening replaced (`restoredCash` in the response; an opening that replaced nothing ' +
+      `restores nothing) — adjust it afterwards with ${T.update_account} if needed. An id that isn't yours or is ` +
+      'already gone deletes nothing ({ deleted: false }).',
     inputSchema: DeleteInvestmentEventSchema.shape,
   },
   handle: async (args, { deps, runEffects }) => {

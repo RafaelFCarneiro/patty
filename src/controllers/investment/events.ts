@@ -1,10 +1,11 @@
-import { ok, ResultAsync, safeTry, type Result } from 'neverthrow';
+import { ok, type ResultAsync, safeTry, type Result } from 'neverthrow';
 import * as R from 'remeda';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { AppError } from '../../common/errors.js';
 import { okOr } from '../../common/result.js';
 import { latestPrice } from '../../logic/asset.js';
 import {
+  cashToRestore,
   eventView,
   isOpening,
   mergeEventPatch,
@@ -21,7 +22,9 @@ import {
   INVESTMENT_EVENT_ENTITY_TAG,
   investmentErrors,
   type DeleteInvestmentEventInput,
+  type DeleteInvestmentEventResult,
   type InvestmentEvent,
+  type InvestmentEventEntity,
   type InvestmentEventView,
   type ListInvestmentEventsInput,
   type OpenPositionInput,
@@ -124,14 +127,34 @@ export const updateInvestmentEvent = (
     return ok({ persist, response });
   });
 
+/** Deleting an opening that replaced some of the account's cash gives it back in the same batch (ADR-038 §7): the
+ *  account's `initialBalance` is rewritten, version-guarded, ahead of the event's removal. */
+const restoreWrites = async (
+  deps: Deps,
+  event: InvestmentEventEntity,
+): Promise<Result<{ writes: Persistable[]; restored?: DeleteInvestmentEventResult['restoredCash'] }, AppError>> => {
+  const cash = cashToRestore(event);
+  if (cash === null) return ok({ writes: [] });
+  const raw = await deps.accounts.findRawById(event.accountId);
+  return okOr(raw, notFound('account', event.accountId, [])).map((account) => ({
+    writes: [persistence.update({ entity: ACCOUNT_ENTITY_TAG, model: { ...account, initialBalance: cash } })],
+    restored: { account: account.name, initialBalance: cash },
+  }));
+};
+
 /** Idempotent by design, like `deleteTag`: an id that is not the caller's (or is gone) deletes nothing. */
 export const deleteInvestmentEvent = (
   deps: Deps,
   input: DeleteInvestmentEventInput,
-): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>
-  ResultAsync.fromSafePromise(deps.investments.findById(input.id)).map((existing) => ({
-    persist: existing
-      ? [persistence.remove({ entity: INVESTMENT_EVENT_ENTITY_TAG, id: existing.id, version: existing.version })]
-      : [],
-    response: { deleted: existing !== null },
-  }));
+): ResultAsync<FlowOutcome<DeleteInvestmentEventResult>, AppError> =>
+  safeTry(async function* () {
+    const existing = await deps.investments.findById(input.id);
+    if (existing === null) return ok({ persist: [], response: { deleted: false } });
+    const { writes, restored } = yield* await restoreWrites(deps, existing);
+    const removal = persistence.remove({
+      entity: INVESTMENT_EVENT_ENTITY_TAG,
+      id: existing.id,
+      version: existing.version,
+    });
+    return ok({ persist: [...writes, removal], response: { deleted: true, restoredCash: restored } });
+  });

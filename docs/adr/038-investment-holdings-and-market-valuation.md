@@ -106,6 +106,8 @@ price when unknown, with a warning that P&L starts from there), and the account'
 remaining broker cash (default 0) **in the same batch**, so the old static value and the new holdings are never
 counted together. Accounts that are not converted keep today's balance-only behavior.
 
+The conversion is **reversible**: the opening stores the `initialBalance` it replaced (`investment_events.replaced_cash`, null when the opening replaced nothing, i.e. `remainingCash` equals the old balance), and deleting an opening gives it back in the same batch (an account update, version-guarded, then the event's removal; the response says so with `restoredCash`). An opening that replaced nothing restores nothing; deleting any other event type never touches the account's cash. Deleting does overwrite a later edit of `initialBalance` with the remembered value — the agent adjusts it afterwards with `update_account` if needed. **One opening per position is enforced by the database**, not only by the flow's pre-check: a partial unique index on `(user_id, account_id, asset_id) WHERE type = 'opening'`; a concurrent second `open_position` that loses the race is retried by the engine (`VersionConflict`), re-reads the winner's opening and gets the ordinary "already has an opening" validation error, never a 500.
+
 ## MCP surface
 
 New tools (each a `defineTool` in a new `diplomat/mcp/tools/investment.ts`, documented in `docs/mcp-tools.md`):
