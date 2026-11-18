@@ -20,7 +20,7 @@ const EVENT_STEPS = {
 const applyEvent = (state: PositionState, event: InvestmentEvent): PositionState =>
   EVENT_STEPS[event.type](state, event);
 
-export const foldPosition = (events: readonly InvestmentEvent[]): PositionState =>
+export const fold = (events: readonly InvestmentEvent[]): PositionState =>
   R.pipe(
     events,
     R.sortBy((event) => event.date),
@@ -32,13 +32,10 @@ const positionKey = (event: InvestmentEvent): string => JSON.stringify([event.ac
 const toPosition = (events: readonly [InvestmentEvent, ...InvestmentEvent[]]): Position => ({
   accountId: events[0].accountId,
   assetId: events[0].assetId,
-  ...foldPosition(events),
+  ...fold(events),
 });
-
-export const isOpening = (event: Pick<InvestmentEvent, 'type'>): boolean =>
-  event.type === InvestmentEventType.enum.opening;
 
 const isHeld = (position: Position): boolean => position.quantity > 0;
 
-export const foldPositions = (events: readonly InvestmentEvent[]): Position[] =>
+export const foldAll = (events: readonly InvestmentEvent[]): Position[] =>
   R.pipe(events, R.groupBy(positionKey), R.values(), R.filter(R.isDefined), R.map(toPosition), R.filter(isHeld));

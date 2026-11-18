@@ -6,7 +6,6 @@ import {
   openPosition,
   updateInvestmentEvent,
 } from '../../../../src/controllers/investment/events.js';
-import { deriveInvestmentEventKey } from '../../../../src/logic/investment/idempotency.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../../src/models/account.js';
 import type { AssetEntity } from '../../../../src/models/investment/asset.js';
 import {
@@ -19,6 +18,7 @@ import {
 } from '../../../../src/models/investment/core.js';
 import { decided, investmentDeps } from '../../fixtures/investment-deps.js';
 import { investmentAccount, kncrAsset, NOW, nuAsset, openingEvent, priceOf } from '../../fixtures/investment.js';
+import * as idempotency from '../../../../src/logic/investment/idempotency.js';
 
 const account = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
   ...investmentAccount(),
@@ -59,7 +59,7 @@ describe('openPosition', () => {
           note: null,
           replacedCash: 500,
         },
-        idempotencyKey: deriveInvestmentEventKey(
+        idempotencyKey: idempotency.deriveKey(
           { accountId: 'acc-inv', assetId: 'asset-nu', type: 'opening', date: '2026-11-18', quantity: 10, unitCost: 8 },
           2,
         ),

@@ -22,7 +22,7 @@ import type { ConversionResult } from '../../models/currency-rate.js';
 import type { CurrencyCode, DecimalsFor } from '../../models/money.js';
 import { convert } from '../currency-rate.js';
 import { roundToDecimals } from '../money.js';
-import { assetLabel, isPriceStale, latestPrice } from './asset.js';
+import * as assetRules from './asset.js';
 
 const PERCENT = 100;
 const PERCENT_DECIMALS = 2;
@@ -74,7 +74,7 @@ const readPrice = ({ asset, price }: PositionFacts, context: ValuationContext): 
         price: price.price,
         priceAsOf: price.asOf,
         noPrice: false,
-        stale: isPriceStale(asset.pricing, price.asOf, context.now, context.priceThresholds),
+        stale: assetRules.isPriceStale(asset.pricing, price.asOf, context.now, context.priceThresholds),
       }
     : NO_PRICE;
 
@@ -87,7 +87,7 @@ const identityOf = ({ position, account, asset }: PositionFacts) => ({
   accountId: account.id,
   account: account.name,
   assetId: asset.id,
-  asset: assetLabel(asset),
+  asset: assetRules.label(asset),
   name: asset.name,
   assetClass: asset.assetClass,
   pricing: asset.pricing,
@@ -96,7 +96,7 @@ const identityOf = ({ position, account, asset }: PositionFacts) => ({
   avgCost: position.avgCost,
 });
 
-export const valuePosition = (facts: PositionFacts, context: ValuationContext): PositionValuation => {
+export const value = (facts: PositionFacts, context: ValuationContext): PositionValuation => {
   const figures = assetFigures(facts, context.decimalsOf);
   const priceReading = readPrice(facts, context);
   const rateReading = readRate(baseFigures(figures, facts.asset.currency, context));
@@ -113,7 +113,7 @@ export const valuePosition = (facts: PositionFacts, context: ValuationContext): 
   };
 };
 
-export const valuePositions = (
+export const valueAll = (
   positions: readonly Position[],
   accounts: readonly Pick<Account, 'id' | 'name'>[],
   assets: readonly Asset[],
@@ -128,10 +128,10 @@ export const valuePositions = (
       position,
       account: accountById[position.accountId],
       asset: assetById[position.assetId],
-      price: latestPrice(prices, position.assetId),
+      price: assetRules.latestPrice(prices, position.assetId),
     })),
     R.filter((facts): facts is PositionFacts => facts.account !== undefined && facts.asset !== undefined),
-    R.map((facts) => valuePosition(facts, context)),
+    R.map((facts) => value(facts, context)),
   );
 };
 
@@ -190,7 +190,7 @@ const allocateBy = (
   );
 };
 
-export const consolidatePortfolio = (
+export const consolidate = (
   valuations: readonly PositionValuation[],
   baseCurrency: CurrencyCode,
   baseDecimals: number,

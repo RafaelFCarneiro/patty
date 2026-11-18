@@ -14,7 +14,6 @@ import {
 } from '../../logic/account.js';
 import { computeBalance, computeProjectedBalance } from '../../logic/balance.js';
 import { consolidateNetWorth, valueAccount } from '../../logic/currency-rate.js';
-import { netWorthHoldings, withAccountHoldings, withNetWorthHoldings } from '../../logic/investment/net-worth.js';
 import * as persistence from '../../logic/persistence.js';
 import { resolveByName } from '../../logic/resolve.js';
 import {
@@ -34,6 +33,7 @@ import type { Deps } from '../deps.js';
 import { valueHoldings } from '../investment/portfolio.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 import { loadValuationBasis } from '../valuation.js';
+import * as netWorth from '../../logic/investment/net-worth.js';
 
 const assertNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
   !(await deps.accounts.findByName(name));
@@ -80,10 +80,10 @@ export const getAccountBalances = (
     const holdings = await valueHoldings(deps, accounts, context);
 
     return ok({
-      balances: withAccountHoldings(valued, holdings, baseCurrency, baseDecimals),
-      consolidatedNetWorth: withNetWorthHoldings(
+      balances: netWorth.withAccountHoldings(valued, holdings, baseCurrency, baseDecimals),
+      consolidatedNetWorth: netWorth.withHoldings(
         consolidateNetWorth(valued, baseCurrency, baseDecimals),
-        netWorthHoldings(holdings, baseCurrency, baseDecimals),
+        netWorth.holdings(holdings, baseCurrency, baseDecimals),
         baseDecimals,
       ),
     });

@@ -3,10 +3,6 @@ import * as R from 'remeda';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { AppError } from '../../common/errors.js';
 import { okOr } from '../../common/result.js';
-import { latestPrice } from '../../logic/investment/asset.js';
-import { cashToRestore, eventView, mergeEventPatch, openingResult } from '../../logic/investment/events.js';
-import { isOpening } from '../../logic/investment/positions.js';
-import { planOpening } from '../../logic/investment/opening.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { ACCOUNT_ENTITY_TAG, type Account } from '../../models/account.js';
@@ -29,6 +25,9 @@ import {
 } from '../../models/investment/core.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveAssetRef, resolveDecimals } from '../resolve.js';
+import * as assetRules from '../../logic/investment/asset.js';
+import * as investmentEvents from '../../logic/investment/events.js';
+import * as opening from '../../logic/investment/opening.js';
 
 const isDisplayable = (row: EventRow): row is { event: InvestmentEvent; account: Account; asset: Asset } =>
   row.account !== undefined && row.asset !== undefined;
@@ -41,7 +40,7 @@ const viewsOf = async (deps: Deps, events: readonly InvestmentEvent[]): Promise<
     events,
     R.map((event) => ({ event, account: accountById[event.accountId], asset: assetById[event.assetId] })),
     R.filter(isDisplayable),
-    R.map((row) => eventView(row.event, row.account, row.asset)),
+    R.map((row) => investmentEvents.view(row.event, row.account, row.asset)),
   );
 };
 
@@ -57,8 +56,8 @@ const gatherOpening = async (deps: Deps, input: OpenPositionInput, account: Acco
     input,
     account,
     asset,
-    price: latestPrice(prices, asset.id),
-    hasOpening: existing.some(isOpening),
+    price: assetRules.latestPrice(prices, asset.id),
+    hasOpening: existing.some(investmentEvents.isOpening),
     decimals,
   };
 };
@@ -83,14 +82,14 @@ export const openPosition = (
     const account = yield* resolveAccountRef(deps, input.account);
     const asset = yield* resolveAssetRef(deps, input.asset);
     const facts = await gatherOpening(deps, input, account, asset);
-    const plan = yield* planOpening(facts);
+    const plan = yield* opening.plan(facts);
     const cash = yield* await remainingCashWrite(deps, account, plan);
     const event = persistence.insert({
       entity: INVESTMENT_EVENT_ENTITY_TAG,
       model: plan.event,
       idempotencyKey: plan.idempotencyKey,
     });
-    return ok({ persist: [...cash, event], response: openingResult(plan, account, asset, facts.decimals) });
+    return ok({ persist: [...cash, event], response: opening.result(plan, account, asset, facts.decimals) });
   });
 
 export const listInvestmentEvents = (
@@ -110,7 +109,7 @@ export const updateInvestmentEvent = (
 ): ResultAsync<FlowOutcome<InvestmentEventView>, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.investments.findById(input.id), investmentErrors.unknownEvent(input.id));
-    const entity = mergeEventPatch(existing, input);
+    const entity = investmentEvents.mergePatch(existing, input);
     const [view] = await viewsOf(deps, [entity]);
     const response = yield* okOr(view, investmentErrors.unknownEvent(input.id));
     const persist = R.isDeepEqual(entity, existing)
@@ -123,7 +122,7 @@ const restoreReplacedCash = async (
   deps: Deps,
   event: InvestmentEventEntity,
 ): Promise<Result<{ writes: Persistable[]; restored?: DeleteInvestmentEventResult['restoredCash'] }, AppError>> => {
-  const cash = cashToRestore(event);
+  const cash = investmentEvents.cashToRestore(event);
   if (cash === null) return ok({ writes: [] });
   const raw = await deps.accounts.findRawById(event.accountId);
   return okOr(raw, notFound('account', event.accountId, [])).map((account) => ({

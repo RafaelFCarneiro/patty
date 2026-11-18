@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { CurrencyCode } from '../../../../src/models/money.js';
-import { consolidatePortfolio, valuePosition, valuePositions } from '../../../../src/logic/investment/valuation.js';
 import { AssetClass } from '../../../../src/models/investment/asset.js';
 import { PositionExclusionReason } from '../../../../src/models/investment/core.js';
 import {
@@ -14,20 +13,18 @@ import {
   rateOf,
   valuationContext,
 } from '../../fixtures/investment.js';
+import * as valuation from '../../../../src/logic/investment/valuation.js';
 
 const { USD, BRL, BTC } = CurrencyCode.enum;
 
-describe('valuePosition — read-time valuation (ADR-038 §4)', () => {
+describe('valuation.value — read-time valuation (ADR-038 §4)', () => {
   const account = investmentAccount();
   const position = { accountId: 'acc-inv', assetId: 'asset-nu', quantity: 10, avgCost: 8 };
   const nu = nuAsset();
 
   it('values quantity × price in the asset currency and converts it to the base currency', () => {
-    const valuation = valuePosition(
-      { position, account, asset: nu, price: priceOf(nu, 13, FRESH) },
-      valuationContext(),
-    );
-    expect(valuation).toMatchObject({
+    const valued = valuation.value({ position, account, asset: nu, price: priceOf(nu, 13, FRESH) }, valuationContext());
+    expect(valued).toMatchObject({
       asset: 'NYSE:NU',
       quantity: 10,
       avgCost: 8,
@@ -45,7 +42,7 @@ describe('valuePosition — read-time valuation (ADR-038 §4)', () => {
 
   it('is the identity for an asset already in the base currency: rate 1, never stale', () => {
     const kncr = kncrAsset();
-    const valuation = valuePosition(
+    const valued = valuation.value(
       {
         position: { ...position, assetId: kncr.id, quantity: 100, avgCost: 9 },
         account,
@@ -54,7 +51,7 @@ describe('valuePosition — read-time valuation (ADR-038 §4)', () => {
       },
       valuationContext({ rates: [] }),
     );
-    expect(valuation).toMatchObject({
+    expect(valued).toMatchObject({
       marketValue: 1000,
       noRate: false,
       stale: false,
@@ -63,16 +60,16 @@ describe('valuePosition — read-time valuation (ADR-038 §4)', () => {
   });
 
   it('flags a stale market price (older than the hours window) but still values it', () => {
-    const valuation = valuePosition(
+    const valued = valuation.value(
       { position, account, asset: nu, price: priceOf(nu, 13, hoursBeforeNow(100)) },
       valuationContext({ rates: [rateOf(USD, BRL, 5, hoursBeforeNow(1))] }),
     );
-    expect(valuation).toMatchObject({ stale: true, marketValue: 130, asOf: hoursBeforeNow(100) });
+    expect(valued).toMatchObject({ stale: true, marketValue: 130, asOf: hoursBeforeNow(100) });
   });
 
   it('keeps a manual price of the same age fresh: its window is in days', () => {
     const cdb = cdbAsset();
-    const valuation = valuePosition(
+    const valued = valuation.value(
       {
         position: { ...position, assetId: cdb.id, quantity: 1, avgCost: 1000 },
         account,
@@ -81,12 +78,12 @@ describe('valuePosition — read-time valuation (ADR-038 §4)', () => {
       },
       valuationContext(),
     );
-    expect(valuation).toMatchObject({ stale: false, marketValue: 1010, unrealized: 10 });
+    expect(valued).toMatchObject({ stale: false, marketValue: 1010, unrealized: 10 });
   });
 
   it('flags a manual price past the days window as stale', () => {
     const cdb = cdbAsset();
-    const valuation = valuePosition(
+    const valued = valuation.value(
       {
         position: { ...position, assetId: cdb.id, quantity: 1, avgCost: 1000 },
         account,
@@ -95,20 +92,20 @@ describe('valuePosition — read-time valuation (ADR-038 §4)', () => {
       },
       valuationContext(),
     );
-    expect(valuation.stale).toBe(true);
+    expect(valued.stale).toBe(true);
   });
 
   it('flags the position stale when the rate is stale, even with a fresh price', () => {
-    const valuation = valuePosition(
+    const valued = valuation.value(
       { position, account, asset: nu, price: priceOf(nu, 13, FRESH) },
       valuationContext({ rates: [rateOf(USD, BRL, 5, hoursBeforeNow(48))] }),
     );
-    expect(valuation).toMatchObject({ stale: true, asOf: hoursBeforeNow(48) });
+    expect(valued).toMatchObject({ stale: true, asOf: hoursBeforeNow(48) });
   });
 
   it('with no price the market value is null — never 0 — but the cost is still known', () => {
-    const valuation = valuePosition({ position, account, asset: nu, price: undefined }, valuationContext());
-    expect(valuation).toMatchObject({
+    const valued = valuation.value({ position, account, asset: nu, price: undefined }, valuationContext());
+    expect(valued).toMatchObject({
       noPrice: true,
       price: null,
       priceAsOf: null,
@@ -121,23 +118,23 @@ describe('valuePosition — read-time valuation (ADR-038 §4)', () => {
   });
 
   it('with no exchange rate the base figures are null and the position says noRate', () => {
-    const valuation = valuePosition(
+    const valued = valuation.value(
       { position, account, asset: nu, price: priceOf(nu, 13, FRESH) },
       valuationContext({ rates: [] }),
     );
-    expect(valuation).toMatchObject({ noRate: true, base: null, marketValue: 130, unrealized: 50, asOf: FRESH });
+    expect(valued).toMatchObject({ noRate: true, base: null, marketValue: 130, unrealized: 50, asOf: FRESH });
   });
 
   it('rounds to each currency’s own decimals', () => {
-    const valuation = valuePosition(
+    const valued = valuation.value(
       { position: { ...position, quantity: 3, avgCost: 1.111 }, account, asset: nu, price: priceOf(nu, 1.115, FRESH) },
       valuationContext(),
     );
-    expect(valuation).toMatchObject({ costBasis: 3.33, marketValue: 3.35, unrealized: 0.02 });
+    expect(valued).toMatchObject({ costBasis: 3.33, marketValue: 3.35, unrealized: 0.02 });
   });
 });
 
-describe('valuePositions', () => {
+describe('valuation.valueAll', () => {
   it('values each position against its account, asset and newest price, dropping one with an unknown asset', () => {
     const nu = nuAsset();
     const positions = [
@@ -145,13 +142,13 @@ describe('valuePositions', () => {
       { accountId: 'acc-inv', assetId: 'asset-gone', quantity: 2, avgCost: 1 },
     ];
     const prices = [priceOf(nu, 10, '2026-11-10T00:00:00.000Z', 'old'), priceOf(nu, 12, FRESH, 'new')];
-    const valued = valuePositions(positions, [investmentAccount()], [nu], prices, valuationContext());
+    const valued = valuation.valueAll(positions, [investmentAccount()], [nu], prices, valuationContext());
     expect(valued).toHaveLength(1);
     expect(valued[0]).toMatchObject({ asset: 'NYSE:NU', price: 12, marketValue: 24 });
   });
 });
 
-describe('consolidatePortfolio', () => {
+describe('valuation.consolidate', () => {
   const account = investmentAccount();
   const nu = nuAsset();
   const kncr = kncrAsset();
@@ -163,7 +160,7 @@ describe('consolidatePortfolio', () => {
     price: number | undefined,
     ctx = valuationContext(),
   ) =>
-    valuePosition(
+    valuation.value(
       {
         position: { accountId: 'acc-inv', assetId: asset.id, quantity, avgCost },
         account,
@@ -180,7 +177,7 @@ describe('consolidatePortfolio', () => {
       value(cdb, 1, 1000, undefined),
       value(nuAsset({ id: 'asset-btc', symbol: 'FOO', currency: BTC }), 1, 1, 5),
     ];
-    const { totals } = consolidatePortfolio(valuations, BRL, 2);
+    const { totals } = valuation.consolidate(valuations, BRL, 2);
     expect(totals).toMatchObject({
       baseCurrency: BRL,
       marketValue: 1650,
@@ -197,8 +194,8 @@ describe('consolidatePortfolio', () => {
 
   it('is stale when any valued part is, and an excluded position does not make it stale', () => {
     const stale = value(nu, 10, 8, 13, valuationContext({ rates: [rateOf(USD, BRL, 5, hoursBeforeNow(48))] }));
-    expect(consolidatePortfolio([stale], BRL, 2).totals.stale).toBe(true);
-    expect(consolidatePortfolio([value(cdb, 1, 1, undefined)], BRL, 2).totals).toMatchObject({
+    expect(valuation.consolidate([stale], BRL, 2).totals.stale).toBe(true);
+    expect(valuation.consolidate([value(cdb, 1, 1, undefined)], BRL, 2).totals).toMatchObject({
       stale: false,
       asOf: null,
       marketValue: 0,
@@ -207,7 +204,7 @@ describe('consolidatePortfolio', () => {
 
   it('allocates by asset class and by currency, sorted by value, summing to 100 within rounding', () => {
     const valuations = [value(nu, 10, 8, 13), value(kncr, 100, 9, 10), value(cdb, 1, 1000, 1100)];
-    const { allocation } = consolidatePortfolio(valuations, BRL, 2);
+    const { allocation } = valuation.consolidate(valuations, BRL, 2);
     expect(allocation.byAssetClass.map((s) => [s.key, s.value])).toEqual([
       [AssetClass.enum.fixed_income, 1100],
       [AssetClass.enum.reit, 1000],
@@ -224,7 +221,7 @@ describe('consolidatePortfolio', () => {
   });
 
   it('allocates nothing, and divides by nothing, when no position is valued', () => {
-    const { allocation, totals } = consolidatePortfolio([value(cdb, 1, 1, undefined)], BRL, 2);
+    const { allocation, totals } = valuation.consolidate([value(cdb, 1, 1, undefined)], BRL, 2);
     expect(allocation).toEqual({ byAssetClass: [], byCurrency: [] });
     expect(totals.excluded).toHaveLength(1);
   });
@@ -234,18 +231,18 @@ describe('a missing price or rate is null and excluded — never 0', () => {
   const account = investmentAccount();
   const nu = nuAsset();
   const position = { accountId: 'acc-inv', assetId: 'asset-nu', quantity: 10, avgCost: 8 };
-  const unpriced = valuePosition({ position, account, asset: nu, price: undefined }, valuationContext());
-  const unrated = valuePosition(
+  const unpriced = valuation.value({ position, account, asset: nu, price: undefined }, valuationContext());
+  const unrated = valuation.value(
     { position, account, asset: nu, price: priceOf(nu, 13, FRESH) },
     valuationContext({ rates: [] }),
   );
-  const priced = valuePosition({ position, account, asset: nu, price: priceOf(nu, 13, FRESH) }, valuationContext());
+  const priced = valuation.value({ position, account, asset: nu, price: priceOf(nu, 13, FRESH) }, valuationContext());
 
   it('a position without a price has value null, not 0, and is excluded from the total', () => {
     expect(unpriced.marketValue).toBeNull();
     expect(unpriced.unrealized).toBeNull();
     expect(unpriced.base?.marketValue).toBeNull();
-    const { totals } = consolidatePortfolio([priced, unpriced], BRL, 2);
+    const { totals } = valuation.consolidate([priced, unpriced], BRL, 2);
     expect(totals.marketValue).toBe(650);
     expect(totals.excluded).toEqual([
       { account: account.name, asset: 'NYSE:NU', reason: PositionExclusionReason.enum.no_price },
@@ -255,7 +252,7 @@ describe('a missing price or rate is null and excluded — never 0', () => {
   it('a position without an exchange rate has base value null, not 0, and is excluded from the total', () => {
     expect(unrated.base).toBeNull();
     expect(unrated.marketValue).toBe(130);
-    const { totals } = consolidatePortfolio([priced, unrated], BRL, 2);
+    const { totals } = valuation.consolidate([priced, unrated], BRL, 2);
     expect(totals.marketValue).toBe(650);
     expect(totals.excluded).toEqual([
       { account: account.name, asset: 'NYSE:NU', reason: PositionExclusionReason.enum.no_rate },
@@ -263,7 +260,7 @@ describe('a missing price or rate is null and excluded — never 0', () => {
   });
 
   it('a total of nothing valued is 0 only because nothing was valued, and says what was left out', () => {
-    const { totals } = consolidatePortfolio([unpriced, unrated], BRL, 2);
+    const { totals } = valuation.consolidate([unpriced, unrated], BRL, 2);
     expect(totals.marketValue).toBe(0);
     expect(totals.excluded).toHaveLength(2);
   });

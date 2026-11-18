@@ -10,10 +10,14 @@ import {
   type InvestmentEvent,
   type OpeningFacts,
   type OpeningPlan,
+  type OpenPositionResult,
   type OpeningRule,
 } from '../../models/investment/core.js';
-import { assetLabel } from './asset.js';
-import { deriveInvestmentEventKey } from './idempotency.js';
+import type { Asset } from '../../models/investment/asset.js';
+import { roundToDecimals } from '../money.js';
+import * as assetRules from './asset.js';
+import * as investmentEvents from './events.js';
+import * as idempotency from './idempotency.js';
 
 const isNotInvestmentAccount = ({ account }: OpeningFacts): boolean => account.type !== AccountType.enum.investment;
 
@@ -23,9 +27,9 @@ const refuseNotInvestmentAccount = ({ account }: OpeningFacts): InvestmentError 
 const alreadyHasOpening = ({ hasOpening }: OpeningFacts): boolean => hasOpening;
 
 const refuseOpeningExists = ({ account, asset }: OpeningFacts): InvestmentError =>
-  investmentErrors.openingExists(account.name, assetLabel(asset));
+  investmentErrors.openingExists(account.name, assetRules.label(asset));
 
-const OPENING_RULES: readonly OpeningRule[] = [
+const RULES: readonly OpeningRule[] = [
   [isNotInvestmentAccount, refuseNotInvestmentAccount],
   [alreadyHasOpening, refuseOpeningExists],
 ];
@@ -36,15 +40,15 @@ const givenCost = ({ input }: OpeningFacts): CostResolution | undefined =>
 const costFromLatestPrice = ({ asset, price }: OpeningFacts): CostResolution | undefined =>
   price && {
     unitCost: price.price,
-    warnings: [investmentWarnings.costFromPrice(assetLabel(asset), price.price, price.asOf)],
+    warnings: [investmentWarnings.costFromPrice(assetRules.label(asset), price.price, price.asOf)],
   };
 
 const resolveUnitCost = (facts: OpeningFacts): Result<CostResolution, InvestmentError> => {
   const resolution = givenCost(facts) ?? costFromLatestPrice(facts);
-  return resolution ? ok(resolution) : err(investmentErrors.noPriceNoCost(assetLabel(facts.asset)));
+  return resolution ? ok(resolution) : err(investmentErrors.noPriceNoCost(assetRules.label(facts.asset)));
 };
 
-const cashReplacedByOpening = (account: Pick<Account, 'initialBalance'>, remainingCash: number): number | null =>
+const cashReplaced = (account: Pick<Account, 'initialBalance'>, remainingCash: number): number | null =>
   account.initialBalance === remainingCash ? null : account.initialBalance;
 
 const openingEvent = (facts: OpeningFacts, unitCost: number, replacedCash: number | null): InvestmentEvent => ({
@@ -61,13 +65,24 @@ const openingEvent = (facts: OpeningFacts, unitCost: number, replacedCash: numbe
 
 const buildOpeningPlan = (facts: OpeningFacts, { unitCost, warnings }: CostResolution): OpeningPlan => {
   const initialBalance = facts.input.remainingCash ?? 0;
-  const event = openingEvent(facts, unitCost, cashReplacedByOpening(facts.account, initialBalance));
-  return { event, idempotencyKey: deriveInvestmentEventKey(event, facts.decimals), initialBalance, warnings };
+  const event = openingEvent(facts, unitCost, cashReplaced(facts.account, initialBalance));
+  return { event, idempotencyKey: idempotency.deriveKey(event, facts.decimals), initialBalance, warnings };
 };
 
-export const planOpening = (facts: OpeningFacts): Result<OpeningPlan, InvestmentError> => {
-  const violated = R.find(OPENING_RULES, ([isViolated]) => isViolated(facts));
+export const plan = (facts: OpeningFacts): Result<OpeningPlan, InvestmentError> => {
+  const violated = R.find(RULES, ([isViolated]) => isViolated(facts));
   return violated
     ? err(violated[1](facts))
     : resolveUnitCost(facts).map((resolution) => buildOpeningPlan(facts, resolution));
 };
+
+export const result = (
+  plan: OpeningPlan,
+  account: Pick<Account, 'name'>,
+  asset: Asset,
+  decimals: number,
+): OpenPositionResult => ({
+  ...investmentEvents.view(plan.event, account, asset),
+  costBasis: roundToDecimals(plan.event.quantity * plan.event.unitCost, decimals),
+  warnings: plan.warnings,
+});

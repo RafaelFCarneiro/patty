@@ -40,7 +40,7 @@ export const isPriceStale = (
   thresholds: PriceStalenessThresholds,
 ): boolean => isStale(asOf, now, STALE_AFTER_HOURS[pricing](thresholds));
 
-export const assetLabel = (asset: Pick<Asset, 'symbol' | 'exchange'>): string =>
+export const label = (asset: Pick<Asset, 'symbol' | 'exchange'>): string =>
   `${asset.exchange}${EXCHANGE_SEPARATOR}${asset.symbol}`;
 
 const normalizeCode = (code: string): string => code.trim().toUpperCase();
@@ -52,7 +52,7 @@ export const normalizeRegistration = (input: RegisterAsset): RegisterAsset => ({
   name: input.name.trim(),
 });
 
-export const parseAssetRef = (ref: string): AssetRef => {
+export const parseRef = (ref: string): AssetRef => {
   const [head = '', ...rest] = ref.split(EXCHANGE_SEPARATOR);
   return rest.length === 0
     ? { symbol: normalizeCode(head), exchange: null }
@@ -66,16 +66,16 @@ const matchesRef =
 
 const matchesName = (query: string) => (asset: Asset) => fold(asset.name) === fold(query);
 
-export const resolveAsset = (assets: readonly Asset[], ref: string): Resolution<Asset> => {
-  const bySymbol = R.filter(assets, matchesRef(parseAssetRef(ref)));
+export const resolve = (assets: readonly Asset[], ref: string): Resolution<Asset> => {
+  const bySymbol = R.filter(assets, matchesRef(parseRef(ref)));
   const matches = bySymbol.length > 0 ? bySymbol : R.filter(assets, matchesName(ref));
   const [single] = matches;
   if (single && matches.length === 1) return { kind: 'found', entity: single };
-  const candidates = R.map(matches.length > 1 ? matches : assets, assetLabel);
+  const candidates = R.map(matches.length > 1 ? matches : assets, label);
   return matches.length > 1 ? { kind: 'ambiguous', query: ref, candidates } : { kind: 'none', query: ref, candidates };
 };
 
-export const toAsset = (entity: Asset | AssetEntity): Asset => R.omit(entity as AssetEntity, ['version']);
+export const fromEntity = (entity: Asset | AssetEntity): Asset => R.omit(entity as AssetEntity, ['version']);
 
 const DIFFERING_FIELDS = ['assetClass', 'currency', 'pricing'] as const;
 
@@ -88,7 +88,7 @@ const differingWarnings = (existing: Asset, input: RegisterAsset): string[] =>
     ),
   );
 
-export const planRegisterAsset = (id: string, input: RegisterAsset, existing: Asset | null): RegisterPlan => {
+export const planRegister = (id: string, input: RegisterAsset, existing: Asset | null): RegisterPlan => {
   if (existing === null) return { asset: { id, ...input }, created: true, renamed: false, warnings: [] };
   const renamed = existing.name !== input.name;
   return {
@@ -107,7 +107,7 @@ export const registerResult = (plan: RegisterPlan): RegisterAssetResult => ({
 
 export const canonicalTimestamp = (asOf: string): string => new Date(asOf).toISOString();
 
-export const planAssetPrice = (
+export const planPrice = (
   id: string,
   asset: Asset,
   input: SetAssetPriceInput,
@@ -121,7 +121,7 @@ export const planAssetPrice = (
     asOf,
     source: input.source ?? null,
   };
-  return { price, view: { asset: assetLabel(asset), price: input.price, asOf, source: input.source } };
+  return { price, view: { asset: label(asset), price: input.price, asOf, source: input.source } };
 };
 
 const bulkShape = <E>(): BulkItemShape<

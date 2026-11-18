@@ -1,6 +1,6 @@
 import { and, eq, max } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import * as assetAdapters from '../../../adapters/assets.js';
+import * as assetPriceAdapters from '../../../adapters/asset-prices.js';
 import type { AssetPriceEntity } from '../../../models/investment/asset.js';
 import type { Db } from '../driver.js';
 import { assetPrices } from '../schema.js';
@@ -23,7 +23,7 @@ export const assetPricesRepo = (db: Db): AssetPricesRepo => ({
       .from(assetPrices)
       .where(eq(assetPrices.asOf, newestOfAsset))
       .orderBy(assetPrices.assetId);
-    return rows.map(assetAdapters.priceDbToEntity);
+    return rows.map(assetPriceAdapters.dbToEntity);
   },
 
   findAt: async (assetId, asOf) => {
@@ -32,7 +32,7 @@ export const assetPricesRepo = (db: Db): AssetPricesRepo => ({
       .from(assetPrices)
       .where(and(eq(assetPrices.assetId, assetId), eq(assetPrices.asOf, asOf)))
       .limit(1);
-    return row ? assetAdapters.priceDbToEntity(row) : null;
+    return row ? assetPriceAdapters.dbToEntity(row) : null;
   },
 });
 

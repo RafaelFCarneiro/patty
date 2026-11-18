@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PersistOp } from '@rfc0/effect-runner';
 import { listAssets, registerAsset, setAssetPrice } from '../../../../src/controllers/investment/assets.js';
-import { buildBulkResult } from '../../../../src/logic/investment/asset.js';
 import {
   ASSET_ENTITY_TAG,
   ASSET_PRICE_ENTITY_TAG,
@@ -16,6 +15,7 @@ import { CurrencyCode } from '../../../../src/models/money.js';
 import { SetAssetPricesSchema } from '../../../../src/wire/in/assets.js';
 import { decided, investmentDeps } from '../../fixtures/investment-deps.js';
 import { cdbAsset, kncrAsset, NOW, nuAsset, priceOf } from '../../fixtures/investment.js';
+import * as assetRules from '../../../../src/logic/investment/asset.js';
 
 const entity = (asset = nuAsset(), version = 4): AssetEntity => ({ ...asset, version });
 const priceEntity = (price: ReturnType<typeof priceOf>, version = 2): AssetPriceEntity => ({ ...price, version });
@@ -125,7 +125,7 @@ describe('setAssetPrice', () => {
     const outcomes = await Promise.all(
       items.map(async (item) => (await setAssetPrice(deps, item)).map((outcome) => outcome.response as AssetPriceView)),
     );
-    const result = buildBulkResult(items, outcomes);
+    const result = assetRules.buildBulkResult(items, outcomes);
     expect(result.map((item) => item.status)).toEqual(['ok', 'error']);
     expect(result[1]).toMatchObject({ asset: 'ZZZ', error: { code: 'unknown_asset' } });
   });

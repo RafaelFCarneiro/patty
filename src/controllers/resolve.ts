@@ -5,7 +5,6 @@ import { okOr } from '../common/result.js';
 import { buildSynonyms, resolveAndSort } from '../logic/category.js';
 import { normalizeMerchant } from '../logic/merchant.js';
 import { decimalsLookup } from '../logic/money.js';
-import { resolveAsset } from '../logic/investment/asset.js';
 import { resolveByName, resolveByNames } from '../logic/resolve.js';
 import { resolveTagIds, resolveTagNames, tagSetPersistable } from '../logic/tag.js';
 import type { Account } from '../models/account.js';
@@ -18,6 +17,7 @@ import type { CategorySelection, MerchantMatch, TransactionView } from '../model
 import type { Deps } from './deps.js';
 import type { Named, Resolution } from '../models/resolution.js';
 import type { TagLinksResolution } from '../models/tag.js';
+import * as assetRules from '../logic/investment/asset.js';
 
 export const resolutionToResult = <T extends Named>(
   res: Resolution<T>,
@@ -36,7 +36,7 @@ export const resolveAccountRef = (deps: Deps, name: string): ResultAsync<Account
 
 export const resolveAssetRef = (deps: Deps, ref: string): ResultAsync<Asset, AppError> =>
   ResultAsync.fromSafePromise(deps.assets.list()).andThen((assets) =>
-    resolutionToResult(resolveAsset(assets, ref), 'asset'),
+    resolutionToResult(assetRules.resolve(assets, ref), 'asset'),
   );
 
 export const resolveCategoryRef = (deps: Deps, name: string): ResultAsync<Category, AppError> =>

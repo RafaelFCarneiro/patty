@@ -4,11 +4,7 @@ import { roundToDecimals } from '../money.js';
 
 export const joinUnambiguously = (fields: readonly unknown[]): string => JSON.stringify(fields);
 
-export const deriveInvestmentEventKey = (
-  identity: InvestmentEventIdentity,
-  decimals: number,
-  discriminator?: string,
-): string =>
+export const deriveKey = (identity: InvestmentEventIdentity, decimals: number, discriminator?: string): string =>
   createHash('sha256')
     .update(
       joinUnambiguously([

@@ -1,6 +1,7 @@
 import { ToolName } from '../tool-name.js';
 import * as accountAdapters from '../../../adapters/accounts.js';
 import * as assetAdapters from '../../../adapters/assets.js';
+import * as assetPriceAdapters from '../../../adapters/asset-prices.js';
 import * as investmentAdapters from '../../../adapters/investment-events.js';
 import { listAssets, registerAsset, setAssetPrice } from '../../../controllers/investment/assets.js';
 import {
@@ -10,7 +11,6 @@ import {
   updateInvestmentEvent,
 } from '../../../controllers/investment/events.js';
 import { getPortfolio } from '../../../controllers/investment/portfolio.js';
-import { buildBulkResult } from '../../../logic/investment/asset.js';
 import {
   DEFAULT_MANUAL_PRICE_STALE_DAYS,
   DEFAULT_PRICE_STALE_HOURS,
@@ -29,6 +29,7 @@ import { PRODUCT_NAME } from '../../../models/package.js';
 import { defineTool } from '../definition.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 import { fromResult, json } from '../respond.js';
+import * as assetRules from '../../../logic/investment/asset.js';
 
 const T = ToolName.enum;
 
@@ -89,9 +90,9 @@ const setAssetPricesTool = defineTool({
   handle: async (args, { deps, runEffectsSequence }) => {
     const outcomes = await runEffectsSequence(
       args.prices,
-      (item) => () => setAssetPrice(deps, item).map(assetAdapters.priceOutcomeToDb),
+      (item) => () => setAssetPrice(deps, item).map(assetPriceAdapters.outcomeToDb),
     );
-    return json(assetAdapters.bulkResultToWireOut(buildBulkResult(args.prices, outcomes)));
+    return json(assetPriceAdapters.bulkResultToWireOut(assetRules.buildBulkResult(args.prices, outcomes)));
   },
 });
 
