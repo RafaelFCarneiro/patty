@@ -100,9 +100,9 @@ const openPositionTool = defineTool({
       'investment account, at an average cost (default: the latest price, with a warning that P&L starts there; ' +
       'with no price either the call is refused — set a price or give avgCost). `remainingCash` (default 0) ' +
       "becomes the account's initialBalance in the SAME write, so the old static value and the holding are never " +
-      'counted together. One opening per account and asset: edit it with update_investment_event. Not a ' +
+      `counted together. One opening per account and asset: edit it with ${T.update_investment_event}. Not a ` +
       'transaction — nothing here touches spending summaries. Positions are derived from events, never stored; ' +
-      'read them with get_portfolio.',
+      `read them with ${T.get_portfolio}.`,
     inputSchema: OpenPositionSchema.shape,
   },
   handle: async (args, { deps, runEffects }) => {
@@ -118,7 +118,7 @@ const listInvestmentEventsTool = defineTool({
     title: 'List investment events',
     description:
       'The events that make up the positions (today: openings), oldest first, optionally for one account and/or ' +
-      'asset. Each carries its id, for update_investment_event / delete_investment_event.',
+      `asset. Each carries its id, for ${T.update_investment_event} / ${T.delete_investment_event}.`,
     inputSchema: ListInvestmentEventsSchema.shape,
   },
   handle: async (args, { deps }) => fromResult(await listInvestmentEvents(deps, args)),
@@ -146,8 +146,8 @@ const deleteInvestmentEventTool = defineTool({
     annotations: MUTATING,
     title: 'Delete investment event',
     description:
-      'Delete an event by id; the position it opened disappears from get_portfolio. The cash that stayed in the ' +
-      "account (its initialBalance) is untouched — adjust it with update_account if needed. An id that isn't yours " +
+      `Delete an event by id; the position it opened disappears from ${T.get_portfolio}. The cash that stayed in the ` +
+      `account (its initialBalance) is untouched — adjust it with ${T.update_account} if needed. An id that isn't yours ` +
       'or is already gone deletes nothing ({ deleted: false }).',
     inputSchema: DeleteInvestmentEventSchema.shape,
   },

@@ -31,6 +31,11 @@ import {
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveAssetRef, resolveDecimals } from '../resolve.js';
 
+type EventRow = { event: InvestmentEvent; account: Account | undefined; asset: Asset | undefined };
+
+const isDisplayable = (row: EventRow): row is { event: InvestmentEvent; account: Account; asset: Asset } =>
+  row.account !== undefined && row.asset !== undefined;
+
 const viewsOf = async (deps: Deps, events: readonly InvestmentEvent[]): Promise<InvestmentEventView[]> => {
   const [accounts, assets] = await Promise.all([deps.accounts.list(), deps.assets.list()]);
   const accountById = R.indexBy(accounts, (account) => account.id);
@@ -38,8 +43,8 @@ const viewsOf = async (deps: Deps, events: readonly InvestmentEvent[]): Promise<
   return R.pipe(
     events,
     R.map((event) => ({ event, account: accountById[event.accountId], asset: assetById[event.assetId] })),
-    R.filter((row) => row.account !== undefined && row.asset !== undefined),
-    R.map((row) => eventView(row.event, row.account!, row.asset!)),
+    R.filter(isDisplayable),
+    R.map((row) => eventView(row.event, row.account, row.asset)),
   );
 };
 
