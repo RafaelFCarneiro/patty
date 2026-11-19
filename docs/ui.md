@@ -337,7 +337,15 @@ live update, same as before this phase.
 
 **The tag lists are tested; the stream recovers and resyncs (ADR-036 §4).** Each bundled dashboard's tag list names
 every entity its `/api` calls read (`test/unit/ui/dashboard-entity-tags.test.ts` parses each list and checks it against
-the `*_ENTITY_TAG` constants, so a renamed or missing tag fails the test). The shell recovers its own stream: when
+the `*_ENTITY_TAG` constants, so a renamed or missing tag fails the test).
+
+| Dashboard | Entity tags |
+| --- | --- |
+| `accounts` | `account`, `transaction`, `category`, `tag`, `currency_rate`, `userSettings`, `asset_price`, `investment_event` |
+| `overview` | `transaction`, `account`, `category`, `recurring`, `currency_rate`, `userSettings`, `creditCard`, `bill`, `asset_price`, `investment_event` |
+
+`asset_price` and `investment_event` are only on `accounts` and `overview`: they read `/api/accounts/balances`, where
+holdings are valued; no other bundled dashboard reads balances. The other dashboards' lists are in the test. The shell recovers its own stream: when
 `EventSource` gives up (`readyState` CLOSED, e.g. a 401 after the session lapsed) `onerror` makes one request to
 `/api/status` — a 401 goes to `/ui/login?next=<current path>`; anything else reopens the stream after
 `RECONNECT_DELAY_MS`, never more than one reconnect pending. After any reopen following an error (the shell's own or the

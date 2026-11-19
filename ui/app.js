@@ -58,12 +58,14 @@
   // resync after a gap in the event stream sends all of them so every dashboard refetches.
   var ALL_ENTITY_TAGS = [
     'account',
+    'asset_price',
     'bill',
     'budget',
     'category',
     'creditCard',
     'currency_rate',
     'dashboard',
+    'investment_event',
     'recurring',
     'tag',
     'transaction',

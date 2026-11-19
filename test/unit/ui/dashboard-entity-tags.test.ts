@@ -4,6 +4,8 @@ import { UI_DASHBOARDS_ROOT } from '../../../src/diplomat/db/repos/dashboards.js
 import { ACCOUNT_ENTITY_TAG } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG } from '../../../src/models/bill.js';
 import { BUDGET_ENTITY_TAG } from '../../../src/models/budget.js';
+import { ASSET_PRICE_ENTITY_TAG } from '../../../src/models/investment/asset.js';
+import { INVESTMENT_EVENT_ENTITY_TAG } from '../../../src/models/investment/core.js';
 import { CATEGORY_ENTITY_TAG } from '../../../src/models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from '../../../src/models/credit-card.js';
 import { CURRENCY_RATE_ENTITY_TAG } from '../../../src/models/currency-rate.js';
@@ -32,6 +34,8 @@ const EXPECTED_TAGS = {
     TAG_ENTITY_TAG,
     CURRENCY_RATE_ENTITY_TAG,
     USER_SETTINGS_ENTITY_TAG,
+    ASSET_PRICE_ENTITY_TAG,
+    INVESTMENT_EVENT_ENTITY_TAG,
   ],
   budget: [
     BUDGET_ENTITY_TAG,
@@ -62,6 +66,8 @@ const EXPECTED_TAGS = {
     USER_SETTINGS_ENTITY_TAG,
     CREDIT_CARD_ENTITY_TAG,
     BILL_ENTITY_TAG,
+    ASSET_PRICE_ENTITY_TAG,
+    INVESTMENT_EVENT_ENTITY_TAG,
   ],
   pending: [
     TRANSACTION_ENTITY_TAG,
