@@ -930,7 +930,7 @@ One line per convention; the mechanics are in the section named. Conventions wit
 - **Identifiers**: `crypto.randomUUID()`; seeded rows use stable slugs (`cat-food`); dates are `YYYY-MM-DD`, and month/year filters become `date >= from AND date < to` — § Conventions in this repo.
 - **Amounts** are positive numbers in full units (reais, dollars); `type` (`expense`/`income`) carries the sign.
 - **Locale, base currency**: per-user `user_settings`, resolved `PATTY_LOCALE` → the user's locale → `en`; localized names are read-time (`names?.[locale] ?? name`) — Invariants 13, 14.
-- **Currency**: BRL, USD, MXN, COP, USDC, BTC; each account carries one, transactions denormalize it; summaries group per currency, never convert; rounding uses the currency's own `decimals` — Invariant 3.
+- **Currency**: BRL, USD, MXN, COP, USDC, BTC; each account carries one, transactions denormalize it; summaries group per currency and never convert implicitly (opt-in `displayCurrency` totals and read-time valuation are the only conversion); rounding uses the currency's own `decimals` — Invariant 3.
 - **Idempotency**: `UNIQUE(user_id, idempotency_key)`, a domain-derived key (never caller-supplied), `rowsAffected === 0` means duplicate — Invariant 1.
 - **Provenance**: an MCP-created transaction stores its natural-language `rawInput`.
 - **Classification**: `classificationMethod` (`rule|history|user|none`) and `confidence` on every transaction; merchant knowledge in `merchant_category` — Invariant 5.
