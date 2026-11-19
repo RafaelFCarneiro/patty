@@ -483,7 +483,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     - The account remembers the cash it held before its holdings, and gets it back with its last investment event,
       whatever its type; one account version means a sibling opening and a deletion conflict and retry.
     - A balance read takes an investment account's cash and its holdings from one account version, and repeats the
-      reads (bounded) when it moved; the account's references are counted after its versioned read
+      reads (bounded) when it moved, flagging the holdings stale if it still moves after the last attempt; the account's references are counted after its versioned read
       (`controllers/account/account.ts`).
     - One opening per position is a database constraint, and the same opening recorded twice is answered as the same
       opening.

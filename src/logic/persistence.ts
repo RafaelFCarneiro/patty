@@ -70,3 +70,13 @@ export const entityDbAdapter = <Tag extends string, Model, Row extends { version
 
   return { persistableToDb, outcomeToDb };
 };
+
+type Versions = Readonly<Record<string, { version: number }>>;
+
+export const movedIds = (before: Versions, after: Versions): string[] =>
+  R.pipe(
+    R.unique([...R.keys(before), ...R.keys(after)]),
+    R.filter((id) => (before[id]?.version ?? null) !== (after[id]?.version ?? null)),
+  );
+
+export const sameVersions = (before: Versions, after: Versions): boolean => movedIds(before, after).length === 0;

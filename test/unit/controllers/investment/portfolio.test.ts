@@ -216,6 +216,38 @@ describe('getAccountBalances — holdings in balances and net worth (ADR-038 §6
     expect(result.balances[0]?.holdings).toMatchObject({ stale: true, asOf: oldRate });
   });
 
+  it('after the last attempt, holdings of an account that still moves are reported stale', async () => {
+    const deps = investmentDeps(holdingsWorld);
+    let version = 0;
+    deps.accounts.findRawById = async (id) => {
+      const stored = holdingsWorld.accounts.find((candidate) => candidate.id === id);
+      version += 1;
+      return stored ? { ...stored, version } : null;
+    };
+
+    const result = (await getAccountBalances(deps, { account: 'Nu Holdings (NYSE:NU)' }))._unsafeUnwrap();
+
+    expect(result.balances[0]?.holdings).toMatchObject({ holdingsValue: 650, stale: true });
+    expect(result.consolidatedNetWorth.holdings?.stale).toBe(true);
+  });
+
+  it('reads the accounts again up to three times while their version moves, then answers', async () => {
+    const deps = investmentDeps(holdingsWorld);
+    let reads = 0;
+    deps.accounts.findRawById = async (id) => {
+      reads += 1;
+      const stored = holdingsWorld.accounts.find((candidate) => candidate.id === id);
+      return stored ? { ...stored, version: reads } : null;
+    };
+    await getAccountBalances(deps, { account: 'Nu Holdings (NYSE:NU)' });
+    expect(reads).toBe(6);
+  });
+
+  it('a version that holds still settles at once: fresh holdings stay fresh', async () => {
+    const result = (await getAccountBalances(investmentDeps(holdingsWorld)))._unsafeUnwrap();
+    expect(result.balances[1]?.holdings?.stale).toBe(false);
+  });
+
   it('counts only the positions of the accounts the filter selects', async () => {
     const result = (await getAccountBalances(investmentDeps(holdingsWorld), { account: 'Itaú' }))._unsafeUnwrap();
     expect('holdings' in result.consolidatedNetWorth).toBe(false);

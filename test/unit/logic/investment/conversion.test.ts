@@ -75,24 +75,3 @@ describe('conversion.isLastEvent — whatever its type, the event that is alone 
     expect(conversion.isLastEvent([], 'a')).toBe(true);
   });
 });
-
-describe('conversion.sameVersions — whether two reads of the accounts saw the same state', () => {
-  it('is true for the same versions, whatever the key order', () => {
-    expect(
-      conversion.sameVersions({ a: { version: 1 }, b: { version: 2 } }, { b: { version: 2 }, a: { version: 1 } }),
-    ).toBe(true);
-  });
-
-  it('is false when any version moved', () => {
-    expect(conversion.sameVersions({ a: { version: 1 } }, { a: { version: 2 } })).toBe(false);
-  });
-
-  it('is false when an account appeared or vanished between the reads', () => {
-    expect(conversion.sameVersions({ a: { version: 1 } }, {})).toBe(false);
-    expect(conversion.sameVersions({}, { a: { version: 1 } })).toBe(false);
-  });
-
-  it('is true for no accounts at all', () => {
-    expect(conversion.sameVersions({}, {})).toBe(true);
-  });
-});

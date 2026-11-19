@@ -23,20 +23,21 @@ import {
   type AccountBalance,
   type AccountBalancesResult,
   AccountType,
-  type AccountEntity,
+  type AccountSnapshots,
+  type BalancesAndHoldings,
   type CreateAccount,
   type UpdateAccount,
 } from '../../models/account.js';
 import { notFound } from '../../models/error.js';
-import type { PositionValuation, ValuationContext } from '../../models/investment/core.js';
+import type { ValuationContext } from '../../models/investment/core.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
 import { valueHoldings } from '../investment/portfolio.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 import { loadValuationBasis } from '../valuation.js';
-import * as conversion from '../../logic/investment/conversion.js';
 import * as netWorth from '../../logic/investment/net-worth.js';
+import * as valuation from '../../logic/investment/valuation.js';
 
 const assertNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
   !(await deps.accounts.findByName(name));
@@ -67,8 +68,6 @@ const balanceOf = async (deps: Deps, account: Account, projectedAsOf?: string): 
 
 const MAX_SNAPSHOT_ATTEMPTS = 3;
 
-type AccountSnapshots = Record<string, AccountEntity>;
-
 const isInvestmentAccount = (account: Account): boolean => account.type === AccountType.enum.investment;
 
 const snapshotsOf = async (deps: Deps, accounts: readonly Account[]): Promise<AccountSnapshots> =>
@@ -86,8 +85,6 @@ const withSnapshotCash = (accounts: readonly Account[], snapshots: AccountSnapsh
     initialBalance: snapshots[account.id]?.initialBalance ?? account.initialBalance,
   }));
 
-type BalancesAndHoldings = { balances: AccountBalance[]; holdings: PositionValuation[] };
-
 const readBalancesAndHoldings = async (
   deps: Deps,
   accounts: readonly Account[],
@@ -100,9 +97,10 @@ const readBalancesAndHoldings = async (
     Promise.all(withSnapshotCash(accounts, before).map((account) => balanceOf(deps, account, projectedAsOf))),
     valueHoldings(deps, accounts, context),
   ]);
-  const settled = conversion.sameVersions(before, await snapshotsOf(deps, accounts));
-  return settled || attemptsLeft <= 1
-    ? { balances, holdings }
+  const moved = persistence.movedIds(before, await snapshotsOf(deps, accounts));
+  if (moved.length === 0) return { balances, holdings };
+  return attemptsLeft <= 1
+    ? { balances, holdings: valuation.markStale(holdings, moved) }
     : readBalancesAndHoldings(deps, accounts, context, projectedAsOf, attemptsLeft - 1);
 };
 

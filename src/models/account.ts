@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { ConvertedValueSchema } from './currency-rate.js';
-import { AccountHoldingsSchema, NetWorthHoldingsSchema } from './investment/core.js';
+import { AccountHoldingsSchema, NetWorthHoldingsSchema, type PositionValuation } from './investment/core.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
@@ -99,6 +99,10 @@ export const AccountBalanceSchema = AccountSchema.extend({
   ),
 });
 export type AccountBalance = z.infer<typeof AccountBalanceSchema>;
+
+export type AccountSnapshots = Record<string, AccountEntity>;
+
+export type BalancesAndHoldings = { balances: AccountBalance[]; holdings: PositionValuation[] };
 
 export const ConsolidatedNetWorthSchema = z.object({
   baseCurrency: CurrencyCode.describe('The base currency all included balances are summed in'),

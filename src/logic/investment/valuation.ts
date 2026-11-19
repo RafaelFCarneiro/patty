@@ -204,3 +204,11 @@ export const consolidate = (
     },
   };
 };
+
+export const markStale = (
+  valuations: readonly PositionValuation[],
+  accountIds: readonly string[],
+): PositionValuation[] =>
+  R.map(valuations, (valuation) =>
+    accountIds.includes(valuation.accountId) ? { ...valuation, stale: true } : valuation,
+  );

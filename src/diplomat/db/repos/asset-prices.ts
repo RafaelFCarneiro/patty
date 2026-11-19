@@ -11,29 +11,32 @@ export type AssetPricesRepo = {
   findAt: (assetId: string, asOf: string) => Promise<AssetPriceEntity | null>;
 };
 
-export const assetPricesRepo = (db: Db): AssetPricesRepo => ({
-  latest: async () => {
-    const newer = alias(assetPrices, 'newer_prices');
-    const newestOfAsset = db
-      .select({ asOf: max(newer.asOf) })
-      .from(newer)
-      .where(eq(newer.assetId, assetPrices.assetId));
-    const rows = await db
-      .select()
-      .from(assetPrices)
-      .where(eq(assetPrices.asOf, newestOfAsset))
-      .orderBy(assetPrices.assetId);
-    return rows.map(assetPriceAdapters.dbToEntity);
-  },
+const latest = async (db: Db): ReturnType<AssetPricesRepo['latest']> => {
+  const newer = alias(assetPrices, 'newer_prices');
+  const newestOfAsset = db
+    .select({ asOf: max(newer.asOf) })
+    .from(newer)
+    .where(eq(newer.assetId, assetPrices.assetId));
+  const rows = await db
+    .select()
+    .from(assetPrices)
+    .where(eq(assetPrices.asOf, newestOfAsset))
+    .orderBy(assetPrices.assetId);
+  return rows.map(assetPriceAdapters.dbToEntity);
+};
 
-  findAt: async (assetId, asOf) => {
-    const [row] = await db
-      .select()
-      .from(assetPrices)
-      .where(and(eq(assetPrices.assetId, assetId), eq(assetPrices.asOf, asOf)))
-      .limit(1);
-    return row ? assetPriceAdapters.dbToEntity(row) : null;
-  },
+const findAt = async (db: Db, assetId: string, asOf: string): ReturnType<AssetPricesRepo['findAt']> => {
+  const [row] = await db
+    .select()
+    .from(assetPrices)
+    .where(and(eq(assetPrices.assetId, assetId), eq(assetPrices.asOf, asOf)))
+    .limit(1);
+  return row ? assetPriceAdapters.dbToEntity(row) : null;
+};
+
+export const assetPricesRepo = (db: Db): AssetPricesRepo => ({
+  latest: () => latest(db),
+  findAt: (assetId, asOf) => findAt(db, assetId, asOf),
 });
 
 export const assetPriceApplier: EntityApplier = uniqueViolationAsConflict(versionedTableApplier(assetPrices));

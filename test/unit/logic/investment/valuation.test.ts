@@ -265,3 +265,30 @@ describe('a missing price or rate is null and excluded — never 0', () => {
     expect(totals.excluded).toHaveLength(2);
   });
 });
+
+describe('valuation.markStale — positions of unsettled accounts are never presented as settled', () => {
+  const nu = nuAsset();
+  const positionOn = (accountId: string) =>
+    valuation.value(
+      {
+        position: { accountId, assetId: nu.id, quantity: 1, avgCost: 1 },
+        account: investmentAccount({ id: accountId, name: accountId }),
+        asset: nu,
+        price: priceOf(nu, 2, FRESH),
+      },
+      valuationContext(),
+    );
+
+  it('flags the positions of the named accounts stale and leaves the others as they were', () => {
+    const [moved, calm] = [positionOn('acc-moved'), positionOn('acc-calm')];
+    const marked = valuation.markStale([moved, calm], ['acc-moved']);
+    expect(marked[0]).toEqual({ ...moved, stale: true });
+    expect(marked[1]).toBe(calm);
+    expect(moved.stale).toBe(false);
+  });
+
+  it('changes nothing when no account is named', () => {
+    const calm = positionOn('acc-calm');
+    expect(valuation.markStale([calm], [])).toEqual([calm]);
+  });
+});
