@@ -268,23 +268,41 @@ describe('updateAccount — functional core (ADR-021 phase 3a)', () => {
     expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation', remedy: Remedy.enum.update_credit_card });
   });
 
-  it('rejects a type change when transactions exist, before reading a raw version', async () => {
-    const findRawById = vi.fn();
+  it('rejects a type change when transactions exist, writing nothing', async () => {
     const deps = makeDeps({
       accounts: makeAccountsRepo({
         countReferences: async () => ({ transactions: 1, recurring: 0, cards: 0, investmentEvents: 0 }),
-        findRawById,
       }),
     });
 
     const result = await updateAccount(deps, { name: 'Nubank', type: AccountType.enum.savings });
 
-    expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({
       code: 'validation',
       issues: ['type cannot be changed — account has 1 transaction(s)'],
     });
-    expect(findRawById).not.toHaveBeenCalled();
+  });
+
+  it('reads the versioned account before it counts references, so a write in between conflicts', async () => {
+    const order: string[] = [];
+    const base = makeAccountsRepo();
+    const deps = makeDeps({
+      accounts: {
+        ...base,
+        findRawById: async (id: string) => {
+          order.push('versioned read');
+          return base.findRawById(id);
+        },
+        countReferences: async (id: string) => {
+          order.push('count references');
+          return base.countReferences(id);
+        },
+      },
+    });
+
+    await updateAccount(deps, { name: 'Nubank', currency: CurrencyCode.enum.USD });
+
+    expect(order).toEqual(['versioned read', 'count references']);
   });
 
   it('rejects renaming to an already-taken name', async () => {

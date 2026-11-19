@@ -22,17 +22,20 @@ import {
   type Account,
   type AccountBalance,
   type AccountBalancesResult,
-  type AccountType,
+  AccountType,
+  type AccountEntity,
   type CreateAccount,
   type UpdateAccount,
 } from '../../models/account.js';
 import { notFound } from '../../models/error.js';
+import type { PositionValuation, ValuationContext } from '../../models/investment/core.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
 import { valueHoldings } from '../investment/portfolio.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 import { loadValuationBasis } from '../valuation.js';
+import * as conversion from '../../logic/investment/conversion.js';
 import * as netWorth from '../../logic/investment/net-worth.js';
 
 const assertNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
@@ -62,6 +65,47 @@ const balanceOf = async (deps: Deps, account: Account, projectedAsOf?: string): 
   return { ...account, ...parts, balance, projectedBalance };
 };
 
+const MAX_SNAPSHOT_ATTEMPTS = 3;
+
+type AccountSnapshots = Record<string, AccountEntity>;
+
+const isInvestmentAccount = (account: Account): boolean => account.type === AccountType.enum.investment;
+
+const snapshotsOf = async (deps: Deps, accounts: readonly Account[]): Promise<AccountSnapshots> =>
+  R.pipe(
+    await Promise.all(
+      R.map(R.filter(accounts, isInvestmentAccount), (account) => deps.accounts.findRawById(account.id)),
+    ),
+    R.filter(R.isNonNullish),
+    R.indexBy((snapshot) => snapshot.id),
+  );
+
+const withSnapshotCash = (accounts: readonly Account[], snapshots: AccountSnapshots): Account[] =>
+  R.map(accounts, (account) => ({
+    ...account,
+    initialBalance: snapshots[account.id]?.initialBalance ?? account.initialBalance,
+  }));
+
+type BalancesAndHoldings = { balances: AccountBalance[]; holdings: PositionValuation[] };
+
+const readBalancesAndHoldings = async (
+  deps: Deps,
+  accounts: readonly Account[],
+  context: ValuationContext,
+  projectedAsOf: string | undefined,
+  attemptsLeft: number,
+): Promise<BalancesAndHoldings> => {
+  const before = await snapshotsOf(deps, accounts);
+  const [balances, holdings] = await Promise.all([
+    Promise.all(withSnapshotCash(accounts, before).map((account) => balanceOf(deps, account, projectedAsOf))),
+    valueHoldings(deps, accounts, context),
+  ]);
+  const settled = conversion.sameVersions(before, await snapshotsOf(deps, accounts));
+  return settled || attemptsLeft <= 1
+    ? { balances, holdings }
+    : readBalancesAndHoldings(deps, accounts, context, projectedAsOf, attemptsLeft - 1);
+};
+
 export const getAccountBalances = (
   deps: Deps,
   filter?: { account?: string; type?: AccountType; projectedAsOf?: string },
@@ -72,18 +116,17 @@ export const getAccountBalances = (
       ? [yield* resolutionToResult(resolveByName(candidates, filter.account), 'account')]
       : candidates;
 
-    const balances = await Promise.all(accounts.map((account) => balanceOf(deps, account, filter?.projectedAsOf)));
     const { baseCurrency, baseDecimals, context } = await loadValuationBasis(deps);
-    const valued = balances.map((b) =>
+    const read = await readBalancesAndHoldings(deps, accounts, context, filter?.projectedAsOf, MAX_SNAPSHOT_ATTEMPTS);
+    const valued = read.balances.map((b) =>
       valueAccount(b, baseCurrency, context.rates, context.now, baseDecimals, deps.rateStaleness),
     );
-    const holdings = await valueHoldings(deps, accounts, context);
 
     return ok({
-      balances: netWorth.withAccountHoldings(valued, holdings, baseCurrency, baseDecimals),
+      balances: netWorth.withAccountHoldings(valued, read.holdings, baseCurrency, baseDecimals),
       consolidatedNetWorth: netWorth.withHoldings(
         consolidateNetWorth(valued, baseCurrency, baseDecimals),
-        netWorth.holdings(holdings, baseCurrency, baseDecimals),
+        netWorth.holdings(read.holdings, baseCurrency, baseDecimals),
         baseDecimals,
       ),
     });
@@ -123,9 +166,9 @@ export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<Flo
     yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected(Remedy.enum.update_credit_card));
     yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected(Remedy.enum.create_credit_card));
     yield* guardRenameAvailable(deps, account, input.newName);
-    yield* guardPinnedFieldChange(deps, account.id, input);
 
     const raw = yield* okOr(await deps.accounts.findRawById(account.id), notFound('account', account.id, []));
+    yield* guardPinnedFieldChange(deps, account.id, input);
     const entity = mergeAccountPatch(raw, input);
 
     const locale = await deps.locale();
