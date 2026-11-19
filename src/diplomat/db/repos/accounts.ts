@@ -15,6 +15,7 @@ export type AccountsRepo = {
   findRawById: (id: string) => Promise<AccountEntity | null>;
   balanceParts: (accountId: string) => Promise<BalancePartsRow>;
   countReferences: (accountId: string) => Promise<AccountReferences>;
+  countEffectiveTransactions: (accountId: string) => Promise<number>;
 };
 
 const list = async ({ db, userId }: RepoScope): ReturnType<AccountsRepo['list']> => {
@@ -80,6 +81,19 @@ const balanceParts = async ({ db, userId }: RepoScope, accountId: string): Retur
   });
 };
 
+const countEffectiveTransactions = async (
+  { db, userId }: RepoScope,
+  accountId: string,
+): ReturnType<AccountsRepo['countEffectiveTransactions']> => {
+  const [row] = await db.all<{ total: number }>(sql`
+      SELECT COUNT(*) AS total FROM transactions t
+      WHERE ${ownedBy(userId, 't')}
+        AND (t.from_account_id = ${accountId} OR (t.type = ${TransactionType.enum.transfer} AND t.to_account_id = ${accountId}))
+        AND t.status = ${TransactionStatus.enum.effective}
+    `);
+  return Number(row?.total ?? 0);
+};
+
 const countReferences = async (
   { db, userId }: RepoScope,
   accountId: string,
@@ -123,6 +137,7 @@ export const accountsRepo = (db: Db, userId: string): AccountsRepo => {
     findRawById: (id) => findRawById(scope, id),
     balanceParts: (accountId) => balanceParts(scope, accountId),
     countReferences: (accountId) => countReferences(scope, accountId),
+    countEffectiveTransactions: (accountId) => countEffectiveTransactions(scope, accountId),
   };
 };
 

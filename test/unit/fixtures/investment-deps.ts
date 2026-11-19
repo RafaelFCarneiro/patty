@@ -50,6 +50,7 @@ export const investmentDeps = (world: InvestmentWorld = {}): Deps => {
       findById: async (id: string) => accounts.find((account) => account.id === id) ?? null,
       findRawById: async (id: string) => accounts.find((account) => account.id === id) ?? null,
       balanceParts: async () => world.activity?.movements ?? ZERO_PARTS,
+      countEffectiveTransactions: async () => world.activity?.transactions ?? 0,
       countReferences: async () => ({
         transactions: world.activity?.transactions ?? 0,
         recurring: 0,

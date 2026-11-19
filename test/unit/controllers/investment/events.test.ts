@@ -59,6 +59,14 @@ describe('openPosition', () => {
     expect((response as { warnings: string[] }).warnings).toHaveLength(1);
   });
 
+  it('reports no activity and no warning when the account has no effective transactions', async () => {
+    const { response } = await decidedWith(
+      openPosition(investmentDeps(world), { ...OPEN, remainingCash: 0 }),
+      stored('event-new'),
+    );
+    expect(response).toMatchObject({ warnings: [], existingActivity: { transactions: 0, net: 0 } });
+  });
+
   it('writes the account (cash, cash from before) and the opening in ONE batch, the account first', async () => {
     const { persist, response } = await decidedWith(
       openPosition(investmentDeps(world), { ...OPEN, remainingCash: 85 }),

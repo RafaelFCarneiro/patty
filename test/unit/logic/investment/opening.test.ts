@@ -78,6 +78,18 @@ describe('opening.plan', () => {
       expect(plan.warnings).toEqual([investmentWarnings.existingActivity(2, 750)]);
     });
 
+    it('rounds the reported net to the account decimals, in the response and the warning', () => {
+      const plan = opening
+        .plan(
+          facts({
+            activity: { transactions: 2, movements: { income: 0.1, expenses: 0, transfersIn: 0.2, transfersOut: 0 } },
+          }),
+        )
+        ._unsafeUnwrap();
+      expect(plan.existingActivity).toEqual({ transactions: 2, net: 0.3 });
+      expect(plan.warnings).toEqual([investmentWarnings.existingActivity(2, 0.3)]);
+    });
+
     it('does not warn when the account has no transactions', () => {
       const plan = opening.plan(facts())._unsafeUnwrap();
       expect(plan.existingActivity).toEqual({ transactions: 0, net: 0 });

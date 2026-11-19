@@ -46,13 +46,13 @@ const viewsOf = async (deps: Deps, events: readonly InvestmentEvent[]): Promise<
 };
 
 const gatherOpening = async (deps: Deps, input: OpenPositionInput, account: AccountEntity, asset: Asset) => {
-  const [existing, prices, decimals, accountDecimals, movements, references] = await Promise.all([
+  const [existing, prices, decimals, accountDecimals, movements, transactions] = await Promise.all([
     deps.investments.list({ accountId: account.id, assetId: asset.id }),
     deps.assetPrices.latest(),
     resolveDecimals(deps, asset.currency),
     resolveDecimals(deps, account.currency),
     deps.accounts.balanceParts(account.id),
-    deps.accounts.countReferences(account.id),
+    deps.accounts.countEffectiveTransactions(account.id),
   ]);
   return {
     id: deps.newId(),
@@ -64,7 +64,7 @@ const gatherOpening = async (deps: Deps, input: OpenPositionInput, account: Acco
     existingOpening: R.find(existing, investmentEvents.isOpening),
     decimals,
     accountDecimals,
-    activity: { transactions: references.transactions, movements },
+    activity: { transactions, movements },
   };
 };
 

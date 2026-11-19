@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { isUniqueConstraintViolation } from '../../../src/diplomat/db/sqlite-errors.js';
 import { accounts, assets, investmentEvents } from '../../../src/diplomat/db/schema.js';
@@ -14,55 +15,62 @@ let ctx: AppContext;
 beforeAll(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'patty-investment-events-'));
   ctx = await buildApp({ dbPath: join(tmpDir, 'test.db') });
+});
+
+afterAll(() => rmSync(tmpDir, { recursive: true, force: true }));
+
+const insertPosition = async (name: string) => {
+  const accountId = `acc-${name}`;
+  const assetId = `asset-${name}`;
   await ctx.db.insert(accounts).values({
-    id: 'acc-1',
-    name: 'Broker',
+    id: accountId,
+    name: `Broker ${name}`,
     type: 'investment',
     currency: 'USD',
     initialBalance: 0,
     userId: OWNER_USER_ID,
   });
   await ctx.db.insert(assets).values({
-    id: 'asset-1',
-    symbol: 'ZZ',
+    id: assetId,
+    symbol: name.toUpperCase(),
     exchange: 'ZZX',
-    name: 'Zed',
+    name,
     assetClass: 'stock',
     currency: 'USD',
     pricing: 'market',
   });
-});
-
-afterAll(() => rmSync(tmpDir, { recursive: true, force: true }));
-
-const event = (id: string, type: InvestmentEventType) => ({
-  id,
-  accountId: 'acc-1',
-  assetId: 'asset-1',
-  type,
-  date: '2026-11-01',
-  quantity: 1,
-  unitCost: 1,
-  idempotencyKey: `key-${id}`,
-  userId: OWNER_USER_ID,
-});
+  return (id: string, type: InvestmentEventType) => ({
+    id,
+    accountId,
+    assetId,
+    type,
+    date: '2026-11-01',
+    quantity: 1,
+    unitCost: 1,
+    idempotencyKey: `key-${id}`,
+    userId: OWNER_USER_ID,
+  });
+};
 
 describe('one opening per position, enforced by the database (ADR-038)', () => {
   it('refuses a second opening of the same account and asset with a unique violation', async () => {
-    await ctx.db.insert(investmentEvents).values(event('e1', InvestmentEventType.enum.opening));
-    const second = ctx.db.insert(investmentEvents).values(event('e2', InvestmentEventType.enum.opening));
+    const event = await insertPosition('dup');
+    await ctx.db.insert(investmentEvents).values(event('dup-1', InvestmentEventType.enum.opening));
+    const second = ctx.db.insert(investmentEvents).values(event('dup-2', InvestmentEventType.enum.opening));
     await expect(second).rejects.toSatisfy(isUniqueConstraintViolation);
   });
 
   it('does not limit the other event types: they are the schema’s room for step 2', async () => {
-    await ctx.db.insert(investmentEvents).values(event('e3', InvestmentEventType.enum.buy));
-    await ctx.db.insert(investmentEvents).values(event('e4', InvestmentEventType.enum.buy));
-    const rows = await ctx.db.select().from(investmentEvents);
-    expect(rows.map((row) => row.id).sort()).toEqual(['e1', 'e3', 'e4']);
+    const event = await insertPosition('buys');
+    await ctx.db.insert(investmentEvents).values(event('buys-1', InvestmentEventType.enum.buy));
+    await ctx.db.insert(investmentEvents).values(event('buys-2', InvestmentEventType.enum.buy));
+    const rows = await ctx.db.select().from(investmentEvents).where(eq(investmentEvents.accountId, 'acc-buys'));
+    expect(rows.map((row) => row.id).sort()).toEqual(['buys-1', 'buys-2']);
   });
 
   it('keeps the conversion state on the account: cash_before_holdings is nullable and starts null', async () => {
-    const [row] = await ctx.db.select().from(accounts);
+    await insertPosition('state');
+    const [row] = await ctx.db.select().from(accounts).where(eq(accounts.id, 'acc-state'));
     expect(row?.cashBeforeHoldings).toBeNull();
   });
 });

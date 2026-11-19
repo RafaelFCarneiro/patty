@@ -384,6 +384,20 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
       expect((await balancesOf('Brokerage M')).balances[0]).toMatchObject({ balance: 450 });
     });
 
+    it('counts only effective transactions: a pending one reports nothing and does not warn', async () => {
+      await tool('create_account', { name: 'Brokerage P', type: 'investment', currency: 'USD', initialBalance: 90 });
+      await tool('add_account_income', {
+        account: 'Brokerage P',
+        amount: 500,
+        description: 'Expected',
+        status: 'pending',
+      });
+      await asset('PPP');
+      const opened = await open('Brokerage P', 'PPP', 40);
+      expect(opened).toMatchObject({ warnings: [], existingActivity: { transactions: 0, net: 0 } });
+      expect((await balancesOf('Brokerage P')).balances[0]).toMatchObject({ balance: 40 });
+    });
+
     it('an account without activity answers as before: no warning, an empty activity', async () => {
       await tool('create_account', { name: 'Brokerage Q', type: 'investment', currency: 'USD', initialBalance: 90 });
       await asset('QQQ');

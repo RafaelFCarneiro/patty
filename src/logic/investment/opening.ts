@@ -73,9 +73,9 @@ const RULES: readonly OpeningRule[] = [
   [conflictsWithExistingOpening, refuseOpeningExists],
 ];
 
-const existingActivity = ({ activity }: OpeningFacts): OpeningPlan['existingActivity'] => ({
+const existingActivity = ({ activity, accountDecimals }: OpeningFacts): OpeningPlan['existingActivity'] => ({
   transactions: activity.transactions,
-  net: conversion.netMovement(activity.movements),
+  net: roundToDecimals(conversion.netMovement(activity.movements), accountDecimals),
 });
 
 const activityWarnings = (facts: OpeningFacts): string[] =>
