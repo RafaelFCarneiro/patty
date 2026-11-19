@@ -60,3 +60,18 @@ describe('conversion.afterDeletion — the cash comes back with the last event o
     });
   });
 });
+
+describe('conversion.isLastEvent — whatever its type, the event that is alone on its account', () => {
+  it('is true when the event is the only one on the account', () => {
+    expect(conversion.isLastEvent([{ id: 'a' }], 'a')).toBe(true);
+  });
+
+  it('is false while any other event remains, of any type', () => {
+    expect(conversion.isLastEvent([{ id: 'a' }, { id: 'b' }], 'a')).toBe(false);
+    expect(conversion.isLastEvent([{ id: 'b' }, { id: 'a' }], 'a')).toBe(false);
+  });
+
+  it('is true for an account with no events listed: nothing else remains', () => {
+    expect(conversion.isLastEvent([], 'a')).toBe(true);
+  });
+});

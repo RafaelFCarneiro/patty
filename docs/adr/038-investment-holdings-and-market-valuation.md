@@ -178,6 +178,7 @@ optional `discriminator`; a dividend is a transaction and uses the existing deri
        `open_position` (with the §7 conversion), `list_investment_events`, `update/delete_investment_event`,
        `get_portfolio`; `get_account_balances` includes holdings; manual assets; the `refresh_quotes` prompt.
 2. [ ] **Trades and income** (`feat/investment-events`): `buy`/`sell`/`split` with cash legs and the balance rule,
-       `record_dividend` (`transactions.asset_id`), realized P&L.
+       `record_dividend` (`transactions.asset_id`), realized P&L. Every investment event deletion updates the account;
+       the account's last event, whatever its type, restores `cash_before_holdings`.
 3. [ ] **Performance and reconciliation** (`feat/investment-performance`): `get_investment_performance`,
        `reconcile_holdings`, an investments dashboard.

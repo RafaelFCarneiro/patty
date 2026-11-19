@@ -6,6 +6,9 @@ export const afterOpening = (account: AccountConversion, remainingCash: number):
     account.cashBeforeHoldings ?? (account.initialBalance === remainingCash ? null : account.initialBalance),
 });
 
+export const isLastEvent = (events: readonly { id: string }[], eventId: string): boolean =>
+  events.every((event) => event.id === eventId);
+
 export const afterDeletion = (account: AccountConversion, isLastEvent: boolean): AccountAfterDeletion =>
   isLastEvent && account.cashBeforeHoldings !== null
     ? { initialBalance: account.cashBeforeHoldings, cashBeforeHoldings: null, restored: true }

@@ -135,7 +135,7 @@ const deleteOpening = (
       notFound('account', event.accountId, []),
     );
     const onAccount = await deps.investments.list({ accountId: event.accountId });
-    const after = conversion.afterDeletion(account, R.filter(onAccount, (other) => other.id !== event.id).length === 0);
+    const after = conversion.afterDeletion(account, conversion.isLastEvent(onAccount, event.id));
     const update = persistence.update({
       entity: ACCOUNT_ENTITY_TAG,
       model: { ...account, initialBalance: after.initialBalance, cashBeforeHoldings: after.cashBeforeHoldings },
