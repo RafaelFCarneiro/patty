@@ -86,7 +86,7 @@ const cashOf = async (name: string) => (await scoped.deps.accounts.findByName(na
 
 const cashBeforeOf = async (id: string) => (await scoped.deps.accounts.findRawById(id))?.cashBeforeHoldings;
 
-describe('open_position reads the account once and guards it (ADR-038 §7)', () => {
+describe('open_position reads the account once and guards it (Feature Design 023 §7)', () => {
   it('retries when the cash changes between read and write, and replaces the balance actually there', async () => {
     await createBroker('acc-race-1', 'Broker Race 1', 500);
 
@@ -180,7 +180,7 @@ const remove = (deps: Deps, id: string) =>
 
 const eventCount = async (accountId: string) => (await scoped.deps.investments.list({ accountId })).length;
 
-describe('a sibling opening and a deletion on one account conflict on its version (ADR-038 §7)', () => {
+describe('a sibling opening and a deletion on one account conflict on its version (Feature Design 023 §7)', () => {
   it('a deletion that lands while a sibling opens makes the sibling retry: nothing is double counted', async () => {
     await createBroker('acc-race-5', 'Broker Race 5', 700);
     const first = (await open(scoped.deps, 'Broker Race 5', 'AAA', 85))._unsafeUnwrap();

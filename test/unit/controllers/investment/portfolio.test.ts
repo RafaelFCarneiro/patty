@@ -130,7 +130,7 @@ describe('getPortfolio', () => {
   });
 });
 
-describe('getAccountBalances — holdings in balances and net worth (ADR-038 §6)', () => {
+describe('getAccountBalances — holdings in balances and net worth (Feature Design 023 §6)', () => {
   const invested = account({ initialBalance: 100 });
   const holdingsWorld = {
     accounts: [checking, invested],

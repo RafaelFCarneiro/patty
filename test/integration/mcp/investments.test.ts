@@ -47,7 +47,7 @@ type AssetRow = { symbol: string; price: number | null; stale: boolean; noPrice:
 
 const ASOF = '2026-11-18T21:00:00.000Z';
 
-describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
+describe('MCP integration > investment holdings (Feature Design 023 step 1)', () => {
   let client: Client;
   let transport: StreamableHTTPClientTransport;
 
@@ -407,7 +407,7 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
     });
   });
 
-  describe('the cash from before the holdings comes back with the account’s last event (ADR-038 §7)', () => {
+  describe('the cash from before the holdings comes back with the account’s last event (Feature Design 023 §7)', () => {
     const openOn = (account: string, asset: string, remainingCash: number) =>
       tool('open_position', { account, asset, quantity: 1, avgCost: 1, remainingCash }) as Promise<{ id: string }>;
 

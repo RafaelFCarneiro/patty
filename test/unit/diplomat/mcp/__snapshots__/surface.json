@@ -1428,7 +1428,7 @@
     {
       "name": "register_asset",
       "title": "Register asset",
-      "description": "Register something with a price: a stock, ETF, REIT (FII), BDR or fixed-income product, by symbol and exchange (e.g. NU on NYSE, KNCR11 on B3). `currency` is the quote currency; `pricing` is \"market\" (a public quote exists) or \"manual\" (the agent posts the value, e.g. a CDB). Idempotent on symbol + exchange: an asset already registered is returned unchanged (a new name only renames it) with a warning for any other field that differs. Assets are shared by every user of the instance. BTC and USDC are currencies, not assets: keep those as accounts in that currency. PATTY never fetches prices itself (local-first, zero external calls — ADR-026, ADR-038). The AI agent sources current quotes (or asks the user for a manually valued asset) and posts them with set_asset_prices; a price change is never a transaction, so cash-flow reports are untouched. ",
+      "description": "Register something with a price: a stock, ETF, REIT (FII), BDR or fixed-income product, by symbol and exchange (e.g. NU on NYSE, KNCR11 on B3). `currency` is the quote currency; `pricing` is \"market\" (a public quote exists) or \"manual\" (the agent posts the value, e.g. a CDB). Idempotent on symbol + exchange: an asset already registered is returned unchanged (a new name only renames it) with a warning for any other field that differs. Assets are shared by every user of the instance. BTC and USDC are currencies, not assets: keep those as accounts in that currency. PATTY never fetches prices itself (local-first, zero external calls — ADR-026, Feature Design 023). The AI agent sources current quotes (or asks the user for a manually valued asset) and posts them with set_asset_prices; a price change is never a transaction, so cash-flow reports are untouched. ",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1500,7 +1500,7 @@
     {
       "name": "list_assets",
       "title": "List assets",
-      "description": "Registered assets with their latest price, `priceAsOf`, `stale` and `noPrice`. Staleness is per pricing class: market quotes after PRICE_STALE_HOURS (default 72 h, so a Friday close is still fresh on Monday), manual values after MANUAL_PRICE_STALE_DAYS (default 31). Filter by `assetClass`, or pass `staleOnly` for the assets that need a fresh price. PATTY never fetches prices itself (local-first, zero external calls — ADR-026, ADR-038). The AI agent sources current quotes (or asks the user for a manually valued asset) and posts them with set_asset_prices; a price change is never a transaction, so cash-flow reports are untouched. ",
+      "description": "Registered assets with their latest price, `priceAsOf`, `stale` and `noPrice`. Staleness is per pricing class: market quotes after PRICE_STALE_HOURS (default 72 h, so a Friday close is still fresh on Monday), manual values after MANUAL_PRICE_STALE_DAYS (default 31). Filter by `assetClass`, or pass `staleOnly` for the assets that need a fresh price. PATTY never fetches prices itself (local-first, zero external calls — ADR-026, Feature Design 023). The AI agent sources current quotes (or asks the user for a manually valued asset) and posts them with set_asset_prices; a price change is never a transaction, so cash-flow reports are untouched. ",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1533,7 +1533,7 @@
     {
       "name": "set_asset_prices",
       "title": "Set asset prices (bulk)",
-      "description": "Post the price of ONE unit of each asset, in the asset currency, as of an ISO 8601 `asOf`. `asset` is a symbol, or EXCHANGE:SYMBOL when one symbol is quoted on two exchanges. Prices are kept as history (the newest `asOf` is the current one); a price for an instant already on file is revised. Partial success: an unknown asset fails only its own item — check each item's status. PATTY never fetches prices itself (local-first, zero external calls — ADR-026, ADR-038). The AI agent sources current quotes (or asks the user for a manually valued asset) and posts them with set_asset_prices; a price change is never a transaction, so cash-flow reports are untouched. ",
+      "description": "Post the price of ONE unit of each asset, in the asset currency, as of an ISO 8601 `asOf`. `asset` is a symbol, or EXCHANGE:SYMBOL when one symbol is quoted on two exchanges. Prices are kept as history (the newest `asOf` is the current one); a price for an instant already on file is revised. Partial success: an unknown asset fails only its own item — check each item's status. PATTY never fetches prices itself (local-first, zero external calls — ADR-026, Feature Design 023). The AI agent sources current quotes (or asks the user for a manually valued asset) and posts them with set_asset_prices; a price change is never a transaction, so cash-flow reports are untouched. ",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -3033,7 +3033,7 @@
       "name": "assets",
       "title": "Assets",
       "uri": "patty://assets",
-      "description": "All registered assets (stocks, ETFs, REITs, BDRs, fixed income) with their latest price, as_of and staleness — the same data list_assets returns. PATTY never fetches prices itself (ADR-038); read this to see which are missing or stale before refreshing them with set_asset_prices.",
+      "description": "All registered assets (stocks, ETFs, REITs, BDRs, fixed income) with their latest price, as_of and staleness — the same data list_assets returns. PATTY never fetches prices itself (Feature Design 023); read this to see which are missing or stale before refreshing them with set_asset_prices.",
       "mimeType": "application/json"
     },
     {

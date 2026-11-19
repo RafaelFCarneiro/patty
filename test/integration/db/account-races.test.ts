@@ -61,7 +61,7 @@ const remove = (deps: Deps, id: string) =>
     deleteInvestmentEvent(deps, { id }).map(accountAdapters.outcomeToDb).map(investmentAdapters.outcomeToDb),
   );
 
-describe('updateAccount reads the versioned account before it counts references (ADR-038 §7)', () => {
+describe('updateAccount reads the versioned account before it counts references (Feature Design 023 §7)', () => {
   it('an opening landing after the count conflicts with the update; the retry refuses the change', async () => {
     await createBroker('acc-u-1', 'Broker U1', 500);
     const racing: Deps = {
@@ -90,7 +90,7 @@ describe('updateAccount reads the versioned account before it counts references 
   });
 });
 
-describe('get_account_balances reads cash and holdings from one account version (ADR-038 §6)', () => {
+describe('get_account_balances reads cash and holdings from one account version (Feature Design 023 §6)', () => {
   it('an opening that lands between the cash read and the events read does not count the cash twice', async () => {
     await createBroker('acc-s-1', 'Broker S1', 500);
     let raced = false;

@@ -17,7 +17,7 @@ import * as valuation from '../../../../src/logic/investment/valuation.js';
 
 const { USD, BRL, BTC } = CurrencyCode.enum;
 
-describe('valuation.value — read-time valuation (ADR-038 §4)', () => {
+describe('valuation.value — read-time valuation (Feature Design 023 §4)', () => {
   const account = investmentAccount();
   const position = { accountId: 'acc-inv', assetId: 'asset-nu', quantity: 10, avgCost: 8 };
   const nu = nuAsset();

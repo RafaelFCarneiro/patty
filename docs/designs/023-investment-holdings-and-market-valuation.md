@@ -1,8 +1,9 @@
-# ADR-038: Investment holdings and market valuation
+# Feature Design 023: Investment holdings and market valuation
 
-**Status:** Accepted · **Date:** 2026-11-17 (accepted 2026-11-18) · **Deciders:** Rafael · **Extends ADR-026** (agent-sourced external data,
-read-time valuation) from currencies to assets. Keeps ADR-002 (transfers are one row, same currency), ADR-028
-(read-side correlation in controllers) and ADR-029 (domain-derived idempotency).
+**Type:** Feature design · **Design status:** Accepted · **Implementation status:** In progress — step 1 in review
+(`feat/investment-holdings`, #281) · **Date:** 2026-11-17 (accepted 2026-11-18) · Extends ADR-026 (agent-sourced
+external data, read-time valuation) from currencies to assets. Keeps ADR-002 (transfers are one row, same currency),
+ADR-028 (read-side correlation in controllers) and ADR-029 (domain-derived idempotency).
 
 ## Context
 
@@ -160,7 +161,7 @@ optional `discriminator`; a dividend is a transaction and uses the existing deri
   scale; balances already work this way.
 - **Trades as `transfer` transactions** (rejected): a buy is not a movement between two accounts' cash, and recording
   it as a transaction would put investment detail into the cash-flow tables that every summary reads.
-- **Price adjustments as income/expense** (today's workaround, rejected): the problem this ADR exists to remove.
+- **Price adjustments as income/expense** (today's workaround, rejected): the problem this design exists to remove.
 - **Crypto as an asset class** (rejected): BTC/USDC are already currencies with rates; two models would double-count.
 - **Latest-only prices like `currency_rates`** (rejected for prices): period performance needs the price at the start
   of the period. Rate history stays out of scope here (see Consequences).
@@ -172,7 +173,7 @@ optional `discriminator`; a dividend is a transaction and uses the existing deri
   rule gains the trade cash legs, documented in `docs/architecture.md`.
 - New configuration: `PRICE_STALE_HOURS`, `MANUAL_PRICE_STALE_DAYS`.
 - Base-currency period performance uses today's rate for both ends of the period until rate history exists; the
-  report says so (`fxBasis: "current"`). Exact FX attribution over time is a later ADR.
+  report says so (`fxBasis: "current"`). Exact FX attribution over time is a later design.
 - Out of scope, not blocked: taxes (Brazilian capital gains, exemptions, DARF), options and derivatives, broker
   integrations, intraday prices, cross-currency trades.
 
@@ -187,3 +188,25 @@ optional `discriminator`; a dividend is a transaction and uses the existing deri
        the account's last event, whatever its type, restores `cash_before_holdings`.
 3. [ ] **Performance and reconciliation** (`feat/investment-performance`): `get_investment_performance`,
        `reconcile_holdings`, an investments dashboard.
+
+## Implementation prompt
+
+Implement this design in the steps of its Plan, one branch each, behind the full gate. Read
+`docs/architecture.md`, `docs/write-path.md` and the canonical docs first (CLAUDE.md).
+
+1. **`feat/investment-holdings`** — §1–§7 as the Plan's step 1: `assets`, `asset_prices`, `investment_events` with
+   `opening` only; the conversion on the account (`accounts.cash_before_holdings`, one opening per position,
+   `remainingCash` as the resulting balance); the MCP tools and the `refresh_quotes` prompt; `get_account_balances`
+   with holdings; tenancy rows (shared assets and prices, owned events). Tests per behavior; `docs/mcp-tools.md`.
+2. **`feat/investment-events`** — `buy`/`sell`/`split` with cash legs and the balance rule, `record_dividend`
+   (`transactions.asset_id`), realized P&L; deleting any investment event updates the account, and the account's last
+   event restores `cash_before_holdings`. Touches the balance rule and the schema: also run the independent
+   verification subagent.
+3. **`feat/investment-performance`** — `get_investment_performance`, `reconcile_holdings`, an investments dashboard.
+
+Constraints throughout: positions are derived, never stored; a missing price or rate is `null` and excluded, never 0;
+a price change never writes a transaction; effects are described by the flows and executed by the runner.
+
+### Finish (every push)
+Run the Definition of Done (CLAUDE.md): the self-review pass + the gate
+(`lint && typecheck && test:all && build`), and report the result before pushing.

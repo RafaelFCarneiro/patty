@@ -122,7 +122,7 @@ const account: Account = {
 
 const accountEntity: AccountEntity = { ...account, cashBeforeHoldings: null, version: 3 };
 
-describe('cashBeforeHoldings — the account’s conversion state (ADR-038 §7)', () => {
+describe('cashBeforeHoldings — the account’s conversion state (Feature Design 023 §7)', () => {
   it('is read from the row onto the entity, and written back from it', () => {
     const entity = accountAdapters.dbToEntity(sqlRow({ cashBeforeHoldings: 700 }));
     expect(entity.cashBeforeHoldings).toBe(700);

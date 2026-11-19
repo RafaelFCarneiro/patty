@@ -14,7 +14,7 @@ import * as valuation from '../../../../src/logic/investment/valuation.js';
 
 const { BRL, USD } = CurrencyCode.enum;
 
-describe('holdings in balances and net worth (ADR-038 §6)', () => {
+describe('holdings in balances and net worth (Feature Design 023 §6)', () => {
   const account = investmentAccount();
   const nu = nuAsset();
   const valued = valuation.value(

@@ -52,7 +52,7 @@ const insertPosition = async (name: string) => {
   });
 };
 
-describe('one opening per position, enforced by the database (ADR-038)', () => {
+describe('one opening per position, enforced by the database (Feature Design 023)', () => {
   it('refuses a second opening of the same account and asset with a unique violation', async () => {
     const event = await insertPosition('dup');
     await ctx.db.insert(investmentEvents).values(event('dup-1', InvestmentEventType.enum.opening));

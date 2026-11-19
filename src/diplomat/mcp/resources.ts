@@ -71,7 +71,7 @@ const exchangeRatesResource: ResourceDefinition = {
 
 const assetsDescription =
   'All registered assets (stocks, ETFs, REITs, BDRs, fixed income) with their latest price, as_of and staleness — ' +
-  `the same data list_assets returns. ${PRODUCT_NAME} never fetches prices itself (ADR-038); read this to see ` +
+  `the same data list_assets returns. ${PRODUCT_NAME} never fetches prices itself (Feature Design 023); read this to see ` +
   'which are missing or stale before refreshing them with set_asset_prices.';
 
 const assetsResource: ResourceDefinition = {

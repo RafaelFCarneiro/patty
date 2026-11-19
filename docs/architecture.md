@@ -174,22 +174,22 @@ currency_rates      (id PK, from_code FK→currencies, to_code FK→currencies, 
                      itself (local-first, ADR-004/005); ADR-026 Phase 2)
 assets              (id PK, symbol, exchange, name, asset_class: stock|etf|reit|bdr|fixed_income,
                      currency FK→currencies — the quote currency —, pricing: market|manual, version —
-                     UNIQUE(symbol, exchange); shared reference data, no owner; ADR-038)
+                     UNIQUE(symbol, exchange); shared reference data, no owner; Feature Design 023)
 asset_prices        (id PK, asset_id FK→assets, price REAL — one unit, in the asset currency —, as_of TEXT —
                      canonical UTC, so the text order is the time order —, source TEXT?, version —
                      UNIQUE(asset_id, as_of); a HISTORY (period performance needs the start price), the
-                     latest is the newest as_of; agent-supplied like rates — the backend never fetches; ADR-038)
+                     latest is the newest as_of; agent-supplied like rates — the backend never fetches; Feature Design 023)
 accounts            (id PK, name, type: checking|savings|wallet|investment|credit,
                      initial_balance, currency FK→currencies, cash_before_holdings REAL? — the initial_balance the
-                     account held before it held positions, ADR-038 §7; never on an `Account` response —, user_id, version)
+                     account held before it held positions, Feature Design 023 §7; never on an `Account` response —, user_id, version)
 investment_events   (id PK, user_id NOT NULL, account_id FK→accounts, asset_id FK→assets,
-                     type: opening|buy|sell|split — the flows accept only `opening` until ADR-038 step 2 —,
+                     type: opening|buy|sell|split — the flows accept only `opening` until Feature Design 023 step 2 —,
                      date, quantity REAL, unit_cost REAL — per unit, in the asset currency; the average cost
                      for an opening —, idempotency_key, note?, version —
                      UNIQUE(user_id, idempotency_key), UNIQUE(user_id, account_id, asset_id) WHERE type = 'opening'
                      (one opening per position, enforced by the database),
                      INDEX (user_id, account_id), (asset_id); a position (account × asset) is DERIVED by a
-                     pure fold of these in date order, never stored; ADR-038)
+                     pure fold of these in date order, never stored; Feature Design 023)
 credit_cards        (id PK, name, currency FK, closing_day, due_day, limit_amount?,
                      account_id FK→accounts, payment_account_id FK→accounts, user_id, version)
 categories          (id PK, name, kind: expense|income|both, parent_id FK→self, names JSON?,
@@ -293,7 +293,7 @@ can read every user's data. **user_id** is on every user-owned row; the map says
 | **Owned** | `accounts`, `credit_cards`, `bills`, `transactions`, `tags`, `budgets`, `recurring_rules`, `investment_events` (`user_id` NOT NULL, FK RESTRICT); `user_settings` (PK, FK CASCADE); `transaction_tags` (via its parents) | Reads see only the user's rows; writes are stamped with and confined to the user. |
 | **Shared default** | `categories` (the seeded `cat-*`), `merchant_category` `origin = rule`, `dashboards` `source = file` (`user_id` NULL) | Every read returns *shared + own*; nobody can rename or delete one (`SHARED_DEFAULT_READ_ONLY_MESSAGE`, `models/tenancy.ts`, one validation error from every tool and route). A dashboard saved under a default's name is the user's own copy and replaces the default for them alone. |
 | **Infrastructure** | `change_events` (ADR-036 §1) | Entity tags announced between the processes that share the file; never data. Not owned and not a shared default: no `Deps` repo, no applier, no controller or logic access, not in `Tenancy` — only `diplomat/db/change-events.ts` (the `ChangeLogStore`, with its row decoding in `adapters/change-events.ts`) and the composition root's wiring (`composition/change-log.ts`) touch it. Its `user_id` only says whose change a row announces (nullable, no foreign key); isolation is the relay's local publish plus `/ui/events`' per-user filter. `test/integration/tenancy/table-classification.test.ts` lists it in an explicit infrastructure allow-list with that reason, and fails when any table is unclassified or domain code names it. |
-| **Shared dictionary / reference** | `merchants`, `currencies`, `currency_rates`, `assets`, `asset_prices` (ADR-038), `settings` (singleton: the sign-in cap and the instance kind) | No owner. Any signed-in user with write scope refreshes exchange rates and asset prices and registers assets (market data: one `NU` on `NYSE` and one price series per instance); a change to one is heard by every user's stream (`SHARED_ENTITY_TAGS`: `currency_rate`, `asset`, `asset_price`). The merchant dictionary is never listed across users. A user's **holdings** (`investment_events`) are owned: scoped repo, scoped applier. |
+| **Shared dictionary / reference** | `merchants`, `currencies`, `currency_rates`, `assets`, `asset_prices` (Feature Design 023), `settings` (singleton: the sign-in cap and the instance kind) | No owner. Any signed-in user with write scope refreshes exchange rates and asset prices and registers assets (market data: one `NU` on `NYSE` and one price series per instance); a change to one is heard by every user's stream (`SHARED_ENTITY_TAGS`: `currency_rate`, `asset`, `asset_price`). The merchant dictionary is never listed across users. A user's **holdings** (`investment_events`) are owned: scoped repo, scoped applier. |
 
 **`depsFor(principal)` / `runEffectsFor(principal)`.** The composition root (`composition/runtime.ts`) builds, per request and
 by partial application, a `Deps` whose repos are already bound to `principal.userId` (`accountsRepo(db, userId)` …),
@@ -469,7 +469,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     applied migrations, `diplomat/db/safety-copy.ts` snapshots it with `VACUUM INTO` while holding SQLite's write lock — `migration-barrier.ts`'s `applyPendingMigrationsHolding` applies the pending migrations in that same `BEGIN IMMEDIATE` transaction (mirroring drizzle's libsql migrator and its `__drizzle_migrations` rows), so no other writer — even a process on an older release — can commit between the snapshot and the migration and be missing from the backup. The snapshot is written, encrypted under the same key, to `<DB_PATH>.pre-<migration>.bak` (standalone, mode `0600`,
     path logged to stderr); a brand-new database gets none. The copy and the migration run under a cross-process lock (`diplomat/db/migration-lock.ts`: an `EXCLUSIVE` transaction on a companion SQLite file `<DB_PATH>.migrate.lock` — OS-owned, so atomic and released when its holder dies), and "is it still pending?" is re-asked once the lock is held — so several stdio servers starting at once can neither interleave their copies nor back up an already-migrated file.
 
-24. **Holdings (ADR-038).**
+24. **Holdings (Feature Design 023).**
     - A position (account × asset) is derived from its investment events and never stored (`logic/investment/positions.ts`).
     - Prices are agent-supplied market data: the backend never fetches them, and a price change never writes a
       transaction, so cash-flow reports never see a market move.
@@ -490,7 +490,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
       opening.
     - An account with investment events cannot be deleted or change type or currency; an account without positions
       answers exactly as before.
-    - Until ADR-038 step 2, only `opening` events exist.
+    - Until Feature Design 023 step 2, only `opening` events exist.
 
 ## Authentication (ADR-033)
 
@@ -804,7 +804,7 @@ write the `patty` entry, claim an owner, sign in or open a database; the flags e
 
 ## Tool surface
 
-63 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — `list_budgets`/`get_budget_status` (Feature Design 015) now have REST parity (`GET /api/budgets`, `GET /api/budgets/status`); `create_budget`/`update_budget`/`delete_budget` and `find_correlations` (Feature Design 016) are MCP-only for now, no REST mirror yet. `set/list_exchange_rates` and `set_base_currency` (ADR-026 Phase 2) have full REST parity (`GET`/`POST /api/exchange-rates`, `POST /api/exchange-rates/bulk`, `GET /api/preferences`, `POST /api/settings/base-currency`). The holdings tools (ADR-038 step 1: `register_asset`, `list_assets`, `set_asset_prices`, `open_position`, `list_investment_events`, `update_investment_event`, `delete_investment_event`, `get_portfolio`) are MCP-only for now, no REST mirror yet. Client connections: `docs/mcp-clients.md`.
+63 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — `list_budgets`/`get_budget_status` (Feature Design 015) now have REST parity (`GET /api/budgets`, `GET /api/budgets/status`); `create_budget`/`update_budget`/`delete_budget` and `find_correlations` (Feature Design 016) are MCP-only for now, no REST mirror yet. `set/list_exchange_rates` and `set_base_currency` (ADR-026 Phase 2) have full REST parity (`GET`/`POST /api/exchange-rates`, `POST /api/exchange-rates/bulk`, `GET /api/preferences`, `POST /api/settings/base-currency`). The holdings tools (Feature Design 023 step 1: `register_asset`, `list_assets`, `set_asset_prices`, `open_position`, `list_investment_events`, `update_investment_event`, `delete_investment_event`, `get_portfolio`) are MCP-only for now, no REST mirror yet. Client connections: `docs/mcp-clients.md`.
 
 **Scopes:** every tool declares `annotations.readOnlyHint` and needs `patty:read` (read-only) or `patty:write` (`docs/mcp-tools.md` § Scopes per tool). Over HTTP the scopes are the request's principal's; over stdio they are the signed-in credential's (a read-only stdio sign-in is refused a write tool with `insufficient_scope`), and an explicit `PATTY_AUTH=disabled` run is the owner with every scope. Resources and prompts need `patty:read`.
 
@@ -995,7 +995,7 @@ Preferred remeda helpers (canonical `code-quality.md` § Declarative over impera
   `composition/`, `main.ts`, `config.ts`. ESM with NodeNext: relative imports end in `.js`.
 - A domain with more than one file in a layer gets a folder in that layer and its files drop the folder's name:
   `logic/demo/plan.ts`, `logic/demo/database.ts` (not `logic/demo.ts`, `logic/demo-database.ts`); likewise
-  `controllers/auth/`, `models/demo/`; the holdings domain (ADR-038) is `logic/investment/{positions,idempotency,opening,events,valuation,net-worth,asset}.ts`, `models/investment/{core,asset}.ts` and `controllers/investment/{assets,events,portfolio}.ts`. A layer holds only what it is for: types live in `models/` (`controllers/deps.ts`, the dependency ports file, is the one exception), so `logic/` and `controllers/` hold functions and constants.
+  `controllers/auth/`, `models/demo/`; the holdings domain (Feature Design 023) is `logic/investment/{positions,idempotency,opening,events,valuation,net-worth,asset}.ts`, `models/investment/{core,asset}.ts` and `controllers/investment/{assets,events,portfolio}.ts`. A layer holds only what it is for: types live in `models/` (`controllers/deps.ts`, the dependency ports file, is the one exception), so `logic/` and `controllers/` hold functions and constants.
 - Tests live under `test/unit/` and `test/integration/` in a mirrored path, never colocated (the vitest configs scan only
   those folders, so `src/**/*.test.ts` silently never runs). Every `logic/` function has a mirrored
   `test/unit/logic/*.test.ts`; shared fixtures are in `test/unit/fixtures/`.
@@ -1050,4 +1050,4 @@ Preferred remeda helpers (canonical `code-quality.md` § Declarative over impera
 - ADR-034: authentication on by default (`PATTY_AUTH=required` everywhere), terminal owner claim inside `setup`, and browser sign-in for stdio sessions with chosen expiry; revises ADR-033 §1 (accepted; step 1 — auth by default, `setup`/`auth setup`/`auth reset-password`, PAT expiry without "never" — and step 2 — stdio sign-in, `login`/`logout`, `/ui/connect`, the startup version guard — are implemented)
 - ADR-035: rename to PATTY and go public — new names for the package, binary, image, data directory, keychain and environment variables, with generic `key import` / `db import` as the way to move an install and no compatibility code (accepted; all steps done — `key import` / `db import`, `key export` behind an administrator's password, interactive only, with a confirmation, and the move of the author's install with the old package and image deleted)
 - ADR-036: live update across processes — the database is the transport: a `change_events` table, `@rfc0/effect-runner` 0.6's relayed `ChangeBus` and polling relay over PATTY's SQLite `ChangeLogStore` (steps 1 and 2 — dashboard tag lists, stream recovery and resync; the table, the store, the wiring, retention — implemented)
-- ADR-038: investment holdings and market valuation — shared `assets` and `asset_prices` (agent-refreshed, with history), owned `investment_events`, positions derived by a pure fold and valued at read time, net worth including holdings (accepted; step 1 — holdings, prices, valuation, net worth, `refresh_quotes` — in progress)
+- Feature Design 023: investment holdings and market valuation — shared `assets` and `asset_prices` (agent-refreshed, with history), owned `investment_events`, positions derived by a pure fold and valued at read time, net worth including holdings (accepted; step 1 — holdings, prices, valuation, net worth, `refresh_quotes` — in progress)

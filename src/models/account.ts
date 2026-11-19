@@ -94,7 +94,7 @@ export const AccountBalanceSchema = AccountSchema.extend({
     'Read-time valuation of balance in the base currency (ADR-026); absent when no exchange rate is on file',
   ),
   holdings: AccountHoldingsSchema.optional().describe(
-    'Only on an investment account with positions (ADR-038): its cash balance, the market value of its holdings in ' +
+    'Only on an investment account with positions (Feature Design 023): its cash balance, the market value of its holdings in ' +
       'the base currency, and their total. `balance` stays the cash balance',
   ),
 });
@@ -111,7 +111,7 @@ export const ConsolidatedNetWorthSchema = z.object({
     .array(Id)
     .describe('Account ids left out of total because no exchange rate is on file for their currency'),
   holdings: NetWorthHoldingsSchema.optional().describe(
-    'Only when an account holds positions (ADR-038): the market value of the holdings, already part of `total`, and ' +
+    'Only when an account holds positions (Feature Design 023): the market value of the holdings, already part of `total`, and ' +
       'the positions left out of it (no price or no exchange rate)',
   ),
 });

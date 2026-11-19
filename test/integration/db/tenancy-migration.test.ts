@@ -357,7 +357,8 @@ describe('migration 0021 — tenancy data', () => {
         .map((config) => config.name);
     // Identity tables also have a user_id (a login's owner, not tenancy) and are not tenant data; so does
     // `change_events` (ADR-036 infrastructure: whose change a row announces, no owner, no scoped repo).
-    // `investment_events` (ADR-038) is owned but born after this migration with `user_id NOT NULL`: nothing to backfill
+    // `investment_events` (Feature Design 023) is owned but born after this migration with `user_id NOT NULL`:
+    // nothing to backfill
     // or check at 0021, so it is not in the migration's own table lists (the table-classification suite covers it).
     const IDENTITY = ['sessions', 'access_tokens', 'client_grants', 'invites', 'change_events', 'investment_events'];
 

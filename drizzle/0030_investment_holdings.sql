@@ -1,4 +1,4 @@
--- ADR-038 step 1: shared assets and price history, owned investment events (a position is derived from them, never stored).
+-- Feature Design 023 step 1: shared assets and price history, owned investment events (a position is derived from them, never stored).
 CREATE TABLE `asset_prices` (
 	`id` text PRIMARY KEY NOT NULL,
 	`asset_id` text NOT NULL,
