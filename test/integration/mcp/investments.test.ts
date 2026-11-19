@@ -335,6 +335,64 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
     expect(after.balances[0]!.holdings).toBeUndefined();
   });
 
+  describe('remainingCash is the balance after: existing activity is offset, not double-counted', () => {
+    const asset = async (symbol: string) => {
+      await registerNu(symbol);
+      await tool('set_asset_prices', { prices: [{ asset: symbol, price: 10, asOf: ASOF }] });
+    };
+    const open = (account: string, symbol: string, remainingCash: number) =>
+      tool('open_position', { account, asset: symbol, quantity: 100, avgCost: 9, remainingCash }) as Promise<{
+        id: string;
+        warnings: string[];
+        existingActivity: { transactions: number; net: number };
+      }>;
+
+    it('a funded account: +1000 transferred in, remainingCash 0 → cash 0, net worth is the holdings only', async () => {
+      await tool('create_account', { name: 'Checking F', type: 'checking', currency: 'USD', initialBalance: 5000 });
+      await tool('create_account', { name: 'Brokerage F', type: 'investment', currency: 'USD', initialBalance: 0 });
+      await tool('create_transfer', { from: 'Checking F', to: 'Brokerage F', amount: 1000, description: 'fund' });
+      await asset('FFF');
+      expect((await balancesOf('Brokerage F')).balances[0]).toMatchObject({ balance: 1000 });
+
+      const opened = await open('Brokerage F', 'FFF', 0);
+      expect(opened.existingActivity).toEqual({ transactions: 1, net: 1000 });
+      expect(opened.warnings).toHaveLength(1);
+
+      expect((await balancesOf('Brokerage F')).balances[0]).toMatchObject({
+        balance: 0,
+        holdings: { cashBalance: 0, holdingsValue: 1000, total: 1000 },
+      });
+
+      await tool('delete_investment_event', { id: opened.id });
+      const restored = (await balancesOf('Brokerage F')).balances[0];
+      expect(restored).toMatchObject({ balance: 1000 });
+      expect(restored!.holdings).toBeUndefined();
+    });
+
+    it('income and expenses that recorded market moves are offset the same way, and restored', async () => {
+      await tool('create_account', { name: 'Brokerage M', type: 'investment', currency: 'USD', initialBalance: 200 });
+      await tool('add_account_income', { account: 'Brokerage M', amount: 300, description: 'Rendimentos' });
+      await tool('add_account_expense', { account: 'Brokerage M', amount: 50, description: 'Ajuste' });
+      await asset('MMM');
+      expect((await balancesOf('Brokerage M')).balances[0]).toMatchObject({ balance: 450 });
+
+      const opened = await open('Brokerage M', 'MMM', 85);
+      expect(opened.existingActivity).toEqual({ transactions: 2, net: 250 });
+      expect((await balancesOf('Brokerage M')).balances[0]).toMatchObject({ balance: 85 });
+
+      await tool('delete_investment_event', { id: opened.id });
+      expect((await balancesOf('Brokerage M')).balances[0]).toMatchObject({ balance: 450 });
+    });
+
+    it('an account without activity answers as before: no warning, an empty activity', async () => {
+      await tool('create_account', { name: 'Brokerage Q', type: 'investment', currency: 'USD', initialBalance: 90 });
+      await asset('QQQ');
+      const opened = await open('Brokerage Q', 'QQQ', 40);
+      expect(opened).toMatchObject({ warnings: [], existingActivity: { transactions: 0, net: 0 } });
+      expect((await balancesOf('Brokerage Q')).balances[0]).toMatchObject({ balance: 40 });
+    });
+  });
+
   describe('the cash from before the holdings comes back with the account’s last event (ADR-038 §7)', () => {
     const openOn = (account: string, asset: string, remainingCash: number) =>
       tool('open_position', { account, asset, quantity: 1, avgCost: 1, remainingCash }) as Promise<{ id: string }>;

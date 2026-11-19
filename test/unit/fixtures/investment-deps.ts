@@ -5,7 +5,7 @@ import type { Deps } from '../../../src/controllers/deps.js';
 import type { AccountEntity } from '../../../src/models/account.js';
 import type { AssetEntity, AssetPriceEntity } from '../../../src/models/investment/asset.js';
 import type { CurrencyRateEntity } from '../../../src/models/currency-rate.js';
-import type { InvestmentEventEntity } from '../../../src/models/investment/core.js';
+import type { AccountActivity, InvestmentEventEntity } from '../../../src/models/investment/core.js';
 import { Locale } from '../../../src/models/locale.js';
 import { type CurrencyCode } from '../../../src/models/money.js';
 import { SEEDED_CURRENCIES } from './currencies.js';
@@ -18,6 +18,8 @@ export type InvestmentWorld = {
   prices?: AssetPriceEntity[];
   events?: InvestmentEventEntity[];
   rates?: CurrencyRateEntity[];
+  /** What every account already holds in activity: the transaction count and the movements they add up to. */
+  activity?: AccountActivity;
   baseCurrency?: CurrencyCode | null;
   /** The ids handed out by `newId`, in order. */
   ids?: string[];
@@ -47,7 +49,13 @@ export const investmentDeps = (world: InvestmentWorld = {}): Deps => {
       list: async () => accounts,
       findById: async (id: string) => accounts.find((account) => account.id === id) ?? null,
       findRawById: async (id: string) => accounts.find((account) => account.id === id) ?? null,
-      balanceParts: async () => ZERO_PARTS,
+      balanceParts: async () => world.activity?.movements ?? ZERO_PARTS,
+      countReferences: async () => ({
+        transactions: world.activity?.transactions ?? 0,
+        recurring: 0,
+        cards: 0,
+        investmentEvents: events.length,
+      }),
     } as unknown as Deps['accounts'],
     assets: {
       list: async () => assets,

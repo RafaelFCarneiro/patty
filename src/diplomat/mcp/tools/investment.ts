@@ -105,8 +105,12 @@ const openPositionTool = defineTool({
       'Convert a static investment account into a holding: record the quantity of an asset held in an ' +
       'investment account, at an average cost (default: the latest price, with a warning that P&L starts there; ' +
       'with no price either the call is refused — set a price or give avgCost). `remainingCash` (default 0) ' +
-      "becomes the account's initialBalance in the SAME write, so the old static value and the holding are never " +
-      'counted together; the account remembers the cash it held before, which comes back with its last event. One opening ' +
+      "is the account's cash balance AFTER the conversion: the account's starting balance is set in the SAME " +
+      'write so that balance equals it, whatever activity the account already has (existing transactions are ' +
+      'offset, not erased; the response reports `existingActivity`). Delete entries that only recorded market ' +
+      'moves (e.g. "Rendimentos" adjustments) BEFORE converting: they are not money and would stay in ' +
+      'cash-flow reports. The account remembers its earlier starting balance, which comes back with its last ' +
+      'event. One opening ' +
       `per account and asset (enforced by the database): edit it with ${T.update_investment_event}. Not a ` +
       'transaction — nothing here touches spending summaries. Positions are derived from events, never stored; ' +
       `read them with ${T.get_portfolio}.`,

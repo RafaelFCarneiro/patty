@@ -42,6 +42,23 @@ const OPEN = { account: 'Nu Holdings (NYSE:NU)', asset: 'NU', quantity: 10, avgC
 describe('openPosition', () => {
   const world = { accounts: [account({ initialBalance: 500 })], assets: [asset()], ids: ['event-new'] };
 
+  it('gathers the account’s activity and sets its cash so the balance equals remainingCash', async () => {
+    const activity = {
+      transactions: 3,
+      movements: { income: 0, expenses: 0, transfersIn: 1000, transfersOut: 0 },
+    };
+    const { persist, response } = await decidedWith(
+      openPosition(investmentDeps({ ...world, accounts: [account({ initialBalance: 0 })], activity }), {
+        ...OPEN,
+        remainingCash: 0,
+      }),
+      stored('event-new'),
+    );
+    expect(persist[0]).toMatchObject({ model: { initialBalance: -1000, cashBeforeHoldings: 0 } });
+    expect(response).toMatchObject({ existingActivity: { transactions: 3, net: 1000 } });
+    expect((response as { warnings: string[] }).warnings).toHaveLength(1);
+  });
+
   it('writes the account (cash, cash from before) and the opening in ONE batch, the account first', async () => {
     const { persist, response } = await decidedWith(
       openPosition(investmentDeps(world), { ...OPEN, remainingCash: 85 }),
@@ -84,6 +101,7 @@ describe('openPosition', () => {
       costBasis: 80,
       warnings: [],
       created: true,
+      existingActivity: { transactions: 0, net: 0 },
     });
   });
 

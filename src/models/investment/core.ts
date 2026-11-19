@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
-import type { Account, AccountEntity } from '../account.js';
+import type { Account, AccountEntity, PendingParts } from '../account.js';
 import {
   AssetClass,
   AssetPricing,
@@ -54,8 +54,8 @@ export const OpenPositionSchema = z.object({
     .nonnegative()
     .optional()
     .describe(
-      'Cash that stays in the account after the conversion; sets the account initialBalance in the same write so the ' +
-        'old static value and the holding are never counted together. Default 0',
+      'The account cash balance after the conversion; the starting balance is set in the same write so the balance ' +
+        'equals it whatever activity the account already has. Default 0',
     ),
   note: z.string().min(1).optional().describe('Free-text note'),
 });
@@ -113,6 +113,12 @@ export const OpenPositionResultSchema = InvestmentEventViewSchema.extend({
   created: z
     .boolean()
     .describe('False when the same opening was already recorded: the id is then the stored event’s, nothing changed'),
+  existingActivity: z
+    .object({
+      transactions: z.number().int().describe('Transactions already on the account'),
+      net: z.number().describe('Their net movement (income − expenses ± transfers), in the account currency'),
+    })
+    .describe('What the account already held in activity: the cash was set so the balance still equals remainingCash'),
 });
 export type OpenPositionResult = z.infer<typeof OpenPositionResultSchema>;
 
@@ -241,6 +247,10 @@ export const investmentErrors = {
 export const investmentWarnings = {
   costFromPrice: (asset: string, price: number, asOf: string): string =>
     `no avgCost given: P&L for ${asset} starts at the latest price (${price} as of ${asOf})`,
+  existingActivity: (transactions: number, net: number): string =>
+    `the account already has ${transactions} transaction(s), net ${net}: ` +
+    'its cash was set so the balance equals remainingCash. ' +
+    'Entries that recorded market moves are not money; delete them so they do not stay in cash-flow reports',
 };
 
 export type PositionState = Pick<Position, 'quantity' | 'avgCost'>;
@@ -259,7 +269,11 @@ export type OpeningFacts = {
   price: AssetPrice | undefined;
   existingOpening: InvestmentEvent | undefined;
   decimals: number;
+  accountDecimals: number;
+  activity: AccountActivity;
 };
+
+export type AccountActivity = { transactions: number; movements: PendingParts };
 
 export type OpeningPlan = {
   event: InvestmentEvent;
@@ -268,6 +282,7 @@ export type OpeningPlan = {
   cashBeforeHoldings: number | null;
   warnings: string[];
   recordedBefore: InvestmentEvent | null;
+  existingActivity: OpenPositionResult['existingActivity'];
 };
 
 export type CostResolution = { unitCost: number; warnings: string[] };

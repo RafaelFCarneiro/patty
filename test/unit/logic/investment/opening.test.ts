@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AccountType } from '../../../../src/models/account.js';
 import { investmentErrors, investmentWarnings, type OpeningFacts } from '../../../../src/models/investment/core.js';
-import { FRESH, investmentAccount, nuAsset, openingEvent, priceOf } from '../../fixtures/investment.js';
+import { FRESH, NO_ACTIVITY, investmentAccount, nuAsset, openingEvent, priceOf } from '../../fixtures/investment.js';
 import * as idempotency from '../../../../src/logic/investment/idempotency.js';
 import * as opening from '../../../../src/logic/investment/opening.js';
 
@@ -15,6 +15,7 @@ describe('opening.plan', () => {
     price: undefined,
     existingOpening: undefined,
     decimals: 2,
+    ...NO_ACTIVITY,
     ...overrides,
   });
 
@@ -49,6 +50,44 @@ describe('opening.plan', () => {
     expect(plan(500)).toMatchObject({ initialBalance: 0, cashBeforeHoldings: 500 });
     expect(plan(85, 85)).toMatchObject({ initialBalance: 85, cashBeforeHoldings: null });
     expect(plan(85, 0, 700)).toMatchObject({ initialBalance: 0, cashBeforeHoldings: 700 });
+  });
+
+  describe('an account that already has activity — remainingCash is the balance after', () => {
+    const active = (remainingCash: number | undefined, transactions = 2) =>
+      opening
+        .plan(
+          facts({
+            account: investmentAccount({ initialBalance: 100, cashBeforeHoldings: null }),
+            input: { account: 'x', asset: 'NU', quantity: 1, avgCost: 1, remainingCash },
+            activity: {
+              transactions,
+              movements: { income: 1000, expenses: 250, transfersIn: 0, transfersOut: 0 },
+            },
+          }),
+        )
+        ._unsafeUnwrap();
+
+    it('sets the starting balance to remainingCash minus the net movements, remembering the old one', () => {
+      expect(active(85)).toMatchObject({ initialBalance: -665, cashBeforeHoldings: 100 });
+      expect(active(undefined)).toMatchObject({ initialBalance: -750, cashBeforeHoldings: 100 });
+    });
+
+    it('reports the activity it offset, and warns about it', () => {
+      const plan = active(0);
+      expect(plan.existingActivity).toEqual({ transactions: 2, net: 750 });
+      expect(plan.warnings).toEqual([investmentWarnings.existingActivity(2, 750)]);
+    });
+
+    it('does not warn when the account has no transactions', () => {
+      const plan = opening.plan(facts())._unsafeUnwrap();
+      expect(plan.existingActivity).toEqual({ transactions: 0, net: 0 });
+      expect(plan.warnings).toEqual([]);
+    });
+
+    it('carries the activity into the response', () => {
+      const plan = active(0);
+      expect(opening.result(plan, investmentAccount(), nuAsset(), 2).existingActivity).toEqual(plan.existingActivity);
+    });
   });
 
   it('does not let the account’s cash change the idempotency key', () => {
@@ -142,6 +181,7 @@ describe('opening rules — the first one violated refuses, in order', () => {
     price: undefined,
     existingOpening: undefined,
     decimals: 2,
+    ...NO_ACTIVITY,
     ...overrides,
   });
 
@@ -186,6 +226,7 @@ describe('the unit cost — the given one, else the latest price, else refused',
     price,
     existingOpening: undefined,
     decimals: 2,
+    ...NO_ACTIVITY,
   });
   const quote = priceOf(nuAsset(), 13.2, FRESH);
 
@@ -225,6 +266,7 @@ describe('opening.resolveResponse — the response is built from what the write 
         price: undefined,
         existingOpening: undefined,
         decimals: 2,
+        ...NO_ACTIVITY,
       })
       ._unsafeUnwrap(),
     investmentAccount(),
@@ -263,6 +305,7 @@ describe('opening.plan — the same opening recorded again is safe by design (AD
     price: undefined,
     existingOpening: existing,
     decimals: 2,
+    ...NO_ACTIVITY,
     ...overrides,
   });
 

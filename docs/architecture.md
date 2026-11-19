@@ -479,7 +479,8 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     - Correlating events, assets, prices, rates and balances is controller work over each repo's own table (ADR-028);
       the fold, valuation and consolidation are pure (`controllers/investment/portfolio.ts`).
     - `open_position` and the deletion of an opening always update the account, in the same batch as the event, so the
-      old static balance and the holding are never both counted (`logic/investment/conversion.ts`).
+      old static balance and the holding are never both counted (`logic/investment/conversion.ts`); `remainingCash` is
+      the balance after, so `initialBalance` offsets the activity the account already has.
     - The account remembers the cash it held before its holdings, and gets it back with its last investment event,
       whatever its type; one account version means a sibling opening and a deletion conflict and retry.
     - A balance read takes an investment account's cash and its holdings from one account version, and repeats the

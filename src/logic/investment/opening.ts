@@ -73,13 +73,29 @@ const RULES: readonly OpeningRule[] = [
   [conflictsWithExistingOpening, refuseOpeningExists],
 ];
 
+const existingActivity = ({ activity }: OpeningFacts): OpeningPlan['existingActivity'] => ({
+  transactions: activity.transactions,
+  net: conversion.netMovement(activity.movements),
+});
+
+const activityWarnings = (facts: OpeningFacts): string[] =>
+  facts.activity.transactions > 0
+    ? [investmentWarnings.existingActivity(facts.activity.transactions, existingActivity(facts).net)]
+    : [];
+
 const buildOpeningPlan = (facts: OpeningFacts, { unitCost, warnings }: CostResolution): OpeningPlan => {
   const event = openingEvent(facts, unitCost);
   return {
     event,
     idempotencyKey: idempotency.deriveKey(event, facts.decimals),
-    ...conversion.afterOpening(facts.account, facts.input.remainingCash ?? 0),
-    warnings,
+    ...conversion.afterOpening(
+      facts.account,
+      facts.input.remainingCash ?? 0,
+      facts.activity.movements,
+      facts.accountDecimals,
+    ),
+    warnings: [...warnings, ...activityWarnings(facts)],
+    existingActivity: existingActivity(facts),
     recordedBefore: facts.existingOpening ?? null,
   };
 };
@@ -103,6 +119,7 @@ export const result = (
     costBasis: roundToDecimals(effective.quantity * effective.unitCost, decimals),
     warnings: plan.warnings,
     created: plan.recordedBefore === null,
+    existingActivity: plan.existingActivity,
   };
 };
 

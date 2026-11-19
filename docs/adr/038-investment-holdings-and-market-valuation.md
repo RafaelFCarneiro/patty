@@ -102,9 +102,14 @@ redemption a `sell` (realized P&L included). A valuation update is a price, so i
 ### 7. Moving existing accounts
 
 `open_position` converts an account: the agent gives asset and quantity (and average cost, defaulting to the current
-price when unknown, with a warning that P&L starts from there), and the account's `initialBalance` is set to the
-remaining broker cash (default 0) **in the same batch**, so the old static value and the new holdings are never
-counted together. Accounts that are not converted keep today's balance-only behavior.
+price when unknown, with a warning that P&L starts from there). `remainingCash` (default 0) is the account's cash
+balance **after** the conversion: the account's `initialBalance` is set to `remainingCash` minus the net movement of
+the transactions the account already has (income − expenses ± transfers), **in the same batch**, so the computed
+balance equals `remainingCash` and the old static value and the new holdings are never counted together. Existing
+activity is offset, not erased: the response reports it (`existingActivity`) and warns, because entries that only
+recorded market moves are not money and should be deleted before converting, or they stay in cash-flow reports.
+The remembered cash (below) is the previous `initialBalance`, so deleting the last event restores the account exactly.
+Accounts that are not converted keep today's balance-only behavior.
 
 The conversion is **reversible**, and its state belongs to the **account**, not to any one opening: `accounts.cash_before_holdings` remembers the `initialBalance` the account held before it held positions (null when none was remembered). `open_position` always writes the account (an update, so its version moves even when the cash stays) and, when `cash_before_holdings` is null and the opening changes `initialBalance`, remembers the balance it is replacing; later openings keep what is remembered. Deleting an opening is allowed in any order and always writes the account too; only when the deleted event is the account's **last** investment event does `initialBalance` become `cash_before_holdings` (if not null), which is then cleared, in the same batch — the response says so with `restoredCash`. Because every opening and every deletion updates the same account version, a concurrent sibling opening and a deletion conflict and retry, so the remembered cash can never be given back while a position it stood for is still held. Deleting the last event does overwrite a later edit of `initialBalance` with the remembered value — the agent adjusts it afterwards with `update_account` if needed. Deleting any other event type never touches the account. (An earlier cut stored `replaced_cash` per opening and refused deleting an opening that had replaced cash while others remained; it could deadlock two openings that both changed the cash, and it left a race with a concurrent sibling, so the state moved to the account.) The account's `type` and `currency` are pinned while it has investment events, since the remembered cash and the holdings are tied to them. **One opening per position is enforced by the database**, not only by the flow's pre-check: a partial unique index on `(user_id, account_id, asset_id) WHERE type = 'opening'`; a concurrent second `open_position` that loses the race is retried by the engine (`VersionConflict`) and re-reads the winner's opening: an identical request is answered as the same opening (`created: false`), a different one gets the ordinary "already has an opening" validation error, never a 500.
 

@@ -110,3 +110,8 @@ export const valuationContext = (overrides: Partial<ValuationContext> = {}): Val
   ...THRESHOLDS,
   ...overrides,
 });
+
+export const NO_ACTIVITY = {
+  accountDecimals: 2,
+  activity: { transactions: 0, movements: { income: 0, expenses: 0, transfersIn: 0, transfersOut: 0 } },
+};
