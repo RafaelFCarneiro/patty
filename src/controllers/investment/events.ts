@@ -1,6 +1,6 @@
 import { ok, type ResultAsync, safeTry, type Result } from 'neverthrow';
 import * as R from 'remeda';
-import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
+import type { FlowOutcome, Persistable, PersistOutcome } from '@rfc0/effect-runner';
 import type { AppError } from '../../common/errors.js';
 import { okOr } from '../../common/result.js';
 import * as persistence from '../../logic/persistence.js';
@@ -57,7 +57,7 @@ const gatherOpening = async (deps: Deps, input: OpenPositionInput, account: Acco
     account,
     asset,
     price: assetRules.latestPrice(prices, asset.id),
-    hasOpening: existing.some(investmentEvents.isOpening),
+    existingOpening: R.find(existing, investmentEvents.isOpening),
     decimals,
   };
 };
@@ -85,10 +85,16 @@ export const openPosition = (
       model: plan.event,
       idempotencyKey: plan.idempotencyKey,
     });
-    return ok({
-      persist: [remainingCashWrite(snapshot, plan), event],
-      response: opening.result(plan, snapshot, asset, facts.decimals),
-    });
+    const planned = opening.result(plan, snapshot, asset, facts.decimals);
+    return ok(
+      plan.recordedBefore
+        ? { persist: [], response: planned }
+        : {
+            persist: [remainingCashWrite(snapshot, plan), event],
+            response: (outcomes: PersistOutcome[]) =>
+              opening.resolveResponse(planned, persistence.outcomeFor(INVESTMENT_EVENT_ENTITY_TAG, outcomes)),
+          },
+    );
   });
 
 export const listInvestmentEvents = (

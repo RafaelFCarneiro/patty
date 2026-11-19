@@ -1,5 +1,5 @@
 import type { ResultAsync } from 'neverthrow';
-import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
+import type { FlowOutcome, Persistable, PersistOutcome } from '@rfc0/effect-runner';
 import type { AppError } from '../../../src/common/errors.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import type { AccountEntity } from '../../../src/models/account.js';
@@ -103,4 +103,15 @@ export const decided = async <T>(
 ): Promise<{ persist: Persistable[]; response: T }> => {
   const { persist, response } = (await flow)._unsafeUnwrap();
   return { persist, response: response as T };
+};
+
+export const decidedWith = async <T>(
+  flow: ResultAsync<FlowOutcome<T>, AppError>,
+  outcomes: PersistOutcome[],
+): Promise<{ persist: Persistable[]; response: T }> => {
+  const { persist, response } = (await flow)._unsafeUnwrap();
+  return {
+    persist,
+    response: typeof response === 'function' ? (response as (o: PersistOutcome[]) => T)(outcomes) : response,
+  };
 };

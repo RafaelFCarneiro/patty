@@ -113,6 +113,9 @@ export type InvestmentEventView = z.infer<typeof InvestmentEventViewSchema>;
 export const OpenPositionResultSchema = InvestmentEventViewSchema.extend({
   costBasis: z.number().describe('quantity × avgCost, in the asset currency'),
   warnings: z.array(z.string()).describe('Things the caller should know, e.g. P&L starting at the latest price'),
+  created: z
+    .boolean()
+    .describe('False when the same opening was already recorded: the id is then the stored event’s, nothing changed'),
 });
 export type OpenPositionResult = z.infer<typeof OpenPositionResultSchema>;
 
@@ -257,7 +260,7 @@ export type OpeningFacts = {
   account: Pick<Account, 'id' | 'name' | 'type' | 'initialBalance'>;
   asset: Asset;
   price: AssetPrice | undefined;
-  hasOpening: boolean;
+  existingOpening: InvestmentEvent | undefined;
   decimals: number;
 };
 
@@ -266,6 +269,7 @@ export type OpeningPlan = {
   idempotencyKey: string;
   initialBalance: number;
   warnings: string[];
+  recordedBefore: InvestmentEvent | null;
 };
 
 export type CostResolution = { unitCost: number; warnings: string[] };

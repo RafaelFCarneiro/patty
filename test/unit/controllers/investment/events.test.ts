@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PersistOp } from '@rfc0/effect-runner';
+import { PersistOp, type PersistOutcome } from '@rfc0/effect-runner';
 import {
   deleteInvestmentEvent,
   listInvestmentEvents,
@@ -16,7 +16,7 @@ import {
   investmentErrors,
   type InvestmentEventEntity,
 } from '../../../../src/models/investment/core.js';
-import { decided, investmentDeps } from '../../fixtures/investment-deps.js';
+import { decided, decidedWith, investmentDeps } from '../../fixtures/investment-deps.js';
 import { investmentAccount, kncrAsset, NOW, nuAsset, openingEvent, priceOf } from '../../fixtures/investment.js';
 import * as idempotency from '../../../../src/logic/investment/idempotency.js';
 
@@ -32,13 +32,21 @@ const eventEntity = (overrides: Partial<InvestmentEventEntity> = {}): Investment
   ...overrides,
 });
 
+const stored = (id: string, applied = true): PersistOutcome[] => [
+  { entity: ACCOUNT_ENTITY_TAG, applied: true },
+  { entity: INVESTMENT_EVENT_ENTITY_TAG, applied, read: id },
+];
+
 const OPEN = { account: 'Nu Holdings (NYSE:NU)', asset: 'NU', quantity: 10, avgCost: 8 };
 
 describe('openPosition', () => {
   const world = { accounts: [account({ initialBalance: 500 })], assets: [asset()], ids: ['event-new'] };
 
   it('writes the account’s remaining cash and the opening event in ONE batch, the cash first', async () => {
-    const { persist, response } = await decided(openPosition(investmentDeps(world), { ...OPEN, remainingCash: 85 }));
+    const { persist, response } = await decidedWith(
+      openPosition(investmentDeps(world), { ...OPEN, remainingCash: 85 }),
+      stored('event-new'),
+    );
     expect(persist).toEqual([
       {
         op: PersistOp.enum.update,
@@ -77,6 +85,7 @@ describe('openPosition', () => {
       replacedCash: 500,
       costBasis: 80,
       warnings: [],
+      created: true,
     });
   });
 
@@ -109,12 +118,23 @@ describe('openPosition', () => {
       ...world,
       prices: [{ ...priceOf(nuAsset(), 13.2, '2026-11-18T12:00:00.000Z'), version: 0 }],
     });
-    const { persist, response } = await decided(
+    const { persist, response } = await decidedWith(
       openPosition(deps, { account: OPEN.account, asset: 'NU', quantity: 10 }),
+      stored('event-new'),
     );
     expect(persist[1]).toMatchObject({ model: { unitCost: 13.2 } });
     expect(response.warnings).toHaveLength(1);
     expect(response.warnings[0]).toContain('P&L for NYSE:NU starts at the latest price (13.2');
+  });
+
+  it('answers from the outcome: the stored event’s id, created true for a new opening', async () => {
+    const { response } = await decidedWith(openPosition(investmentDeps(world), OPEN), stored('event-new'));
+    expect(response).toMatchObject({ id: 'event-new', created: true });
+  });
+
+  it('answers a duplicate with the surviving event’s id and created false, not the id it minted', async () => {
+    const { response } = await decidedWith(openPosition(investmentDeps(world), OPEN), stored('event-first', false));
+    expect(response).toMatchObject({ id: 'event-first', created: false });
   });
 
   it('is refused with no average cost and no price, writing nothing', async () => {
@@ -140,6 +160,15 @@ describe('openPosition', () => {
       query: 'ZZZ',
       candidates: ['NYSE:NU'],
     });
+  });
+
+  it('records the same opening again as a no-op: nothing written, the stored event’s id, created false', async () => {
+    const deps = investmentDeps({ ...world, events: [eventEntity({ id: 'stored' })] });
+    const { persist, response } = await decided(
+      openPosition(deps, { ...OPEN, date: '2026-11-01', quantity: 10, avgCost: 8 }),
+    );
+    expect(persist).toEqual([]);
+    expect(response).toMatchObject({ id: 'stored', created: false });
   });
 
   it('is refused for a second opening of the same account and asset: edit the first instead', async () => {

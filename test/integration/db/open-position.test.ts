@@ -112,3 +112,42 @@ describe('open_position reads the account once and guards it (ADR-038 §7)', () 
     expect(await cashOf('Broker Race 3')).toBe(85);
   });
 });
+
+/** Both flows pass the pre-check before either writes — the race of two identical requests. */
+const bothReadBeforeEitherWrites = (): (() => Deps) => {
+  let arrived = 0;
+  let release: () => void = () => undefined;
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return () => ({
+    ...scoped.deps,
+    investments: {
+      ...scoped.deps.investments,
+      list: async (filter) => {
+        const existing = await scoped.deps.investments.list(filter);
+        arrived += 1;
+        if (arrived === 2) release();
+        await barrier;
+        return existing;
+      },
+    },
+  });
+};
+
+describe('two identical open_position calls at once are safe by design (ADR-029)', () => {
+  it('stores one opening and answers both calls with its id, one created and one not', async () => {
+    await createBroker('acc-race-4', 'Broker Race 4', 0);
+    const deps = bothReadBeforeEitherWrites();
+    const [first, second] = await Promise.all([
+      open(deps(), 'Broker Race 4', 'BBB', 0),
+      open(deps(), 'Broker Race 4', 'BBB', 0),
+    ]);
+    const answers = [first._unsafeUnwrap(), second._unsafeUnwrap()];
+
+    const stored = await scoped.deps.investments.list({ accountId: 'acc-race-4' });
+    expect(stored).toHaveLength(1);
+    expect(answers.map((answer) => answer.id)).toEqual([stored[0]!.id, stored[0]!.id]);
+    expect(answers.map((answer) => answer.created).sort()).toEqual([false, true]);
+  });
+});

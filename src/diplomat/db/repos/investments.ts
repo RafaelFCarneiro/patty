@@ -44,4 +44,4 @@ export const investmentsRepo = (db: Db, userId: string): InvestmentsRepo => {
 };
 
 export const investmentEventApplier = (userId: string): EntityApplier =>
-  uniqueViolationAsConflict(ownedTableApplier(investmentEvents, userId));
+  uniqueViolationAsConflict(ownedTableApplier(investmentEvents, userId, { readBack: async (_tx, id) => id }));

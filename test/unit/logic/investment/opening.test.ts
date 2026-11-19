@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AccountType } from '../../../../src/models/account.js';
 import { investmentErrors, investmentWarnings, type OpeningFacts } from '../../../../src/models/investment/core.js';
-import { FRESH, investmentAccount, nuAsset, priceOf } from '../../fixtures/investment.js';
+import { FRESH, investmentAccount, nuAsset, openingEvent, priceOf } from '../../fixtures/investment.js';
 import * as investmentEvents from '../../../../src/logic/investment/events.js';
 import * as idempotency from '../../../../src/logic/investment/idempotency.js';
 import * as opening from '../../../../src/logic/investment/opening.js';
@@ -14,7 +14,7 @@ describe('opening.plan', () => {
     account: investmentAccount(),
     asset: nuAsset(),
     price: undefined,
-    hasOpening: false,
+    existingOpening: undefined,
     decimals: 2,
     ...overrides,
   });
@@ -127,9 +127,9 @@ describe('opening.plan', () => {
   });
 
   it('is refused for a second opening of the same account and asset', () => {
-    expect(opening.plan(facts({ hasOpening: true }))._unsafeUnwrapErr()).toEqual(
-      investmentErrors.openingExists('Nu Holdings (NYSE:NU)', 'NYSE:NU'),
-    );
+    expect(
+      opening.plan(facts({ existingOpening: openingEvent({ id: 'old', quantity: 99 }) }))._unsafeUnwrapErr(),
+    ).toEqual(investmentErrors.openingExists('Nu Holdings (NYSE:NU)', 'NYSE:NU'));
   });
 
   it('builds the result with the cost basis rounded to the asset currency’s decimals', () => {
@@ -157,7 +157,7 @@ describe('opening.plan — the cash it replaces, which deleting the opening give
         account: investmentAccount({ initialBalance: cash }),
         asset: nuAsset(),
         price: undefined,
-        hasOpening: false,
+        existingOpening: undefined,
         decimals: 2,
       })
       ._unsafeUnwrap().event;
@@ -183,27 +183,37 @@ describe('opening rules — the first one violated refuses, in order', () => {
     account: investmentAccount(),
     asset: nuAsset(),
     price: undefined,
-    hasOpening: false,
+    existingOpening: undefined,
     decimals: 2,
     ...overrides,
   });
 
   it('an account that is not an investment account is refused before the opening is even looked at', () => {
     const refused = opening
-      .plan(facts({ account: investmentAccount({ type: AccountType.enum.savings }), hasOpening: true }))
+      .plan(
+        facts({
+          account: investmentAccount({ type: AccountType.enum.savings }),
+          existingOpening: openingEvent({ id: 'old', quantity: 99 }),
+        }),
+      )
       ._unsafeUnwrapErr();
     expect(refused).toEqual(investmentErrors.notInvestmentAccount('Nu Holdings (NYSE:NU)', 'savings'));
   });
 
   it('an existing opening is refused once the account is fine', () => {
-    expect(opening.plan(facts({ hasOpening: true }))._unsafeUnwrapErr()).toEqual(
-      investmentErrors.openingExists('Nu Holdings (NYSE:NU)', 'NYSE:NU'),
-    );
+    expect(
+      opening.plan(facts({ existingOpening: openingEvent({ id: 'old', quantity: 99 }) }))._unsafeUnwrapErr(),
+    ).toEqual(investmentErrors.openingExists('Nu Holdings (NYSE:NU)', 'NYSE:NU'));
   });
 
   it('a rule violation wins over a missing cost', () => {
     const refused = opening
-      .plan(facts({ input: { account: 'x', asset: 'NU', quantity: 1 }, hasOpening: true }))
+      .plan(
+        facts({
+          input: { account: 'x', asset: 'NU', quantity: 1 },
+          existingOpening: openingEvent({ id: 'old', quantity: 99 }),
+        }),
+      )
       ._unsafeUnwrapErr();
     expect(refused).toMatchObject({ code: 'validation', issues: [expect.stringContaining('already has an opening')] });
   });
@@ -217,7 +227,7 @@ describe('the unit cost — the given one, else the latest price, else refused',
     account: investmentAccount(),
     asset: nuAsset(),
     price,
-    hasOpening: false,
+    existingOpening: undefined,
     decimals: 2,
   });
   const quote = priceOf(nuAsset(), 13.2, FRESH);
@@ -242,6 +252,94 @@ describe('the unit cost — the given one, else the latest price, else refused',
   it('is refused with neither', () => {
     expect(opening.plan(facts({ account: 'x', asset: 'NU', quantity: 1 }))._unsafeUnwrapErr()).toEqual(
       investmentErrors.noPriceNoCost('NYSE:NU'),
+    );
+  });
+});
+
+describe('opening.resolveResponse — the response is built from what the write reported', () => {
+  const planned = opening.result(
+    opening
+      .plan({
+        id: 'minted',
+        today: '2026-11-18',
+        input: { account: 'x', asset: 'NU', quantity: 1, avgCost: 1 },
+        account: investmentAccount(),
+        asset: nuAsset(),
+        price: undefined,
+        existingOpening: undefined,
+        decimals: 2,
+      })
+      ._unsafeUnwrap(),
+    investmentAccount(),
+    nuAsset(),
+    2,
+  );
+
+  it('carries the stored event’s id and created true for a new opening', () => {
+    expect(
+      opening.resolveResponse(planned, { entity: 'investment_event', applied: true, read: 'minted' }),
+    ).toMatchObject({
+      id: 'minted',
+      created: true,
+    });
+  });
+
+  it('carries the surviving event’s id, not the minted one, and created false for a duplicate', () => {
+    expect(
+      opening.resolveResponse(planned, { entity: 'investment_event', applied: false, read: 'survivor' }),
+    ).toMatchObject({ id: 'survivor', created: false });
+  });
+
+  it('refuses an outcome that names no event', () => {
+    expect(() => opening.resolveResponse(planned, { entity: 'investment_event', applied: true })).toThrow();
+  });
+});
+
+describe('opening.plan — the same opening recorded again is safe by design (ADR-029)', () => {
+  const existing = openingEvent({ id: 'stored', date: '2026-11-01', quantity: 10, unitCost: 8, replacedCash: 500 });
+  const again = (input: Partial<OpeningFacts['input']> = {}, overrides: Partial<OpeningFacts> = {}): OpeningFacts => ({
+    id: 'minted',
+    today: '2026-11-18',
+    input: { account: 'x', asset: 'NU', quantity: 10, avgCost: 8, date: '2026-11-01', ...input },
+    account: investmentAccount(),
+    asset: nuAsset(),
+    price: undefined,
+    existingOpening: existing,
+    decimals: 2,
+    ...overrides,
+  });
+
+  it('plans the stored opening itself, not a new one, with its id in the response and created false', () => {
+    const plan = opening.plan(again())._unsafeUnwrap();
+    expect(plan.recordedBefore).toEqual(existing);
+    const response = opening.result(plan, investmentAccount(), nuAsset(), 2);
+    expect(response).toMatchObject({ id: 'stored', created: false, replacedCash: 500 });
+  });
+
+  it('a first opening has nothing recorded before it and is created', () => {
+    const plan = opening.plan(again({}, { existingOpening: undefined }))._unsafeUnwrap();
+    expect(plan.recordedBefore).toBeNull();
+    expect(opening.result(plan, investmentAccount(), nuAsset(), 2)).toMatchObject({ id: 'minted', created: true });
+  });
+
+  it('recognizes it when the cost comes from the latest price, if that is the stored cost', () => {
+    const priced = again({ avgCost: undefined }, { price: priceOf(nuAsset(), 8, FRESH) });
+    expect(opening.plan(priced)._unsafeUnwrap().recordedBefore).toEqual(existing);
+  });
+
+  it.each([
+    ['quantity', { quantity: 11 }],
+    ['cost', { avgCost: 9 }],
+    ['date', { date: '2026-11-02' }],
+  ])('a different %s is another opening, refused while one exists', (_field, change) => {
+    expect(opening.plan(again(change))._unsafeUnwrapErr()).toEqual(
+      investmentErrors.openingExists('Nu Holdings (NYSE:NU)', 'NYSE:NU'),
+    );
+  });
+
+  it('with no cost and no price it cannot be the same opening, so it is refused as a second one', () => {
+    expect(opening.plan(again({ avgCost: undefined }))._unsafeUnwrapErr()).toEqual(
+      investmentErrors.openingExists('Nu Holdings (NYSE:NU)', 'NYSE:NU'),
     );
   });
 });

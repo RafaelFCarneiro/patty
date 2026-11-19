@@ -1,6 +1,8 @@
+import type { PersistOutcome } from '@rfc0/effect-runner';
 import { err, ok, type Result } from 'neverthrow';
 import * as R from 'remeda';
 import { AccountType, type Account } from '../../models/account.js';
+import { Id } from '../../models/id.js';
 import {
   InvestmentEventType,
   investmentErrors,
@@ -24,15 +26,8 @@ const isNotInvestmentAccount = ({ account }: OpeningFacts): boolean => account.t
 const refuseNotInvestmentAccount = ({ account }: OpeningFacts): InvestmentError =>
   investmentErrors.notInvestmentAccount(account.name, account.type);
 
-const alreadyHasOpening = ({ hasOpening }: OpeningFacts): boolean => hasOpening;
-
 const refuseOpeningExists = ({ account, asset }: OpeningFacts): InvestmentError =>
   investmentErrors.openingExists(account.name, assetRules.label(asset));
-
-const RULES: readonly OpeningRule[] = [
-  [isNotInvestmentAccount, refuseNotInvestmentAccount],
-  [alreadyHasOpening, refuseOpeningExists],
-];
 
 const givenCost = ({ input }: OpeningFacts): CostResolution | undefined =>
   input.avgCost === undefined ? undefined : { unitCost: input.avgCost, warnings: [] };
@@ -63,10 +58,34 @@ const openingEvent = (facts: OpeningFacts, unitCost: number, replacedCash: numbe
   replacedCash,
 });
 
+const isRecordedAgain = (facts: OpeningFacts): boolean => {
+  const cost = givenCost(facts) ?? costFromLatestPrice(facts);
+  return (
+    facts.existingOpening !== undefined &&
+    cost !== undefined &&
+    idempotency.deriveKey(openingEvent(facts, cost.unitCost, null), facts.decimals) ===
+      idempotency.deriveKey(facts.existingOpening, facts.decimals)
+  );
+};
+
+const conflictsWithExistingOpening = (facts: OpeningFacts): boolean =>
+  facts.existingOpening !== undefined && !isRecordedAgain(facts);
+
+const RULES: readonly OpeningRule[] = [
+  [isNotInvestmentAccount, refuseNotInvestmentAccount],
+  [conflictsWithExistingOpening, refuseOpeningExists],
+];
+
 const buildOpeningPlan = (facts: OpeningFacts, { unitCost, warnings }: CostResolution): OpeningPlan => {
   const initialBalance = facts.input.remainingCash ?? 0;
   const event = openingEvent(facts, unitCost, cashReplaced(facts.account, initialBalance));
-  return { event, idempotencyKey: idempotency.deriveKey(event, facts.decimals), initialBalance, warnings };
+  return {
+    event,
+    idempotencyKey: idempotency.deriveKey(event, facts.decimals),
+    initialBalance,
+    warnings,
+    recordedBefore: facts.existingOpening ?? null,
+  };
 };
 
 export const plan = (facts: OpeningFacts): Result<OpeningPlan, InvestmentError> => {
@@ -82,7 +101,14 @@ export const result = (
   asset: Asset,
   decimals: number,
 ): OpenPositionResult => ({
-  ...investmentEvents.view(plan.event, account, asset),
+  ...investmentEvents.view(plan.recordedBefore ?? plan.event, account, asset),
   costBasis: roundToDecimals(plan.event.quantity * plan.event.unitCost, decimals),
   warnings: plan.warnings,
+  created: plan.recordedBefore === null,
+});
+
+export const resolveResponse = (planned: OpenPositionResult, outcome: PersistOutcome): OpenPositionResult => ({
+  ...planned,
+  id: Id.parse(outcome.read),
+  created: outcome.applied,
 });
