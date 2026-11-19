@@ -2392,9 +2392,10 @@ function handleAppDataChanged(entities) {
     // currency_rate/userSettings included because the net-worth badge's consolidatedNetWorth is
     // computed from the base currency (user_settings.base_currency) and every stored exchange rate
     // (ADR-026) — omitting them would leave the badge stale after a rate or home-currency update
-    // until some unrelated entity change happened to trigger a refetch.
+    // until some unrelated entity change happened to trigger a refetch. asset_price/investment_event:
+    // the badge reads /api/accounts/balances, where holdings are valued from prices and positions.
     var affected = entities.some(function(tag) {
-        return ['transaction', 'account', 'category', 'recurring', 'currency_rate', 'userSettings', 'creditCard', 'bill'].indexOf(tag) !== -1;
+        return ['transaction', 'account', 'category', 'recurring', 'currency_rate', 'userSettings', 'creditCard', 'bill', 'asset_price', 'investment_event'].indexOf(tag) !== -1;
     });
     if (affected) {
         console.log("overview refetching due to entity change:", entities);

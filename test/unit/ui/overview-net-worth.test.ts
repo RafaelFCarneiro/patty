@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
+import { ASSET_PRICE_ENTITY_TAG } from '../../../src/models/investment/asset.js';
+import { INVESTMENT_EVENT_ENTITY_TAG } from '../../../src/models/investment/core.js';
 
 // ui/dashboards/overview.html is a plain browser-global fragment script (no build step, no module
 // system — see ui/money.js's own header comment for the same reasoning), so renderNetWorth() can't
@@ -270,6 +272,20 @@ describe('handleAppDataChanged (ui/dashboards/overview.html)', () => {
 
     expect(callCount).toBe(3);
   });
+
+  it.each([ASSET_PRICE_ENTITY_TAG, INVESTMENT_EVENT_ENTITY_TAG])(
+    'refetches on a %s change (holdings are valued in the balances)',
+    (tag) => {
+      const { sandbox } = loadOverviewSandbox();
+      let callCount = 0;
+      sandbox.loadDashboardData = () => {
+        callCount += 1;
+      };
+      (sandbox.handleAppDataChanged as (entities: string[]) => void)([tag]);
+
+      expect(callCount).toBe(1);
+    },
+  );
 
   it('ignores entity tags the net-worth badge does not depend on', () => {
     const { sandbox } = loadOverviewSandbox();
