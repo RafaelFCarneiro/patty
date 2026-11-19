@@ -316,6 +316,19 @@ describe('opening.plan — the same opening recorded again is safe by design (AD
     expect(response).toMatchObject({ id: 'stored', created: false, replacedCash: 500 });
   });
 
+  it('answers wholly from the stored event: a repeat at 8.004 against a stored 8 reports avgCost 8 and costBasis 80', () => {
+    const plan = opening.plan(again({ avgCost: 8.004 }))._unsafeUnwrap();
+    expect(plan.recordedBefore).toEqual(existing);
+    expect(opening.result(plan, investmentAccount(), nuAsset(), 2)).toMatchObject({
+      id: 'stored',
+      avgCost: 8,
+      quantity: 10,
+      date: '2026-11-01',
+      costBasis: 80,
+      created: false,
+    });
+  });
+
   it('a first opening has nothing recorded before it and is created', () => {
     const plan = opening.plan(again({}, { existingOpening: undefined }))._unsafeUnwrap();
     expect(plan.recordedBefore).toBeNull();

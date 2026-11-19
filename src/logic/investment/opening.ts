@@ -100,12 +100,15 @@ export const result = (
   account: Pick<Account, 'name'>,
   asset: Asset,
   decimals: number,
-): OpenPositionResult => ({
-  ...investmentEvents.view(plan.recordedBefore ?? plan.event, account, asset),
-  costBasis: roundToDecimals(plan.event.quantity * plan.event.unitCost, decimals),
-  warnings: plan.warnings,
-  created: plan.recordedBefore === null,
-});
+): OpenPositionResult => {
+  const effective = plan.recordedBefore ?? plan.event;
+  return {
+    ...investmentEvents.view(effective, account, asset),
+    costBasis: roundToDecimals(effective.quantity * effective.unitCost, decimals),
+    warnings: plan.warnings,
+    created: plan.recordedBefore === null,
+  };
+};
 
 export const resolveResponse = (planned: OpenPositionResult, outcome: PersistOutcome): OpenPositionResult => ({
   ...planned,
