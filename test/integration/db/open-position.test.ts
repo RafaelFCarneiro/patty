@@ -94,7 +94,7 @@ describe('open_position reads the account once and guards it (ADR-038 §7)', () 
     expect(await cashOf('Broker Race 1')).toBe(85);
   });
 
-  it('guards the version when the cash is unchanged: a concurrent change conflicts, the retry replaces it', async () => {
+  it('guards the version when the cash is unchanged: a concurrent change is retried', async () => {
     await createBroker('acc-race-2', 'Broker Race 2', 85);
 
     const opened = (await open(racingDeps('Broker Race 2', 300), 'Broker Race 2', 'AAA', 85))._unsafeUnwrap();
