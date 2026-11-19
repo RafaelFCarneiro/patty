@@ -1,6 +1,7 @@
 import * as R from 'remeda';
 import type {
   AccountHoldings,
+  CashConversion,
   HoldingsHost,
   NetWorthHoldings,
   PortfolioTotals,
@@ -23,16 +24,16 @@ export const totalsByAccount = (
 
 export const ofAccount = (
   cashBalance: number,
-  convertedCash: number | undefined,
+  convertedCash: CashConversion | undefined,
   totals: PortfolioTotals,
   baseDecimals: number,
 ): AccountHoldings => ({
   cashBalance,
   holdingsValue: totals.marketValue,
   baseCurrency: totals.baseCurrency,
-  total: convertedCash === undefined ? null : roundToDecimals(convertedCash + totals.marketValue, baseDecimals),
-  stale: totals.stale,
-  asOf: totals.asOf,
+  total: convertedCash === undefined ? null : roundToDecimals(convertedCash.value + totals.marketValue, baseDecimals),
+  stale: totals.stale || (convertedCash?.stale ?? false),
+  asOf: valuation.olderOf([totals.asOf, convertedCash?.asOf ?? null]),
   excluded: totals.excluded,
 });
 
@@ -56,7 +57,7 @@ export const withAccountHoldings = <A extends HoldingsHost>(
   return R.map(balances, (balance) => {
     const totals = byAccount[balance.id];
     return totals
-      ? { ...balance, holdings: ofAccount(balance.balance, balance.converted?.value, totals, baseDecimals) }
+      ? { ...balance, holdings: ofAccount(balance.balance, balance.converted, totals, baseDecimals) }
       : balance;
   });
 };

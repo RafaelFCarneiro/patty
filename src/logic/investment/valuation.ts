@@ -59,7 +59,7 @@ const baseFigures = (figures: AssetFigures, from: CurrencyCode, context: Valuati
   };
 };
 
-const olderOf = (instants: readonly (string | null)[]): string | null =>
+export const olderOf = (instants: readonly (string | null)[]): string | null =>
   R.pipe(
     instants,
     R.filter(R.isNonNullish),

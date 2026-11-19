@@ -205,6 +205,17 @@ describe('getAccountBalances — holdings in balances and net worth (ADR-038 §6
     expect(result.balances[1]?.holdings?.stale).toBe(true);
   });
 
+  it('flags the account total stale when only the cash rate is stale: fresh price, old USD→BRL rate', async () => {
+    const oldRate = '2026-11-10T12:00:00.000Z';
+    const result = (
+      await getAccountBalances(
+        investmentDeps({ ...holdingsWorld, rates: [{ ...rateOf(USD, BRL, 5, oldRate), version: 0 }] }),
+        { account: 'Nu Holdings (NYSE:NU)' },
+      )
+    )._unsafeUnwrap();
+    expect(result.balances[0]?.holdings).toMatchObject({ stale: true, asOf: oldRate });
+  });
+
   it('counts only the positions of the accounts the filter selects', async () => {
     const result = (await getAccountBalances(investmentDeps(holdingsWorld), { account: 'Itaú' }))._unsafeUnwrap();
     expect('holdings' in result.consolidatedNetWorth).toBe(false);

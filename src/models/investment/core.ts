@@ -300,7 +300,9 @@ export type ValuedPosition = PositionValuation & { base: BaseValuation & { marke
 
 export type BaseCurrencyFacts = { currency: CurrencyCode; decimals: number };
 
-export type HoldingsHost = { id: string; balance: number; converted?: { value: number } };
+export type CashConversion = { value: number; stale: boolean; asOf: string };
+
+export type HoldingsHost = { id: string; balance: number; converted?: CashConversion };
 
 export type EventRow = { event: InvestmentEvent; account: Account | undefined; asset: Asset | undefined };
 
