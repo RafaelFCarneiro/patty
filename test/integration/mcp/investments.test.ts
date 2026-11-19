@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { callTool, callToolError, makeClient, searchTransactions } from './helpers.js';
 
 type Balances = {
@@ -294,6 +295,30 @@ describe('MCP integration > investment holdings (Feature Design 023 step 1)', ()
     expect(await latest()).toMatchObject({ price: 2.5 });
     await tool('set_asset_prices', { prices: [{ asset: 'HHH', price: 9, asOf: '2026-11-11T21:00:00.000Z' }] });
     expect(await latest()).toMatchObject({ price: 2.5 });
+  });
+
+  it('refuses an exchange containing the reference separator at the boundary, writing nothing', async () => {
+    const before = (await tool('list_assets', {})) as unknown[];
+    const refused = await client.request(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'register_asset',
+          arguments: {
+            symbol: 'ABC',
+            exchange: 'NYSE:ARCA',
+            name: 'Abc',
+            assetClass: 'etf',
+            currency: 'USD',
+            pricing: 'market',
+          },
+        },
+      },
+      CallToolResultSchema,
+    );
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused.content)).toMatch(/must not contain/);
+    expect(await tool('list_assets', {})).toEqual(before);
   });
 
   it('registers idempotently, lists stale and unpriced assets with staleOnly, and mirrors it in patty://assets', async () => {

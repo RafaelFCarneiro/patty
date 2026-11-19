@@ -7,6 +7,8 @@ import { CurrencyCode } from '../money.js';
 export const ASSET_ENTITY_TAG = 'asset';
 export const ASSET_PRICE_ENTITY_TAG = 'asset_price';
 
+export const EXCHANGE_SEPARATOR = ':';
+
 export const AssetTimestamp = z.iso.datetime({ offset: true });
 
 export const AssetClass = z.enum(['stock', 'etf', 'reit', 'bdr', 'fixed_income']);
@@ -18,7 +20,14 @@ export type AssetPricing = z.infer<typeof AssetPricing>;
 export const AssetSchema = z.object({
   id: Id.describe('Unique asset identifier'),
   symbol: z.string().trim().min(1).describe('Ticker or product code, e.g. NU, KNCR11, TESOURO-SELIC-2031'),
-  exchange: z.string().trim().min(1).describe('Where it is quoted, e.g. NYSE, B3; unique together with the symbol'),
+  exchange: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((exchange) => !exchange.includes(EXCHANGE_SEPARATOR), {
+      message: `must not contain "${EXCHANGE_SEPARATOR}": it separates the exchange from the symbol in a reference`,
+    })
+    .describe('Where it is quoted, e.g. NYSE, B3; unique together with the symbol'),
   name: z.string().trim().min(1).describe('Display name, e.g. "Nu Holdings"'),
   assetClass: AssetClass.describe('stock | etf | reit (FII) | bdr | fixed_income'),
   currency: CurrencyCode.describe('Quote currency: the price of one unit is expressed in this currency'),

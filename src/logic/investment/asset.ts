@@ -9,6 +9,7 @@ import {
   type AssetPriceView,
   type AssetPricing,
   AssetPricing as AssetPricingEnum,
+  EXCHANGE_SEPARATOR,
   type AssetRef,
   type AssetView,
   type ListAssetsInput,
@@ -26,7 +27,6 @@ import { fold } from '../resolve.js';
 import { isStale } from '../currency-rate.js';
 
 const HOURS_PER_DAY = 24;
-const EXCHANGE_SEPARATOR = ':';
 
 const STALE_AFTER_HOURS = {
   [AssetPricingEnum.enum.market]: (thresholds) => thresholds.marketHours,

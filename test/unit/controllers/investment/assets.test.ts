@@ -148,6 +148,16 @@ describe('setAssetPrice', () => {
   });
 });
 
+describe('the boundary keeps an asset reference unambiguous', () => {
+  it('refuses a colon in the exchange, since it separates exchange and symbol in a reference', () => {
+    expect(RegisterAssetSchema.safeParse({ ...NU_REQUEST, exchange: 'NYSE:ARCA' }).success).toBe(false);
+  });
+
+  it('still accepts a colon in the symbol: the first colon alone splits a reference', () => {
+    expect(RegisterAssetSchema.safeParse({ ...NU_REQUEST, symbol: 'ARCA:ABC' }).success).toBe(true);
+  });
+});
+
 describe('the boundary refuses blank asset fields before anything is written', () => {
   it.each(['symbol', 'exchange', 'name'] as const)('a whitespace-only %s is refused', (field) => {
     expect(RegisterAssetSchema.safeParse({ ...NU_REQUEST, [field]: '   ' }).success).toBe(false);
