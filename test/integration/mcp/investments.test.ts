@@ -370,6 +370,25 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
     expect(((await tool('list_investment_events', { account: 'Brokerage T' })) as unknown[]).length).toBe(1);
   });
 
+  it.each(['symbol', 'exchange', 'name'])('refuses a whitespace-only %s and stores nothing', async (field) => {
+    const before = (await tool('list_assets', {})) as AssetRow[];
+    await expect(
+      callTool(client, {
+        name: 'register_asset',
+        args: {
+          symbol: 'BLANKX',
+          exchange: 'NYSE',
+          name: 'Blank Test',
+          assetClass: 'stock',
+          currency: 'USD',
+          pricing: 'market',
+          [field]: '   ',
+        },
+      }),
+    ).rejects.toThrow();
+    expect(await tool('list_assets', {})).toEqual(before);
+  });
+
   it('serves the refresh_quotes prompt', async () => {
     const result = await client.getPrompt({ name: 'refresh_quotes' });
     const text = (result.messages[0]!.content as { text: string }).text;

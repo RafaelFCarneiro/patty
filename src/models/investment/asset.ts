@@ -17,9 +17,9 @@ export type AssetPricing = z.infer<typeof AssetPricing>;
 
 export const AssetSchema = z.object({
   id: Id.describe('Unique asset identifier'),
-  symbol: z.string().min(1).describe('Ticker or product code, e.g. NU, KNCR11, TESOURO-SELIC-2031'),
-  exchange: z.string().min(1).describe('Where it is quoted, e.g. NYSE, B3; unique together with the symbol'),
-  name: z.string().min(1).describe('Display name, e.g. "Nu Holdings"'),
+  symbol: z.string().trim().min(1).describe('Ticker or product code, e.g. NU, KNCR11, TESOURO-SELIC-2031'),
+  exchange: z.string().trim().min(1).describe('Where it is quoted, e.g. NYSE, B3; unique together with the symbol'),
+  name: z.string().trim().min(1).describe('Display name, e.g. "Nu Holdings"'),
   assetClass: AssetClass.describe('stock | etf | reit (FII) | bdr | fixed_income'),
   currency: CurrencyCode.describe('Quote currency: the price of one unit is expressed in this currency'),
   pricing: AssetPricing.describe('market (a public quote exists) | manual (the agent posts the value)'),

@@ -6,6 +6,7 @@ import {
   ASSET_PRICE_ENTITY_TAG,
   AssetClass,
   AssetPricing,
+  RegisterAssetSchema,
   SetAssetPriceSchema,
   type AssetEntity,
   type AssetPriceEntity,
@@ -144,6 +145,21 @@ describe('setAssetPrice', () => {
     expect(listed).toEqual([
       expect.objectContaining({ symbol: 'CDB-ITAU', price: 1012.5, stale: false, noPrice: false }),
     ]);
+  });
+});
+
+describe('the boundary refuses blank asset fields before anything is written', () => {
+  it.each(['symbol', 'exchange', 'name'] as const)('a whitespace-only %s is refused', (field) => {
+    expect(RegisterAssetSchema.safeParse({ ...NU_REQUEST, [field]: '   ' }).success).toBe(false);
+    expect(RegisterAssetSchema.safeParse({ ...NU_REQUEST, [field]: '' }).success).toBe(false);
+  });
+
+  it('trims the padding of a filled field instead of storing it', () => {
+    expect(RegisterAssetSchema.parse({ ...NU_REQUEST, name: '  Nu Holdings  ' }).name).toBe('Nu Holdings');
+  });
+
+  it('refuses a blank name on a rename too: a registration of a registered asset goes through the same schema', () => {
+    expect(RegisterAssetSchema.safeParse({ ...NU_REQUEST, name: '\t ' }).success).toBe(false);
   });
 });
 
