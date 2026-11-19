@@ -229,8 +229,13 @@ describe('pinned fields — type and currency once the account has activity', ()
     expect(result._unsafeUnwrapErr()).toEqual(accountErrors.typeImmutableHoldings(2));
   });
 
-  it('still allows a currency change on an account whose only activity is investment events', () => {
-    expect(guardPinnedFields({ ...none, investmentEvents: 2 }, { currency: CurrencyCode.enum.USD }).isOk()).toBe(true);
+  it('refuses a currency change once the account holds investment events: holdings and cash are pinned to it', () => {
+    const result = guardPinnedFields({ ...none, investmentEvents: 2 }, { currency: CurrencyCode.enum.BTC });
+    expect(result._unsafeUnwrapErr()).toEqual(accountErrors.currencyImmutableHoldings(2));
+  });
+
+  it('still allows a name or balance edit on such an account', () => {
+    expect(guardPinnedFields({ ...none, investmentEvents: 2 }, {}).isOk()).toBe(true);
   });
 
   it('refuses a currency change for transactions, then recurring rules, then cards — first violation wins', () => {

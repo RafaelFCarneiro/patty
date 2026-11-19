@@ -240,6 +240,10 @@ export const accountErrors = {
     code: 'validation',
     issues: ['currency cannot be changed — account has recurring rules that persist the original currency'],
   } satisfies AccountError,
+  currencyImmutableHoldings: (investmentEvents: number): AccountError => ({
+    code: 'validation',
+    issues: [`currency cannot be changed — account has ${investmentEvents} investment event(s)`],
+  }),
   currencyImmutableCards: {
     code: 'validation',
     issues: ['currency cannot be changed — account is a credit card payment account'],

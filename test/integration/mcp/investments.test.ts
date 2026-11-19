@@ -227,6 +227,7 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
     };
     expect(inUse.error).toMatchObject({ code: 'in_use', references: { investmentEvents: 1 } });
     expect(errorCode(await toolError('update_account', { name: 'Brokerage F', type: 'savings' }))).toBe('validation');
+    expect(errorCode(await toolError('update_account', { name: 'Brokerage F', currency: 'BRL' }))).toBe('validation');
     expect(await tool('update_account', { name: 'Brokerage F', newName: 'Brokerage F2' })).toMatchObject({
       type: 'investment',
     });

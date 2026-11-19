@@ -55,6 +55,10 @@ export const guardPinnedFields = (
     [isChangingCurrency && !hasNoTransactions(refs), accountErrors.currencyImmutableTransactions(refs.transactions)],
     [isChangingCurrency && !hasNoRecurring(refs), accountErrors.currencyImmutableRecurring],
     [isChangingCurrency && !hasNoCards(refs), accountErrors.currencyImmutableCards],
+    [
+      isChangingCurrency && !hasNoInvestmentEvents(refs),
+      accountErrors.currencyImmutableHoldings(refs.investmentEvents),
+    ],
   ];
   const violated = R.find(violations, ([isViolated]) => isViolated);
   return violated ? err(violated[1]) : ok(undefined);

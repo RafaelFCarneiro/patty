@@ -222,7 +222,7 @@ const updateAccountDescription =
   'Update a bank account. name (via newName) and initialBalance are always editable. ' +
   'type is only editable when the account has no transactions/transfers (and cannot be set to credit). ' +
   'currency is only editable when the account has no transactions/transfers, ' +
-  'no recurring rules, and is not a credit card payment account. ' +
+  'no recurring rules, no investment events, and is not a credit card payment account. ' +
   'Credit accounts (card-managed) are rejected — use the card flow.';
 
 const updateAccountTool = defineTool({
