@@ -47,7 +47,7 @@ const NOON = 12;
 export type DemoSeedOptions = {
   country: DemoCountry;
   today: Date;
-  config: Pick<RuntimeConfig, 'FIAT_RATE_STALE_HOURS' | 'CRYPTO_RATE_STALE_HOURS'>;
+  config: Omit<RuntimeConfig, 'PATTY_LOCALE'>;
 };
 
 type Step<Kind extends DemoStepKind> = Extract<DemoStep, { kind: Kind }>;

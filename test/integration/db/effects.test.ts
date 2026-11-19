@@ -126,6 +126,7 @@ afterEach(() => {
 // plain `Account` — see `@rfc0/effect-runner`): the same factory doubles as the seed for the
 // update/delete cases below, which do need a real version to key their guard off.
 const newAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
+  cashBeforeHoldings: null,
   id: randomUUID(),
   name: `UoW Account ${randomUUID()}`,
   type: AccountType.enum.checking,
@@ -1694,6 +1695,9 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     const deps: Deps = {
       accounts: accountsR,
       bills: billsR,
+      assets: {} as Deps['assets'],
+      assetPrices: {} as Deps['assetPrices'],
+      investments: {} as Deps['investments'],
       budgets: {} as Deps['budgets'],
       categories: {} as Deps['categories'],
       subCategories: {} as Deps['subCategories'],
@@ -1713,6 +1717,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
       newId: () => randomUUID(),
       locale: async () => Locale.enum.en,
       rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+      priceStaleness: { marketHours: 72, manualDays: 31 },
     };
 
     return { deps, cardName };
@@ -2352,6 +2357,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
     const accountId = randomUUID();
     const cardId = randomUUID();
     const accountModel: AccountEntity & { version: number } = {
+      cashBeforeHoldings: null,
       id: accountId,
       name: `Card account ${accountId}`,
       type: AccountType.enum.credit,
@@ -2486,6 +2492,9 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
     const deps: Deps = {
       accounts: accountsR,
       bills: billsR,
+      assets: {} as Deps['assets'],
+      assetPrices: {} as Deps['assetPrices'],
+      investments: {} as Deps['investments'],
       budgets: {} as Deps['budgets'],
       categories: {} as Deps['categories'],
       subCategories: {} as Deps['subCategories'],
@@ -2505,6 +2514,7 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       newId: () => randomUUID(),
       locale: async () => Locale.enum.en,
       rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+      priceStaleness: { marketHours: 72, manualDays: 31 },
     };
 
     return { deps, cardName, payerId };

@@ -8,6 +8,7 @@ import { decimalsLookup } from '../logic/money.js';
 import { resolveByName, resolveByNames } from '../logic/resolve.js';
 import { resolveTagIds, resolveTagNames, tagSetPersistable } from '../logic/tag.js';
 import type { Account } from '../models/account.js';
+import type { Asset } from '../models/investment/asset.js';
 import type { Category, SubCategory } from '../models/category.js';
 import type { CreditCard } from '../models/credit-card.js';
 import { ambiguous, notFound } from '../models/error.js';
@@ -16,10 +17,11 @@ import type { CategorySelection, MerchantMatch, TransactionView } from '../model
 import type { Deps } from './deps.js';
 import type { Named, Resolution } from '../models/resolution.js';
 import type { TagLinksResolution } from '../models/tag.js';
+import * as assetRules from '../logic/investment/asset.js';
 
 export const resolutionToResult = <T extends Named>(
   res: Resolution<T>,
-  kind: 'account' | 'category' | 'sub_category' | 'card',
+  kind: 'account' | 'category' | 'sub_category' | 'card' | 'asset',
 ): Result<T, AppError> => {
   if (res.kind === 'found') return ok(res.entity);
   return res.kind === 'none'
@@ -30,6 +32,11 @@ export const resolutionToResult = <T extends Named>(
 export const resolveAccountRef = (deps: Deps, name: string): ResultAsync<Account, AppError> =>
   ResultAsync.fromSafePromise(deps.accounts.list()).andThen((accounts) =>
     resolutionToResult(resolveByName(accounts, name), 'account'),
+  );
+
+export const resolveAssetRef = (deps: Deps, ref: string): ResultAsync<Asset, AppError> =>
+  ResultAsync.fromSafePromise(deps.assets.list()).andThen((assets) =>
+    resolutionToResult(assetRules.resolve(assets, ref), 'asset'),
   );
 
 export const resolveCategoryRef = (deps: Deps, name: string): ResultAsync<Category, AppError> =>

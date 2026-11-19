@@ -65,7 +65,9 @@ type Row = Record<string, unknown>;
 const OWNED_AND_SHARED = [...OWNED_TABLES, ...SHARED_OR_OWNED_TABLES, 'transaction_tags', 'merchants', 'currencies'];
 
 const dumpTable = async (db: Db, table: string, dropUserId: boolean): Promise<Row[]> => {
-  const rows = await db.all<Row>(sql`SELECT * FROM ${sql.identifier(table)}`);
+  const rows = (await db.all<Row>(sql`SELECT * FROM ${sql.identifier(table)}`)).map(
+    ({ cash_before_holdings: _addedLater, ...rest }) => rest,
+  );
   const shaped = dropUserId ? rows.map(({ user_id: _userId, ...rest }) => rest) : rows;
   return shaped.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 };
@@ -355,7 +357,10 @@ describe('migration 0021 — tenancy data', () => {
         .map((config) => config.name);
     // Identity tables also have a user_id (a login's owner, not tenancy) and are not tenant data; so does
     // `change_events` (ADR-036 infrastructure: whose change a row announces, no owner, no scoped repo).
-    const IDENTITY = ['sessions', 'access_tokens', 'client_grants', 'invites', 'change_events'];
+    // `investment_events` (Feature Design 023) is owned but born after this migration with `user_id NOT NULL`:
+    // nothing to backfill
+    // or check at 0021, so it is not in the migration's own table lists (the table-classification suite covers it).
+    const IDENTITY = ['sessions', 'access_tokens', 'client_grants', 'invites', 'change_events', 'investment_events'];
 
     it('lists exactly the schema’s tenant tables, so a new owned table cannot be forgotten', () => {
       const listed = [...OWNED_TABLES, ...SHARED_OR_OWNED_TABLES, 'user_settings'].sort();

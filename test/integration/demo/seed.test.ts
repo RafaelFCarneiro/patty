@@ -26,7 +26,12 @@ import { keyLockPathForTest } from '../../unit/fixtures/key-lock.js';
 const TEST_KEY = 'd'.repeat(64);
 const TODAY = new Date(2026, 9, 26, 9);
 const LAST_FULL_MONTH = { month: 9, year: 2026 };
-const CONFIG = { FIAT_RATE_STALE_HOURS: 24, CRYPTO_RATE_STALE_HOURS: 1 };
+const CONFIG = {
+  FIAT_RATE_STALE_HOURS: 24,
+  CRYPTO_RATE_STALE_HOURS: 1,
+  PRICE_STALE_HOURS: 72,
+  MANUAL_PRICE_STALE_DAYS: 31,
+};
 const COUNTRIES = Object.values(DemoCountry.enum);
 
 let dir: string;

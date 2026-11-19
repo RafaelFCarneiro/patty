@@ -8,6 +8,7 @@ import type { AccountRow } from '../../../src/wire/db/accounts.js';
 
 // Row as returned by a Drizzle select on the accounts table (schema-derived shape)
 const sqlRow = (overrides: Partial<AccountRow> = {}): AccountRow => ({
+  cashBeforeHoldings: null,
   id: 'acc-1',
   name: 'Nubank',
   type: AccountType.enum.checking,
@@ -119,11 +120,28 @@ const account: Account = {
   initialBalance: 0,
 };
 
-const accountEntity: AccountEntity = { ...account, version: 3 };
+const accountEntity: AccountEntity = { ...account, cashBeforeHoldings: null, version: 3 };
+
+describe('cashBeforeHoldings — the account’s conversion state (Feature Design 023 §7)', () => {
+  it('is read from the row onto the entity, and written back from it', () => {
+    const entity = accountAdapters.dbToEntity(sqlRow({ cashBeforeHoldings: 700 }));
+    expect(entity.cashBeforeHoldings).toBe(700);
+    expect(accountAdapters.modelToDb(entity).cashBeforeHoldings).toBe(700);
+  });
+
+  it('is null on a plain account, and a model without it is written as null (a new account)', () => {
+    expect(accountAdapters.dbToEntity(sqlRow()).cashBeforeHoldings).toBeNull();
+    expect(accountAdapters.modelToDb({ ...account, version: 0 } as AccountEntity).cashBeforeHoldings).toBeNull();
+  });
+
+  it('never reaches the plain Account model a response is built from', () => {
+    expect(accountAdapters.dbToModel(sqlRow({ cashBeforeHoldings: 700 }))).not.toHaveProperty('cashBeforeHoldings');
+  });
+});
 
 describe('modelToDb', () => {
   it('carries every field, including version, onto the row', () => {
-    expect(accountAdapters.modelToDb(accountEntity)).toEqual({ ...account, version: 3 });
+    expect(accountAdapters.modelToDb(accountEntity)).toEqual({ ...account, cashBeforeHoldings: null, version: 3 });
   });
 });
 
@@ -133,7 +151,7 @@ describe('persistableToDb (accounts) — model→row adaptation lives at the dip
     expect(accountAdapters.persistableToDb(p)).toEqual({
       op: PersistOp.enum.insert,
       entity: ACCOUNT_ENTITY_TAG,
-      model: { ...account, version: INITIAL_VERSION },
+      model: { ...account, cashBeforeHoldings: null, version: INITIAL_VERSION },
     });
   });
 
@@ -142,7 +160,7 @@ describe('persistableToDb (accounts) — model→row adaptation lives at the dip
     expect(accountAdapters.persistableToDb(p)).toEqual({
       op: PersistOp.enum.update,
       entity: ACCOUNT_ENTITY_TAG,
-      model: { ...account, version: 3 },
+      model: { ...account, cashBeforeHoldings: null, version: 3 },
     });
   });
 
@@ -172,7 +190,11 @@ describe('outcomeToDb', () => {
     };
     expect(accountAdapters.outcomeToDb(outcome)).toEqual({
       persist: [
-        { op: PersistOp.enum.insert, entity: ACCOUNT_ENTITY_TAG, model: { ...account, version: INITIAL_VERSION } },
+        {
+          op: PersistOp.enum.insert,
+          entity: ACCOUNT_ENTITY_TAG,
+          model: { ...account, cashBeforeHoldings: null, version: INITIAL_VERSION },
+        },
       ],
       response: account,
     });
@@ -188,7 +210,11 @@ describe('outcomeToDb', () => {
     expect(accountAdapters.outcomeToDb(outcome)).toEqual({
       persist: [
         foreign,
-        { op: PersistOp.enum.insert, entity: ACCOUNT_ENTITY_TAG, model: { ...account, version: INITIAL_VERSION } },
+        {
+          op: PersistOp.enum.insert,
+          entity: ACCOUNT_ENTITY_TAG,
+          model: { ...account, cashBeforeHoldings: null, version: INITIAL_VERSION },
+        },
       ],
       response: account,
     });

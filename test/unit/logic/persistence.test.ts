@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { entityDbAdapter, insert, outcomeFor, remove, update } from '../../../src/logic/persistence.js';
+import {
+  entityDbAdapter,
+  insert,
+  movedIds,
+  outcomeFor,
+  remove,
+  sameVersions,
+  update,
+} from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { INITIAL_VERSION, PersistOp, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
@@ -12,7 +20,7 @@ const account: Account = {
   initialBalance: 0,
 };
 
-const accountEntity: AccountEntity = { ...account, version: 3 };
+const accountEntity: AccountEntity = { ...account, cashBeforeHoldings: null, version: 3 };
 
 describe('logic/persistence — Persistable builders', () => {
   it('insert tags op:insert and carries the plain model, no version', () => {
@@ -202,5 +210,28 @@ describe('entityDbAdapter', () => {
       ],
       response: null,
     });
+  });
+});
+
+describe('logic/persistence — comparing two reads by version', () => {
+  it('sameVersions is true for the same versions, whatever the key order', () => {
+    expect(sameVersions({ a: { version: 1 }, b: { version: 2 } }, { b: { version: 2 }, a: { version: 1 } })).toBe(true);
+  });
+
+  it('sameVersions is false when any version moved, or an entry appeared or vanished', () => {
+    expect(sameVersions({ a: { version: 1 } }, { a: { version: 2 } })).toBe(false);
+    expect(sameVersions({ a: { version: 1 } }, {})).toBe(false);
+    expect(sameVersions({}, { a: { version: 1 } })).toBe(false);
+  });
+
+  it('sameVersions is true for nothing at all', () => {
+    expect(sameVersions({}, {})).toBe(true);
+  });
+
+  it('movedIds names exactly the entries that moved, appeared or vanished', () => {
+    const before = { a: { version: 1 }, b: { version: 1 }, c: { version: 1 } };
+    const after = { a: { version: 1 }, b: { version: 2 }, d: { version: 1 } };
+    expect(movedIds(before, after).sort()).toEqual(['b', 'c', 'd']);
+    expect(movedIds(before, before)).toEqual([]);
   });
 });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BulkItemStatus } from '../../models/bulk.js';
 import { CurrencyCode } from '../../models/money.js';
 import { CurrencyRateViewSchema } from '../../models/currency-rate.js';
 
@@ -6,8 +7,8 @@ import { CurrencyRateViewSchema } from '../../models/currency-rate.js';
  *  shape: one discriminated union, `error` collapsed from `AppError` to a plain string via
  *  `formatAppError` (adapters/currency-rates.ts), safe for external consumers. */
 const BulkExchangeRateItemOut = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('ok'), rate: CurrencyRateViewSchema }),
-  z.object({ status: z.literal('error'), from: CurrencyCode, to: CurrencyCode, error: z.string() }),
+  z.object({ status: z.literal(BulkItemStatus.enum.ok), rate: CurrencyRateViewSchema }),
+  z.object({ status: z.literal(BulkItemStatus.enum.error), from: CurrencyCode, to: CurrencyCode, error: z.string() }),
 ]);
 export type BulkExchangeRateItemOut = z.infer<typeof BulkExchangeRateItemOut>;
 

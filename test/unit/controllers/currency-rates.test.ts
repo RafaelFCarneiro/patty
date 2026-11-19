@@ -29,10 +29,14 @@ const makeDeps = (overrides?: Partial<Deps['currencyRates']>): Deps => ({
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
   transactions: {} as Deps['transactions'],
+  assets: {} as Deps['assets'],
+  assetPrices: {} as Deps['assetPrices'],
+  investments: {} as Deps['investments'],
   clock: () => new Date('2026-08-10T12:00:00.000Z'),
   newId: () => 'rate-new',
   locale: async () => 'en',
   rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+  priceStaleness: { marketHours: 72, manualDays: 31 },
 });
 
 const existingRate = (overrides: Partial<CurrencyRateEntity> = {}): CurrencyRateEntity => ({

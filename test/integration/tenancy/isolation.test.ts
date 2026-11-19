@@ -135,6 +135,41 @@ const TOOL_CASES: Record<string, ToolCase | ToolCase[]> = {
     expected: own,
   },
   list_exchange_rates: { args: () => ({}), expected: scoped() },
+  // Assets and their prices are shared reference data, like rates: any signed-in user registers and prices them.
+  register_asset: {
+    args: () => ({
+      symbol: 'ZZB1',
+      exchange: 'ZZX',
+      name: 'Zed Bee',
+      assetClass: 'etf',
+      currency: 'USD',
+      pricing: 'market',
+    }),
+    expected: own,
+  },
+  list_assets: { args: () => ({}), expected: scoped(['ZZNU']) },
+  set_asset_prices: {
+    args: () => ({ prices: [{ asset: 'ZZNU', price: 6, asOf: '2026-10-01T00:00:00.000Z' }] }),
+    expected: own,
+  },
+  // Holdings are owned: A's account and events do not exist for B.
+  open_position: {
+    args: (a) => ({ account: a.inv.name, asset: 'ZZNU', quantity: 1, avgCost: 1 }),
+    expected: notFound('unknown_account'),
+  },
+  list_investment_events: [
+    { args: () => ({}), expected: scoped(['ZZ-B Brokerage'], ['ZZ-A']) },
+    { args: (a) => ({ account: a.inv.name }), expected: notFound('unknown_account') },
+  ],
+  update_investment_event: {
+    args: (a) => ({ id: a.event.id, quantity: 2 }),
+    expected: notFound('unknown_investment_event'),
+  },
+  delete_investment_event: { args: (a) => ({ id: a.event.id }), expected: noop },
+  get_portfolio: [
+    { args: () => ({}), expected: scoped(['ZZ-B Brokerage'], ['ZZ-A']) },
+    { args: (a) => ({ account: a.inv.name }), expected: notFound('unknown_account') },
+  ],
   confirm_transaction: { args: (a) => ({ id: a.tx.pending }), expected: notFound('unknown_transaction') },
   search_transactions: [
     { args: () => ({}), expected: scoped(['ZZ-B Groceries'], ['ZZ-A']) },
@@ -513,6 +548,7 @@ const RESOURCE_CASES: Record<string, { contains: string[]; omits: string[] }> = 
   'patty://merchants/top': { contains: [], omits: ['ZZ-A', 'zzashop'] },
   'patty://currencies': { contains: ['USD'], omits: ['ZZ-A'] },
   'patty://exchange-rates': { contains: [], omits: ['ZZ-A'] },
+  'patty://assets': { contains: ['ZZNU'], omits: ['ZZ-A'] },
   'patty://openapi': { contains: ['/api/accounts'], omits: ['ZZ-A'] },
 };
 

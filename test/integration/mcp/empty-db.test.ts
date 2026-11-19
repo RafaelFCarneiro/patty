@@ -7,6 +7,9 @@ import { migrate } from 'drizzle-orm/libsql/migrator';
 import { fileURLToPath } from 'node:url';
 import { createTransactionRunner, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
+import { assetPricesRepo } from '../../../src/diplomat/db/repos/asset-prices.js';
+import { assetsRepo } from '../../../src/diplomat/db/repos/assets.js';
+import { investmentsRepo } from '../../../src/diplomat/db/repos/investments.js';
 import { billsRepo } from '../../../src/diplomat/db/repos/bills.js';
 import { budgetsRepo } from '../../../src/diplomat/db/repos/budgets.js';
 import { categoriesRepo } from '../../../src/diplomat/db/repos/categories.js';
@@ -58,7 +61,10 @@ describe('empty DB (ADR-008)', () => {
     const settingsR = settingsRepo(db, OWNER_USER_ID);
     deps = {
       accounts: accountsRepo(db, OWNER_USER_ID),
+      assets: assetsRepo(db),
+      assetPrices: assetPricesRepo(db),
       bills: billsRepo(db, OWNER_USER_ID),
+      investments: investmentsRepo(db, OWNER_USER_ID),
       budgets: budgetsRepo(db, OWNER_USER_ID),
       categories: categoriesRepo(db, OWNER_USER_ID),
       subCategories: subCategoriesRepo(db, OWNER_USER_ID),
@@ -81,6 +87,7 @@ describe('empty DB (ADR-008)', () => {
         return row?.locale ?? Locale.enum.en;
       },
       rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+      priceStaleness: { marketHours: 72, manualDays: 31 },
     };
     registry = { [USER_SETTINGS_ENTITY_TAG]: userSettingsApplier(OWNER_USER_ID) };
   });

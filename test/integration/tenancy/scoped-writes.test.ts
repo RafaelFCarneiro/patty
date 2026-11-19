@@ -12,6 +12,7 @@ import { BUDGET_ENTITY_TAG } from '../../../src/models/budget.js';
 import { CATEGORY_ENTITY_TAG } from '../../../src/models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from '../../../src/models/credit-card.js';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
+import { INVESTMENT_EVENT_ENTITY_TAG } from '../../../src/models/investment/core.js';
 import { USER_SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { RECURRING_ENTITY_TAG } from '../../../src/models/recurring.js';
@@ -75,6 +76,20 @@ const WRITES_AGAINST_A: Array<[string, Persistable]> = [
   ],
   ['delete a credit card', remove(CREDIT_CARD_ENTITY_TAG, A.card.id)],
   ['delete a bill', remove(BILL_ENTITY_TAG, A.bill.id)],
+  [
+    'update an investment event',
+    update(INVESTMENT_EVENT_ENTITY_TAG, {
+      id: A.event.id,
+      accountId: B.inv.id,
+      assetId: 'asset-zznu',
+      type: 'opening',
+      date: '2026-09-01',
+      quantity: 999,
+      unitCost: 1,
+      note: null,
+    }),
+  ],
+  ['delete an investment event', remove(INVESTMENT_EVENT_ENTITY_TAG, A.event.id)],
   [
     'update a transaction',
     update(TRANSACTION_ENTITY_TAG, {

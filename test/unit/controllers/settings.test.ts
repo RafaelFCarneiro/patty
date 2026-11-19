@@ -11,6 +11,7 @@ const makeDeps = (stored?: UserSettingsEntity, envLocale?: Locale): Deps => ({
   },
   locale: async () => envLocale ?? stored?.locale ?? Locale.enum.en,
   rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+  priceStaleness: { marketHours: 72, manualDays: 31 },
   accounts: {} as Deps['accounts'],
   bills: {} as Deps['bills'],
   budgets: {} as Deps['budgets'],
@@ -27,6 +28,9 @@ const makeDeps = (stored?: UserSettingsEntity, envLocale?: Locale): Deps => ({
   recurring: {} as Deps['recurring'],
   tags: {} as Deps['tags'],
   transactions: {} as Deps['transactions'],
+  assets: {} as Deps['assets'],
+  assetPrices: {} as Deps['assetPrices'],
+  investments: {} as Deps['investments'],
   clock: () => new Date(),
   newId: () => 'test-id',
 });

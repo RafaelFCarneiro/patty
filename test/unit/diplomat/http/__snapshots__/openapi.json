@@ -716,6 +716,84 @@
                               "stale"
                             ],
                             "description": "Read-time valuation of balance in the base currency (ADR-026); absent when no exchange rate is on file"
+                          },
+                          "holdings": {
+                            "type": "object",
+                            "properties": {
+                              "cashBalance": {
+                                "type": "number",
+                                "description": "The cash balance in the account currency — the same figure as `balance`"
+                              },
+                              "holdingsValue": {
+                                "type": "number",
+                                "description": "Market value of the positions in the base currency"
+                              },
+                              "baseCurrency": {
+                                "type": "string",
+                                "enum": [
+                                  "USD",
+                                  "BRL",
+                                  "MXN",
+                                  "COP",
+                                  "USDC",
+                                  "BTC"
+                                ]
+                              },
+                              "total": {
+                                "type": "number",
+                                "nullable": true,
+                                "description": "Cash converted to the base currency + holdingsValue; null without a rate"
+                              },
+                              "stale": {
+                                "type": "boolean",
+                                "description": "True when any contributing price or rate is stale"
+                              },
+                              "asOf": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
+                              },
+                              "excluded": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "account": {
+                                      "type": "string",
+                                      "description": "Account name"
+                                    },
+                                    "asset": {
+                                      "type": "string",
+                                      "description": "EXCHANGE:SYMBOL"
+                                    },
+                                    "reason": {
+                                      "type": "string",
+                                      "enum": [
+                                        "no_price",
+                                        "no_rate"
+                                      ],
+                                      "description": "no_price: no price on file | no_rate: no exchange rate to the base currency"
+                                    }
+                                  },
+                                  "required": [
+                                    "account",
+                                    "asset",
+                                    "reason"
+                                  ]
+                                },
+                                "description": "Positions left out of holdingsValue, and why"
+                              }
+                            },
+                            "required": [
+                              "cashBalance",
+                              "holdingsValue",
+                              "baseCurrency",
+                              "total",
+                              "stale",
+                              "asOf",
+                              "excluded"
+                            ],
+                            "description": "Only on an investment account with positions (Feature Design 023): its cash balance, the market value of its holdings in the base currency, and their total. `balance` stays the cash balance"
                           }
                         },
                         "required": [
@@ -757,6 +835,59 @@
                             "minLength": 1
                           },
                           "description": "Account ids left out of total because no exchange rate is on file for their currency"
+                        },
+                        "holdings": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "number",
+                              "description": "Market value of the valued positions in the base currency"
+                            },
+                            "stale": {
+                              "type": "boolean"
+                            },
+                            "asOf": {
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
+                            },
+                            "excluded": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "account": {
+                                    "type": "string",
+                                    "description": "Account name"
+                                  },
+                                  "asset": {
+                                    "type": "string",
+                                    "description": "EXCHANGE:SYMBOL"
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "no_price",
+                                      "no_rate"
+                                    ],
+                                    "description": "no_price: no price on file | no_rate: no exchange rate to the base currency"
+                                  }
+                                },
+                                "required": [
+                                  "account",
+                                  "asset",
+                                  "reason"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "stale",
+                            "asOf",
+                            "excluded"
+                          ],
+                          "description": "Only when an account holds positions (Feature Design 023): the market value of the holdings, already part of `total`, and the positions left out of it (no price or no exchange rate)"
                         }
                       },
                       "required": [

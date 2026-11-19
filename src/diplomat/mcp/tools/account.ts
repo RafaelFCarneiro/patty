@@ -173,6 +173,10 @@ const getAccountBalancesDescription =
   '+ transfers in − transfers out, plus an optional converted block (read-time valuation against the base ' +
   'currency, with rate/asOf/stale — absent when no exchange rate is on file). consolidatedNetWorth sums ' +
   'every convertible balance in the base currency; accounts with no rate are listed in its excluded array. ' +
+  'An investment account that holds positions (open_position) also carries a holdings block — cashBalance ' +
+  '(the same as balance), holdingsValue (market value in the base currency, with stale/asOf) and total — and ' +
+  'consolidatedNetWorth includes the holdings; a position with no price or no rate is named in ' +
+  'holdings.excluded instead of counted as zero. Accounts without positions answer as before. ' +
   'Optionally filter by account name or type.';
 
 const getAccountBalancesTool = defineTool({
@@ -218,7 +222,7 @@ const updateAccountDescription =
   'Update a bank account. name (via newName) and initialBalance are always editable. ' +
   'type is only editable when the account has no transactions/transfers (and cannot be set to credit). ' +
   'currency is only editable when the account has no transactions/transfers, ' +
-  'no recurring rules, and is not a credit card payment account. ' +
+  'no recurring rules, no investment events, and is not a credit card payment account. ' +
   'Credit accounts (card-managed) are rejected — use the card flow.';
 
 const updateAccountTool = defineTool({

@@ -8,6 +8,8 @@ import type { ClientConfigFailure } from '../models/client-config.js';
 import type { KeychainFailure } from '../models/auth/sign-in.js';
 import type { Locale } from '../models/locale.js';
 import type { AccountsRepo } from '../diplomat/db/repos/accounts.js';
+import type { AssetPricesRepo } from '../diplomat/db/repos/asset-prices.js';
+import type { AssetsRepo } from '../diplomat/db/repos/assets.js';
 import type { BillsRepo } from '../diplomat/db/repos/bills.js';
 import type { BudgetsRepo } from '../diplomat/db/repos/budgets.js';
 import type { CategoriesRepo } from '../diplomat/db/repos/categories.js';
@@ -20,6 +22,7 @@ import type { DashboardsRepo } from '../diplomat/db/repos/dashboards.js';
 import type { HealthRepo } from '../diplomat/db/repos/health.js';
 import type { InstanceKind } from '../models/instance.js';
 import type { InstanceRepo } from '../diplomat/db/repos/instance.js';
+import type { InvestmentsRepo } from '../diplomat/db/repos/investments.js';
 import type { MerchantsRepo } from '../diplomat/db/repos/merchants.js';
 import type { RecurringRepo } from '../diplomat/db/repos/recurring.js';
 import type { SettingsRepo } from '../diplomat/db/repos/settings.js';
@@ -32,10 +35,13 @@ import type { SessionsRepo } from '../diplomat/db/repos/sessions.js';
 import type { SetupCodesRepo } from '../diplomat/db/repos/setup-codes.js';
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
 import type { UsersRepo } from '../diplomat/db/repos/users.js';
+import type { PriceStalenessThresholds } from '../models/investment/asset.js';
 import type { StalenessThresholds } from '../models/currency-rate.js';
 
 export type Deps = {
   accounts: AccountsRepo;
+  assetPrices: AssetPricesRepo;
+  assets: AssetsRepo;
   bills: BillsRepo;
   budgets: BudgetsRepo;
   categories: CategoriesRepo;
@@ -47,6 +53,7 @@ export type Deps = {
   dashboards: DashboardsRepo;
   health: HealthRepo;
   instance: InstanceRepo;
+  investments: InvestmentsRepo;
   merchants: MerchantsRepo;
   recurring: RecurringRepo;
   settings: SettingsRepo;
@@ -56,6 +63,7 @@ export type Deps = {
   newId: () => string;
   locale: () => Promise<Locale>;
   rateStaleness: StalenessThresholds;
+  priceStaleness: PriceStalenessThresholds;
 };
 
 export type AuthSecrets = {

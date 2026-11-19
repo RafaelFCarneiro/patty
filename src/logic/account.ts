@@ -33,8 +33,9 @@ export const assertNonCreditType = (type?: AccountType): boolean => type !== Acc
 export const hasNoTransactions = (refs: AccountReferences): boolean => refs.transactions === 0;
 export const hasNoRecurring = (refs: AccountReferences): boolean => refs.recurring === 0;
 export const hasNoCards = (refs: AccountReferences): boolean => refs.cards === 0;
+export const hasNoInvestmentEvents = (refs: AccountReferences): boolean => refs.investmentEvents === 0;
 export const isUnreferenced = (refs: AccountReferences): boolean =>
-  hasNoTransactions(refs) && hasNoRecurring(refs) && hasNoCards(refs);
+  hasNoTransactions(refs) && hasNoRecurring(refs) && hasNoCards(refs) && hasNoInvestmentEvents(refs);
 
 export const isRename = (currentName: string, newName?: string): newName is string =>
   newName !== undefined && newName.toLowerCase() !== currentName.toLowerCase();
@@ -50,9 +51,14 @@ export const guardPinnedFields = (
   const isChangingCurrency = R.isDefined(input.currency);
   const violations: ReadonlyArray<readonly [boolean, AccountError]> = [
     [isChangingType && !hasNoTransactions(refs), accountErrors.typeImmutable(refs.transactions)],
+    [isChangingType && !hasNoInvestmentEvents(refs), accountErrors.typeImmutableHoldings(refs.investmentEvents)],
     [isChangingCurrency && !hasNoTransactions(refs), accountErrors.currencyImmutableTransactions(refs.transactions)],
     [isChangingCurrency && !hasNoRecurring(refs), accountErrors.currencyImmutableRecurring],
     [isChangingCurrency && !hasNoCards(refs), accountErrors.currencyImmutableCards],
+    [
+      isChangingCurrency && !hasNoInvestmentEvents(refs),
+      accountErrors.currencyImmutableHoldings(refs.investmentEvents),
+    ],
   ];
   const violated = R.find(violations, ([isViolated]) => isViolated);
   return violated ? err(violated[1]) : ok(undefined);

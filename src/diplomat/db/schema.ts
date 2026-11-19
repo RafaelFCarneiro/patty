@@ -16,10 +16,12 @@ import { UserRole } from '../../models/auth/owner.js';
 import type { Scope } from '../../models/auth/scope.js';
 import { DEFAULT_SIGN_IN_CAP, SignInCap } from '../../models/auth/users.js';
 import { AccessTokenKind, type TokenAccess } from '../../models/auth/token.js';
+import { AssetClass, AssetPricing } from '../../models/investment/asset.js';
 import { BudgetPeriod } from '../../models/budget.js';
 import { DemoCountry } from '../../models/demo/core.js';
 import { DashboardSource } from '../../models/dashboard.js';
 import { DEFAULT_INSTANCE_KIND, InstanceKind } from '../../models/instance.js';
+import { InvestmentEventType } from '../../models/investment/core.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
 import { RecurringPeriod } from '../../models/recurring.js';
 import { ClassificationMethod, TransactionStatus } from '../../models/transaction.js';
@@ -49,6 +51,7 @@ export const accounts = sqliteTable('accounts', {
   name: text('name').notNull(),
   type: text('type', { enum: ['checking', 'savings', 'wallet', 'investment', 'credit'] }).notNull(),
   initialBalance: real('initial_balance').notNull().default(0),
+  cashBeforeHoldings: real('cash_before_holdings'),
   currency: text('currency')
     .notNull()
     .references(() => currencies.code),
@@ -336,6 +339,67 @@ export const currencyRates = sqliteTable(
     version: integer('version').notNull().default(0),
   },
   (t) => [uniqueIndex('currency_rates_from_to').on(t.fromCode, t.toCode)],
+);
+
+export const assets = sqliteTable(
+  'assets',
+  {
+    id: text('id').primaryKey(),
+    symbol: text('symbol').notNull(),
+    exchange: text('exchange').notNull(),
+    name: text('name').notNull(),
+    assetClass: text('asset_class', { enum: columnValues(AssetClass.options) }).notNull(),
+    currency: text('currency')
+      .notNull()
+      .references(() => currencies.code),
+    pricing: text('pricing', { enum: columnValues(AssetPricing.options) }).notNull(),
+    version: integer('version').notNull().default(0),
+  },
+  (t) => [uniqueIndex('assets_symbol_exchange').on(t.symbol, t.exchange)],
+);
+
+export const assetPrices = sqliteTable(
+  'asset_prices',
+  {
+    id: text('id').primaryKey(),
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => assets.id),
+    price: real('price').notNull(),
+    asOf: text('as_of').notNull(),
+    source: text('source'),
+    version: integer('version').notNull().default(0),
+  },
+  (t) => [uniqueIndex('asset_prices_asset_as_of').on(t.assetId, t.asOf)],
+);
+
+export const investmentEvents = sqliteTable(
+  'investment_events',
+  {
+    id: text('id').primaryKey(),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => accounts.id),
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => assets.id),
+    type: text('type', { enum: columnValues(InvestmentEventType.options) }).notNull(),
+    date: text('date').notNull(),
+    quantity: real('quantity').notNull(),
+    unitCost: real('unit_cost').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    note: text('note'),
+    version: integer('version').notNull().default(0),
+    userId: ownerColumn(),
+  },
+  (t) => [
+    uniqueIndex('investment_events_user_idempotency_key').on(t.userId, t.idempotencyKey),
+    uniqueIndex('investment_events_one_opening')
+      .on(t.userId, t.accountId, t.assetId)
+      .where(sql`${t.type} = ${sql.raw(`'${InvestmentEventType.enum.opening}'`)}`),
+    index('idx_investment_events_user_account').on(t.userId, t.accountId),
+    index('idx_investment_events_asset').on(t.assetId),
+  ],
 );
 
 // ADR-033 §2/§7. `username`/`password_hash` are null until the owner row (inserted by migration on

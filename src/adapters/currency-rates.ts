@@ -5,6 +5,7 @@ import {
   type CurrencyRateEntity,
   type CurrencyRateBulkItem,
 } from '../models/currency-rate.js';
+import { BulkItemStatus } from '../models/bulk.js';
 import * as persistence from '../logic/persistence.js';
 import { BulkSetExchangeRatesOut, type BulkExchangeRateItemOut } from '../wire/out/currency-rates.js';
 import type { CurrencyRateRow } from '../wire/db/currency-rates.js';
@@ -26,7 +27,9 @@ export const modelToDb = (entity: CurrencyRateEntity): CurrencyRateRow => entity
 export const { persistableToDb, outcomeToDb } = persistence.entityDbAdapter(CURRENCY_RATE_ENTITY_TAG, modelToDb);
 
 const bulkItemToWireOut = (item: CurrencyRateBulkItem<AppError>): BulkExchangeRateItemOut =>
-  item.status === 'error' ? { status: 'error', from: item.from, to: item.to, error: formatAppError(item.error) } : item;
+  item.status === BulkItemStatus.enum.error
+    ? { status: BulkItemStatus.enum.error, from: item.from, to: item.to, error: formatAppError(item.error) }
+    : item;
 
 export const bulkResultToWireOut = (items: CurrencyRateBulkItem<AppError>[]): BulkSetExchangeRatesOut =>
   BulkSetExchangeRatesOut.parse({ items: items.map(bulkItemToWireOut) });

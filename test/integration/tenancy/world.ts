@@ -6,11 +6,13 @@ import type { Db } from '../../../src/diplomat/db/driver.js';
 import {
   accounts,
   accessTokens,
+  assets,
   bills,
   budgets,
   categories,
   creditCards,
   dashboards,
+  investmentEvents,
   merchantCategory,
   merchants,
   recurringRules,
@@ -36,6 +38,8 @@ export type World = {
   // names (what a person types) and ids (what a tool returns)
   acc1: { id: string; name: string };
   acc2: { id: string; name: string };
+  inv: { id: string; name: string };
+  event: { id: string };
   cardAccount: { id: string; name: string };
   card: { id: string; name: string };
   bill: { id: string; month: number; year: number };
@@ -60,6 +64,8 @@ export const worldOf = (label: 'A' | 'B', userId: string): World => {
     username: `user-${lower}`,
     acc1: { id: `acc-${label}-1`, name: `ZZ-${label} Checking` },
     acc2: { id: `acc-${label}-2`, name: `ZZ-${label} Savings` },
+    inv: { id: `acc-${label}-inv`, name: `ZZ-${label} Brokerage` },
+    event: { id: `ev-${label}-1` },
     cardAccount: { id: `acc-${label}-card`, name: `Card: ZZ-${label} Visa` },
     card: { id: `card-${label}`, name: `ZZ-${label} Visa` },
     bill: { id: `bill-${label}`, month: 9, year: 2026 },
@@ -105,6 +111,17 @@ export const markersOf = (world: World): string[] => {
 
 const NOW = '2026-10-01T00:00:00.000Z';
 
+/** The one asset both worlds hold: shared reference data carries no user's marker. */
+export const SHARED_ASSET = {
+  id: 'asset-zznu',
+  symbol: 'ZZNU',
+  exchange: 'ZZX',
+  name: 'Zed Nu',
+  assetClass: 'stock',
+  currency: 'USD',
+  pricing: 'market',
+} as const;
+
 /** Inserts the whole of one user's data. Dates sit in September 2026; the recurring rule is already due. */
 export const seedWorld = async (db: Db, w: World): Promise<void> => {
   const owner = { userId: w.userId };
@@ -112,7 +129,24 @@ export const seedWorld = async (db: Db, w: World): Promise<void> => {
     { ...owner, id: w.acc1.id, name: w.acc1.name, type: 'checking', initialBalance: 1000, currency: 'USD' },
     { ...owner, id: w.acc2.id, name: w.acc2.name, type: 'savings', initialBalance: 200, currency: 'BRL' },
     { ...owner, id: w.cardAccount.id, name: w.cardAccount.name, type: 'credit', initialBalance: 0, currency: 'USD' },
+    { ...owner, id: w.inv.id, name: w.inv.name, type: 'investment', initialBalance: 100, currency: 'USD' },
   ]);
+  // Assets are shared reference data: both worlds hold a position in the same one.
+  await db
+    .insert(assets)
+    .values({ ...SHARED_ASSET })
+    .onConflictDoNothing();
+  await db.insert(investmentEvents).values({
+    ...owner,
+    id: w.event.id,
+    accountId: w.inv.id,
+    assetId: SHARED_ASSET.id,
+    type: 'opening',
+    date: '2026-09-01',
+    quantity: 10,
+    unitCost: 5,
+    idempotencyKey: `key-${w.label}-event`,
+  });
   await db.insert(creditCards).values({
     ...owner,
     id: w.card.id,
@@ -306,6 +340,7 @@ export const dumpOf = async (db: Db, userId: string): Promise<Record<string, Row
     'tags',
     'budgets',
     'recurring_rules',
+    'investment_events',
     'categories',
     'merchant_category',
     'dashboards',

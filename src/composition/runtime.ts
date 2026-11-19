@@ -9,6 +9,8 @@ import { createEngineContext } from '../diplomat/db/engine.js';
 import type { ApplierRegistry } from '../diplomat/db/effects.js';
 import { createLocaleResolver } from '../diplomat/db/locale-cache.js';
 import { accountApplier, accountsRepo } from '../diplomat/db/repos/accounts.js';
+import { assetPriceApplier, assetPricesRepo } from '../diplomat/db/repos/asset-prices.js';
+import { assetApplier, assetsRepo } from '../diplomat/db/repos/assets.js';
 import { billApplier, billsRepo } from '../diplomat/db/repos/bills.js';
 import { budgetApplier, budgetsRepo } from '../diplomat/db/repos/budgets.js';
 import { categoriesRepo, categoryApplier } from '../diplomat/db/repos/categories.js';
@@ -19,6 +21,7 @@ import { currencyRateApplier, currencyRatesRepo } from '../diplomat/db/repos/cur
 import { dashboardApplier, dashboardsRepo } from '../diplomat/db/repos/dashboards.js';
 import { healthRepo } from '../diplomat/db/repos/health.js';
 import { instanceRepo } from '../diplomat/db/repos/instance.js';
+import { investmentEventApplier, investmentsRepo } from '../diplomat/db/repos/investments.js';
 import { merchantApplier, merchantCategoryApplier, merchantsRepo } from '../diplomat/db/repos/merchants.js';
 import { recurringRepo, recurringRuleApplier } from '../diplomat/db/repos/recurring.js';
 import { settingsRepo, userSettingsApplier } from '../diplomat/db/repos/settings.js';
@@ -27,12 +30,14 @@ import { tagApplier, tagsRepo } from '../diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../diplomat/db/repos/transactions.js';
 import { transactionTagApplier } from '../diplomat/db/repos/transaction-tags.js';
 import { ACCOUNT_ENTITY_TAG } from '../models/account.js';
+import { ASSET_ENTITY_TAG, ASSET_PRICE_ENTITY_TAG } from '../models/investment/asset.js';
 import { BILL_ENTITY_TAG } from '../models/bill.js';
 import { BUDGET_ENTITY_TAG } from '../models/budget.js';
 import { CATEGORY_ENTITY_TAG } from '../models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from '../models/credit-card.js';
 import { CURRENCY_RATE_ENTITY_TAG } from '../models/currency-rate.js';
 import { DASHBOARD_ENTITY_TAG } from '../models/dashboard.js';
+import { INVESTMENT_EVENT_ENTITY_TAG } from '../models/investment/core.js';
 import { USER_SETTINGS_ENTITY_TAG } from '../models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../models/merchant.js';
 import { RECURRING_ENTITY_TAG } from '../models/recurring.js';
@@ -48,7 +53,10 @@ export type Runtime = Tenancy & {
   changeLog: ChangeLog;
 };
 
-export type RuntimeConfig = Pick<Config, 'PATTY_LOCALE' | 'FIAT_RATE_STALE_HOURS' | 'CRYPTO_RATE_STALE_HOURS'>;
+export type RuntimeConfig = Pick<
+  Config,
+  'PATTY_LOCALE' | 'FIAT_RATE_STALE_HOURS' | 'CRYPTO_RATE_STALE_HOURS' | 'PRICE_STALE_HOURS' | 'MANUAL_PRICE_STALE_DAYS'
+>;
 
 const applierRegistryFor = (userId: string): ApplierRegistry => ({
   [ACCOUNT_ENTITY_TAG]: accountApplier(userId),
@@ -62,6 +70,9 @@ const applierRegistryFor = (userId: string): ApplierRegistry => ({
   [CATEGORY_ENTITY_TAG]: categoryApplier(userId),
   [CREDIT_CARD_ENTITY_TAG]: creditCardApplier(userId),
   [CURRENCY_RATE_ENTITY_TAG]: currencyRateApplier,
+  [ASSET_ENTITY_TAG]: assetApplier,
+  [ASSET_PRICE_ENTITY_TAG]: assetPriceApplier,
+  [INVESTMENT_EVENT_ENTITY_TAG]: investmentEventApplier(userId),
   [RECURRING_ENTITY_TAG]: recurringRuleApplier(userId),
   [DASHBOARD_ENTITY_TAG]: dashboardApplier(userId),
   [USER_SETTINGS_ENTITY_TAG]: userSettingsApplier(userId),
@@ -81,6 +92,7 @@ const reposFor = (db: Db, userId: string) => ({
   correlations: correlationsRepo(db, userId),
   creditCards: creditCardsRepo(db, userId),
   dashboards: dashboardsRepo(db, userId),
+  investments: investmentsRepo(db, userId),
   merchants: merchantsRepo(db, userId),
   recurring: recurringRepo(db, userId),
   tags: tagsRepo(db, userId),
@@ -132,6 +144,8 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
     return {
       ...reposFor(db, userId),
       currencies: currenciesRepo(db),
+      assets: assetsRepo(db),
+      assetPrices: assetPricesRepo(db),
       currencyRates: currencyRatesRepo(db),
       health,
       instance,
@@ -140,6 +154,7 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
       newId: () => randomUUID(),
       locale: () => localeResolver.locale(userId, settings),
       rateStaleness: { fiatHours: config.FIAT_RATE_STALE_HOURS, cryptoHours: config.CRYPTO_RATE_STALE_HOURS },
+      priceStaleness: { marketHours: config.PRICE_STALE_HOURS, manualDays: config.MANUAL_PRICE_STALE_DAYS },
     };
   };
 

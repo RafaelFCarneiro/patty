@@ -34,6 +34,7 @@ export const dbToEntity = (row: AccountRow): AccountEntity =>
     type: row.type,
     initialBalance: row.initialBalance,
     currency: row.currency,
+    cashBeforeHoldings: row.cashBeforeHoldings,
     version: row.version,
   });
 
@@ -45,6 +46,7 @@ export const modelToDb = (entity: AccountEntity): AccountRow => ({
   type: entity.type,
   initialBalance: entity.initialBalance,
   currency: entity.currency,
+  cashBeforeHoldings: entity.cashBeforeHoldings ?? null,
   version: entity.version,
 });
 

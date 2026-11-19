@@ -124,10 +124,25 @@ const REPRESENTATIVE_ERRORS: Array<{ error: AppError; expectedStatus: number; ex
       code: 'in_use',
       entity: 'account',
       name: 'Nubank',
-      references: { transactions: 5, recurring: 2, cards: 1 },
+      references: { transactions: 5, recurring: 2, cards: 1, investmentEvents: 0 },
     },
     expectedStatus: 409,
     expectedSubstring: 'in_use',
+  },
+  {
+    error: { code: 'unknown_asset', query: 'ZZZ', candidates: ['NYSE:NU'] },
+    expectedStatus: 404,
+    expectedSubstring: 'NYSE:NU',
+  },
+  {
+    error: { code: 'ambiguous_asset', query: 'NU', candidates: ['NYSE:NU', 'B3:NU'] },
+    expectedStatus: 409,
+    expectedSubstring: 'B3:NU',
+  },
+  {
+    error: { code: 'unknown_investment_event', query: 'event-1', candidates: [] },
+    expectedStatus: 404,
+    expectedSubstring: 'event-1',
   },
   { error: { code: 'validation', issues: ['bad input'] }, expectedStatus: 422, expectedSubstring: 'validation' },
 ];
@@ -146,9 +161,11 @@ describe('formatAppError / httpStatus exhaustiveness', () => {
       code: 'in_use',
       entity: 'account',
       name: 'X',
-      references: { transactions: 1, recurring: 2, cards: 3 },
+      references: { transactions: 1, recurring: 2, cards: 3, investmentEvents: 4 },
     };
-    expect(formatAppError(err)).toBe('in_use: account "X" (transactions: 1, recurring: 2, cards: 3)');
+    expect(formatAppError(err)).toBe(
+      'in_use: account "X" (transactions: 1, recurring: 2, cards: 3, investmentEvents: 4)',
+    );
   });
 
   it('formatAppError produces the same output shape for in_use category (subCategories field)', () => {

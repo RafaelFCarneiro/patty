@@ -31,10 +31,14 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
   transactions: {} as Deps['transactions'],
+  assets: {} as Deps['assets'],
+  assetPrices: {} as Deps['assetPrices'],
+  investments: { list: async () => [] } as unknown as Deps['investments'],
   clock: () => new Date('2026-06-01'),
   newId: () => 'account-id-1',
   locale: async () => Locale.enum.en,
   rateStaleness: { fiatHours: 24, cryptoHours: 1 },
+  priceStaleness: { marketHours: 72, manualDays: 31 },
   ...overrides,
 });
 
@@ -132,6 +136,7 @@ describe('createAccount — functional core (ADR-021 phase 1)', () => {
 
 const accountEntity = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
   ...account(),
+  cashBeforeHoldings: null,
   version: 2,
   ...overrides,
 });
@@ -140,7 +145,7 @@ const makeAccountsRepo = (overrides: Partial<Deps['accounts']> = {}): Deps['acco
   ({
     list: async () => [account()],
     findByName: async () => null,
-    countReferences: async () => ({ transactions: 0, recurring: 0, cards: 0 }),
+    countReferences: async () => ({ transactions: 0, recurring: 0, cards: 0, investmentEvents: 0 }),
     findRawById: async () => accountEntity(),
     ...overrides,
   }) as unknown as Deps['accounts'];
@@ -177,7 +182,9 @@ describe('deleteAccount — functional core (ADR-021 phase 3a)', () => {
 
   it('rejects when the account is still referenced (in_use), building no Persistable', async () => {
     const deps = makeDeps({
-      accounts: makeAccountsRepo({ countReferences: async () => ({ transactions: 2, recurring: 0, cards: 0 }) }),
+      accounts: makeAccountsRepo({
+        countReferences: async () => ({ transactions: 2, recurring: 0, cards: 0, investmentEvents: 0 }),
+      }),
     });
 
     const result = await deleteAccount(deps, 'Nubank');
@@ -187,7 +194,7 @@ describe('deleteAccount — functional core (ADR-021 phase 3a)', () => {
       code: 'in_use',
       entity: 'account',
       name: 'Nubank',
-      references: { transactions: 2, recurring: 0, cards: 0 },
+      references: { transactions: 2, recurring: 0, cards: 0, investmentEvents: 0 },
     });
   });
 });
@@ -207,6 +214,17 @@ describe('updateAccount — functional core (ADR-021 phase 3a)', () => {
         model: { ...accountEntity(), name: 'Nubank Ultravioleta', initialBalance: 500 },
       },
     ]);
+  });
+
+  it('keeps the account’s conversion state through an edit, and never shows it in the response', async () => {
+    const holding = { ...accountEntity(), cashBeforeHoldings: 700 };
+    const deps = makeDeps({ accounts: makeAccountsRepo({ findRawById: async () => holding }) });
+
+    const { persist, response } = (await updateAccount(deps, { name: 'Nubank', initialBalance: 90 }))._unsafeUnwrap();
+
+    expect(persist[0]).toMatchObject({ model: { initialBalance: 90, cashBeforeHoldings: 700 } });
+    expect(response).not.toHaveProperty('cashBeforeHoldings');
+    expect(response).not.toHaveProperty('version');
   });
 
   it('the response omits version and carries a localized typeLabel', async () => {
@@ -250,23 +268,41 @@ describe('updateAccount — functional core (ADR-021 phase 3a)', () => {
     expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation', remedy: Remedy.enum.update_credit_card });
   });
 
-  it('rejects a type change when transactions exist, before reading a raw version', async () => {
-    const findRawById = vi.fn();
+  it('rejects a type change when transactions exist, writing nothing', async () => {
     const deps = makeDeps({
       accounts: makeAccountsRepo({
-        countReferences: async () => ({ transactions: 1, recurring: 0, cards: 0 }),
-        findRawById,
+        countReferences: async () => ({ transactions: 1, recurring: 0, cards: 0, investmentEvents: 0 }),
       }),
     });
 
     const result = await updateAccount(deps, { name: 'Nubank', type: AccountType.enum.savings });
 
-    expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({
       code: 'validation',
       issues: ['type cannot be changed — account has 1 transaction(s)'],
     });
-    expect(findRawById).not.toHaveBeenCalled();
+  });
+
+  it('reads the versioned account before it counts references, so a write in between conflicts', async () => {
+    const order: string[] = [];
+    const base = makeAccountsRepo();
+    const deps = makeDeps({
+      accounts: {
+        ...base,
+        findRawById: async (id: string) => {
+          order.push('versioned read');
+          return base.findRawById(id);
+        },
+        countReferences: async (id: string) => {
+          order.push('count references');
+          return base.countReferences(id);
+        },
+      },
+    });
+
+    await updateAccount(deps, { name: 'Nubank', currency: CurrencyCode.enum.USD });
+
+    expect(order).toEqual(['versioned read', 'count references']);
   });
 
   it('rejects renaming to an already-taken name', async () => {

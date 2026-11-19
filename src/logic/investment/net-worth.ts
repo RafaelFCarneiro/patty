@@ -1,0 +1,72 @@
+import * as R from 'remeda';
+import type {
+  AccountHoldings,
+  CashConversion,
+  HoldingsHost,
+  NetWorthHoldings,
+  PortfolioTotals,
+  PositionValuation,
+} from '../../models/investment/core.js';
+import type { CurrencyCode } from '../../models/money.js';
+import { roundToDecimals } from '../money.js';
+import * as valuation from './valuation.js';
+
+export const totalsByAccount = (
+  valuations: readonly PositionValuation[],
+  baseCurrency: CurrencyCode,
+  baseDecimals: number,
+): Record<string, PortfolioTotals> =>
+  R.pipe(
+    valuations,
+    R.groupBy((valuation) => valuation.accountId),
+    R.mapValues((group) => valuation.consolidate(group, baseCurrency, baseDecimals).totals),
+  );
+
+export const ofAccount = (
+  cashBalance: number,
+  convertedCash: CashConversion | undefined,
+  totals: PortfolioTotals,
+  baseDecimals: number,
+): AccountHoldings => ({
+  cashBalance,
+  holdingsValue: totals.marketValue,
+  baseCurrency: totals.baseCurrency,
+  total: convertedCash === undefined ? null : roundToDecimals(convertedCash.value + totals.marketValue, baseDecimals),
+  stale: totals.stale || (convertedCash?.stale ?? false),
+  asOf: valuation.olderOf([totals.asOf, convertedCash?.asOf ?? null]),
+  excluded: totals.excluded,
+});
+
+export const holdings = (
+  valuations: readonly PositionValuation[],
+  baseCurrency: CurrencyCode,
+  baseDecimals: number,
+): NetWorthHoldings | undefined => {
+  if (valuations.length === 0) return undefined;
+  const { totals } = valuation.consolidate(valuations, baseCurrency, baseDecimals);
+  return { value: totals.marketValue, stale: totals.stale, asOf: totals.asOf, excluded: totals.excluded };
+};
+
+export const withAccountHoldings = <A extends HoldingsHost>(
+  balances: readonly A[],
+  valuations: readonly PositionValuation[],
+  baseCurrency: CurrencyCode,
+  baseDecimals: number,
+): (A & { holdings?: AccountHoldings })[] => {
+  const byAccount = totalsByAccount(valuations, baseCurrency, baseDecimals);
+  return R.map(balances, (balance) => {
+    const totals = byAccount[balance.id];
+    return totals
+      ? { ...balance, holdings: ofAccount(balance.balance, balance.converted, totals, baseDecimals) }
+      : balance;
+  });
+};
+
+export const withHoldings = <N extends { total: number }>(
+  netWorth: N,
+  holdings: NetWorthHoldings | undefined,
+  baseDecimals: number,
+): N & { holdings?: NetWorthHoldings } =>
+  holdings
+    ? { ...netWorth, total: roundToDecimals(netWorth.total + holdings.value, baseDecimals), holdings }
+    : netWorth;

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { ConvertedValueSchema } from './currency-rate.js';
+import { AccountHoldingsSchema, NetWorthHoldingsSchema, type PositionValuation } from './investment/core.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
@@ -59,7 +60,9 @@ export type Account = z.infer<typeof AccountSchema>;
 // model→row adaptation (`modelToDb`/`persistableToDb`) speak `AccountEntity` — the applier itself
 // doesn't: by the time a batch reaches `diplomat/db`, it's already been adapted to a plain row
 // (`versionedTableApplier` in `diplomat/db/effects.ts` is entity-agnostic).
-export const AccountEntitySchema = withPersistenceMeta(AccountSchema);
+export const AccountEntitySchema = withPersistenceMeta(
+  AccountSchema.extend({ cashBeforeHoldings: z.number().nullable().default(null) }),
+);
 export type AccountEntity = z.infer<typeof AccountEntitySchema>;
 
 // The account aggregate owns its own entity tag — `@rfc0/effect-runner`'s `Persistable` is generic over any
@@ -90,8 +93,16 @@ export const AccountBalanceSchema = AccountSchema.extend({
   converted: ConvertedValueSchema.optional().describe(
     'Read-time valuation of balance in the base currency (ADR-026); absent when no exchange rate is on file',
   ),
+  holdings: AccountHoldingsSchema.optional().describe(
+    'Only on an investment account with positions (Feature Design 023): its cash balance, the market value of its holdings in ' +
+      'the base currency, and their total. `balance` stays the cash balance',
+  ),
 });
 export type AccountBalance = z.infer<typeof AccountBalanceSchema>;
+
+export type AccountSnapshots = Record<string, AccountEntity>;
+
+export type BalancesAndHoldings = { balances: AccountBalance[]; holdings: PositionValuation[] };
 
 export const ConsolidatedNetWorthSchema = z.object({
   baseCurrency: CurrencyCode.describe('The base currency all included balances are summed in'),
@@ -99,6 +110,10 @@ export const ConsolidatedNetWorthSchema = z.object({
   excluded: z
     .array(Id)
     .describe('Account ids left out of total because no exchange rate is on file for their currency'),
+  holdings: NetWorthHoldingsSchema.optional().describe(
+    'Only when an account holds positions (Feature Design 023): the market value of the holdings, already part of `total`, and ' +
+      'the positions left out of it (no price or no exchange rate)',
+  ),
 });
 export type ConsolidatedNetWorth = z.infer<typeof ConsolidatedNetWorthSchema>;
 
@@ -191,7 +206,7 @@ export type CreateTransfer = z.infer<typeof CreateTransferSchema>;
  * destructive/structural changes (delete, type/currency edits). The repo populates the counts;
  * `logic/account.ts` predicates interpret them.
  */
-export type AccountReferences = { transactions: number; recurring: number; cards: number };
+export type AccountReferences = { transactions: number; recurring: number; cards: number; investmentEvents: number };
 
 export type AccountError =
   | NotFound<'account'>
@@ -219,6 +234,10 @@ export const accountErrors = {
     code: 'validation',
     issues: [`type cannot be changed — account has ${transactions} transaction(s)`],
   }),
+  typeImmutableHoldings: (investmentEvents: number): AccountError => ({
+    code: 'validation',
+    issues: [`type cannot be changed — account has ${investmentEvents} investment event(s)`],
+  }),
   currencyImmutableTransactions: (transactions: number): AccountError => ({
     code: 'validation',
     issues: [`currency cannot be changed — account has ${transactions} transaction(s)`],
@@ -227,6 +246,10 @@ export const accountErrors = {
     code: 'validation',
     issues: ['currency cannot be changed — account has recurring rules that persist the original currency'],
   } satisfies AccountError,
+  currencyImmutableHoldings: (investmentEvents: number): AccountError => ({
+    code: 'validation',
+    issues: [`currency cannot be changed — account has ${investmentEvents} investment event(s)`],
+  }),
   currencyImmutableCards: {
     code: 'validation',
     issues: ['currency cannot be changed — account is a credit card payment account'],

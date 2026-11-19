@@ -48,6 +48,12 @@ describe('defaults next to a transform (config, CLI flags)', () => {
     expect(env({ FIAT_RATE_STALE_HOURS: '6' }).FIAT_RATE_STALE_HOURS).toBe(6);
   });
 
+  it('price staleness: unset gives the defaults, a value is coerced', () => {
+    expect(env({}).PRICE_STALE_HOURS).toBe(72);
+    expect(env({}).MANUAL_PRICE_STALE_DAYS).toBe(31);
+    expect(env({ PRICE_STALE_HOURS: '48' }).PRICE_STALE_HOURS).toBe(48);
+  });
+
   it('PORT: unset gives the default, a value is coerced', () => {
     expect(env({}).PORT).toBe(env({ PORT: String(env({}).PORT) }).PORT);
     expect(env({ PORT: '4000' }).PORT).toBe(4000);
