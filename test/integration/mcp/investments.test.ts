@@ -335,6 +335,38 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
     expect(after.balances[0]!.holdings).toBeUndefined();
   });
 
+  it('deletes an opening that replaced cash last: refused while others remain, then it restores', async () => {
+    await tool('create_account', { name: 'Brokerage U', type: 'investment', currency: 'USD', initialBalance: 700 });
+    await registerNu('UUA');
+    await registerNu('UUB');
+    const first = (await tool('open_position', {
+      account: 'Brokerage U',
+      asset: 'UUA',
+      quantity: 1,
+      avgCost: 1,
+      remainingCash: 85,
+    })) as { id: string; replacedCash: number | null };
+    const second = (await tool('open_position', {
+      account: 'Brokerage U',
+      asset: 'UUB',
+      quantity: 1,
+      avgCost: 1,
+      remainingCash: 85,
+    })) as { id: string; replacedCash: number | null };
+    expect([first.replacedCash, second.replacedCash]).toEqual([700, null]);
+
+    const refused = JSON.stringify(await toolError('delete_investment_event', { id: first.id }));
+    expect(refused).toContain("delete the account's other openings first");
+    expect((await balancesOf('Brokerage U')).balances[0]).toMatchObject({ balance: 85 });
+
+    expect(await tool('delete_investment_event', { id: second.id })).toEqual({ deleted: true });
+    expect(await tool('delete_investment_event', { id: first.id })).toEqual({
+      deleted: true,
+      restoredCash: { account: 'Brokerage U', initialBalance: 700 },
+    });
+    expect((await balancesOf('Brokerage U')).balances[0]).toMatchObject({ balance: 700 });
+  });
+
   it('an opening that replaced nothing restores nothing when deleted', async () => {
     await tool('create_account', { name: 'Brokerage S', type: 'investment', currency: 'USD', initialBalance: 40 });
     await registerNu('SSS');

@@ -2,7 +2,7 @@ import { ok, type ResultAsync, safeTry, type Result } from 'neverthrow';
 import * as R from 'remeda';
 import type { FlowOutcome, Persistable, PersistOutcome } from '@rfc0/effect-runner';
 import type { AppError } from '../../common/errors.js';
-import { okOr } from '../../common/result.js';
+import { okOr, orRefuse } from '../../common/result.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { ACCOUNT_ENTITY_TAG, type Account, type AccountEntity } from '../../models/account.js';
@@ -129,11 +129,22 @@ const restoreReplacedCash = async (
 ): Promise<Result<{ writes: Persistable[]; restored?: DeleteInvestmentEventResult['restoredCash'] }, AppError>> => {
   const cash = investmentEvents.cashToRestore(event);
   if (cash === null) return ok({ writes: [] });
-  const raw = await deps.accounts.findRawById(event.accountId);
-  return okOr(raw, notFound('account', event.accountId, [])).map((account) => ({
-    writes: [persistence.update({ entity: ACCOUNT_ENTITY_TAG, model: { ...account, initialBalance: cash } })],
-    restored: { account: account.name, initialBalance: cash },
-  }));
+  const [raw, onAccount] = await Promise.all([
+    deps.accounts.findRawById(event.accountId),
+    deps.investments.list({ accountId: event.accountId }),
+  ]);
+  return okOr(raw, notFound('account', event.accountId, [])).andThen((account) =>
+    orRefuse(
+      investmentEvents.refusalToDelete(
+        event,
+        R.filter(onAccount, (sibling) => sibling.id !== event.id),
+        account,
+      ),
+    ).map(() => ({
+      writes: [persistence.update({ entity: ACCOUNT_ENTITY_TAG, model: { ...account, initialBalance: cash } })],
+      restored: { account: account.name, initialBalance: cash },
+    })),
+  );
 };
 
 export const deleteInvestmentEvent = (

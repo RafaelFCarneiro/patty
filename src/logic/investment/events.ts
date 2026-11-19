@@ -2,6 +2,8 @@ import type { Account } from '../../models/account.js';
 import type { Asset } from '../../models/investment/asset.js';
 import {
   InvestmentEventType,
+  investmentErrors,
+  type InvestmentError,
   type InvestmentEvent,
   type InvestmentEventEntity,
   type InvestmentEventView,
@@ -45,3 +47,10 @@ export const mergePatch = (
   date: keepUnlessGiven(patch.date, existing.date),
   note: clearsNote(patch) ? null : keepUnlessGiven(patch.note, existing.note),
 });
+
+export const refusalToDelete = (
+  event: Pick<InvestmentEvent, 'type' | 'replacedCash'>,
+  siblings: readonly InvestmentEvent[],
+  account: Pick<Account, 'name'>,
+): InvestmentError | null =>
+  cashToRestore(event) !== null && siblings.length > 0 ? investmentErrors.otherPositionsRemain(account.name) : null;

@@ -238,6 +238,13 @@ export const investmentErrors = {
     code: 'validation',
     issues: [`no price is on file for ${asset} and no avgCost was given — set a price or give avgCost`],
   }),
+  otherPositionsRemain: (account: string): InvestmentError => ({
+    code: 'validation',
+    issues: [
+      `this opening replaced cash that other positions in ${account} still rely on — delete the account's other ` +
+        'openings first, or set the account cash directly',
+    ],
+  }),
   unknownEvent: (id: string): InvestmentError => ({ code: 'unknown_investment_event', query: id, candidates: [] }),
 };
 

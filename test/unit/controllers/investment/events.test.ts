@@ -310,6 +310,38 @@ describe('deleteInvestmentEvent', () => {
     });
   });
 
+  describe('an opening that replaced cash is deleted last (A replaces 700, B replaces nothing)', () => {
+    const openingA = eventEntity({ id: 'A', replacedCash: 700 });
+    const openingB = eventEntity({ id: 'B', assetId: 'asset-kncr', replacedCash: null });
+    const both = (events: InvestmentEventEntity[]) =>
+      investmentDeps({ accounts: [account({ initialBalance: 85 })], assets: [asset()], events });
+
+    it('refuses deleting A while B remains, writing nothing', async () => {
+      const refused = await deleteInvestmentEvent(both([openingA, openingB]), { id: 'A' });
+      expect(refused._unsafeUnwrapErr()).toEqual(investmentErrors.otherPositionsRemain('Nu Holdings (NYSE:NU)'));
+    });
+
+    it('deleting B first is fine and restores nothing', async () => {
+      const { persist, response } = await decided(deleteInvestmentEvent(both([openingA, openingB]), { id: 'B' }));
+      expect(persist.map((p) => p.entity)).toEqual([INVESTMENT_EVENT_ENTITY_TAG]);
+      expect(response).toEqual({ deleted: true });
+    });
+
+    it('then deleting A, now the last event, restores the 700', async () => {
+      const { persist, response } = await decided(deleteInvestmentEvent(both([openingA]), { id: 'A' }));
+      expect(persist[0]).toMatchObject({ entity: ACCOUNT_ENTITY_TAG, model: { initialBalance: 700 } });
+      expect(response).toEqual({
+        deleted: true,
+        restoredCash: { account: 'Nu Holdings (NYSE:NU)', initialBalance: 700 },
+      });
+    });
+
+    it('an opening that replaced nothing deletes as before even with others on the account', async () => {
+      const { persist } = await decided(deleteInvestmentEvent(both([openingA, openingB]), { id: 'B' }));
+      expect(persist).toHaveLength(1);
+    });
+  });
+
   it('restores a replaced cash of 0 too', async () => {
     const zero = investmentDeps({
       accounts: [account({ initialBalance: 85 })],
