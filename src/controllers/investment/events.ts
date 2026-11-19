@@ -5,7 +5,7 @@ import type { AppError } from '../../common/errors.js';
 import { okOr } from '../../common/result.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
-import { ACCOUNT_ENTITY_TAG, type Account } from '../../models/account.js';
+import { ACCOUNT_ENTITY_TAG, type Account, type AccountEntity } from '../../models/account.js';
 import type { Asset } from '../../models/investment/asset.js';
 import { notFound } from '../../models/error.js';
 import {
@@ -62,34 +62,33 @@ const gatherOpening = async (deps: Deps, input: OpenPositionInput, account: Acco
   };
 };
 
-const remainingCashWrite = async (
-  deps: Deps,
-  account: Account,
-  plan: OpeningPlan,
-): Promise<Result<Persistable[], AppError>> => {
-  if (account.initialBalance === plan.initialBalance) return ok([]);
-  const raw = await deps.accounts.findRawById(account.id);
-  return okOr(raw, notFound('account', account.id, [])).map((entity) => [
-    persistence.update({ entity: ACCOUNT_ENTITY_TAG, model: { ...entity, initialBalance: plan.initialBalance } }),
-  ]);
-};
+const remainingCashWrite = (snapshot: AccountEntity, plan: OpeningPlan): Persistable =>
+  snapshot.initialBalance === plan.initialBalance
+    ? persistence.check({ entity: ACCOUNT_ENTITY_TAG, id: snapshot.id, version: snapshot.version })
+    : persistence.update({
+        entity: ACCOUNT_ENTITY_TAG,
+        model: { ...snapshot, initialBalance: plan.initialBalance },
+      });
 
 export const openPosition = (
   deps: Deps,
   input: OpenPositionInput,
 ): ResultAsync<FlowOutcome<OpenPositionResult>, AppError> =>
   safeTry(async function* () {
-    const account = yield* resolveAccountRef(deps, input.account);
+    const resolved = yield* resolveAccountRef(deps, input.account);
     const asset = yield* resolveAssetRef(deps, input.asset);
-    const facts = await gatherOpening(deps, input, account, asset);
+    const snapshot = yield* okOr(await deps.accounts.findRawById(resolved.id), notFound('account', resolved.id, []));
+    const facts = await gatherOpening(deps, input, snapshot, asset);
     const plan = yield* opening.plan(facts);
-    const cash = yield* await remainingCashWrite(deps, account, plan);
     const event = persistence.insert({
       entity: INVESTMENT_EVENT_ENTITY_TAG,
       model: plan.event,
       idempotencyKey: plan.idempotencyKey,
     });
-    return ok({ persist: [...cash, event], response: opening.result(plan, account, asset, facts.decimals) });
+    return ok({
+      persist: [remainingCashWrite(snapshot, plan), event],
+      response: opening.result(plan, snapshot, asset, facts.decimals),
+    });
   });
 
 export const listInvestmentEvents = (

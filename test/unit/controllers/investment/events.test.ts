@@ -85,10 +85,23 @@ describe('openPosition', () => {
     expect(persist[0]).toMatchObject({ entity: ACCOUNT_ENTITY_TAG, model: { initialBalance: 0 } });
   });
 
-  it('does not rewrite an account that is already at that cash', async () => {
-    const deps = investmentDeps({ ...world, accounts: [account({ initialBalance: 0 })] });
+  it('does not rewrite an account already at that cash: it guards the version it read instead', async () => {
+    const deps = investmentDeps({ ...world, accounts: [account({ initialBalance: 0, version: 9 })] });
     const { persist } = await decided(openPosition(deps, OPEN));
-    expect(persist.map((p) => p.entity)).toEqual([INVESTMENT_EVENT_ENTITY_TAG]);
+    expect(persist.map((p) => p.op)).toEqual([PersistOp.enum.check, PersistOp.enum.insert]);
+    expect(persist[0]).toMatchObject({ entity: ACCOUNT_ENTITY_TAG, id: 'acc-inv', version: 9 });
+  });
+
+  it('reads the stored account once: type check, replaced cash and update version share one snapshot', async () => {
+    const deps = investmentDeps(world);
+    let reads = 0;
+    const findRawById = deps.accounts.findRawById;
+    deps.accounts.findRawById = async (id) => {
+      reads += 1;
+      return findRawById(id);
+    };
+    await decided(openPosition(deps, OPEN));
+    expect(reads).toBe(1);
   });
 
   it('defaults the average cost to the latest price and says so in a warning', async () => {
