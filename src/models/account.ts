@@ -60,7 +60,9 @@ export type Account = z.infer<typeof AccountSchema>;
 // model→row adaptation (`modelToDb`/`persistableToDb`) speak `AccountEntity` — the applier itself
 // doesn't: by the time a batch reaches `diplomat/db`, it's already been adapted to a plain row
 // (`versionedTableApplier` in `diplomat/db/effects.ts` is entity-agnostic).
-export const AccountEntitySchema = withPersistenceMeta(AccountSchema);
+export const AccountEntitySchema = withPersistenceMeta(
+  AccountSchema.extend({ cashBeforeHoldings: z.number().nullable().default(null) }),
+);
 export type AccountEntity = z.infer<typeof AccountEntitySchema>;
 
 // The account aggregate owns its own entity tag — `@rfc0/effect-runner`'s `Persistable` is generic over any

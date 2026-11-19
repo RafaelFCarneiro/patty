@@ -51,6 +51,7 @@ export const accounts = sqliteTable('accounts', {
   name: text('name').notNull(),
   type: text('type', { enum: ['checking', 'savings', 'wallet', 'investment', 'credit'] }).notNull(),
   initialBalance: real('initial_balance').notNull().default(0),
+  cashBeforeHoldings: real('cash_before_holdings'),
   currency: text('currency')
     .notNull()
     .references(() => currencies.code),
@@ -388,7 +389,6 @@ export const investmentEvents = sqliteTable(
     unitCost: real('unit_cost').notNull(),
     idempotencyKey: text('idempotency_key').notNull(),
     note: text('note'),
-    replacedCash: real('replaced_cash'),
     version: integer('version').notNull().default(0),
     userId: ownerColumn(),
   },

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { AccountType } from '../../../../src/models/account.js';
 import { investmentErrors, investmentWarnings, type OpeningFacts } from '../../../../src/models/investment/core.js';
 import { FRESH, investmentAccount, nuAsset, openingEvent, priceOf } from '../../fixtures/investment.js';
-import * as investmentEvents from '../../../../src/logic/investment/events.js';
 import * as idempotency from '../../../../src/logic/investment/idempotency.js';
 import * as opening from '../../../../src/logic/investment/opening.js';
 
@@ -30,43 +29,29 @@ describe('opening.plan', () => {
       quantity: 10,
       unitCost: 8,
       note: null,
-      replacedCash: null,
     });
     expect(plan.initialBalance).toBe(0);
     expect(plan.warnings).toEqual([]);
     expect(plan.idempotencyKey).toBe(idempotency.deriveKey(plan.event, 2));
   });
 
-  it('remembers the account cash it replaces, so deleting the opening can give it back', () => {
-    const plan = (cash: number, remainingCash?: number) =>
+  it('plans the account after the opening: the cash that stays, and the cash from before the holdings', () => {
+    const plan = (cash: number, remainingCash?: number, before: number | null = null) =>
       opening
         .plan(
           facts({
-            account: investmentAccount({ initialBalance: cash }),
+            account: investmentAccount({ initialBalance: cash, cashBeforeHoldings: before }),
             input: { account: 'x', asset: 'NU', quantity: 1, avgCost: 1, remainingCash },
           }),
         )
         ._unsafeUnwrap();
-    expect(plan(500, 85).event.replacedCash).toBe(500);
-    expect(plan(500).event.replacedCash).toBe(500);
-    expect(plan(0, 85).event.replacedCash).toBe(0);
+    expect(plan(500, 85)).toMatchObject({ initialBalance: 85, cashBeforeHoldings: 500 });
+    expect(plan(500)).toMatchObject({ initialBalance: 0, cashBeforeHoldings: 500 });
+    expect(plan(85, 85)).toMatchObject({ initialBalance: 85, cashBeforeHoldings: null });
+    expect(plan(85, 0, 700)).toMatchObject({ initialBalance: 0, cashBeforeHoldings: 700 });
   });
 
-  it('replaces nothing — and so restores nothing — when the cash is already what the caller leaves', () => {
-    const plan = (cash: number, remainingCash?: number) =>
-      opening
-        .plan(
-          facts({
-            account: investmentAccount({ initialBalance: cash }),
-            input: { account: 'x', asset: 'NU', quantity: 1, avgCost: 1, remainingCash },
-          }),
-        )
-        ._unsafeUnwrap();
-    expect(plan(85, 85).event.replacedCash).toBeNull();
-    expect(plan(0).event.replacedCash).toBeNull();
-  });
-
-  it('does not let the replaced cash change the idempotency key', () => {
+  it('does not let the account’s cash change the idempotency key', () => {
     const base = opening.plan(facts())._unsafeUnwrap();
     const replacing = opening.plan(facts({ account: investmentAccount({ initialBalance: 9 }) }))._unsafeUnwrap();
     expect(replacing.idempotencyKey).toBe(base.idempotencyKey);
@@ -144,34 +129,6 @@ describe('opening.plan', () => {
       costBasis: 3.33,
       warnings: [],
     });
-  });
-});
-
-describe('opening.plan — the cash it replaces, which deleting the opening gives back', () => {
-  const opened = (cash: number, remainingCash?: number) =>
-    opening
-      .plan({
-        id: 'event-new',
-        today: '2026-11-18',
-        input: { account: 'x', asset: 'NU', quantity: 1, avgCost: 1, remainingCash },
-        account: investmentAccount({ initialBalance: cash }),
-        asset: nuAsset(),
-        price: undefined,
-        existingOpening: undefined,
-        decimals: 2,
-      })
-      ._unsafeUnwrap().event;
-
-  it('the same cash replaces nothing, so deleting the opening restores nothing', () => {
-    expect(opened(85, 85).replacedCash).toBeNull();
-    expect(investmentEvents.cashToRestore(opened(85, 85))).toBeNull();
-    expect(investmentEvents.cashToRestore(opened(0))).toBeNull();
-  });
-
-  it('a different cash is replaced, so deleting the opening gives the old balance back', () => {
-    expect(opened(500, 85).replacedCash).toBe(500);
-    expect(investmentEvents.cashToRestore(opened(500, 85))).toBe(500);
-    expect(investmentEvents.cashToRestore(opened(500))).toBe(500);
   });
 });
 
@@ -296,7 +253,7 @@ describe('opening.resolveResponse — the response is built from what the write 
 });
 
 describe('opening.plan — the same opening recorded again is safe by design (ADR-029)', () => {
-  const existing = openingEvent({ id: 'stored', date: '2026-11-01', quantity: 10, unitCost: 8, replacedCash: 500 });
+  const existing = openingEvent({ id: 'stored', date: '2026-11-01', quantity: 10, unitCost: 8 });
   const again = (input: Partial<OpeningFacts['input']> = {}, overrides: Partial<OpeningFacts> = {}): OpeningFacts => ({
     id: 'minted',
     today: '2026-11-18',
@@ -313,7 +270,7 @@ describe('opening.plan — the same opening recorded again is safe by design (AD
     const plan = opening.plan(again())._unsafeUnwrap();
     expect(plan.recordedBefore).toEqual(existing);
     const response = opening.result(plan, investmentAccount(), nuAsset(), 2);
-    expect(response).toMatchObject({ id: 'stored', created: false, replacedCash: 500 });
+    expect(response).toMatchObject({ id: 'stored', created: false });
   });
 
   it('answers wholly from the stored event: a repeat at 8.004 over a stored 8 reports avgCost 8, costBasis 80', () => {

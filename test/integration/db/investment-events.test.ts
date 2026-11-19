@@ -61,8 +61,8 @@ describe('one opening per position, enforced by the database (ADR-038)', () => {
     expect(rows.map((row) => row.id).sort()).toEqual(['e1', 'e3', 'e4']);
   });
 
-  it('stores the replaced cash as nullable', async () => {
-    const [row] = await ctx.db.select().from(investmentEvents);
-    expect(row?.replacedCash).toBeNull();
+  it('keeps the conversion state on the account: cash_before_holdings is nullable and starts null', async () => {
+    const [row] = await ctx.db.select().from(accounts);
+    expect(row?.cashBeforeHoldings).toBeNull();
   });
 });

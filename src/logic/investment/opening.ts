@@ -19,6 +19,7 @@ import type { Asset } from '../../models/investment/asset.js';
 import { roundToDecimals } from '../money.js';
 import * as assetRules from './asset.js';
 import * as investmentEvents from './events.js';
+import * as conversion from './conversion.js';
 import * as idempotency from './idempotency.js';
 
 const isNotInvestmentAccount = ({ account }: OpeningFacts): boolean => account.type !== AccountType.enum.investment;
@@ -43,10 +44,7 @@ const resolveUnitCost = (facts: OpeningFacts): Result<CostResolution, Investment
   return resolution ? ok(resolution) : err(investmentErrors.noPriceNoCost(assetRules.label(facts.asset)));
 };
 
-const cashReplaced = (account: Pick<Account, 'initialBalance'>, remainingCash: number): number | null =>
-  account.initialBalance === remainingCash ? null : account.initialBalance;
-
-const openingEvent = (facts: OpeningFacts, unitCost: number, replacedCash: number | null): InvestmentEvent => ({
+const openingEvent = (facts: OpeningFacts, unitCost: number): InvestmentEvent => ({
   id: facts.id,
   accountId: facts.account.id,
   assetId: facts.asset.id,
@@ -55,7 +53,6 @@ const openingEvent = (facts: OpeningFacts, unitCost: number, replacedCash: numbe
   quantity: facts.input.quantity,
   unitCost,
   note: facts.input.note ?? null,
-  replacedCash,
 });
 
 const isRecordedAgain = (facts: OpeningFacts): boolean => {
@@ -63,7 +60,7 @@ const isRecordedAgain = (facts: OpeningFacts): boolean => {
   return (
     facts.existingOpening !== undefined &&
     cost !== undefined &&
-    idempotency.deriveKey(openingEvent(facts, cost.unitCost, null), facts.decimals) ===
+    idempotency.deriveKey(openingEvent(facts, cost.unitCost), facts.decimals) ===
       idempotency.deriveKey(facts.existingOpening, facts.decimals)
   );
 };
@@ -77,12 +74,11 @@ const RULES: readonly OpeningRule[] = [
 ];
 
 const buildOpeningPlan = (facts: OpeningFacts, { unitCost, warnings }: CostResolution): OpeningPlan => {
-  const initialBalance = facts.input.remainingCash ?? 0;
-  const event = openingEvent(facts, unitCost, cashReplaced(facts.account, initialBalance));
+  const event = openingEvent(facts, unitCost);
   return {
     event,
     idempotencyKey: idempotency.deriveKey(event, facts.decimals),
-    initialBalance,
+    ...conversion.afterOpening(facts.account, facts.input.remainingCash ?? 0),
     warnings,
     recordedBefore: facts.existingOpening ?? null,
   };

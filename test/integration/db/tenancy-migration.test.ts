@@ -65,7 +65,9 @@ type Row = Record<string, unknown>;
 const OWNED_AND_SHARED = [...OWNED_TABLES, ...SHARED_OR_OWNED_TABLES, 'transaction_tags', 'merchants', 'currencies'];
 
 const dumpTable = async (db: Db, table: string, dropUserId: boolean): Promise<Row[]> => {
-  const rows = await db.all<Row>(sql`SELECT * FROM ${sql.identifier(table)}`);
+  const rows = (await db.all<Row>(sql`SELECT * FROM ${sql.identifier(table)}`)).map(
+    ({ cash_before_holdings: _addedLater, ...rest }) => rest,
+  );
   const shaped = dropUserId ? rows.map(({ user_id: _userId, ...rest }) => rest) : rows;
   return shaped.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 };

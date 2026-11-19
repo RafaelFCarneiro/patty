@@ -16,7 +16,6 @@ export const dbToEntity = (row: InvestmentEventRow): InvestmentEventEntity =>
     quantity: row.quantity,
     unitCost: row.unitCost,
     note: row.note,
-    replacedCash: row.replacedCash,
     version: row.version,
   });
 

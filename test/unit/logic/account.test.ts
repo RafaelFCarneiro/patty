@@ -265,7 +265,7 @@ describe('pinned fields — type and currency once the account has activity', ()
 });
 
 describe('mergeAccountPatch', () => {
-  const raw: AccountEntity = { ...account, initialBalance: 50, version: 3 };
+  const raw: AccountEntity = { ...account, initialBalance: 50, cashBeforeHoldings: null, version: 3 };
 
   it('keeps the account when nothing is patched', () => {
     expect(mergeAccountPatch(raw, { name: 'Test' })).toEqual(raw);

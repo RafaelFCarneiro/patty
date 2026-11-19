@@ -323,8 +323,7 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
       quantity: 2,
       avgCost: 3,
       remainingCash: 85,
-    })) as { id: string; replacedCash: number };
-    expect(opened.replacedCash).toBe(700);
+    })) as { id: string };
     expect((await balancesOf('Brokerage R')).balances[0]).toMatchObject({ balance: 85 });
 
     expect(await tool('delete_investment_event', { id: opened.id })).toEqual({
@@ -336,36 +335,52 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
     expect(after.balances[0]!.holdings).toBeUndefined();
   });
 
-  it('deletes an opening that replaced cash last: refused while others remain, then it restores', async () => {
-    await tool('create_account', { name: 'Brokerage U', type: 'investment', currency: 'USD', initialBalance: 700 });
-    await registerNu('UUA');
-    await registerNu('UUB');
-    const first = (await tool('open_position', {
-      account: 'Brokerage U',
-      asset: 'UUA',
-      quantity: 1,
-      avgCost: 1,
-      remainingCash: 85,
-    })) as { id: string; replacedCash: number | null };
-    const second = (await tool('open_position', {
-      account: 'Brokerage U',
-      asset: 'UUB',
-      quantity: 1,
-      avgCost: 1,
-      remainingCash: 85,
-    })) as { id: string; replacedCash: number | null };
-    expect([first.replacedCash, second.replacedCash]).toEqual([700, null]);
+  describe('the cash from before the holdings comes back with the account’s last event (ADR-038 §7)', () => {
+    const openOn = (account: string, asset: string, remainingCash: number) =>
+      tool('open_position', { account, asset, quantity: 1, avgCost: 1, remainingCash }) as Promise<{ id: string }>;
 
-    const refused = JSON.stringify(await toolError('delete_investment_event', { id: first.id }));
-    expect(refused).toContain("delete the account's other openings first");
-    expect((await balancesOf('Brokerage U')).balances[0]).toMatchObject({ balance: 85 });
+    it('A (700→85) and B (85→85): deleting A restores nothing, B stays valued; deleting B restores 700', async () => {
+      await tool('create_account', { name: 'Brokerage U', type: 'investment', currency: 'USD', initialBalance: 700 });
+      await registerNu('UUA');
+      await registerNu('UUB');
+      await tool('set_asset_prices', {
+        prices: [
+          { asset: 'UUA', price: 10, asOf: ASOF },
+          { asset: 'UUB', price: 20, asOf: ASOF },
+        ],
+      });
+      const first = await openOn('Brokerage U', 'UUA', 85);
+      const second = await openOn('Brokerage U', 'UUB', 85);
 
-    expect(await tool('delete_investment_event', { id: second.id })).toEqual({ deleted: true });
-    expect(await tool('delete_investment_event', { id: first.id })).toEqual({
-      deleted: true,
-      restoredCash: { account: 'Brokerage U', initialBalance: 700 },
+      expect(await tool('delete_investment_event', { id: first.id })).toEqual({ deleted: true });
+      const midway = await balancesOf('Brokerage U');
+      expect(midway.balances[0]).toMatchObject({ balance: 85, holdings: { holdingsValue: 20 } });
+
+      expect(await tool('delete_investment_event', { id: second.id })).toEqual({
+        deleted: true,
+        restoredCash: { account: 'Brokerage U', initialBalance: 700 },
+      });
+      expect((await balancesOf('Brokerage U')).balances[0]).toMatchObject({ balance: 700 });
     });
-    expect((await balancesOf('Brokerage U')).balances[0]).toMatchObject({ balance: 700 });
+
+    it.each([
+      ['first then second', [0, 1]],
+      ['second then first', [1, 0]],
+    ])('A (700→85) and B (85→0), deleted %s: no deadlock, the last restores the 700', async (_order, order) => {
+      const suffix = order[0] === 0 ? 'X' : 'Y';
+      const name = `Brokerage V${suffix}`;
+      await tool('create_account', { name, type: 'investment', currency: 'USD', initialBalance: 700 });
+      await registerNu(`VVA${suffix}`);
+      await registerNu(`VVB${suffix}`);
+      const opened = [await openOn(name, `VVA${suffix}`, 85), await openOn(name, `VVB${suffix}`, 0)];
+
+      expect(await tool('delete_investment_event', { id: opened[order[0]!]!.id })).toEqual({ deleted: true });
+      expect(await tool('delete_investment_event', { id: opened[order[1]!]!.id })).toEqual({
+        deleted: true,
+        restoredCash: { account: name, initialBalance: 700 },
+      });
+      expect((await balancesOf(name)).balances[0]).toMatchObject({ balance: 700 });
+    });
   });
 
   it('an opening that replaced nothing restores nothing when deleted', async () => {
@@ -377,8 +392,7 @@ describe('MCP integration > investment holdings (ADR-038 step 1)', () => {
       quantity: 1,
       avgCost: 3,
       remainingCash: 40,
-    })) as { id: string; replacedCash: number | null };
-    expect(opened.replacedCash).toBeNull();
+    })) as { id: string };
     await tool('update_account', { name: 'Brokerage S', initialBalance: 55 });
 
     expect(await tool('delete_investment_event', { id: opened.id })).toEqual({ deleted: true });

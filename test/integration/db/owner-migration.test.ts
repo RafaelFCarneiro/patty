@@ -80,7 +80,7 @@ const domainDump = async (db: Db): Promise<Record<string, Row[]>> => {
   const dump: Record<string, Row[]> = {};
   for (const { name } of tables) {
     const rows = (await db.all<Row>(sql`SELECT * FROM ${sql.identifier(name)}`)).map(
-      ({ user_id: _owner, ...rest }) => rest,
+      ({ user_id: _owner, cash_before_holdings: _addedLater, ...rest }) => rest,
     );
     dump[name] = rows.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   }

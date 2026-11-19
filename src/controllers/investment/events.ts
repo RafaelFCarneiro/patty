@@ -1,8 +1,8 @@
-import { ok, type ResultAsync, safeTry, type Result } from 'neverthrow';
+import { ok, okAsync, ResultAsync, safeTry } from 'neverthrow';
 import * as R from 'remeda';
 import type { FlowOutcome, Persistable, PersistOutcome } from '@rfc0/effect-runner';
 import type { AppError } from '../../common/errors.js';
-import { okOr, orRefuse } from '../../common/result.js';
+import { okOr } from '../../common/result.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { ACCOUNT_ENTITY_TAG, type Account, type AccountEntity } from '../../models/account.js';
@@ -27,6 +27,7 @@ import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveAssetRef, resolveDecimals } from '../resolve.js';
 import * as assetRules from '../../logic/investment/asset.js';
 import * as investmentEvents from '../../logic/investment/events.js';
+import * as conversion from '../../logic/investment/conversion.js';
 import * as opening from '../../logic/investment/opening.js';
 
 const isDisplayable = (row: EventRow): row is { event: InvestmentEvent; account: Account; asset: Asset } =>
@@ -44,7 +45,7 @@ const viewsOf = async (deps: Deps, events: readonly InvestmentEvent[]): Promise<
   );
 };
 
-const gatherOpening = async (deps: Deps, input: OpenPositionInput, account: Account, asset: Asset) => {
+const gatherOpening = async (deps: Deps, input: OpenPositionInput, account: AccountEntity, asset: Asset) => {
   const [existing, prices, decimals] = await Promise.all([
     deps.investments.list({ accountId: account.id, assetId: asset.id }),
     deps.assetPrices.latest(),
@@ -62,13 +63,11 @@ const gatherOpening = async (deps: Deps, input: OpenPositionInput, account: Acco
   };
 };
 
-const remainingCashWrite = (snapshot: AccountEntity, plan: OpeningPlan): Persistable =>
-  snapshot.initialBalance === plan.initialBalance
-    ? persistence.check({ entity: ACCOUNT_ENTITY_TAG, id: snapshot.id, version: snapshot.version })
-    : persistence.update({
-        entity: ACCOUNT_ENTITY_TAG,
-        model: { ...snapshot, initialBalance: plan.initialBalance },
-      });
+const holdingsWrite = (snapshot: AccountEntity, plan: OpeningPlan): Persistable =>
+  persistence.update({
+    entity: ACCOUNT_ENTITY_TAG,
+    model: { ...snapshot, initialBalance: plan.initialBalance, cashBeforeHoldings: plan.cashBeforeHoldings },
+  });
 
 export const openPosition = (
   deps: Deps,
@@ -90,7 +89,7 @@ export const openPosition = (
       plan.recordedBefore
         ? { persist: [], response: planned }
         : {
-            persist: [remainingCashWrite(snapshot, plan), event],
+            persist: [holdingsWrite(snapshot, plan), event],
             response: (outcomes: PersistOutcome[]) =>
               opening.resolveResponse(planned, persistence.outcomeFor(INVESTMENT_EVENT_ENTITY_TAG, outcomes)),
           },
@@ -123,42 +122,35 @@ export const updateInvestmentEvent = (
     return ok({ persist, response });
   });
 
-const restoreReplacedCash = async (
+const deletionOf = (event: InvestmentEventEntity): Persistable =>
+  persistence.remove({ entity: INVESTMENT_EVENT_ENTITY_TAG, id: event.id, version: event.version });
+
+const deleteOpening = (
   deps: Deps,
   event: InvestmentEventEntity,
-): Promise<Result<{ writes: Persistable[]; restored?: DeleteInvestmentEventResult['restoredCash'] }, AppError>> => {
-  const cash = investmentEvents.cashToRestore(event);
-  if (cash === null) return ok({ writes: [] });
-  const [raw, onAccount] = await Promise.all([
-    deps.accounts.findRawById(event.accountId),
-    deps.investments.list({ accountId: event.accountId }),
-  ]);
-  return okOr(raw, notFound('account', event.accountId, [])).andThen((account) =>
-    orRefuse(
-      investmentEvents.refusalToDelete(
-        event,
-        R.filter(onAccount, (sibling) => sibling.id !== event.id),
-        account,
-      ),
-    ).map(() => ({
-      writes: [persistence.update({ entity: ACCOUNT_ENTITY_TAG, model: { ...account, initialBalance: cash } })],
-      restored: { account: account.name, initialBalance: cash },
-    })),
-  );
-};
+): ResultAsync<FlowOutcome<DeleteInvestmentEventResult>, AppError> =>
+  safeTry(async function* () {
+    const account = yield* okOr(
+      await deps.accounts.findRawById(event.accountId),
+      notFound('account', event.accountId, []),
+    );
+    const onAccount = await deps.investments.list({ accountId: event.accountId });
+    const after = conversion.afterDeletion(account, R.filter(onAccount, (other) => other.id !== event.id).length === 0);
+    const update = persistence.update({
+      entity: ACCOUNT_ENTITY_TAG,
+      model: { ...account, initialBalance: after.initialBalance, cashBeforeHoldings: after.cashBeforeHoldings },
+    });
+    const restoredCash = after.restored ? { account: account.name, initialBalance: after.initialBalance } : undefined;
+    return ok({ persist: [update, deletionOf(event)], response: { deleted: true, restoredCash } });
+  });
 
 export const deleteInvestmentEvent = (
   deps: Deps,
   input: DeleteInvestmentEventInput,
 ): ResultAsync<FlowOutcome<DeleteInvestmentEventResult>, AppError> =>
-  safeTry(async function* () {
-    const existing = await deps.investments.findById(input.id);
-    if (existing === null) return ok({ persist: [], response: { deleted: false } });
-    const { writes, restored } = yield* await restoreReplacedCash(deps, existing);
-    const removal = persistence.remove({
-      entity: INVESTMENT_EVENT_ENTITY_TAG,
-      id: existing.id,
-      version: existing.version,
-    });
-    return ok({ persist: [...writes, removal], response: { deleted: true, restoredCash: restored } });
+  ResultAsync.fromSafePromise(deps.investments.findById(input.id)).andThen((existing) => {
+    if (existing === null) return okAsync({ persist: [], response: { deleted: false } });
+    return investmentEvents.isOpening(existing)
+      ? deleteOpening(deps, existing)
+      : okAsync({ persist: [deletionOf(existing)], response: { deleted: true } });
   });

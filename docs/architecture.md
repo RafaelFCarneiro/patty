@@ -180,12 +180,12 @@ asset_prices        (id PK, asset_id FK→assets, price REAL — one unit, in th
                      UNIQUE(asset_id, as_of); a HISTORY (period performance needs the start price), the
                      latest is the newest as_of; agent-supplied like rates — the backend never fetches; ADR-038)
 accounts            (id PK, name, type: checking|savings|wallet|investment|credit,
-                     initial_balance, currency FK→currencies, user_id, version)
+                     initial_balance, currency FK→currencies, cash_before_holdings REAL? — the initial_balance the
+                     account held before it held positions, ADR-038 §7; never on an `Account` response —, user_id, version)
 investment_events   (id PK, user_id NOT NULL, account_id FK→accounts, asset_id FK→assets,
                      type: opening|buy|sell|split — the flows accept only `opening` until ADR-038 step 2 —,
                      date, quantity REAL, unit_cost REAL — per unit, in the asset currency; the average cost
-                     for an opening —, idempotency_key, note?, replaced_cash REAL? — the account `initial_balance` an
-                     opening replaced, given back when it is deleted, null if it replaced nothing —, version —
+                     for an opening —, idempotency_key, note?, version —
                      UNIQUE(user_id, idempotency_key), UNIQUE(user_id, account_id, asset_id) WHERE type = 'opening'
                      (one opening per position, enforced by the database),
                      INDEX (user_id, account_id), (asset_id); a position (account × asset) is DERIVED by a
@@ -478,8 +478,10 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     (`controllers/investment/portfolio.ts`'s `valueHoldings`, shared by `get_portfolio` and `get_account_balances`; each repo
     reads only its own table — ADR-028) and the fold, valuation and consolidation are pure `logic/`. `open_position` converts a
     static investment account: in ONE batch it writes the account's `initialBalance` (the cash that stays, default 0) and the
-    opening event (which remembers the cash it replaced, `replaced_cash`), so the old static value and the new holding are
-    never both counted; deleting the opening gives that cash back in ONE batch (`cashToRestore`) and says so. One opening per
+    opening event, so the old static value and the new holding are never both counted; the account also remembers the cash
+    it held before its holdings (`accounts.cash_before_holdings`), written by every opening and deletion (one account
+    version, so a sibling opening and a deletion conflict and retry) and given back, in ONE batch, with the account's last
+    investment event (`logic/investment/conversion.ts`'s `afterDeletion`); its type and currency are pinned meanwhile. One opening per
     position is a partial unique index, not only a pre-check. Step 1 accepts only `opening` events;
     `buy`/`sell`/`split`, cash legs, dividends, performance and reconciliation are ADR-038 steps 2–3. An investment account that
     holds positions reports `cashBalance`, `holdingsValue` and `total` and `consolidatedNetWorth` includes the holdings; an

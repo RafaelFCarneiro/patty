@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "251172b8-ab51-49c7-b821-3444f558593d",
+  "id": "6886dce8-f868-47c8-a877-e6a47a0b6532",
   "prevId": "9cf3dd26-36a7-405b-8768-b9c4d3f2c3fa",
   "tables": {
     "access_tokens": {
@@ -167,6 +167,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
+        },
+        "cash_before_holdings": {
+          "name": "cash_before_holdings",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "currency": {
           "name": "currency",
@@ -1382,13 +1389,6 @@
         "note": {
           "name": "note",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "replaced_cash": {
-          "name": "replaced_cash",
-          "type": "real",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

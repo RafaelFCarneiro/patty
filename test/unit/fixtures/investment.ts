@@ -58,12 +58,15 @@ export const priceOf = (
   source: null,
 });
 
-export const investmentAccount = (overrides: Partial<Account> = {}): Account => ({
+export const investmentAccount = (
+  overrides: Partial<Account & { cashBeforeHoldings: number | null }> = {},
+): Account & { cashBeforeHoldings: number | null } => ({
   id: 'acc-inv',
   name: 'Nu Holdings (NYSE:NU)',
   type: AccountType.enum.investment,
   currency: USD,
   initialBalance: 0,
+  cashBeforeHoldings: null,
   ...overrides,
 });
 
@@ -76,7 +79,6 @@ export const openingEvent = (overrides: Partial<InvestmentEvent> = {}): Investme
   quantity: 10,
   unitCost: 8,
   note: null,
-  replacedCash: null,
   ...overrides,
 });
 

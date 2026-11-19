@@ -136,6 +136,7 @@ describe('createAccount — functional core (ADR-021 phase 1)', () => {
 
 const accountEntity = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
   ...account(),
+  cashBeforeHoldings: null,
   version: 2,
   ...overrides,
 });
@@ -213,6 +214,17 @@ describe('updateAccount — functional core (ADR-021 phase 3a)', () => {
         model: { ...accountEntity(), name: 'Nubank Ultravioleta', initialBalance: 500 },
       },
     ]);
+  });
+
+  it('keeps the account’s conversion state through an edit, and never shows it in the response', async () => {
+    const holding = { ...accountEntity(), cashBeforeHoldings: 700 };
+    const deps = makeDeps({ accounts: makeAccountsRepo({ findRawById: async () => holding }) });
+
+    const { persist, response } = (await updateAccount(deps, { name: 'Nubank', initialBalance: 90 }))._unsafeUnwrap();
+
+    expect(persist[0]).toMatchObject({ model: { initialBalance: 90, cashBeforeHoldings: 700 } });
+    expect(response).not.toHaveProperty('cashBeforeHoldings');
+    expect(response).not.toHaveProperty('version');
   });
 
   it('the response omits version and carries a localized typeLabel', async () => {

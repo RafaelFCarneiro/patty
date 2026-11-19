@@ -1590,7 +1590,7 @@
     {
       "name": "open_position",
       "title": "Open position",
-      "description": "Convert a static investment account into a holding: record the quantity of an asset held in an investment account, at an average cost (default: the latest price, with a warning that P&L starts there; with no price either the call is refused — set a price or give avgCost). `remainingCash` (default 0) becomes the account's initialBalance in the SAME write, so the old static value and the holding are never counted together; the cash it replaced is remembered, so deleting the opening gives it back. One opening per account and asset (enforced by the database): edit it with update_investment_event. Not a transaction — nothing here touches spending summaries. Positions are derived from events, never stored; read them with get_portfolio.",
+      "description": "Convert a static investment account into a holding: record the quantity of an asset held in an investment account, at an average cost (default: the latest price, with a warning that P&L starts there; with no price either the call is refused — set a price or give avgCost). `remainingCash` (default 0) becomes the account's initialBalance in the SAME write, so the old static value and the holding are never counted together; the account remembers the cash it held before, which comes back with its last event. One opening per account and asset (enforced by the database): edit it with update_investment_event. Not a transaction — nothing here touches spending summaries. Positions are derived from events, never stored; read them with get_portfolio.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1729,7 +1729,7 @@
     {
       "name": "delete_investment_event",
       "title": "Delete investment event",
-      "description": "Delete an event by id; the position it opened disappears from get_portfolio. The cash that stayed in the account (its initialBalance) stays as it is, except that deleting an opening gives back, in the same write, the initialBalance that opening replaced (`restoredCash` in the response; an opening that replaced nothing restores nothing) — adjust it afterwards with update_account if needed. An id that isn't yours or is already gone deletes nothing ({ deleted: false }).",
+      "description": "Delete an event by id; the position it opened disappears from get_portfolio. The cash that stayed in the account (its initialBalance) stays as it is, except that deleting the account's LAST investment event gives back, in the same write, the cash it held before its holdings (`restoredCash` in the response). Openings can be deleted in any order; deleting one while others remain restores nothing. Adjust the cash afterwards with update_account if needed. An id that isn't yours or is already gone deletes nothing ({ deleted: false }).",
       "inputSchema": {
         "type": "object",
         "properties": {

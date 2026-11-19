@@ -126,6 +126,7 @@ afterEach(() => {
 // plain `Account` — see `@rfc0/effect-runner`): the same factory doubles as the seed for the
 // update/delete cases below, which do need a real version to key their guard off.
 const newAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
+  cashBeforeHoldings: null,
   id: randomUUID(),
   name: `UoW Account ${randomUUID()}`,
   type: AccountType.enum.checking,
@@ -2356,6 +2357,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
     const accountId = randomUUID();
     const cardId = randomUUID();
     const accountModel: AccountEntity & { version: number } = {
+      cashBeforeHoldings: null,
       id: accountId,
       name: `Card account ${accountId}`,
       type: AccountType.enum.credit,

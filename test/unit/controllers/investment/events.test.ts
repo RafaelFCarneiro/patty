@@ -42,7 +42,7 @@ const OPEN = { account: 'Nu Holdings (NYSE:NU)', asset: 'NU', quantity: 10, avgC
 describe('openPosition', () => {
   const world = { accounts: [account({ initialBalance: 500 })], assets: [asset()], ids: ['event-new'] };
 
-  it('writes the account’s remaining cash and the opening event in ONE batch, the cash first', async () => {
+  it('writes the account (cash, cash from before) and the opening in ONE batch, the account first', async () => {
     const { persist, response } = await decidedWith(
       openPosition(investmentDeps(world), { ...OPEN, remainingCash: 85 }),
       stored('event-new'),
@@ -51,7 +51,7 @@ describe('openPosition', () => {
       {
         op: PersistOp.enum.update,
         entity: ACCOUNT_ENTITY_TAG,
-        model: { ...investmentAccount(), initialBalance: 85, version: 3 },
+        model: { ...investmentAccount(), initialBalance: 85, cashBeforeHoldings: 500, version: 3 },
       },
       {
         op: PersistOp.enum.insert,
@@ -65,7 +65,6 @@ describe('openPosition', () => {
           quantity: 10,
           unitCost: 8,
           note: null,
-          replacedCash: 500,
         },
         idempotencyKey: idempotency.deriveKey(
           { accountId: 'acc-inv', assetId: 'asset-nu', type: 'opening', date: '2026-11-18', quantity: 10, unitCost: 8 },
@@ -82,7 +81,6 @@ describe('openPosition', () => {
       quantity: 10,
       avgCost: 8,
       note: null,
-      replacedCash: 500,
       costBasis: 80,
       warnings: [],
       created: true,
@@ -94,11 +92,28 @@ describe('openPosition', () => {
     expect(persist[0]).toMatchObject({ entity: ACCOUNT_ENTITY_TAG, model: { initialBalance: 0 } });
   });
 
-  it('does not rewrite an account already at that cash: it guards the version it read instead', async () => {
+  it('always writes the account, bumping its version, even when the cash stays', async () => {
     const deps = investmentDeps({ ...world, accounts: [account({ initialBalance: 0, version: 9 })] });
     const { persist } = await decided(openPosition(deps, OPEN));
-    expect(persist.map((p) => p.op)).toEqual([PersistOp.enum.check, PersistOp.enum.insert]);
-    expect(persist[0]).toMatchObject({ entity: ACCOUNT_ENTITY_TAG, id: 'acc-inv', version: 9 });
+    expect(persist.map((p) => p.op)).toEqual([PersistOp.enum.update, PersistOp.enum.insert]);
+    expect(persist[0]).toMatchObject({
+      entity: ACCOUNT_ENTITY_TAG,
+      model: { id: 'acc-inv', version: 9, initialBalance: 0, cashBeforeHoldings: null },
+    });
+  });
+
+  it('remembers the cash from before the holdings only the first time the cash changes', async () => {
+    const first = await decided(openPosition(investmentDeps(world), { ...OPEN, remainingCash: 85 }));
+    expect(first.persist[0]).toMatchObject({ model: { initialBalance: 85, cashBeforeHoldings: 500 } });
+
+    const later = investmentDeps({
+      ...world,
+      accounts: [account({ initialBalance: 85, cashBeforeHoldings: 500 })],
+      events: [eventEntity({ assetId: 'asset-kncr' })],
+      assets: [asset(), asset(kncrAsset())],
+    });
+    const second = await decided(openPosition(later, { ...OPEN, remainingCash: 0 }));
+    expect(second.persist[0]).toMatchObject({ model: { initialBalance: 0, cashBeforeHoldings: 500 } });
   });
 
   it('reads the stored account once: type check, replaced cash and update version share one snapshot', async () => {
@@ -279,91 +294,80 @@ describe('updateInvestmentEvent', () => {
   });
 });
 
-describe('deleteInvestmentEvent', () => {
-  const deps = investmentDeps({ accounts: [account({ initialBalance: 85 })], events: [eventEntity()] });
+describe('deleteInvestmentEvent — the account’s conversion state comes back with its last event', () => {
+  const converted = (overrides: Partial<AccountEntity> = {}) =>
+    account({ initialBalance: 85, cashBeforeHoldings: 700, version: 7, ...overrides });
+  const openingA = eventEntity({ id: 'A' });
+  const openingB = eventEntity({ id: 'B', assetId: 'asset-kncr' });
+  const world2 = (events: InvestmentEventEntity[], acc = converted()) =>
+    investmentDeps({ accounts: [acc], assets: [asset(), asset(kncrAsset())], events });
 
-  it('emits a version-guarded remove; an opening that replaced nothing restores nothing', async () => {
-    const { persist, response } = await decided(deleteInvestmentEvent(deps, { id: 'event-1' }));
-    expect(persist).toEqual([
-      { op: PersistOp.enum.delete, entity: INVESTMENT_EVENT_ENTITY_TAG, id: 'event-1', version: 5 },
-    ]);
-    expect(response).toEqual({ deleted: true });
-  });
-
-  it('gives back the cash an opening replaced, in the same batch: the account update, then the removal', async () => {
-    const withCash = investmentDeps({
-      accounts: [account({ initialBalance: 85, version: 7 })],
-      events: [eventEntity({ replacedCash: 500 })],
-    });
-    const { persist, response } = await decided(deleteInvestmentEvent(withCash, { id: 'event-1' }));
+  it('the only opening: restores the cash from before, clears it, and says so — one batch, account first', async () => {
+    const { persist, response } = await decided(deleteInvestmentEvent(world2([openingA]), { id: 'A' }));
     expect(persist).toEqual([
       {
         op: PersistOp.enum.update,
         entity: ACCOUNT_ENTITY_TAG,
-        model: { ...investmentAccount(), initialBalance: 500, version: 7 },
+        model: { ...investmentAccount(), initialBalance: 700, cashBeforeHoldings: null, version: 7 },
       },
-      { op: PersistOp.enum.delete, entity: INVESTMENT_EVENT_ENTITY_TAG, id: 'event-1', version: 5 },
+      { op: PersistOp.enum.delete, entity: INVESTMENT_EVENT_ENTITY_TAG, id: 'A', version: 5 },
     ]);
     expect(response).toEqual({
       deleted: true,
-      restoredCash: { account: 'Nu Holdings (NYSE:NU)', initialBalance: 500 },
+      restoredCash: { account: 'Nu Holdings (NYSE:NU)', initialBalance: 700 },
     });
   });
 
-  describe('an opening that replaced cash is deleted last (A replaces 700, B replaces nothing)', () => {
-    const openingA = eventEntity({ id: 'A', replacedCash: 700 });
-    const openingB = eventEntity({ id: 'B', assetId: 'asset-kncr', replacedCash: null });
-    const both = (events: InvestmentEventEntity[]) =>
-      investmentDeps({ accounts: [account({ initialBalance: 85 })], assets: [asset()], events });
-
-    it('refuses deleting A while B remains, writing nothing', async () => {
-      const refused = await deleteInvestmentEvent(both([openingA, openingB]), { id: 'A' });
-      expect(refused._unsafeUnwrapErr()).toEqual(investmentErrors.otherPositionsRemain('Nu Holdings (NYSE:NU)'));
+  it('with another opening on the account: allowed, nothing restored, the account still written', async () => {
+    const { persist, response } = await decided(deleteInvestmentEvent(world2([openingA, openingB]), { id: 'A' }));
+    expect(persist[0]).toMatchObject({
+      entity: ACCOUNT_ENTITY_TAG,
+      model: { initialBalance: 85, cashBeforeHoldings: 700, version: 7 },
     });
-
-    it('deleting B first is fine and restores nothing', async () => {
-      const { persist, response } = await decided(deleteInvestmentEvent(both([openingA, openingB]), { id: 'B' }));
-      expect(persist.map((p) => p.entity)).toEqual([INVESTMENT_EVENT_ENTITY_TAG]);
-      expect(response).toEqual({ deleted: true });
-    });
-
-    it('then deleting A, now the last event, restores the 700', async () => {
-      const { persist, response } = await decided(deleteInvestmentEvent(both([openingA]), { id: 'A' }));
-      expect(persist[0]).toMatchObject({ entity: ACCOUNT_ENTITY_TAG, model: { initialBalance: 700 } });
-      expect(response).toEqual({
-        deleted: true,
-        restoredCash: { account: 'Nu Holdings (NYSE:NU)', initialBalance: 700 },
-      });
-    });
-
-    it('an opening that replaced nothing deletes as before even with others on the account', async () => {
-      const { persist } = await decided(deleteInvestmentEvent(both([openingA, openingB]), { id: 'B' }));
-      expect(persist).toHaveLength(1);
-    });
+    expect(persist[1]).toMatchObject({ op: PersistOp.enum.delete, id: 'A' });
+    expect(response).toEqual({ deleted: true });
   });
 
-  it('restores a replaced cash of 0 too', async () => {
-    const zero = investmentDeps({
-      accounts: [account({ initialBalance: 85 })],
-      events: [eventEntity({ replacedCash: 0 })],
-    });
-    const { persist, response } = await decided(deleteInvestmentEvent(zero, { id: 'event-1' }));
-    expect(persist[0]).toMatchObject({ entity: ACCOUNT_ENTITY_TAG, model: { initialBalance: 0 } });
-    expect(response.restoredCash?.initialBalance).toBe(0);
+  it('any order works: B first restores nothing, then A, now last, gives the 700 back', async () => {
+    const first = await decided(deleteInvestmentEvent(world2([openingA, openingB]), { id: 'B' }));
+    expect(first.response).toEqual({ deleted: true });
+    const last = await decided(deleteInvestmentEvent(world2([openingA]), { id: 'A' }));
+    expect(last.response).toMatchObject({ restoredCash: { initialBalance: 700 } });
   });
 
-  it('leaves the account alone when the event is not an opening, whatever cash it holds', async () => {
-    const other = investmentDeps({
-      accounts: [account()],
-      events: [eventEntity({ type: InvestmentEventType.enum.buy, replacedCash: 500 })],
-    });
-    const { persist, response } = await decided(deleteInvestmentEvent(other, { id: 'event-1' }));
+  it('a conversion that remembered nothing restores nothing, but still writes the account', async () => {
+    const plain = world2([openingA], converted({ cashBeforeHoldings: null }));
+    const { persist, response } = await decided(deleteInvestmentEvent(plain, { id: 'A' }));
+    expect(persist[0]).toMatchObject({ model: { initialBalance: 85, cashBeforeHoldings: null } });
+    expect(response).toEqual({ deleted: true });
+  });
+
+  it('reads the account before its other events, so a sibling opened in between conflicts on the version', async () => {
+    const deps = world2([openingA, openingB]);
+    const order: string[] = [];
+    const findRawById = deps.accounts.findRawById;
+    const list = deps.investments.list;
+    deps.accounts.findRawById = async (id) => {
+      order.push('account');
+      return findRawById(id);
+    };
+    deps.investments.list = async (filter) => {
+      order.push('events');
+      return list(filter);
+    };
+    await decided(deleteInvestmentEvent(deps, { id: 'A' }));
+    expect(order).toEqual(['account', 'events']);
+  });
+
+  it('an event that is not an opening is removed without touching the account', async () => {
+    const other = world2([eventEntity({ id: 'T', type: InvestmentEventType.enum.buy })]);
+    const { persist, response } = await decided(deleteInvestmentEvent(other, { id: 'T' }));
     expect(persist.map((p) => p.entity)).toEqual([INVESTMENT_EVENT_ENTITY_TAG]);
     expect(response).toEqual({ deleted: true });
   });
 
-  it('is idempotent: an id that is not the caller’s deletes nothing and restores nothing', async () => {
-    const { persist, response } = await decided(deleteInvestmentEvent(deps, { id: 'someone-elses' }));
+  it('is idempotent: an id that is not the caller’s deletes nothing and writes nothing', async () => {
+    const { persist, response } = await decided(deleteInvestmentEvent(world2([openingA]), { id: 'someone-elses' }));
     expect(persist).toEqual([]);
     expect(response).toEqual({ deleted: false });
   });

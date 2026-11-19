@@ -12,7 +12,7 @@ const account: Account = {
   initialBalance: 0,
 };
 
-const accountEntity: AccountEntity = { ...account, version: 3 };
+const accountEntity: AccountEntity = { ...account, cashBeforeHoldings: null, version: 3 };
 
 describe('logic/persistence — Persistable builders', () => {
   it('insert tags op:insert and carries the plain model, no version', () => {

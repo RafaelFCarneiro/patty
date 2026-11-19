@@ -1,28 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  InvestmentEventType,
-  investmentErrors,
-  type InvestmentEventEntity,
-} from '../../../../src/models/investment/core.js';
+import { type InvestmentEventEntity } from '../../../../src/models/investment/core.js';
 import { investmentAccount, nuAsset, openingEvent } from '../../fixtures/investment.js';
 import * as investmentEvents from '../../../../src/logic/investment/events.js';
-
-describe('investmentEvents.cashToRestore — what deleting an event gives back (ADR-038 §7)', () => {
-  it('is the cash an opening replaced', () => {
-    expect(investmentEvents.cashToRestore(openingEvent({ replacedCash: 500 }))).toBe(500);
-    expect(investmentEvents.cashToRestore(openingEvent({ replacedCash: 0 }))).toBe(0);
-  });
-
-  it('is nothing for an opening that replaced nothing', () => {
-    expect(investmentEvents.cashToRestore(openingEvent({ replacedCash: null }))).toBeNull();
-  });
-
-  it('is nothing for an event that is not an opening, whatever it holds', () => {
-    expect(
-      investmentEvents.cashToRestore(openingEvent({ type: InvestmentEventType.enum.buy, replacedCash: 500 })),
-    ).toBeNull();
-  });
-});
 
 describe('events: views and patches', () => {
   const entity: InvestmentEventEntity = { ...openingEvent(), version: 2 };
@@ -37,7 +16,6 @@ describe('events: views and patches', () => {
       quantity: 10,
       avgCost: 8,
       note: null,
-      replacedCash: null,
     });
   });
 
@@ -81,32 +59,5 @@ describe('investmentEvents.mergePatch — each field is kept unless given', () =
   it('a null note clears it; an omitted one keeps it', () => {
     expect(merged({ note: null }).note).toBeNull();
     expect(merged({}).note).toBe('old');
-  });
-});
-
-describe('investmentEvents.refusalToDelete — an opening that replaced cash goes last', () => {
-  const account = { name: 'Nu Holdings (NYSE:NU)' };
-  const replacing = openingEvent({ id: 'a', replacedCash: 700 });
-  const other = openingEvent({ id: 'b', assetId: 'asset-kncr', replacedCash: null });
-
-  it('refuses while other events remain on the account, naming it', () => {
-    expect(investmentEvents.refusalToDelete(replacing, [other], account)).toEqual(
-      investmentErrors.otherPositionsRemain('Nu Holdings (NYSE:NU)'),
-    );
-  });
-
-  it('allows the last event of the account', () => {
-    expect(investmentEvents.refusalToDelete(replacing, [], account)).toBeNull();
-  });
-
-  it('allows an opening that replaced nothing, whatever else remains', () => {
-    expect(investmentEvents.refusalToDelete(other, [replacing], account)).toBeNull();
-  });
-
-  it('says what to do, without naming any edge’s vocabulary', () => {
-    const refusal = investmentErrors.otherPositionsRemain('Broker');
-    expect(refusal).toMatchObject({ code: 'validation' });
-    expect(JSON.stringify(refusal)).toContain("delete the account's other openings first");
-    expect(JSON.stringify(refusal)).not.toMatch(/update_account|delete_investment_event/);
   });
 });

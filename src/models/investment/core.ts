@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
-import type { Account } from '../account.js';
+import type { Account, AccountEntity } from '../account.js';
 import {
   AssetClass,
   AssetPricing,
@@ -29,10 +29,6 @@ export const InvestmentEventSchema = z.object({
   quantity: z.number().positive().describe('Units; fractional shares allowed'),
   unitCost: z.number().nonnegative().describe('Cost of one unit in the asset currency (the average cost, for opening)'),
   note: z.string().nullable().describe('Free-text note, or null'),
-  replacedCash: z
-    .number()
-    .nullable()
-    .describe('The account initialBalance this opening replaced (given back when it is deleted); null if none'),
 });
 export type InvestmentEvent = z.infer<typeof InvestmentEventSchema>;
 
@@ -88,7 +84,9 @@ export const DeleteInvestmentEventResultSchema = z.object({
       initialBalance: z.number().describe('The initialBalance the account was given back'),
     })
     .optional()
-    .describe('Present when deleting an opening gave back the account cash that opening had replaced'),
+    .describe(
+      'Present when deleting the account’s last investment event gave back the cash it held before its holdings',
+    ),
 });
 export type DeleteInvestmentEventResult = z.infer<typeof DeleteInvestmentEventResultSchema>;
 
@@ -106,7 +104,6 @@ export const InvestmentEventViewSchema = z.object({
   quantity: z.number(),
   avgCost: z.number().describe('Unit cost in the asset currency'),
   note: z.string().nullable(),
-  replacedCash: z.number().nullable().describe('The account cash this opening replaced; deleting it restores it'),
 });
 export type InvestmentEventView = z.infer<typeof InvestmentEventViewSchema>;
 
@@ -238,13 +235,6 @@ export const investmentErrors = {
     code: 'validation',
     issues: [`no price is on file for ${asset} and no avgCost was given — set a price or give avgCost`],
   }),
-  otherPositionsRemain: (account: string): InvestmentError => ({
-    code: 'validation',
-    issues: [
-      `this opening replaced cash that other positions in ${account} still rely on — delete the account's other ` +
-        'openings first, or set the account cash directly',
-    ],
-  }),
   unknownEvent: (id: string): InvestmentError => ({ code: 'unknown_investment_event', query: id, candidates: [] }),
 };
 
@@ -264,7 +254,7 @@ export type OpeningFacts = {
   id: string;
   today: string;
   input: OpenPositionInput;
-  account: Pick<Account, 'id' | 'name' | 'type' | 'initialBalance'>;
+  account: Pick<AccountEntity, 'id' | 'name' | 'type' | 'initialBalance' | 'cashBeforeHoldings'>;
   asset: Asset;
   price: AssetPrice | undefined;
   existingOpening: InvestmentEvent | undefined;
@@ -275,6 +265,7 @@ export type OpeningPlan = {
   event: InvestmentEvent;
   idempotencyKey: string;
   initialBalance: number;
+  cashBeforeHoldings: number | null;
   warnings: string[];
   recordedBefore: InvestmentEvent | null;
 };
@@ -321,3 +312,7 @@ export type OpeningRule = readonly [
   isViolated: (facts: OpeningFacts) => boolean,
   refusal: (facts: OpeningFacts) => InvestmentError,
 ];
+
+export type AccountConversion = { initialBalance: number; cashBeforeHoldings: number | null };
+
+export type AccountAfterDeletion = AccountConversion & { restored: boolean };
