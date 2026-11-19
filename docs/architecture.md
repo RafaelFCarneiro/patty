@@ -5,7 +5,7 @@
 > Layer concepts: `docs/canonical/diplomatic-architecture.md` (where the layers are) and
 > `docs/canonical/functional-core-imperative-shell.md` (what crosses the write-path boundary between them — ADR-021,
 > mandatory reading alongside the Diplomat doc for any write-flow change).
-> Write-path mechanics: `docs/write-path.md`. Browser `/ui` surface: `docs/ui.md`. Operator guide to authentication: `docs/auth.md`.
+> Write-path mechanics: `docs/write-path.md`. Browser `/ui` surface: `docs/ui.md`. Operator guide to authentication: `docs/auth.md`. Running from source: `docs/setup.md`.
 
 ## Stack
 
@@ -922,6 +922,29 @@ discriminator (default dashboards are git-versioned `.html` files under `ui/dash
 reconciliation, the management flows (`save`/`delete`/`rename`, all FC/IS), and entity-tagged **SSE** live-update
 fed by the `runEffects` post-commit hook — is documented in full in **`docs/ui.md`**. The `dashboards` table
 shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-027.
+
+## Data conventions
+
+One line per convention; the mechanics are in the section named. Conventions with no home elsewhere are stated here in full.
+
+- **Identifiers**: `crypto.randomUUID()`; seeded rows use stable slugs (`cat-food`); dates are `YYYY-MM-DD`, and month/year filters become `date >= from AND date < to` — § Conventions in this repo.
+- **Amounts** are positive numbers in full units (reais, dollars); `type` (`expense`/`income`) carries the sign.
+- **Locale, base currency**: per-user `user_settings`, resolved `PATTY_LOCALE` → the user's locale → `en`; localized names are read-time (`names?.[locale] ?? name`) — Invariants 13, 14.
+- **Currency**: BRL, USD, MXN, COP, USDC, BTC; each account carries one, transactions denormalize it; summaries group per currency, never convert; rounding uses the currency's own `decimals` — Invariant 3.
+- **Idempotency**: `UNIQUE(user_id, idempotency_key)`, a domain-derived key (never caller-supplied), `rowsAffected === 0` means duplicate — Invariant 1.
+- **Provenance**: an MCP-created transaction stores its natural-language `rawInput`.
+- **Classification**: `classificationMethod` (`rule|history|user|none`) and `confidence` on every transaction; merchant knowledge in `merchant_category` — Invariant 5.
+- **Transaction status**: `pending | effective`; only `effective` counts toward balances and summaries; omitted `status` defaults by date (future → `pending`, otherwise `effective`), an explicit `status` wins; classification ignores status — Invariants 4, 20.
+- **Balances** are derived, never stored; projection is opt-in via `projectedAsOf` on `get_account_balances` — Invariant 4.
+- **Transfers**: one `type: 'transfer'` row with both `from_account_id` and `to_account_id`, same currency, excluded from summaries and classification — Invariant 2.
+- **Credit cards**: a transaction references its card and the cycle's bill (auto-created `open` from `closingDay`); `pay_bill` only flips status and writes the payment transfer — Invariant 8.
+- **Recurring**: `recurring_rules.next_due`, materialized by `apply_due_recurring` with stable keys `rec-<ruleId>-<date>` — `docs/write-path.md`.
+- **Bulk import**: each line's key is derived by the single-add flow it dispatches to, against that line's own account/card and currency decimals; confidence below 0.6 flags `needs_review`, never blocks — `docs/write-path.md`.
+- **Holdings**: a position is derived from investment events, never stored; a missing price or rate is null and excluded from totals — Invariant 24.
+- **Demo marker**: `settings.instance_kind` is the only source of "this is a demo" — the paragraph "The database marks the demo", `docs/demo.md`.
+- **Tenancy and identity**: every owned row carries `user_id`; the owner is created by migration and claimed, every other user comes from an invite — § Tenancy (ADR-033 §5), Invariant 23, `docs/auth.md`.
+- **Tool scopes**: every MCP tool declares `annotations.readOnlyHint` (its single scope source) and every `RouteDefinition` a `scope`; `guardScopes` (`diplomat/mcp/scopes.ts`) refuses a tool without it — § Authentication.
+- **SQL** uses Drizzle's parameterized API or the `sql` tag; user input is never interpolated — Invariant 11.
 
 ## Conventions in this repo
 
