@@ -32,7 +32,7 @@ npm run lint && npm run typecheck && npm run test:all && npm run build && npm ru
 
 **Self-review pass** — read `git diff origin/main...HEAD` hunk by hunk against:
 
-1. **The source docs, read in full every time** (also for `main.ts` and `src/composition/` changes): `docs/canonical/diplomatic-architecture.md`, `docs/canonical/functional-core-imperative-shell.md`, `docs/canonical/code-quality.md`, `docs/architecture.md` § Conventions in this repo. The bullets below point at them; they do not replace them.
+1. **The source docs, read in full every time** (also for `main.ts` and `src/composition/` changes): `docs/canonical/diplomatic-architecture.md`, `docs/canonical/functional-core-imperative-shell.md`, `docs/canonical/code-quality.md`, `docs/canonical/code-style.md`, `docs/architecture.md` § Conventions in this repo. The bullets below point at them; they do not replace them.
 2. **Layering**: the rules below and the dependency table in `docs/architecture.md`.
 3. **Constants over literals**: no bare string or number where a zod `.enum.*` or a named constant exists, and no literal — messages included — repeated across two call sites, even across files. Grep the diff for repeated substrings.
 4. **Declarative over imperative**, and **function shape** (limits below).
@@ -115,4 +115,4 @@ Read the file itself before generating code; update it in the same change that a
 | `docs/demo.md` | The sample-data demo instance. |
 | `docs/mcp-tools.md`, `docs/mcp-clients.md` | MCP tool contract (every new tool: schema, error codes, example); connecting clients. |
 | `docs/ui.md`, `docs/releasing.md` | The `/ui` surface; release and distribution. |
-| `docs/adr/`, `docs/designs/` | An ADR is a cross-cutting, hard-to-reverse decision; never contradict an accepted one without a new one. A feature (a capability and how it is built) gets a design in `docs/designs/` (format in its README); its status line moves with its change. |
+| `docs/adr/`, `docs/designs/` | An ADR is a cross-cutting, hard-to-reverse decision (write it with the `engineering:architecture` skill); never contradict an accepted one without a new one. A feature (a capability and how it is built) gets a design in `docs/designs/` (format in its README); its status line moves with its change. |
