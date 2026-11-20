@@ -941,7 +941,7 @@ One line per convention; the mechanics are in the section named. Conventions wit
 - **Recurring**: `recurring_rules.next_due`, materialized by `apply_due_recurring` with stable keys `rec-<ruleId>-<date>` — `docs/write-path.md`.
 - **Bulk import**: each line's key is derived by the single-add flow it dispatches to, against that line's own account/card and currency decimals; confidence below 0.6 flags `needs_review`, never blocks — `docs/write-path.md`.
 - **Holdings**: a position is derived from investment events, never stored; a missing price or rate is null and excluded from totals — Invariant 24.
-- **Demo marker**: `settings.instance_kind` is the only source of "this is a demo" — the paragraph "The database marks the demo", `docs/demo.md`.
+- **Demo marker**: `settings.instance_kind` is the only source of "this is a demo" — the paragraph "The database marks the demo" in this document (`docs/demo.md` covers using the demo).
 - **Tenancy and identity**: every owned row carries `user_id`; the owner is created by migration and claimed, every other user comes from an invite — § Tenancy (ADR-033 §5), Invariant 23, `docs/auth.md`.
 - **Tool scopes**: every MCP tool declares `annotations.readOnlyHint` (its single scope source) and every `RouteDefinition` a `scope`; `guardScopes` (`diplomat/mcp/scopes.ts`) refuses a tool without it — § Authentication.
 - **SQL** uses Drizzle's parameterized API or the `sql` tag; user input is never interpolated — Invariant 11.

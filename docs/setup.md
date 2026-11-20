@@ -47,10 +47,22 @@ also show the terminal route (`TERMINAL_SETUP_HINT`, `src/models/auth/message.ts
 ## Docker
 
 ```bash
-(umask 077; openssl rand -hex 32 > patty_db_key) && docker compose up --build
+(umask 077; openssl rand -hex 32 > patty_db_key)
 ```
 
-On Linux run `sudo chown 1000 patty_db_key` first; the key file stays owner-only. Everything is served on
+On Linux, then give the container's `node` user (uid 1000) the key; the file stays owner-only. Docker Desktop maps ownership itself, so skip this there:
+
+```bash
+sudo chown 1000 patty_db_key
+```
+
+Then start it:
+
+```bash
+docker compose up --build
+```
+
+Everything is served on
 `http://127.0.0.1:51737` over loopback plain HTTP; the first start prints the setup code (`docker compose logs`) to
 claim the owner at `/ui/setup`. MCP clients and scripts use `Authorization: Bearer ptk_…`, a token created at
 `/ui/access/tokens` ([`mcp-clients.md`](mcp-clients.md)). Verify an image:
