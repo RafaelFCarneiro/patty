@@ -4,3 +4,5 @@ export type EntityDbAdapter = {
   persistableToDb: (p: Persistable) => Persistable;
   outcomeToDb: <T>(outcome: FlowOutcome<T>) => FlowOutcome<T>;
 };
+
+export type Versions = Readonly<Record<string, { version: number }>>;
