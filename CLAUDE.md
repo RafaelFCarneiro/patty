@@ -87,7 +87,7 @@ The ones code most often gets wrong:
 - Only `effective` transactions count toward balances and summaries; balances are derived, never stored.
 - A transfer is one row with both accounts; summaries and classification exclude transfers.
 - Summaries group per currency and never convert implicitly; rounding uses the currency's own `decimals` (`roundToDecimals`), never a flat 2.
-- A transaction's idempotency key is domain-derived (never caller-supplied): sha256 over a JSON array of the write's identity. Recurring (`rec-<ruleId>-<date>`) and bill-payment (`billpay-<billId>`) keys are hand-built and outside that derivation.
+- The idempotency key of a transaction or an investment event is domain-derived (never caller-supplied): sha256 over a JSON array of the write's identity. Recurring (`rec-<ruleId>-<date>`) and bill-payment (`billpay-<billId>`) keys are hand-built and outside that derivation.
 - A missing price or rate is `null` and excluded from totals, never 0; holdings are derived from investment events, never stored.
 
 All of them, one line each with a pointer to the invariant that carries the mechanics: `docs/architecture.md` § Data conventions. Changing one means updating it there in the same change.
