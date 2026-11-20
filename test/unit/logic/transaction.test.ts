@@ -46,6 +46,27 @@ describe('deriveIdempotencyKey', () => {
     ...overrides,
   });
 
+  it('keeps known keys byte-identical, so stored transactions still deduplicate', () => {
+    expect(deriveIdempotencyKey(identity(), 2)).toBe(
+      '625c3e9f2d4b52c3005962ebc73822ca438bb7f077103b55ac26f4801b00e6b7',
+    );
+    expect(
+      deriveIdempotencyKey(
+        identity({
+          fundingSourceId: undefined,
+          counterpartyId: 'acct-2',
+          billPeriodKey: '2026-06',
+          type: TransactionType.enum.transfer,
+        }),
+        2,
+        'line-2',
+      ),
+    ).toBe('5bbc6cc927ec74df1d93385b10571d6a1645756d73bcefa8e9add34331a92d15');
+    expect(deriveIdempotencyKey(identity({ currency: CurrencyCode.enum.BTC, amount: 0.12345678 }), 8)).toBe(
+      'a3f3127331197aa15ec8ee3ee4dbfed2308bd08a8c5bb992bf03f4da76700897',
+    );
+  });
+
   it('is a 64-char hex sha256 digest, stable for the same identity', () => {
     expect(deriveIdempotencyKey(identity(), 2)).toMatch(/^[0-9a-f]{64}$/);
     expect(deriveIdempotencyKey(identity(), 2)).toBe(deriveIdempotencyKey(identity(), 2));

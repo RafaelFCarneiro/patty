@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { InvestmentEventIdentity } from '../../models/investment/core.js';
+import { joinUnambiguously } from '../idempotency.js';
 import { roundToDecimals } from '../money.js';
-
-export const joinUnambiguously = (fields: readonly unknown[]): string => JSON.stringify(fields);
 
 export const deriveKey = (identity: InvestmentEventIdentity, decimals: number, discriminator?: string): string =>
   createHash('sha256')

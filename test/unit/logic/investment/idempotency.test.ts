@@ -17,6 +17,23 @@ describe('idempotency.deriveKey (ADR-029)', () => {
     expect(idempotency.deriveKey(identity, 2)).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('keeps a known key byte-identical, so stored events still deduplicate', () => {
+    expect(
+      idempotency.deriveKey(
+        {
+          ...identity,
+          accountId: 'acc-1',
+          assetId: 'ast-1',
+          type: InvestmentEventType.enum.buy,
+          date: '2026-06-09',
+          quantity: 3,
+          unitCost: 10.125,
+        },
+        2,
+      ),
+    ).toBe('961718bd2c84daff4cca361db04bb84c515fe5a47feb69edeb4b6f95357133bb');
+  });
+
   it.each([
     ['account', { accountId: 'acc-other' }],
     ['asset', { assetId: 'asset-kncr' }],
@@ -39,38 +56,5 @@ describe('idempotency.deriveKey (ADR-029)', () => {
     expect(idempotency.deriveKey({ ...identity, accountId: 'acc-inv', assetId: 'x' }, 2, 'y')).not.toBe(
       idempotency.deriveKey({ ...identity, accountId: 'acc-inv"', assetId: 'x' }, 2, 'y'),
     );
-  });
-});
-
-describe('idempotency.joinUnambiguously', () => {
-  it('keeps two field lists apart that a plain separator join would run together', () => {
-    const separators = ['|', ',', ':', ' ', '/'];
-    separators.forEach((separator) => {
-      const first = ['acc', `x${separator}y`];
-      const second = [`acc${separator}x`, 'y'];
-      expect(first.join(separator)).toBe(second.join(separator));
-      expect(idempotency.joinUnambiguously(first)).not.toBe(idempotency.joinUnambiguously(second));
-    });
-  });
-
-  it('tells a missing field from an empty one', () => {
-    expect(idempotency.joinUnambiguously(['a', null])).not.toBe(idempotency.joinUnambiguously(['a', '']));
-  });
-});
-
-describe('idempotency.deriveKey — a discriminator cannot blur a field boundary', () => {
-  const identity = {
-    accountId: 'acc',
-    assetId: 'asset',
-    type: InvestmentEventType.enum.opening,
-    date: '2026-11-01',
-    quantity: 1,
-    unitCost: 1,
-  };
-
-  it.each(['|', ',', ':', ' ', '/', '","'])('with %j inside the discriminator or the ids', (separator) => {
-    const viaDiscriminator = idempotency.deriveKey(identity, 2, `a${separator}b`);
-    const viaIds = idempotency.deriveKey({ ...identity, assetId: `asset${separator}a` }, 2, 'b');
-    expect(viaDiscriminator).not.toBe(viaIds);
   });
 });
