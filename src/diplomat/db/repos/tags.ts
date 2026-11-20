@@ -50,5 +50,5 @@ export const tagsRepo = (db: Db, userId: string): TagsRepo => {
  *  can raise a real unique-constraint error `versionedTableApplier`'s id-scoped
  *  `onConflictDoNothing` doesn't swallow. Recognized and rethrown as `VersionConflict`, rolling
  *  back and retrying — the retry's own `assertTagNameAvailable` then sees the committed row and
- *  returns `duplicate_name` instead of a raw 500. `update`/`delete` stay plain. */
+ *  returns `duplicate_name` instead of a raw 500. */
 export const tagApplier = (userId: string): EntityApplier => uniqueViolationAsConflict(ownedTableApplier(tags, userId));

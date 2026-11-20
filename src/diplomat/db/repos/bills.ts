@@ -101,6 +101,6 @@ export const billsRepo = (db: Db, userId: string): BillsRepo => ({
  *  first purchase on the same cycle can raise a real unique-constraint error that
  *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow. Rethrown as
  *  `VersionConflict` to roll back and retry the flow instead of surfacing a raw 500 or a
- *  wrong-id no-op. `update`/`delete` stay plain. */
+ *  wrong-id no-op. */
 export const billApplier = (userId: string): EntityApplier =>
   uniqueViolationAsConflict(ownedTableApplier(bills, userId));

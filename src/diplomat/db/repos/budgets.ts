@@ -75,7 +75,6 @@ export const budgetsRepo = (db: Db, userId: string): BudgetsRepo => ({
  *  same target races into a real `SQLITE_CONSTRAINT_UNIQUE` the id-scoped `onConflictDoNothing`
  *  doesn't swallow. Recognized and rethrown as `VersionConflict`, rolling back and retrying — the
  *  retry's own `findByTarget` then sees the committed row and returns `duplicate_budget` instead of
- *  a raw 500. Structurally identical to `tagApplier`/`billApplier` (`update`/`delete` stay plain —
- *  neither touches the target/currency/period key). */
+ *  a raw 500. */
 export const budgetApplier = (userId: string): EntityApplier =>
   uniqueViolationAsConflict(ownedTableApplier(budgets, userId));
