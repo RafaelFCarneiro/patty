@@ -199,10 +199,11 @@ the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
   retries. (Rationale: ADR-021.)
 - **Secondary-`UNIQUE` appliers.** `billApplier` (`diplomat/db/repos/bills.ts`; a bill is created by
   upsert-on-cycle, `UNIQUE(creditCardId, month, year)`), `tagApplier` (`tags.name`), `dashboardApplier`
-  (`dashboards.name`), and `budgetApplier` (`UNIQUE(category_id, currency, period)`) wrap `insert` so an
+  (`dashboards.name`), and `budgetApplier` (`UNIQUE(category_id, currency, period)`) are wrapped in
+  `uniqueViolationAsConflict` (`diplomat/db/effects.ts`, which covers `insert` and `update`) so an
   `isUniqueConstraintViolation` is rethrown as `VersionConflict` and the flow retries; the retry's own domain
   check then returns the clean error (`duplicate_name`, `duplicate_budget`) or touches the winning row.
-  `dashboardApplier.update` wraps it too (a rename can collide). `update`/`delete` otherwise stay plain.
+  The `update` wrap matters for a dashboard rename and a username claim. `delete` stays plain.
   `currencyRateApplier` (`UNIQUE(from_code, to_code)`) has the opposite outcome: `set_exchange_rate` is
   upsert-latest, so a concurrent first insert retries into an **update** and both callers succeed. (Rationale:
   ADR-021.)
