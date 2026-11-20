@@ -3,8 +3,7 @@ import * as tagAdapters from '../../../adapters/tags.js';
 import type { Tag, TagEntity } from '../../../models/tag.js';
 import type { Db } from '../driver.js';
 import { tags } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqlite-errors.js';
-import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
+import { ownedTableApplier, uniqueViolationAsConflict, type EntityApplier } from '../effects.js';
 import { ownedWhere } from '../queries/scope.js';
 
 export type TagsRepo = {
@@ -39,25 +38,10 @@ export const tagsRepo = (db: Db, userId: string): TagsRepo => ({
   },
 });
 
-const versionedTagApplier = (userId: string): EntityApplier => ownedTableApplier(tags, userId);
-
 /** `tags.name` has its own `UNIQUE` constraint beyond `createTag`'s pre-check
  *  (`assertTagNameAvailable`, which only guards the common case) — a concurrent same-name insert
  *  can raise a real unique-constraint error `versionedTableApplier`'s id-scoped
  *  `onConflictDoNothing` doesn't swallow. Recognized and rethrown as `VersionConflict`, rolling
  *  back and retrying — the retry's own `assertTagNameAvailable` then sees the committed row and
  *  returns `duplicate_name` instead of a raw 500. `update`/`delete` stay plain. */
-export const tagApplier = (userId: string): EntityApplier => {
-  const applier = versionedTagApplier(userId);
-  return {
-    ...applier,
-    insert: async (tx, model) => {
-      try {
-        return await applier.insert(tx, model);
-      } catch (cause) {
-        if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-        throw cause;
-      }
-    },
-  };
-};
+export const tagApplier = (userId: string): EntityApplier => uniqueViolationAsConflict(ownedTableApplier(tags, userId));

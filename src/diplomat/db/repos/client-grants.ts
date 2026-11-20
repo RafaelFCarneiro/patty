@@ -3,8 +3,7 @@ import * as clientGrantAdapters from '../../../adapters/client-grants.js';
 import { type ClientGrantEntity, GrantStatus } from '../../../models/auth/grant.js';
 import type { Db } from '../driver.js';
 import { clientGrants } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqlite-errors.js';
-import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
+import { uniqueViolationAsConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
 
 export type ClientGrantsRepo = {
   findByDeviceCodeHash: (deviceCodeHash: string) => Promise<ClientGrantEntity | null>;
@@ -87,16 +86,4 @@ export const clientGrantsRepo = (db: Db): ClientGrantsRepo => ({
   listExpired: (nowIso) => listExpired(db, nowIso),
 });
 
-const versionedClientGrantApplier = versionedTableApplier(clientGrants);
-
-export const clientGrantApplier: EntityApplier = {
-  ...versionedClientGrantApplier,
-  insert: async (tx, model, idempotencyKey) => {
-    try {
-      return await versionedClientGrantApplier.insert(tx, model, idempotencyKey);
-    } catch (cause) {
-      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-      throw cause;
-    }
-  },
-};
+export const clientGrantApplier: EntityApplier = uniqueViolationAsConflict(versionedTableApplier(clientGrants));

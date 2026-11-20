@@ -208,6 +208,19 @@ describe('invite → claim → login', () => {
     expect(await userRows(ctx)).toHaveLength(2);
   });
 
+  it('answers a concurrent invite of the same username with the ordinary taken page, not a database error', async () => {
+    const { ctx, owner } = await withOwner();
+
+    const results = await Promise.all([
+      invite(ctx, owner, { username: 'ana' }),
+      invite(ctx, owner, { username: 'ana' }),
+    ]);
+
+    expect(results.map(({ res }) => res.statusCode).sort()).toEqual([200, 409]);
+    expect(results.find(({ res }) => res.statusCode === 409)?.res.body).toContain('already taken');
+    expect(await userRows(ctx)).toHaveLength(2);
+  });
+
   it('sets a username and a password under the same rules as setup', async () => {
     const { ctx, owner } = await withOwner();
     expect((await invite(ctx, owner, { username: 'ab' })).res.statusCode).toBe(422);
@@ -367,6 +380,20 @@ describe('reissue: a new invite, and an admin-driven password reset', () => {
     expect((await inviteRows(ctx)).filter((row) => row.used_at === null)).toHaveLength(1);
     expect((await claim(ctx, first)).statusCode).toBe(403);
     expect((await claim(ctx, second!)).statusCode).toBe(303);
+  });
+
+  it('lets two concurrent reissues both answer, leaving exactly one open invite', async () => {
+    const { ctx, owner } = await withOwner();
+    await mustInvite(ctx, owner, { username: 'ana' });
+    const id = await userIdOf(ctx, 'ana');
+
+    const reissues = await Promise.all([
+      post(ctx, owner, `${USERS_URL}/${id}/reissue`, { password: PASSWORD }),
+      post(ctx, owner, `${USERS_URL}/${id}/reissue`, { password: PASSWORD }),
+    ]);
+
+    expect(reissues.map((res) => res.statusCode)).toEqual([200, 200]);
+    expect((await inviteRows(ctx)).filter((row) => row.used_at === null)).toHaveLength(1);
   });
 
   it('resets a claimed user: password gone, every session, token and sign-in revoked, old invite dead', async () => {

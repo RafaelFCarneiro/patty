@@ -7,6 +7,11 @@ import { assetApplier } from '../../../../src/diplomat/db/repos/assets.js';
 import { currencyRateApplier } from '../../../../src/diplomat/db/repos/currency-rates.js';
 import { investmentEventApplier } from '../../../../src/diplomat/db/repos/investments.js';
 import { dashboardApplier } from '../../../../src/diplomat/db/repos/dashboards.js';
+import { budgetApplier } from '../../../../src/diplomat/db/repos/budgets.js';
+import { billApplier } from '../../../../src/diplomat/db/repos/bills.js';
+import { tagApplier } from '../../../../src/diplomat/db/repos/tags.js';
+import { userApplier } from '../../../../src/diplomat/db/repos/users.js';
+import { inviteApplier } from '../../../../src/diplomat/db/repos/invites.js';
 import { txFailing } from './fake-tx.js';
 
 const unique = () => new LibsqlError('UNIQUE constraint failed', 'SQLITE_CONSTRAINT', 'SQLITE_CONSTRAINT_UNIQUE');
@@ -17,6 +22,12 @@ describe('appliers that turn a secondary-UNIQUE race into a VersionConflict', ()
     ['client grant insert', (tx: never) => clientGrantApplier.insert(tx, row, undefined)],
     ['dashboard insert', (tx: never) => dashboardApplier('user-1').insert(tx, row, undefined)],
     ['dashboard update', (tx: never) => dashboardApplier('user-1').update(tx, row)],
+    ['budget insert', (tx: never) => budgetApplier('user-1').insert(tx, row, undefined)],
+    ['bill insert', (tx: never) => billApplier('user-1').insert(tx, row, undefined)],
+    ['tag insert', (tx: never) => tagApplier('user-1').insert(tx, row, undefined)],
+    ['user insert', (tx: never) => userApplier.insert(tx, row, undefined)],
+    ['user update', (tx: never) => userApplier.update(tx, row)],
+    ['invite insert', (tx: never) => inviteApplier.insert(tx, row, undefined)],
     ['asset insert', (tx: never) => assetApplier.insert(tx, row, undefined)],
     ['asset price insert', (tx: never) => assetPriceApplier.insert(tx, row, undefined)],
     ['currency rate insert', (tx: never) => currencyRateApplier.insert(tx, row, undefined)],
@@ -29,6 +40,12 @@ describe('appliers that turn a secondary-UNIQUE race into a VersionConflict', ()
     ['client grant insert', (tx: never) => clientGrantApplier.insert(tx, row, undefined)],
     ['dashboard insert', (tx: never) => dashboardApplier('user-1').insert(tx, row, undefined)],
     ['dashboard update', (tx: never) => dashboardApplier('user-1').update(tx, row)],
+    ['budget insert', (tx: never) => budgetApplier('user-1').insert(tx, row, undefined)],
+    ['bill insert', (tx: never) => billApplier('user-1').insert(tx, row, undefined)],
+    ['tag insert', (tx: never) => tagApplier('user-1').insert(tx, row, undefined)],
+    ['user insert', (tx: never) => userApplier.insert(tx, row, undefined)],
+    ['user update', (tx: never) => userApplier.update(tx, row)],
+    ['invite insert', (tx: never) => inviteApplier.insert(tx, row, undefined)],
     ['asset insert', (tx: never) => assetApplier.insert(tx, row, undefined)],
     ['asset price insert', (tx: never) => assetPriceApplier.insert(tx, row, undefined)],
     ['currency rate insert', (tx: never) => currencyRateApplier.insert(tx, row, undefined)],
@@ -88,9 +105,18 @@ describe('uniqueViolationAsConflict', () => {
     expect(seen).toEqual(['key-1']);
   });
 
-  it('leaves update, delete and check as they were', async () => {
+  it('turns a unique violation on update into a VersionConflict too', async () => {
+    const wrapped = uniqueViolationAsConflict({
+      ...inserting(async () => ({ applied: true })),
+      update: async () => {
+        throw unique();
+      },
+    });
+    await expect(wrapped.update(txFailing(unique()), row)).rejects.toBeInstanceOf(VersionConflict);
+  });
+
+  it('leaves delete and check as they were', async () => {
     const wrapped = uniqueViolationAsConflict(inserting(async () => ({ applied: true })));
-    expect(await wrapped.update(txFailing(unique()), row)).toEqual({ applied: true });
     expect(await wrapped.delete(txFailing(unique()), 'id', 0)).toEqual({ applied: true });
   });
 });

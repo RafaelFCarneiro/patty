@@ -12,8 +12,7 @@ import {
 } from '../../../models/dashboard.js';
 import type { Db } from '../driver.js';
 import { dashboards } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqlite-errors.js';
-import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
+import { ownedTableApplier, uniqueViolationAsConflict, type EntityApplier } from '../effects.js';
 import { ownedWhere, visibleRows, visibleWhere, type RepoScope } from '../queries/scope.js';
 
 export type DashboardRef = { id: string; version: number };
@@ -134,27 +133,5 @@ export const dashboardsRepo = (db: Db, userId: string): DashboardsRepo => {
   };
 };
 
-const versionedDashboardApplier = (userId: string): EntityApplier => ownedTableApplier(dashboards, userId);
-
-export const dashboardApplier = (userId: string): EntityApplier => {
-  const applier = versionedDashboardApplier(userId);
-  return {
-    ...applier,
-    insert: async (tx, model) => {
-      try {
-        return await applier.insert(tx, model);
-      } catch (cause) {
-        if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-        throw cause;
-      }
-    },
-    update: async (tx, model) => {
-      try {
-        return await applier.update(tx, model);
-      } catch (cause) {
-        if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-        throw cause;
-      }
-    },
-  };
-};
+export const dashboardApplier = (userId: string): EntityApplier =>
+  uniqueViolationAsConflict(ownedTableApplier(dashboards, userId));

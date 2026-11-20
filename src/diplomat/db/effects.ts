@@ -190,14 +190,17 @@ export const ownedTableApplier = <T extends OwnedTable>(
   config: VersionedTableConfig = {},
 ): EntityApplier => applierFor(table, { userId }, config);
 
+const asConflictOnUnique = async <T>(run: () => Promise<T>): Promise<T> => {
+  try {
+    return await run();
+  } catch (cause) {
+    if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
+    throw cause;
+  }
+};
+
 export const uniqueViolationAsConflict = (applier: EntityApplier): EntityApplier => ({
   ...applier,
-  insert: async (tx, model, idempotencyKey) => {
-    try {
-      return await applier.insert(tx, model, idempotencyKey);
-    } catch (cause) {
-      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-      throw cause;
-    }
-  },
+  insert: (tx, model, idempotencyKey) => asConflictOnUnique(() => applier.insert(tx, model, idempotencyKey)),
+  update: (tx, model) => asConflictOnUnique(() => applier.update(tx, model)),
 });
