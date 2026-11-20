@@ -937,7 +937,7 @@ One line per convention; the mechanics are in the section named. Conventions wit
 - **Transaction status**: `pending | effective`; only `effective` counts toward balances and summaries; omitted `status` defaults by date (future → `pending`, otherwise `effective`), an explicit `status` wins; classification ignores status — Invariants 4, 20.
 - **Balances** are derived, never stored; projection is opt-in via `projectedAsOf` on `get_account_balances` — Invariant 4.
 - **Transfers**: one `type: 'transfer'` row with both `from_account_id` and `to_account_id`, same currency, excluded from summaries and classification — Invariant 2.
-- **Credit cards**: a transaction references its card and the cycle's bill (auto-created `open` from `closingDay`); `pay_bill` only flips status and writes the payment transfer — Invariant 8.
+- **Credit cards**: a transaction references its card and the cycle's bill (auto-created `open` from `closingDay`); a bill payment is the transfer `pay_bill` creates, never an expense (it would double-count) — Invariant 8.
 - **Recurring**: `recurring_rules.next_due`, materialized by `apply_due_recurring` with stable keys `rec-<ruleId>-<date>` — `docs/write-path.md`.
 - **Bulk import**: each line's key is derived by the single-add flow it dispatches to, against that line's own account/card and currency decimals; confidence below 0.6 flags `needs_review`, never blocks — `docs/write-path.md`.
 - **Holdings**: a position is derived from investment events, never stored; a missing price or rate is null and excluded from totals — Invariant 24.
