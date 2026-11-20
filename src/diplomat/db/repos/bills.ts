@@ -97,10 +97,6 @@ export const billsRepo = (db: Db, userId: string): BillsRepo => ({
   },
 });
 
-/** A bill is created by cycle (`UNIQUE(creditCardId, month, year)`), not by `id`, so a concurrent
- *  first purchase on the same cycle can raise a real unique-constraint error that
- *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow. Rethrown as
- *  `VersionConflict` to roll back and retry the flow instead of surfacing a raw 500 or a
- *  wrong-id no-op. */
+// UNIQUE(credit_card_id, month, year): a concurrent first purchase on one cycle.
 export const billApplier = (userId: string): EntityApplier =>
   uniqueViolationAsConflict(ownedTableApplier(bills, userId));

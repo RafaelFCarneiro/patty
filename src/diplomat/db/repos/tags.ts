@@ -45,10 +45,5 @@ export const tagsRepo = (db: Db, userId: string): TagsRepo => {
   };
 };
 
-/** `tags.name` has its own `UNIQUE` constraint beyond `createTag`'s pre-check
- *  (`assertTagNameAvailable`, which only guards the common case) — a concurrent same-name insert
- *  can raise a real unique-constraint error `versionedTableApplier`'s id-scoped
- *  `onConflictDoNothing` doesn't swallow. Recognized and rethrown as `VersionConflict`, rolling
- *  back and retrying — the retry's own `assertTagNameAvailable` then sees the committed row and
- *  returns `duplicate_name` instead of a raw 500. */
+// UNIQUE(user_id, name): a concurrent create of one tag name.
 export const tagApplier = (userId: string): EntityApplier => uniqueViolationAsConflict(ownedTableApplier(tags, userId));

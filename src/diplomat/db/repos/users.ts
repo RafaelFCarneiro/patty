@@ -30,7 +30,5 @@ export const usersRepo = (db: Db): UsersRepo => ({
   },
 });
 
-/** `users.username` is unique: two admins inviting the same name at once both insert it. The loser's unique
- *  violation is
- *  rethrown as `VersionConflict`, so the engine re-runs the flow, which then reports `username_taken`. */
+// UNIQUE(username): a concurrent invite of one name, or the owner claim's update onto a taken one.
 export const userApplier: EntityApplier = uniqueViolationAsConflict(versionedTableApplier(users));

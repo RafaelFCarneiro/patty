@@ -39,7 +39,5 @@ export const invitesRepo = (db: Db): InvitesRepo => ({
   },
 });
 
-/** `invites_one_open_per_user` is unique among UNCLAIMED invites: two admins reissuing for the same user at once both
- *  insert one. The loser's unique violation is rethrown as `VersionConflict`, so the engine rolls back and re-runs the
- *  flow, which then sees (and replaces) the winner's invite. */
+// UNIQUE(user_id) among unclaimed invites: a concurrent reissue for one user.
 export const inviteApplier: EntityApplier = uniqueViolationAsConflict(versionedTableApplier(invites));

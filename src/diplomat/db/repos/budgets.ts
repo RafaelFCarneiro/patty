@@ -70,11 +70,6 @@ export const budgetsRepo = (db: Db, userId: string): BudgetsRepo => ({
   },
 });
 
-/** `budgets` has the secondary `UNIQUE(category_id, currency, period)` beyond `createBudget`'s
- *  own pre-check (`findByTarget`, which only guards the common case) — a concurrent create of the
- *  same target races into a real `SQLITE_CONSTRAINT_UNIQUE` the id-scoped `onConflictDoNothing`
- *  doesn't swallow. Recognized and rethrown as `VersionConflict`, rolling back and retrying — the
- *  retry's own `findByTarget` then sees the committed row and returns `duplicate_budget` instead of
- *  a raw 500. */
+// UNIQUE(user_id, category_id, currency, period): a concurrent create of one budget target.
 export const budgetApplier = (userId: string): EntityApplier =>
   uniqueViolationAsConflict(ownedTableApplier(budgets, userId));
