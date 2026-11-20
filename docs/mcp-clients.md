@@ -2,7 +2,7 @@
 
 PATTY runs as a **stdio MCP server** by default — the client launches it as a subprocess and speaks JSON-RPC over stdin/stdout. No port, no URL, no bridge needed for chat itself. This is the recommended path for all local MCP clients.
 
-Alongside that, the **HTTP sidecar** (`/api` + `/ui` dashboards) starts automatically by default — the dashboard experience is a core feature, not something you have to opt into (ADR-013 Decision 7). Set `PATTY_HTTP=false` to disable it and stay stdio-only with zero ports bound. See "HTTP sidecar (alongside stdio)" below. Separately, `MCP_TRANSPORT=http` switches the *transport itself* to HTTP, for multi-client access, REST consumers, or debugging — see the HTTP sections below. Tool contract: `docs/mcp-tools.md`.
+Alongside that, the **HTTP sidecar** (`/api` + `/ui` dashboards) starts automatically by default — the dashboard experience is a core feature, not something you have to opt into. Set `PATTY_HTTP=false` to disable it and stay stdio-only with zero ports bound. See "HTTP sidecar (alongside stdio)" below. Separately, `MCP_TRANSPORT=http` switches the *transport itself* to HTTP, for multi-client access, REST consumers, or debugging — see the HTTP sections below. Tool contract: `docs/mcp-tools.md`.
 
 ---
 
@@ -172,18 +172,17 @@ npx @rfc0/patty@latest
 Set `PATTY_HTTP=false` if you want stdio-only with nothing bound at all. If the sidecar's port is already
 taken, it logs an actionable message to stderr and skips starting instead of failing the whole process —
 **stdio MCP keeps working regardless**; this is a resilience fallback, not the normal state, and the same chat
-session can then help you find and free the port (see `docs/architecture.md` § HTTP sidecar, ADR-013
-Decision 7).
+session can then help you find and free the port (see `docs/architecture.md` § HTTP sidecar).
 
-The sidecar binds `127.0.0.1` by default (`HOST` overrides it, e.g. `0.0.0.0` inside a container whose port is published on host loopback only) — never the LAN unless you override it. This API has no auth (local-first, ADR-013), so with the default it is
-not reachable from other devices on your network, only from this machine; setting `HOST` to a wildcard (`0.0.0.0`/`::`) outside a loopback-only port publish exposes it to the whole network. Use `127.0.0.1` in the URL, not
+The sidecar binds `127.0.0.1` by default (`HOST` overrides it, e.g. `0.0.0.0` inside a container whose port is published on host loopback only) — never the LAN unless you override it. With the default bind it is
+not reachable from other devices on your network, only from this machine (and it needs a login unless `PATTY_AUTH=disabled`); setting `HOST` to a wildcard (`0.0.0.0`/`::`) outside a loopback-only port publish exposes it to the whole network. Use `127.0.0.1` in the URL, not
 `localhost` — some resolvers prefer IPv6 (`::1`), which this server does not bind.
 
 ## Multiple clients at once (dogfooding)
 
-Stdio servers are spawned **per client connection** (ADR-007): running Desktop and Cowork/Code together, or
+Stdio servers are spawned **per client connection**: running Desktop and Cowork/Code together, or
 reconnecting a client without its first server exiting, means two `patty` processes hold two separate
-connections to the same `patty.db` file. PATTY makes this graceful rather than fatal (ADR-024) — WAL mode
+connections to the same `patty.db` file. PATTY makes this graceful rather than fatal — WAL mode
 plus a `busy_timeout` on every connection means a contended writer waits for the lock instead of throwing, and
 `runEffects` bounded-retries any `SQLITE_BUSY` that outlives the timeout — but it is still two writers on one
 file. For heavy multi-client use, prefer the single shared **HTTP transport** below instead: one process, one
@@ -239,7 +238,7 @@ ChatGPT's servers connect from the internet: needs a paid plan with Developer Mo
 cloudflared tunnel --url http://127.0.0.1:51737   # → https://xxx.trycloudflare.com (:3001 from source)
 ```
 
-**Current limitation: PATTY cannot be connected to ChatGPT yet.** An auth-disabled loopback instance (an explicit `PATTY_AUTH=disabled`) refuses a tunnel's non-loopback `Host` with `403`, and an instance with authentication on (the container, or any `PUBLIC_URL`) needs `Authorization: Bearer ptk_…` on every `/mcp` request — a header this connector cannot send. It becomes possible once the OAuth authorization server lands (ADR-033 Phase 3). Don't expose PATTY through a public tunnel in the meantime.
+**Current limitation: PATTY cannot be connected to ChatGPT yet.** An auth-disabled loopback instance (an explicit `PATTY_AUTH=disabled`) refuses a tunnel's non-loopback `Host` with `403`, and an instance with authentication on (the container, or any `PUBLIC_URL`) needs `Authorization: Bearer ptk_…` on every `/mcp` request — a header this connector cannot send. It becomes possible once the OAuth authorization server lands. Don't expose PATTY through a public tunnel in the meantime.
 
 ### Ollama (HTTP mode, untested — needs a bridge client)
 
@@ -255,7 +254,7 @@ The image ([README § Docker](../README.md#docker)) always runs the HTTP transpo
 
 > A client that reaches PATTY through a **non-loopback hostname** (a LAN name, a tunnel) needs authentication on — set `PUBLIC_URL`; an auth-disabled instance only answers `127.0.0.1`, `localhost` and `::1` Hosts (and loopback `Origin`s).
 
-The container requires authentication (ADR-033), so every HTTP client sends a **personal access token** as
+The container requires authentication, so every HTTP client sends a **personal access token** as
 `Authorization: Bearer ptk_…`:
 
 1. Open <http://127.0.0.1:51737/ui/access/tokens> (the key icon in the dashboard sidebar) in your logged-in browser.
