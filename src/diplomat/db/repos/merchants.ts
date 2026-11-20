@@ -5,7 +5,7 @@ import type { Merchant, MerchantCategoryEdge } from '../../../models/merchant.js
 import { MerchantTopDbRowSchema, type MerchantTopDbRow } from '../../../wire/db/merchants.js';
 import type { Db } from '../driver.js';
 import { merchantCategory, merchants } from '../schema.js';
-import { ownedBy, visibleTo } from '../queries/scope.js';
+import { ownedBy, visibleTo, type RepoScope } from '../queries/scope.js';
 import { txPredicates } from '../queries/tx-predicates.js';
 import type { EntityApplier } from '../effects.js';
 
@@ -71,32 +71,41 @@ export type MerchantsRepo = {
   top: (limit: number) => Promise<MerchantTopDbRow[]>;
 };
 
-export const merchantsRepo = (db: Db, userId: string): MerchantsRepo => ({
-  matchCandidates: async (normalizedDescription) => {
-    // Shared `rule` edges plus this user's `history` edges; the same (merchant, category) may have one of each,
-    // so weights are summed.
-    const rows = await db.all<Record<string, unknown>>(sql`
-      SELECT mc.merchant_key AS "merchantKey", mc.category_id AS "categoryId",
-             c.name AS "categoryName", SUM(mc.weight) AS weight,
-             CASE WHEN SUM(mc.origin = ${ClassificationMethod.enum.rule}) > 0
-                  THEN ${ClassificationMethod.enum.rule} ELSE ${ClassificationMethod.enum.history} END AS origin
-      FROM merchant_category mc
-      JOIN categories c ON c.id = mc.category_id
-      WHERE ${visibleTo(userId, 'mc')}
-        AND ${visibleTo(userId, 'c')}
-        AND ${normalizedDescription} LIKE '%' || mc.merchant_key || '%'
-      GROUP BY mc.merchant_key, mc.category_id
-      ORDER BY weight DESC, length(mc.merchant_key) DESC
-      LIMIT 5
-    `);
-    return rows.map((r) => MatchRow.parse(r));
-  },
+const matchCandidates = async (
+  { db, userId }: RepoScope,
+  normalizedDescription: string,
+): ReturnType<MerchantsRepo['matchCandidates']> => {
+  // Shared `rule` edges plus this user's `history` edges; the same (merchant, category) may have one of each,
+  // so weights are summed.
+  const rows = await db.all<Record<string, unknown>>(sql`
+    SELECT mc.merchant_key AS "merchantKey", mc.category_id AS "categoryId",
+           c.name AS "categoryName", SUM(mc.weight) AS weight,
+           CASE WHEN SUM(mc.origin = ${ClassificationMethod.enum.rule}) > 0
+                THEN ${ClassificationMethod.enum.rule} ELSE ${ClassificationMethod.enum.history} END AS origin
+    FROM merchant_category mc
+    JOIN categories c ON c.id = mc.category_id
+    WHERE ${visibleTo(userId, 'mc')}
+      AND ${visibleTo(userId, 'c')}
+      AND ${normalizedDescription} LIKE '%' || mc.merchant_key || '%'
+    GROUP BY mc.merchant_key, mc.category_id
+    ORDER BY weight DESC, length(mc.merchant_key) DESC
+    LIMIT 5
+  `);
+  return rows.map((r) => MatchRow.parse(r));
+};
 
-  top: async (limit) => {
-    const rows = await db.all<Record<string, unknown>>(MERCHANTS_TOP_SELECT(userId, limit));
-    return rows.map((r) => MerchantTopDbRowSchema.parse(r));
-  },
-});
+const top = async ({ db, userId }: RepoScope, limit: number): ReturnType<MerchantsRepo['top']> => {
+  const rows = await db.all<Record<string, unknown>>(MERCHANTS_TOP_SELECT(userId, limit));
+  return rows.map((r) => MerchantTopDbRowSchema.parse(r));
+};
+
+export const merchantsRepo = (db: Db, userId: string): MerchantsRepo => {
+  const scope: RepoScope = { db, userId };
+  return {
+    matchCandidates: (normalizedDescription) => matchCandidates(scope, normalizedDescription),
+    top: (limit) => top(scope, limit),
+  };
+};
 
 /** Hand-written rather than `versionedTableApplier` because `merchants` keys on `key` with no
  *  `version` — like `dashboards`, but simpler: only ever inserted, idempotently. */

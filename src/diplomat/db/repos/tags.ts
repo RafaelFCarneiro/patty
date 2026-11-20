@@ -4,7 +4,7 @@ import type { Tag, TagEntity } from '../../../models/tag.js';
 import type { Db } from '../driver.js';
 import { tags } from '../schema.js';
 import { ownedTableApplier, uniqueViolationAsConflict, type EntityApplier } from '../effects.js';
-import { ownedWhere } from '../queries/scope.js';
+import { ownedWhere, type RepoScope } from '../queries/scope.js';
 
 export type TagsRepo = {
   list: () => Promise<Tag[]>;
@@ -13,30 +13,37 @@ export type TagsRepo = {
   findById: (id: string) => Promise<TagEntity | null>;
 };
 
-export const tagsRepo = (db: Db, userId: string): TagsRepo => ({
-  list: async () => {
-    const rows = await db.select().from(tags).where(ownedWhere(tags.userId, userId)).orderBy(tags.name);
-    return rows.map(tagAdapters.dbToModel);
-  },
+const list = async ({ db, userId }: RepoScope): ReturnType<TagsRepo['list']> => {
+  const rows = await db.select().from(tags).where(ownedWhere(tags.userId, userId)).orderBy(tags.name);
+  return rows.map(tagAdapters.dbToModel);
+};
 
-  findByName: async (name) => {
-    const [row] = await db
-      .select()
-      .from(tags)
-      .where(ownedWhere(tags.userId, userId, eq(tags.name, name)))
-      .limit(1);
-    return row ? tagAdapters.dbToModel(row) : null;
-  },
+const findByName = async ({ db, userId }: RepoScope, name: string): ReturnType<TagsRepo['findByName']> => {
+  const [row] = await db
+    .select()
+    .from(tags)
+    .where(ownedWhere(tags.userId, userId, eq(tags.name, name)))
+    .limit(1);
+  return row ? tagAdapters.dbToModel(row) : null;
+};
 
-  findById: async (id) => {
-    const [row] = await db
-      .select()
-      .from(tags)
-      .where(ownedWhere(tags.userId, userId, eq(tags.id, id)))
-      .limit(1);
-    return row ? tagAdapters.dbToEntity(row) : null;
-  },
-});
+const findById = async ({ db, userId }: RepoScope, id: string): ReturnType<TagsRepo['findById']> => {
+  const [row] = await db
+    .select()
+    .from(tags)
+    .where(ownedWhere(tags.userId, userId, eq(tags.id, id)))
+    .limit(1);
+  return row ? tagAdapters.dbToEntity(row) : null;
+};
+
+export const tagsRepo = (db: Db, userId: string): TagsRepo => {
+  const scope: RepoScope = { db, userId };
+  return {
+    list: () => list(scope),
+    findByName: (name) => findByName(scope, name),
+    findById: (id) => findById(scope, id),
+  };
+};
 
 /** `tags.name` has its own `UNIQUE` constraint beyond `createTag`'s pre-check
  *  (`assertTagNameAvailable`, which only guards the common case) — a concurrent same-name insert
