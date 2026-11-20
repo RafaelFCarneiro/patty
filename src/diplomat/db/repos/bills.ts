@@ -7,9 +7,8 @@ import type { RawTransactionView } from '../../../models/transaction.js';
 import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { Db } from '../driver.js';
 import { bills } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqlite-errors.js';
 import { fullTxSelect } from '../queries/transaction-select.js';
-import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
+import { ownedTableApplier, uniqueViolationAsConflict, type EntityApplier } from '../effects.js';
 import { ownedBy } from '../queries/scope.js';
 
 /** Includes `creditCardId`/`version` — for the FC/IS credit-card transaction flows' own
@@ -98,24 +97,6 @@ export const billsRepo = (db: Db, userId: string): BillsRepo => ({
   },
 });
 
-const versionedBillApplier = (userId: string): EntityApplier => ownedTableApplier(bills, userId);
-
-/** A bill is created by cycle (`UNIQUE(creditCardId, month, year)`), not by `id`, so a concurrent
- *  first purchase on the same cycle can raise a real unique-constraint error that
- *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow. Rethrown as
- *  `VersionConflict` to roll back and retry the flow instead of surfacing a raw 500 or a
- *  wrong-id no-op. `update`/`delete` stay plain. */
-export const billApplier = (userId: string): EntityApplier => {
-  const applier = versionedBillApplier(userId);
-  return {
-    ...applier,
-    insert: async (tx, model) => {
-      try {
-        return await applier.insert(tx, model);
-      } catch (cause) {
-        if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-        throw cause;
-      }
-    },
-  };
-};
+// UNIQUE(credit_card_id, month, year): a concurrent first purchase on one cycle.
+export const billApplier = (userId: string): EntityApplier =>
+  uniqueViolationAsConflict(ownedTableApplier(bills, userId));

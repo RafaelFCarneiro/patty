@@ -5,8 +5,7 @@ import type { CurrencyCode } from '../../../models/money.js';
 import { BudgetViewRowSchema, type BudgetViewRow } from '../../../wire/db/budgets.js';
 import type { Db } from '../driver.js';
 import { budgets } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqlite-errors.js';
-import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
+import { ownedTableApplier, uniqueViolationAsConflict, type EntityApplier } from '../effects.js';
 import { ownedBy, ownedWhere } from '../queries/scope.js';
 
 // Budgets target either a top-level category or a sub-category — both rows in `categories` — so
@@ -71,26 +70,6 @@ export const budgetsRepo = (db: Db, userId: string): BudgetsRepo => ({
   },
 });
 
-const versionedBudgetApplier = (userId: string): EntityApplier => ownedTableApplier(budgets, userId);
-
-/** `budgets` has the secondary `UNIQUE(category_id, currency, period)` beyond `createBudget`'s
- *  own pre-check (`findByTarget`, which only guards the common case) — a concurrent create of the
- *  same target races into a real `SQLITE_CONSTRAINT_UNIQUE` the id-scoped `onConflictDoNothing`
- *  doesn't swallow. Recognized and rethrown as `VersionConflict`, rolling back and retrying — the
- *  retry's own `findByTarget` then sees the committed row and returns `duplicate_budget` instead of
- *  a raw 500. Structurally identical to `tagApplier`/`billApplier` (`update`/`delete` stay plain —
- *  neither touches the target/currency/period key). */
-export const budgetApplier = (userId: string): EntityApplier => {
-  const applier = versionedBudgetApplier(userId);
-  return {
-    ...applier,
-    insert: async (tx, model) => {
-      try {
-        return await applier.insert(tx, model);
-      } catch (cause) {
-        if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-        throw cause;
-      }
-    },
-  };
-};
+// UNIQUE(user_id, category_id, currency, period): a concurrent create of one budget target.
+export const budgetApplier = (userId: string): EntityApplier =>
+  uniqueViolationAsConflict(ownedTableApplier(budgets, userId));

@@ -3,8 +3,7 @@ import * as inviteAdapters from '../../../adapters/invites.js';
 import type { InviteEntity } from '../../../models/auth/users.js';
 import type { Db } from '../driver.js';
 import { invites } from '../schema.js';
-import { isUniqueConstraintViolation } from '../sqlite-errors.js';
-import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
+import { uniqueViolationAsConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
 
 export type InvitesRepo = {
   findByHash: (codeHash: string) => Promise<InviteEntity | null>;
@@ -40,19 +39,5 @@ export const invitesRepo = (db: Db): InvitesRepo => ({
   },
 });
 
-const versionedInviteApplier = versionedTableApplier(invites);
-
-/** `invites_one_open_per_user` is unique among UNCLAIMED invites: two admins reissuing for the same user at once both
- *  insert one. The loser's unique violation is rethrown as `VersionConflict`, so the engine rolls back and re-runs the
- *  flow, which then sees (and replaces) the winner's invite. */
-export const inviteApplier: EntityApplier = {
-  ...versionedInviteApplier,
-  insert: async (tx, model, idempotencyKey) => {
-    try {
-      return await versionedInviteApplier.insert(tx, model, idempotencyKey);
-    } catch (cause) {
-      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-      throw cause;
-    }
-  },
-};
+// UNIQUE(user_id) among unclaimed invites: a concurrent reissue for one user.
+export const inviteApplier: EntityApplier = uniqueViolationAsConflict(versionedTableApplier(invites));

@@ -45,6 +45,7 @@ import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
 import { pickClassification, userClassification } from './classify.js';
 import { localizeTransactionStatus, localizeTransactionType } from './localize.js';
+import { joinUnambiguously } from './idempotency.js';
 import { normalizeMerchant } from './merchant.js';
 
 export const defaultStatusFor = (date: IsoDate, today: IsoDate): TransactionStatus =>
@@ -230,8 +231,7 @@ export const deriveIdempotencyKey = (
   decimals: number,
   discriminator?: string,
 ): string => {
-  // JSON.stringify, not a joined string: the discriminator is free text and could forge a field boundary.
-  const canonical = JSON.stringify([
+  const canonical = joinUnambiguously([
     identity.fundingSourceId ?? null,
     identity.counterpartyId ?? null,
     identity.billPeriodKey ?? null,

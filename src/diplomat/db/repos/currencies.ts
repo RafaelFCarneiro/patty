@@ -7,9 +7,11 @@ export type CurrenciesRepo = {
   list: () => Promise<Currency[]>;
 };
 
+const list = async (db: Db): ReturnType<CurrenciesRepo['list']> => {
+  const rows = await db.select().from(currencies).orderBy(currencies.code);
+  return rows.map(currencyAdapters.dbToModel);
+};
+
 export const currenciesRepo = (db: Db): CurrenciesRepo => ({
-  list: async () => {
-    const rows = await db.select().from(currencies).orderBy(currencies.code);
-    return rows.map(currencyAdapters.dbToModel);
-  },
+  list: () => list(db),
 });

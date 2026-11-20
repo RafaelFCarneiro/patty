@@ -7,7 +7,7 @@ import {
   type Persistable,
   type PersistOutcome,
 } from '@rfc0/effect-runner';
-import type { EntityDbAdapter } from '../models/persistence.js';
+import type { EntityDbAdapter, Versions } from '../models/persistence.js';
 
 export const insert = <Tag extends string, Model>(fields: {
   entity: Tag;
@@ -70,8 +70,6 @@ export const entityDbAdapter = <Tag extends string, Model, Row extends { version
 
   return { persistableToDb, outcomeToDb };
 };
-
-type Versions = Readonly<Record<string, { version: number }>>;
 
 export const movedIds = (before: Versions, after: Versions): string[] =>
   R.pipe(

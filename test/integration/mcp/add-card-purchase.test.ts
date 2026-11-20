@@ -62,6 +62,36 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
     }
   });
 
+  it('is race-safe: concurrent first purchases on one cycle share a single bill', async () => {
+    const cardName = `AddPurchase Race Card ${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      });
+      const purchase = (description: string) =>
+        callTool(client, {
+          name: 'add_card_purchase',
+          args: { description, amount: 10, type: 'expense', date: today, card: cardName },
+        }) as Promise<{ transaction: { id: string; billId?: string } }>;
+
+      const results = await Promise.allSettled([purchase(`Race A ${stamp}`), purchase(`Race B ${stamp}`)]);
+
+      const created = results.map((r) => (r.status === 'fulfilled' ? r.value.transaction : undefined));
+      createdTxIds.push(...created.flatMap((t) => (t ? [t.id] : [])));
+      expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled']);
+      expect(created[0]?.billId).toBe(created[1]?.billId);
+      const bill = (await callTool(client, { name: 'get_bill', args: { card: cardName, month, year } })) as {
+        total?: number;
+      };
+      expect(bill.total).toBe(20);
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('joins an explicit target cycle, auto-creating the bill', async () => {
     const cardName = `AddPurchase Explicit Card ${stamp}`;
     const { client, transport } = makeClient();

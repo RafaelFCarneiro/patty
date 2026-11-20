@@ -199,14 +199,15 @@ the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
   retries. (Rationale: ADR-021.)
 - **Secondary-`UNIQUE` appliers.** `billApplier` (`diplomat/db/repos/bills.ts`; a bill is created by
   upsert-on-cycle, `UNIQUE(creditCardId, month, year)`), `tagApplier` (`tags.name`), `dashboardApplier`
-  (`dashboards.name`), and `budgetApplier` (`UNIQUE(category_id, currency, period)`) wrap `insert` so an
+  (`dashboards.name`), and `budgetApplier` (`UNIQUE(category_id, currency, period)`) are wrapped in
+  `uniqueViolationAsConflict` (`diplomat/db/effects.ts`, which covers `insert` and `update`) so an
   `isUniqueConstraintViolation` is rethrown as `VersionConflict` and the flow retries; the retry's own domain
   check then returns the clean error (`duplicate_name`, `duplicate_budget`) or touches the winning row.
-  `dashboardApplier.update` wraps it too (a rename can collide). `update`/`delete` otherwise stay plain.
+  The `update` wrap matters for a dashboard rename and a username claim. `delete` stays plain.
   `currencyRateApplier` (`UNIQUE(from_code, to_code)`) has the opposite outcome: `set_exchange_rate` is
   upsert-latest, so a concurrent first insert retries into an **update** and both callers succeed. (Rationale:
   ADR-021.)
-  `assetApplier` (`UNIQUE(symbol, exchange)`) and `assetPriceApplier` (`UNIQUE(asset_id, as_of)`, Feature Design 023) wrap `insert` the same way: `registerAsset` is idempotent (a concurrent first registration retries into "already registered") and `setAssetPrices` is upsert-per-instant (a concurrent first price retries into an **update**, so both callers succeed), like `currencyRateApplier`. Both are shared reference data, so they are plain `versionedTableApplier`s with no owner scope.
+  `assetApplier` (`UNIQUE(symbol, exchange)`) and `assetPriceApplier` (`UNIQUE(asset_id, as_of)`, Feature Design 023) are wrapped the same way (`insert` and `update`): `registerAsset` is idempotent (a concurrent first registration retries into "already registered") and `setAssetPrices` is upsert-per-instant (a concurrent first price retries into an **update**, so both callers succeed), like `currencyRateApplier`. Both are shared reference data, so they are plain `versionedTableApplier`s with no owner scope.
 - **The `merchant` entity** — key-only, hand-written `merchantApplier` (insert-only, `onConflictDoNothing`).
   Every flow whose decision implies a merchant emits its own `MERCHANT_ENTITY_TAG` `Persistable` ahead of
   whatever references it, via `logic/merchant.ts`'s `withMerchant` (transaction inserts) and
@@ -231,8 +232,8 @@ the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
 
 - **Auth entities** (`user`, `session`, `setup_code`, `access_token`, `client_grant`, `invite`, `instance_settings`;
   `diplomat/db/repos/{users,sessions,setupCodes,accessTokens,clientGrants,invites,instanceSettings}.ts`). `sessionApplier`
-  and `accessTokenApplier` are plain `versionedTableApplier`s; `userApplier` and `inviteApplier` are too, except that their `insert` rethrows a unique-constraint violation as `VersionConflict` (`users.username`, and the partial index that keeps one unclaimed invite per user): two admins inviting the same name, or reissuing for the same user, at once — the loser's retry re-runs the flow, which then answers `username_taken` or replaces the winner's invite; `instanceSettingsApplier` is a plain `versionedTableApplier` (the `settings` singleton row is inserted by a migration, so it is only ever checked or updated). `clientGrantApplier` is one too, except that its `insert`
-  rethrows a unique-constraint violation as `VersionConflict`: `user_code` is unique among PENDING grants (a partial index),
+  and `accessTokenApplier` are plain `versionedTableApplier`s; `userApplier` and `inviteApplier` are too, except that they are wrapped in `uniqueViolationAsConflict`, so an `insert` or `update` rethrows a unique-constraint violation as `VersionConflict` (`users.username`, and the partial index that keeps one unclaimed invite per user): two admins inviting the same name, or reissuing for the same user, at once — the loser's retry re-runs the flow, which then answers `username_taken` or replaces the winner's invite; `instanceSettingsApplier` is a plain `versionedTableApplier` (the `settings` singleton row is inserted by a migration, so it is only ever checked or updated). `clientGrantApplier` is wrapped in `uniqueViolationAsConflict` like the others (`insert` and `update`),
+  so a unique-constraint violation is rethrown as `VersionConflict`: `user_code` is unique among PENDING grants (a partial index),
   so two requests drawing the same free code at once collide there, and the retry re-runs `startGrant`, whose
   `freshUserCode` sees the committed row and draws another code (the shape `tagApplier` uses for `tags.name`).
   `setupCodeApplier` wraps `insert` the way

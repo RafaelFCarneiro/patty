@@ -14,20 +14,27 @@ export type CurrencyRatesRepo = {
   findByPair: (from: CurrencyCode, to: CurrencyCode) => Promise<CurrencyRateEntity | null>;
 };
 
-export const currencyRatesRepo = (db: Db): CurrencyRatesRepo => ({
-  list: async () => {
-    const rows = await db.select().from(currencyRates).orderBy(currencyRates.fromCode, currencyRates.toCode);
-    return rows.map(currencyRateAdapters.dbToEntity);
-  },
+const list = async (db: Db): ReturnType<CurrencyRatesRepo['list']> => {
+  const rows = await db.select().from(currencyRates).orderBy(currencyRates.fromCode, currencyRates.toCode);
+  return rows.map(currencyRateAdapters.dbToEntity);
+};
 
-  findByPair: async (from, to) => {
-    const [row] = await db
-      .select()
-      .from(currencyRates)
-      .where(and(eq(currencyRates.fromCode, from), eq(currencyRates.toCode, to)))
-      .limit(1);
-    return row ? currencyRateAdapters.dbToEntity(row) : null;
-  },
+const findByPair = async (
+  db: Db,
+  from: CurrencyCode,
+  to: CurrencyCode,
+): ReturnType<CurrencyRatesRepo['findByPair']> => {
+  const [row] = await db
+    .select()
+    .from(currencyRates)
+    .where(and(eq(currencyRates.fromCode, from), eq(currencyRates.toCode, to)))
+    .limit(1);
+  return row ? currencyRateAdapters.dbToEntity(row) : null;
+};
+
+export const currencyRatesRepo = (db: Db): CurrencyRatesRepo => ({
+  list: () => list(db),
+  findByPair: (from, to) => findByPair(db, from, to),
 });
 
 export const currencyRateApplier: EntityApplier = uniqueViolationAsConflict(versionedTableApplier(currencyRates));

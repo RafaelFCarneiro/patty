@@ -50,6 +50,25 @@ describe('MCP integration > dashboards', () => {
     }
   });
 
+  it('save_dashboard is race-safe: concurrent first saves of a name both answer, one survives', async () => {
+    const name = `mcp-dash-race-${Date.now()}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const results = await Promise.allSettled([
+        callTool(client, { name: 'save_dashboard', args: { name, html: '<section>a</section>' } }),
+        callTool(client, { name: 'save_dashboard', args: { name, html: '<section>b</section>' } }),
+      ]);
+
+      expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled']);
+      const list = (await callTool(client, { name: 'list_dashboards', args: {} })) as Array<Record<string, unknown>>;
+      expect(list.filter((d) => d.name === name)).toHaveLength(1);
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('save_dashboard rejects html carrying a full document root and leaves the prior save in place', async () => {
     const stamp = Date.now();
     const name = `mcp-dash-invalid-${stamp}`;
