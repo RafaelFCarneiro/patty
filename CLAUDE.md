@@ -76,7 +76,7 @@ npm run lint && npm run typecheck && npm run test:all && npm run build && npm ru
 ### Security
 
 - SQL goes through Drizzle's parameterized API or the `sql` tag; user input is never interpolated.
-- Secrets (the database key, passwords, tokens, setup and invite codes) are never logged, printed beyond the one time a flow shows them, written beside the data, or put in a URL or a tool result.
+- Secrets (the database key, passwords, tokens, setup and invite codes) are never logged, printed beyond the one time a flow shows them, written beside the data, or put in a URL or a tool result. The one exception is the single-use invite link (`/ui/access/invite?code=…`): its `code` parameter is redacted from logs and the page sends `Referrer-Policy: strict-origin`.
 - User and token management is session-only: never an MCP tool, never an `/api` route, never reachable with a bearer token.
 
 ## Data conventions
@@ -87,7 +87,7 @@ The ones code most often gets wrong:
 - Only `effective` transactions count toward balances and summaries; balances are derived, never stored.
 - A transfer is one row with both accounts; summaries and classification exclude transfers.
 - Summaries group per currency and never convert implicitly; rounding uses the currency's own `decimals` (`roundToDecimals`), never a flat 2.
-- Idempotency keys are domain-derived (never caller-supplied): sha256 over a JSON array of the write's identity.
+- A transaction's idempotency key is domain-derived (never caller-supplied): sha256 over a JSON array of the write's identity. Recurring (`rec-<ruleId>-<date>`) and bill-payment (`billpay-<billId>`) keys are hand-built and outside that derivation.
 - A missing price or rate is `null` and excluded from totals, never 0; holdings are derived from investment events, never stored.
 
 All of them, one line each with a pointer to the invariant that carries the mechanics: `docs/architecture.md` § Data conventions. Changing one means updating it there in the same change.
