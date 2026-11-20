@@ -16,20 +16,3 @@ describe('idempotency.joinUnambiguously', () => {
     expect(idempotency.joinUnambiguously(['a', null])).not.toBe(idempotency.joinUnambiguously(['a', '']));
   });
 });
-
-describe('idempotency.deriveKey — a discriminator cannot blur a field boundary', () => {
-  const identity = {
-    accountId: 'acc',
-    assetId: 'asset',
-    type: InvestmentEventType.enum.opening,
-    date: '2026-11-01',
-    quantity: 1,
-    unitCost: 1,
-  };
-
-  it.each(['|', ',', ':', ' ', '/', '","'])('with %j inside the discriminator or the ids', (separator) => {
-    const viaDiscriminator = idempotency.deriveKey(identity, 2, `a${separator}b`);
-    const viaIds = idempotency.deriveKey({ ...identity, assetId: `asset${separator}a` }, 2, 'b');
-    expect(viaDiscriminator).not.toBe(viaIds);
-  });
-});

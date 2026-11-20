@@ -208,7 +208,7 @@ describe('invite → claim → login', () => {
     expect(await userRows(ctx)).toHaveLength(2);
   });
 
-  it('answers a concurrent invite of the same username with the ordinary taken page, not a database error', async () => {
+  it('answers a concurrent invite of one username with the ordinary taken page, not a database error', async () => {
     const { ctx, owner } = await withOwner();
 
     const results = await Promise.all([

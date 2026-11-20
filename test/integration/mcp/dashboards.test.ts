@@ -50,7 +50,7 @@ describe('MCP integration > dashboards', () => {
     }
   });
 
-  it('save_dashboard is race-safe: concurrent first saves of one name both answer and one dashboard survives', async () => {
+  it('save_dashboard is race-safe: concurrent first saves of a name both answer, one survives', async () => {
     const name = `mcp-dash-race-${Date.now()}`;
     const { client, transport } = makeClient();
     try {
