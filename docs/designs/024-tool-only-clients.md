@@ -60,10 +60,15 @@ tool that returns the same content from the same source.
   every future bridge would have the same gap. A tool is what every client is guaranteed to get.
 - **Put the contract in the dashboard tool's description.** Several KB on every `tools/list`, loaded by clients that
   never build a dashboard. A separate tool is read on demand.
-- **Return the whole OpenAPI document from a tool.** Tens of KB for a client that needs three routes. The index plus a
+- **Return the whole OpenAPI document from a tool.** Over 600 KB for a client that needs three routes. The index plus a
   per-route detail is what the skill's first step needs, and the full document stays one call away on the resource.
 - **Copy the skill's text into the tool's source.** A second copy that drifts. The tool reads the packaged file.
 - **A `get_workflow` that re-renders the prompts' text.** Copied text. It calls the prompt's own handler.
+- **Serve the guide through the MCP Skills extension instead** (`io.modelcontextprotocol/skills`, SEP-2640, Final in
+  September 2026): the server lists its skills and the client loads them, with nothing installed by hand. Not yet a
+  replacement: it serves skill files through `resources/read`, which a tools-only bridge does not forward; no Claude
+  client supports it yet; and it needs protocol revision 2026-07-28 in the SDK. Kept as a later addition (Plan step 8),
+  next to the tool path, never instead of it.
 
 ## Plan
 
@@ -75,6 +80,10 @@ tool that returns the same content from the same source.
 5. [x] `GET /api/portfolio`, `/api/assets`, `/api/investment-events`; OpenAPI snapshot, tenancy rows.
 6. [x] `list_currencies`, `list_top_merchants`; `tool-paths.ts` and its test; the rule in CLAUDE.md.
 7. [x] Tests, the MCP surface snapshot, docs.
+8. [ ] Later: serve the dashboard guide (and the tour) through the MCP Skills extension as
+       `skill://dashboard-building/SKILL.md`, from the same `ui/guides/` source, once the MCP SDK supports protocol
+       revision 2026-07-28 and a Claude client supports the extension. The tools stay; the installed pointer skills can
+       go once the clients that load them discover the served ones.
 
 ## Implementation prompt
 
