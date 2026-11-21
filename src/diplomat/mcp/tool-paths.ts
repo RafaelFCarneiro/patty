@@ -5,7 +5,7 @@ const T = ToolName.enum;
 
 /**
  * Tools are the one surface every client gets: anything offered as a prompt, resource or skill is also reachable
- * through a tool (Feature Design 024). This is where each prompt and resource names its tool; a unit test walks
+ * through a tool This is where each prompt and resource names its tool; a unit test walks
  * the registered definitions and fails for one without an entry here, or whose tool is not registered.
  */
 

@@ -1,14 +1,10 @@
 import type { OpenAPIObject } from 'openapi3-ts/oas30';
 import { describe, expect, it } from 'vitest';
-import {
-  buildContractIndex,
-  buildRouteDetail,
-  formatContractIndexEntry,
-} from '../../../../src/diplomat/http/contract.js';
-import { documentationContext } from '../../../../src/diplomat/http/context.js';
-import { buildOpenApiDocument } from '../../../../src/diplomat/http/openapi.js';
-import { buildRouteDefinitions } from '../../../../src/diplomat/http/routes.js';
-import type { HttpMethod } from '../../../../src/models/api-contract.js';
+import * as apiContract from '../../../src/logic/api-contract.js';
+import { documentationContext } from '../../../src/diplomat/http/context.js';
+import { buildOpenApiDocument } from '../../../src/diplomat/http/openapi.js';
+import { buildRouteDefinitions } from '../../../src/diplomat/http/routes.js';
+import type { HttpMethod } from '../../../src/models/api-contract.js';
 
 const definitions = buildRouteDefinitions(documentationContext('0.0.0-test'));
 const doc = buildOpenApiDocument(definitions, '0.0.0-test');
@@ -18,7 +14,7 @@ const operationOf = (path: string, method: HttpMethod) =>
   (doc.paths[path] as Record<string, Record<string, unknown>>)[method]!;
 
 describe('the contract index', () => {
-  const index = buildContractIndex(doc);
+  const index = apiContract.index(doc);
 
   it('lists every mounted route, and only those', () => {
     const declared = definitions.map(({ method, path }) => `${method} ${toOpenApiPath(path)}`).sort();
@@ -37,50 +33,51 @@ describe('the contract index', () => {
   });
 
   it('is a few KB, one line per route', () => {
-    const text = index.map(formatContractIndexEntry).join('\n');
+    const text = index.map(apiContract.formatIndexEntry).join('\n');
     expect(text.split('\n')).toHaveLength(definitions.length);
     expect(text.length).toBeLessThan(16_000);
     expect(text).toContain('GET /api/portfolio — Get the portfolio');
   });
 
   it('writes "-" where a route has no query or body', () => {
-    const line = formatContractIndexEntry(index.find(({ path }) => path === '/api/currencies')!);
+    const line = apiContract.formatIndexEntry(index.find(({ path }) => path === '/api/currencies')!);
     expect(line).toContain('query: - | body: -');
   });
 });
 
 describe('a route’s detail', () => {
   it('is its OpenAPI operation, with its method and path', () => {
-    const detail = buildRouteDetail(doc, '/api/summary', 'get')._unsafeUnwrap();
+    const detail = apiContract.routeDetail(doc, '/api/summary', 'get')._unsafeUnwrap();
     expect(detail).toEqual([{ method: 'get', path: '/api/summary', ...operationOf('/api/summary', 'get') }]);
   });
 
   it('accepts the Fastify spelling of a path parameter', () => {
-    const detail = buildRouteDetail(doc, '/api/dashboards/:name', 'delete')._unsafeUnwrap();
+    const detail = apiContract.routeDetail(doc, '/api/dashboards/:name', 'delete')._unsafeUnwrap();
     expect(detail[0]?.path).toBe('/api/dashboards/{name}');
   });
 
   it('answers every method of the path when none is given', () => {
-    const methods = buildRouteDetail(doc, '/api/dashboards')
+    const methods = apiContract
+      .routeDetail(doc, '/api/dashboards')
       ._unsafeUnwrap()
       .map(({ method }) => method);
     expect(methods).toEqual(['get', 'post']);
   });
 
   it('refuses a method the path does not have, naming the ones it has', () => {
-    const error = buildRouteDetail(doc, '/api/dashboards', 'delete')._unsafeUnwrapErr();
+    const error = apiContract.routeDetail(doc, '/api/dashboards', 'delete')._unsafeUnwrapErr();
     expect(error.issues[0]).toContain('has no delete operation — it has: get, post');
   });
 
   it('refuses an unknown path with a validation error that lists the close matches', () => {
-    const error = buildRouteDetail(doc, '/api/accounts/nothing/here')._unsafeUnwrapErr();
+    const error = apiContract.routeDetail(doc, '/api/accounts/nothing/here')._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
     expect(error.issues[0]).toContain('close matches: ');
     expect(error.issues[0]).toContain('/api/accounts');
   });
 
   it('points at the index when nothing is close', () => {
-    const error = buildRouteDetail(doc, '/zzz')._unsafeUnwrapErr();
+    const error = apiContract.routeDetail(doc, '/zzz')._unsafeUnwrapErr();
     expect(error.issues[0]).toContain('call without arguments for the index');
   });
 
@@ -114,13 +111,13 @@ describe('a route’s detail', () => {
       },
     } as unknown as OpenAPIObject;
 
-    const [detail] = buildRouteDetail(withRefs, '/api/x', 'get')._unsafeUnwrap();
+    const [detail] = apiContract.routeDetail(withRefs, '/api/x', 'get')._unsafeUnwrap();
     const responses = detail!['responses'] as Record<string, any>;
     expect(responses['200'].content['application/json'].schema.properties.id).toEqual({ type: 'string' });
     expect(responses['200'].content['application/json'].schema.properties.parent).toEqual({
       $ref: '#/components/schemas/Thing',
     });
     expect(responses['404'].content['application/json'].schema).toEqual({ $ref: '#/components/schemas/Nope' });
-    expect(buildContractIndex(withRefs)[0]?.response).toBe('ok (object)');
+    expect(apiContract.index(withRefs)[0]?.response).toBe('ok (object)');
   });
 });

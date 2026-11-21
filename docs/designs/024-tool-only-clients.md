@@ -81,7 +81,7 @@ tool that returns the same content from the same source.
 Implement the feature in this document, in the Plan's order, on `feat/tool-only-clients`. Read `docs/architecture.md`
 (§ Tool surface, § Conventions in this repo) and the canonical docs first (CLAUDE.md).
 
-- The contract tool derives from `buildOpenApiDocument(buildRouteDefinitions(…))`, never from a hand-written list;
+- The contract (`logic/api-contract.ts`, pure) derives from `buildOpenApiDocument(buildRouteDefinitions(…))`, never from a hand-written list;
   `diplomat/mcp` importing the builders from `diplomat/http` is the documented exception.
 - `get_workflow` calls the prompt definition's own `handle`; no prompt text is duplicated.
 - The guide is read from the installed `ui/guides/` folder (resolved from the module, cached on success only); the build

@@ -13,7 +13,13 @@ import { PromptName } from '../../../../src/models/prompts.js';
 
 const ROOT = join(import.meta.dirname, '..', '..', '..', '..');
 const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(documentationContext('0.0.0-test')), '0.0.0-test');
-const ctx = { version: '0.0.0-test', openApiDocument, as: () => scoped } as McpContext;
+const GUIDE = 'the guide, as the context supplies it';
+const ctx = {
+  version: '0.0.0-test',
+  openApiDocument,
+  dashboardGuide: async () => GUIDE,
+  as: () => scoped,
+} as McpContext;
 const scoped = { deps: { clock: () => new Date('2026-03-15T12:00:00Z') } } as unknown as Scoped;
 
 const call = (name: ToolName, args: Record<string, unknown> = {}) => {
@@ -46,9 +52,14 @@ describe('get_api_contract', () => {
 });
 
 describe('get_dashboard_guide', () => {
-  it('returns the guide shipped with the package, whole', async () => {
+  it('returns what the context’s guide reader supplies, whole', async () => {
+    expect(textOf(await call(ToolName.enum.get_dashboard_guide))).toBe(GUIDE);
+  });
+
+  it('is read from the guide shipped with the package', async () => {
     const guide = readFileSync(join(ROOT, 'ui', 'guides', 'dashboard-building.md'), 'utf8');
-    expect(textOf(await call(ToolName.enum.get_dashboard_guide))).toBe(guide);
+    const { DASHBOARD_GUIDE_PATH, readCached } = await import('../../../../src/diplomat/http/ui-files.js');
+    expect(await readCached(DASHBOARD_GUIDE_PATH)).toBe(guide);
   });
 
   it('reads the contract through get_api_contract, and names the alternatives', () => {
@@ -92,6 +103,12 @@ describe('get_workflow', () => {
     expect(textOf(await call(ToolName.enum.get_workflow, { name: 'monthly_review', month: 11, year: 2025 }))).toContain(
       '11/2025',
     );
+  });
+
+  it('answers a bad argument as a validation error, not an internal one', async () => {
+    const result = await call(ToolName.enum.get_workflow, { name: 'monthly_review', month: 13 });
+    expect(result.isError).toBe(true);
+    expect(JSON.parse(textOf(result)).error.code).toBe('validation');
   });
 
   it('without a name lists every workflow with its description and its argument names', async () => {

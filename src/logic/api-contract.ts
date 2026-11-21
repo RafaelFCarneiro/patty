@@ -1,8 +1,8 @@
 import { err, ok, type Result } from 'neverthrow';
 import type { OpenAPIObject, OperationObject, ParameterObject, PathItemObject } from 'openapi3-ts/oas30';
 import * as R from 'remeda';
-import { validation, type ValidationError } from '../../models/error.js';
-import { HttpMethod, type ContractIndexEntry, type ContractRouteDetail } from '../../models/api-contract.js';
+import { validation, type ValidationError } from '../models/error.js';
+import { HttpMethod, type ContractIndexEntry, type ContractRouteDetail } from '../models/api-contract.js';
 
 /**
  * The API contract as a client that only receives tools reads it: an index of the routes, then one route's schema.
@@ -56,9 +56,9 @@ const typeName = (schema: Record<string, unknown> | undefined): string => {
   return type === 'array' ? `${typeName(items)}[]` : type;
 };
 
-const parameterNames = (operation: OperationObject, location: 'query'): string[] =>
+const queryParameterNames = (operation: OperationObject): string[] =>
   ((operation.parameters ?? []) as ParameterObject[])
-    .filter((parameter) => parameter.in === location)
+    .filter((parameter) => parameter.in === 'query')
     .map((p) => p.name);
 
 const responseOf = (operation: OperationObject): string => {
@@ -72,26 +72,19 @@ const indexEntry = (path: string, [method, operation]: readonly [HttpMethod, Ope
   method,
   path,
   summary: operation.summary ?? '',
-  query: parameterNames(operation, 'query'),
+  query: queryParameterNames(operation),
   body: propertyNames(schemaOf((operation.requestBody as Record<string, unknown> | undefined)?.['content'])),
   response: responseOf(operation),
 });
 
 /** Every route of the document, one entry per method and path, in document order. */
-export const buildContractIndex = (doc: OpenAPIObject): ContractIndexEntry[] =>
+export const index = (doc: OpenAPIObject): ContractIndexEntry[] =>
   routesOf(doc).flatMap(({ path, operations }) => operations.map((operation) => indexEntry(path, operation)));
 
 const listOrDash = (names: string[]): string => (names.length === 0 ? '-' : names.join(','));
 
 /** One line per route: `GET /api/summary — Get spending summary | query: month,year | body: - | returns: …`. */
-export const formatContractIndexEntry = ({
-  method,
-  path,
-  summary,
-  query,
-  body,
-  response,
-}: ContractIndexEntry): string =>
+export const formatIndexEntry = ({ method, path, summary, query, body, response }: ContractIndexEntry): string =>
   `${method.toUpperCase()} ${path} — ${summary} | query: ${listOrDash(query)} | body: ${listOrDash(body)} | returns: ${response}`;
 
 const API_SEGMENT = 'api';
@@ -132,7 +125,7 @@ const detailOf = (doc: OpenAPIObject, path: string, [method, operation]: readonl
   ({ method, path, ...(resolveRefs(doc)(operation) as Record<string, unknown>) }) satisfies ContractRouteDetail;
 
 /** The route's operation(s), `$ref`s resolved: the one `method` names, or every method of the path without one. */
-export const buildRouteDetail = (
+export const routeDetail = (
   doc: OpenAPIObject,
   rawPath: string,
   method?: HttpMethod,

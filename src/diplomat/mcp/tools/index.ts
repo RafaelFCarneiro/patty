@@ -5,6 +5,7 @@ import { budgetTools } from './budget.js';
 import { categoryTools } from './category.js';
 import { correlationsTools } from './correlations.js';
 import { creditCardTools } from './credit-card.js';
+import { currencyTools } from './currency.js';
 import { currencyRateTools } from './currency-rates.js';
 import { dashboardTools } from './dashboard.js';
 import { investmentTools } from './investment.js';
@@ -21,6 +22,7 @@ import { transferTools } from './transfer.js';
 export const toolDefinitions: readonly ToolDefinition[] = [
   ...accountTools,
   ...creditCardTools,
+  ...currencyTools,
   ...currencyRateTools,
   ...investmentTools,
   ...transactionTools,

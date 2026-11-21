@@ -9,6 +9,8 @@ export type McpContext = {
   version: string;
   /** The REST contract, built once from the route array — what `patty://openapi` and `get_api_contract` serve. */
   openApiDocument: OpenAPIObject;
+  /** The dashboard-building guide, read once from the installed package — what `get_dashboard_guide` returns. */
+  dashboardGuide: () => Promise<string>;
   as: (extra: unknown) => Scoped;
 };
 
@@ -23,8 +25,14 @@ export const callerOf = (extra: unknown): Principal => {
   return principal;
 };
 
-export const createMcpContext = (tenancy: Tenancy, version: string, openApiDocument: OpenAPIObject): McpContext => ({
+export const createMcpContext = (
+  tenancy: Tenancy,
+  version: string,
+  openApiDocument: OpenAPIObject,
+  dashboardGuide: McpContext['dashboardGuide'],
+): McpContext => ({
   version,
   openApiDocument,
+  dashboardGuide,
   as: (extra) => scopedFor(tenancy, callerOf(extra)),
 });

@@ -1,19 +1,24 @@
-import * as R from 'remeda';
+import { err } from 'neverthrow';
 import { z } from 'zod';
 import { HttpMethod } from '../../../models/api-contract.js';
+import { validation } from '../../../models/error.js';
 import { PromptName } from '../../../models/prompts.js';
-import { buildContractIndex, buildRouteDetail, formatContractIndexEntry } from '../../http/contract.js';
-import { DASHBOARD_GUIDE_PATH, readCached } from '../../http/ui-files.js';
+import * as apiContract from '../../../logic/api-contract.js';
 import { READ_ONLY } from '../annotations.js';
 import { defineTool, type PromptDefinition } from '../definition.js';
-import { ImportStatementPromptArgsSchema, PeriodPromptArgsSchema, promptDefinitions } from '../prompts.js';
+import {
+  ImportStatementPromptArgsSchema,
+  PeriodPromptArgsSchema,
+  promptDefinitions,
+  promptsByName,
+} from '../prompts.js';
 import { ResourceUri } from '../resources.js';
 import { fromResult, json, text } from '../respond.js';
 import { ToolName } from '../tool-name.js';
 
 /**
  * What a client that only receives tools gets in place of the resources, prompts and skills the server also offers
- * (Feature Design 024): each tool returns the same content from the same source.
+ * each tool returns the same content from the same source.
  */
 const T = ToolName.enum;
 
@@ -42,8 +47,8 @@ const getApiContractTool = defineTool({
   },
   handle: async ({ path, method }, _scoped, { openApiDocument }) =>
     path === undefined
-      ? text([CONTRACT_INDEX_INTRO, ...buildContractIndex(openApiDocument).map(formatContractIndexEntry)].join('\n'))
-      : fromResult(buildRouteDetail(openApiDocument, path, method)),
+      ? text([CONTRACT_INDEX_INTRO, ...apiContract.index(openApiDocument).map(apiContract.formatIndexEntry)].join('\n'))
+      : fromResult(apiContract.routeDetail(openApiDocument, path, method)),
 });
 
 const getDashboardGuideTool = defineTool({
@@ -56,10 +61,8 @@ const getDashboardGuideTool = defineTool({
       `it, then ${T.get_api_contract}, before ${T.save_dashboard}. The same guide the dashboard-building skill points to.`,
     inputSchema: {},
   },
-  handle: async () => text(await readCached(DASHBOARD_GUIDE_PATH)),
+  handle: async (_args, _scoped, { dashboardGuide }) => text(await dashboardGuide()),
 });
-
-const workflowsByName = R.indexBy(promptDefinitions, ({ name }) => name) as Record<PromptName, PromptDefinition>;
 
 const describeWorkflow = ({ name, config }: PromptDefinition) => ({
   name,
@@ -82,8 +85,10 @@ const getWorkflowTool = defineTool({
   },
   handle: async ({ name, ...args }, scoped, ctx) => {
     if (name === undefined) return json(promptDefinitions.map(describeWorkflow));
-    const definition = workflowsByName[name];
-    return json(await definition.handle(z.object(definition.config.argsSchema ?? {}).parse(args), scoped, ctx));
+    const definition = promptsByName[name];
+    const parsed = z.object(definition.config.argsSchema ?? {}).safeParse(args);
+    if (!parsed.success) return fromResult(err(validation(parsed.error.issues.map(({ message }) => message))));
+    return json(await definition.handle(parsed.data, scoped, ctx));
   },
 });
 

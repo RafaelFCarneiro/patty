@@ -1,5 +1,4 @@
 import { ToolName } from '../tool-name.js';
-import { listCurrencies } from '../../../controllers/currencies.js';
 import { listExchangeRates, setExchangeRate } from '../../../controllers/currency-rates.js';
 import { buildBulkResult } from '../../../logic/currency-rate.js';
 import { SetExchangeRateSchema } from '../../../models/currency-rate.js';
@@ -78,19 +77,4 @@ const listExchangeRatesTool = defineTool({
   },
 });
 
-const listCurrenciesDescription =
-  'All currencies (fiat and crypto) with symbol and decimals. Format an amount with the symbol and decimals given ' +
-  "here: crypto codes (USDC, BTC) aren't ISO 4217, so a generic currency formatter must not assume 2 decimal places.";
-
-const listCurrenciesTool = defineTool({
-  name: ToolName.enum.list_currencies,
-  config: {
-    annotations: READ_ONLY,
-    title: 'List currencies',
-    description: listCurrenciesDescription,
-    inputSchema: {},
-  },
-  handle: async (_args, { deps }) => json(await listCurrencies(deps)),
-});
-
-export const currencyRateTools = [setExchangeRateTool, setExchangeRatesTool, listExchangeRatesTool, listCurrenciesTool];
+export const currencyRateTools = [setExchangeRateTool, setExchangeRatesTool, listExchangeRatesTool];

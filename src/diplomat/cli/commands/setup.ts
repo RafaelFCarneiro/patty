@@ -94,19 +94,26 @@ const withSkills = (
     lines: [...report.lines, ...installed.lines],
   }));
 
+type ClientLookup = { client: ClientConfig; exit?: undefined } | { client?: undefined; exit: number };
+
+/** The client `tool` names, or the exit code to end with: none named prints the help, an unknown one fails. */
+const lookupClient = (io: Pick<SetupIo, 'out' | 'err' | 'clients'>, tool: string | undefined): ClientLookup => {
+  if (!tool) {
+    io.out(SETUP_MESSAGES.help);
+    return { exit: EXIT_OK };
+  }
+  const client = io.clients.find(tool);
+  if (client) return { client };
+  io.err(SETUP_MESSAGES.unknownTool(tool));
+  return { exit: EXIT_FAILURE };
+};
+
 /** Writes the client's configuration and answers the exit code: help is `EXIT_OK`, an unknown tool or a configuration
  *  file that cannot be read or written is reported on stderr and is `EXIT_FAILURE`. */
 export const runSetup = (io: SetupIo, tool: string | undefined, profile: string = DEFAULT_PROFILE): number => {
-  if (!tool) {
-    io.out(SETUP_MESSAGES.help);
-    return EXIT_OK;
-  }
-
-  const client = io.clients.find(tool);
-  if (!client) {
-    io.err(SETUP_MESSAGES.unknownTool(tool));
-    return EXIT_FAILURE;
-  }
+  const found = lookupClient(io, tool);
+  if (found.exit !== undefined) return found.exit;
+  const { client } = found;
 
   io.out(SETUP_MESSAGES.settingUp(client.label));
   return client
@@ -146,15 +153,9 @@ export const runGuidedSetup = async (
 };
 
 export const runDemoEntry = (io: DemoSetupIo, tool: string | undefined, change: DemoEntryChange): number => {
-  if (!tool) {
-    io.out(SETUP_MESSAGES.help);
-    return EXIT_OK;
-  }
-  const client = io.clients.find(tool);
-  if (!client) {
-    io.err(SETUP_MESSAGES.unknownTool(tool));
-    return EXIT_FAILURE;
-  }
+  const found = lookupClient(io, tool);
+  if (found.exit !== undefined) return found.exit;
+  const { client } = found;
   io.out(SETUP_MESSAGES.settingUpDemo(change, client.label));
   return (change === DemoEntryChange.enum.add ? client.addDemo(io.demo.databasePath) : client.removeDemo()).match(
     (report) => {
@@ -174,15 +175,9 @@ export const runDemoEntry = (io: DemoSetupIo, tool: string | undefined, change: 
 
 /** `--remove-skills`: takes out the skills `setup` installed, and nothing else of the client's. */
 export const runSkillsRemoval = (io: SetupIo, tool: string | undefined): number => {
-  if (!tool) {
-    io.out(SETUP_MESSAGES.help);
-    return EXIT_OK;
-  }
-  const client = io.clients.find(tool);
-  if (!client) {
-    io.err(SETUP_MESSAGES.unknownTool(tool));
-    return EXIT_FAILURE;
-  }
+  const found = lookupClient(io, tool);
+  if (found.exit !== undefined) return found.exit;
+  const { client } = found;
   if (!client.skills) {
     io.out(SETUP_MESSAGES.noSkills(client.label));
     return EXIT_OK;

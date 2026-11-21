@@ -10,7 +10,7 @@ import { PRODUCT_NAME } from '../../models/package.js';
 
 const T = ToolName.enum;
 
-/** How a client that only receives tools runs the same workflow (Feature Design 024). */
+/** How a client that only receives tools runs the same workflow. */
 export const workflowCall = (name: PromptName): string => `${T.get_workflow}({ name: "${name}" })`;
 
 const withToolEquivalent = (name: PromptName, description: string): string =>
@@ -196,10 +196,12 @@ const tourPrompt = definePrompt({
 });
 
 /** Guided-workflow prompts (Feature Design 019, 022) — few and cross-domain, one module (ADR-025). */
-export const promptDefinitions: PromptDefinition[] = [
-  monthlyReviewPrompt,
-  budgetCheckupPrompt,
-  importStatementPrompt,
-  refreshQuotesPrompt,
-  tourPrompt,
-];
+export const promptsByName = {
+  [PromptName.enum.monthly_review]: monthlyReviewPrompt,
+  [PromptName.enum.budget_checkup]: budgetCheckupPrompt,
+  [PromptName.enum.import_statement]: importStatementPrompt,
+  [PromptName.enum.refresh_quotes]: refreshQuotesPrompt,
+  [PromptName.enum.tour]: tourPrompt,
+} satisfies Record<PromptName, PromptDefinition>;
+
+export const promptDefinitions: PromptDefinition[] = Object.values(promptsByName);

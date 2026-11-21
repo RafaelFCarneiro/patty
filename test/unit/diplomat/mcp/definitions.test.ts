@@ -42,7 +42,12 @@ describe('the definition lists', () => {
 
 describe('registerDefinitions', () => {
   const scoped = { deps: { marker: 'deps' } } as unknown as Scoped;
-  const ctx: McpContext = { version: '1.2.3', openApiDocument: {} as McpContext['openApiDocument'], as: () => scoped };
+  const ctx: McpContext = {
+    version: '1.2.3',
+    openApiDocument: {} as McpContext['openApiDocument'],
+    dashboardGuide: async () => '',
+    as: () => scoped,
+  };
   const extra = { authInfo: authInfoOf(OWNER_PRINCIPAL) };
 
   // The SDK keeps what was registered in private maps; reading them is how the scope-guard tests drive a callback too.

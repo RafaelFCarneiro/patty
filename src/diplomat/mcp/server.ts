@@ -3,6 +3,7 @@ import type { Tenancy } from '../../controllers/deps.js';
 import { DEFAULT_INSTANCE, type InstanceFacts } from '../../models/instance.js';
 import { documentationContext } from '../http/context.js';
 import { buildOpenApiDocument } from '../http/openapi.js';
+import { DASHBOARD_GUIDE_PATH, readCached } from '../http/ui-files.js';
 import { buildRouteDefinitions } from '../http/routes.js';
 import { createMcpContext } from './context.js';
 import { MCP_SERVER_NAME, serverInstructions } from './instructions.js';
@@ -24,7 +25,7 @@ export const buildMcpServer = (
   const server = new McpServer({ name: MCP_SERVER_NAME, version }, { instructions: serverInstructions(instance) });
   guardScopes(server, scopeGuard);
   const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(documentationContext(version)), version);
-  const ctx = createMcpContext(tenancy, version, openApiDocument);
+  const ctx = createMcpContext(tenancy, version, openApiDocument, () => readCached(DASHBOARD_GUIDE_PATH));
   registerDefinitions(server, ctx, {
     prompts: promptDefinitions,
     resources: resourceDefinitions(openApiDocument),
