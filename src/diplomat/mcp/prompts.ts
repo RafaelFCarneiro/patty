@@ -10,6 +10,12 @@ import { PRODUCT_NAME } from '../../models/package.js';
 
 const T = ToolName.enum;
 
+/** How a client that only receives tools runs the same workflow (Feature Design 024). */
+export const workflowCall = (name: PromptName): string => `${T.get_workflow}({ name: "${name}" })`;
+
+const withToolEquivalent = (name: PromptName, description: string): string =>
+  `${description} Tool-only clients: ${workflowCall(name)}.`;
+
 /** Guided-workflow MCP prompts (Feature Design 019) — orchestration text; the *model* executes the tools the text
  *  instructs it to call. Only `tour` reads the database (through `controllers/demo/tour.ts`). The trivial date
  *  formatting below stays local rather than reusing `logic/period.ts`'s private `pad`. */
@@ -118,9 +124,11 @@ const monthlyReviewPrompt = definePrompt({
   name: PromptName.enum.monthly_review,
   config: {
     title: 'Monthly financial review',
-    description:
+    description: withToolEquivalent(
+      PromptName.enum.monthly_review,
       'Synthesize a per-currency monthly review: spending summary, the biggest shifts vs baseline, ' +
-      'budget fit, and recurring-payment candidates worth automating.',
+        'budget fit, and recurring-payment candidates worth automating.',
+    ),
     argsSchema: PeriodPromptArgsSchema,
   },
   handle: periodPrompt(monthlyReviewPromptText),
@@ -130,9 +138,11 @@ const budgetCheckupPrompt = definePrompt({
   name: PromptName.enum.budget_checkup,
   config: {
     title: 'Budget checkup',
-    description:
+    description: withToolEquivalent(
+      PromptName.enum.budget_checkup,
       'Report which budgets are on track, over, or generous, surface suggested limits and unbudgeted ' +
-      'significant spend, and offer to apply the suggestions.',
+        'significant spend, and offer to apply the suggestions.',
+    ),
     argsSchema: PeriodPromptArgsSchema,
   },
   handle: periodPrompt(budgetCheckupPromptText),
@@ -142,9 +152,11 @@ const importStatementPrompt = definePrompt({
   name: PromptName.enum.import_statement,
   config: {
     title: 'Import a statement',
-    description:
+    description: withToolEquivalent(
+      PromptName.enum.import_statement,
       'Walk the user through pasting a card or account statement, importing it, and confirming any ' +
-      'needs_review items.',
+        'needs_review items.',
+    ),
     argsSchema: ImportStatementPromptArgsSchema,
   },
   handle: async ({ source }) => ({
@@ -156,9 +168,11 @@ const refreshQuotesPrompt = definePrompt({
   name: PromptName.enum.refresh_quotes,
   config: {
     title: 'Refresh quotes and exchange rates',
-    description:
+    description: withToolEquivalent(
+      PromptName.enum.refresh_quotes,
       'List the stale prices and the FX pairs the held assets need, have the agent source and post them, then ' +
-      'report how the portfolio changed — split into price effect and FX effect.',
+        'report how the portfolio changed — split into price effect and FX effect.',
+    ),
   },
   handle: async () => ({
     messages: [{ role: 'user', content: { type: 'text', text: refreshQuotesPromptText() } }],
@@ -170,9 +184,11 @@ const tourPrompt = definePrompt({
   name: PromptName.enum.tour,
   config: {
     title: `Tour of the ${PRODUCT_NAME} demo`,
-    description:
+    description: withToolEquivalent(
+      PromptName.enum.tour,
       'A six-step guided tour of the demo (balances, last month, budgets, a statement import, tagging the seeded ' +
-      'trip and building a dashboard, then installing for real). On a real database it only says how to start the demo.',
+        'trip and building a dashboard, then installing for real). On a real database it only says how to start the demo.',
+    ),
   },
   handle: async (_args, { deps }) => ({
     messages: [{ role: 'user', content: { type: 'text', text: tourPromptText(await getTourContext(deps)) } }],

@@ -1,18 +1,22 @@
 import { ToolName } from '../tool-name.js';
+import { listCurrencies } from '../../../controllers/currencies.js';
 import { listExchangeRates, setExchangeRate } from '../../../controllers/currency-rates.js';
 import { buildBulkResult } from '../../../logic/currency-rate.js';
 import { SetExchangeRateSchema } from '../../../models/currency-rate.js';
 import { SetExchangeRatesSchema } from '../../../wire/in/currency-rates.js';
 import * as currencyRateAdapters from '../../../adapters/currency-rates.js';
 import { defineTool } from '../definition.js';
+import { workflowCall } from '../prompts.js';
 import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
+import { PromptName } from '../../../models/prompts.js';
 import { PRODUCT_NAME } from '../../../models/package.js';
 
 const RATE_TOOL_DESCRIPTION_PREFIX =
   `${PRODUCT_NAME} never fetches exchange rates itself (local-first, zero external calls — ADR-026). ` +
   'The AI agent is responsible for sourcing current rates (e.g. PTAX for fiat, a crypto price API) ' +
-  'and upserting them here so read-time valuation has data to work with. ';
+  'and upserting them here so read-time valuation has data to work with. ' +
+  `The whole refresh is a workflow: ${workflowCall(PromptName.enum.refresh_quotes)}. `;
 
 const setExchangeRateDescription =
   RATE_TOOL_DESCRIPTION_PREFIX +
@@ -74,4 +78,19 @@ const listExchangeRatesTool = defineTool({
   },
 });
 
-export const currencyRateTools = [setExchangeRateTool, setExchangeRatesTool, listExchangeRatesTool];
+const listCurrenciesDescription =
+  'All currencies (fiat and crypto) with symbol and decimals. Format an amount with the symbol and decimals given ' +
+  "here: crypto codes (USDC, BTC) aren't ISO 4217, so a generic currency formatter must not assume 2 decimal places.";
+
+const listCurrenciesTool = defineTool({
+  name: ToolName.enum.list_currencies,
+  config: {
+    annotations: READ_ONLY,
+    title: 'List currencies',
+    description: listCurrenciesDescription,
+    inputSchema: {},
+  },
+  handle: async (_args, { deps }) => json(await listCurrencies(deps)),
+});
+
+export const currencyRateTools = [setExchangeRateTool, setExchangeRatesTool, listExchangeRatesTool, listCurrenciesTool];

@@ -8,7 +8,9 @@ import { creditCardTools } from './credit-card.js';
 import { currencyRateTools } from './currency-rates.js';
 import { dashboardTools } from './dashboard.js';
 import { investmentTools } from './investment.js';
+import { merchantTools } from './merchant.js';
 import { recurringTools } from './recurring.js';
+import { referenceTools } from './reference.js';
 import { summaryTools } from './summary.js';
 import { systemTools } from './system.js';
 import { tagTools } from './tag.js';
@@ -31,5 +33,7 @@ export const toolDefinitions: readonly ToolDefinition[] = [
   ...correlationsTools,
   ...aggregateTools,
   ...summaryTools,
+  ...merchantTools,
+  ...referenceTools,
   ...systemTools,
 ];

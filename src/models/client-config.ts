@@ -32,3 +32,18 @@ export const clientConfigFailures = {
     warnings,
   }),
 };
+
+/** A skill `setup` installs next to a client: the folder it goes in, and the packaged skill it is a copy of. */
+export type SkillPointer = { directory: string; source: string };
+
+/** The skills `setup claude-code` installs. Each is a pointer: its body says which tool returns the real guide. */
+export const SKILL_POINTERS: readonly SkillPointer[] = [
+  { directory: 'patty-dashboard', source: 'dashboard-building' },
+  { directory: 'patty-tour', source: 'patty-tour' },
+];
+
+/** What setup says of a skill file that is not PATTY's own, whichever way it was asked to touch it. */
+export const leftUnchangedNotOwn = (path: string): string => `  Left unchanged (not PATTY's own): ${path}`;
+
+/** Marks a skill file as PATTY's own: `setup` replaces or removes only files that carry it, never a person's. */
+export const SKILL_POINTER_MARKER = '<!-- patty:skill-pointer -->';

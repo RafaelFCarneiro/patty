@@ -14,6 +14,7 @@ import { creditCardRoutes } from './routes/credit-card.js';
 import { currencyRoutes } from './routes/currency.js';
 import { currencyRateRoutes } from './routes/currency-rates.js';
 import { dashboardRoutes } from './routes/dashboard.js';
+import { investmentRoutes } from './routes/investment.js';
 import { recurringRoutes } from './routes/recurring.js';
 import { settingsRoutes } from './routes/settings.js';
 import { summaryRoutes } from './routes/summary.js';
@@ -58,6 +59,7 @@ export const buildRouteDefinitions = (ctx: HttpContext): RouteDefinition[] => [
   ...aggregateRoutes,
   ...summaryRoutes,
   ...budgetRoutes,
+  ...investmentRoutes,
 ];
 
 // A long-lived stream is authenticated once, when it opens — so it asks again on this schedule.

@@ -23,9 +23,8 @@ export const buildMcpServer = (
 ): McpServer => {
   const server = new McpServer({ name: MCP_SERVER_NAME, version }, { instructions: serverInstructions(instance) });
   guardScopes(server, scopeGuard);
-  const ctx = createMcpContext(tenancy, version);
-
   const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(documentationContext(version)), version);
+  const ctx = createMcpContext(tenancy, version, openApiDocument);
   registerDefinitions(server, ctx, {
     prompts: promptDefinitions,
     resources: resourceDefinitions(openApiDocument),

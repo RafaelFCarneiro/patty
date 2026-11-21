@@ -1,3 +1,4 @@
+import type { OpenAPIObject } from 'openapi3-ts/oas30';
 import { scopedFor, type Scoped, type Tenancy } from '../../controllers/deps.js';
 import type { Principal } from '../../models/auth/principal.js';
 import { LOG_PREFIX } from '../../models/package.js';
@@ -6,6 +7,8 @@ import { LOG_PREFIX } from '../../models/package.js';
  *  so a domain's tools/resources/prompts don't each carry the full parameter list. */
 export type McpContext = {
   version: string;
+  /** The REST contract, built once from the route array — what `patty://openapi` and `get_api_contract` serve. */
+  openApiDocument: OpenAPIObject;
   as: (extra: unknown) => Scoped;
 };
 
@@ -20,7 +23,8 @@ export const callerOf = (extra: unknown): Principal => {
   return principal;
 };
 
-export const createMcpContext = (tenancy: Tenancy, version: string): McpContext => ({
+export const createMcpContext = (tenancy: Tenancy, version: string, openApiDocument: OpenAPIObject): McpContext => ({
   version,
+  openApiDocument,
   as: (extra) => scopedFor(tenancy, callerOf(extra)),
 });

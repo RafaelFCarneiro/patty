@@ -8,14 +8,15 @@ import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 
 const saveDashboardDescription =
+  `Call ${ToolName.enum.get_dashboard_guide} and ${ToolName.enum.get_api_contract} first: the guide holds the rules, ` +
+  'the contract the routes to fetch from. ' +
   'Create or override a named dashboard: a content FRAGMENT you author (sections + an inline ' +
   '<script>, no <!doctype>/<html>/<head>/<style> root — the app shell at GET /ui already provides ' +
   'those and is what actually renders it, at GET /ui/:name) (ADR-013, fragment model ADR-027). ' +
   'Upsert semantics — saving to an existing name replaces it immediately, no rebuild or restart ' +
   'needed. CRITICAL: the fragment must NEVER embed financial data, secrets, or tokens inline — ' +
-  'render layout/styling only and fetch data client-side from the documented /api endpoints (read ' +
-  'the patty://openapi resource for the contract) on load, so the dashboard is always live and ' +
-  'safe to share. Rejected (validation error) if the content is empty, still carries a full ' +
+  'render layout/styling only and fetch data client-side from the documented /api endpoints on load, ' +
+  'so the dashboard is always live and safe to share. Rejected (validation error) if the content is empty, still carries a full ' +
   '<!doctype>/<html> document root, an external <script src> reference (the shell already loads ' +
   'Chart.js once — a fragment carries zero external references of its own), or an inline <script> ' +
   'has a syntax error — fix the reported issue and save again.';
