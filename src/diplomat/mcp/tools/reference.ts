@@ -1,4 +1,3 @@
-import { err } from 'neverthrow';
 import { z } from 'zod';
 import { HttpMethod } from '../../../models/api-contract.js';
 import { validation } from '../../../models/error.js';
@@ -13,11 +12,11 @@ import {
   promptsByName,
 } from '../prompts.js';
 import { ResourceUri } from '../resources.js';
-import { fromResult, json, text } from '../respond.js';
+import { fromResult, json, jsonError, text } from '../respond.js';
 import { ToolName } from '../tool-name.js';
 
 /**
- * What a client that only receives tools gets in place of the resources, prompts and skills the server also offers
+ * What a client that only receives tools gets in place of the resources, prompts and skills the server also offers:
  * each tool returns the same content from the same source.
  */
 const T = ToolName.enum;
@@ -87,7 +86,7 @@ const getWorkflowTool = defineTool({
     if (name === undefined) return json(promptDefinitions.map(describeWorkflow));
     const definition = promptsByName[name];
     const parsed = z.object(definition.config.argsSchema ?? {}).safeParse(args);
-    if (!parsed.success) return fromResult(err(validation(parsed.error.issues.map(({ message }) => message))));
+    if (!parsed.success) return jsonError(validation(parsed.error.issues.map(({ message }) => message)));
     return json(await definition.handle(parsed.data, scoped, ctx));
   },
 });

@@ -62,7 +62,7 @@ const accountsResource: ResourceDefinition = {
 
 export const currenciesDescription =
   `All currencies (fiat and crypto) with symbol and decimals — the same data as ${ToolName.enum.list_currencies}, ` +
-  'patty://currencies and GET /api/currencies. Format an amount with the symbol and decimals given here: crypto ' +
+  `${ResourceUri.currencies} and GET /api/currencies. Format an amount with the symbol and decimals given here: crypto ` +
   "codes (USDC, BTC) aren't ISO 4217, so a generic currency formatter must not assume 2 decimal places.";
 
 const currenciesResource: ResourceDefinition = {
