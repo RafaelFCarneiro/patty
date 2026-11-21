@@ -89,10 +89,13 @@ const withSkills = (
   skills: ReturnType<NonNullable<ClientConfig['skills']>['install']> | undefined,
   report: ClientSetupReport,
 ) =>
-  (skills ?? ok({ warnings: [], lines: [] })).map((installed): ClientSetupReport => ({
-    warnings: [...report.warnings, ...installed.warnings],
-    lines: [...report.lines, ...installed.lines],
-  }));
+  (skills ?? ok({ warnings: [], lines: [] }))
+    .map((installed): ClientSetupReport => ({
+      warnings: [...report.warnings, ...installed.warnings],
+      lines: [...report.lines, ...installed.lines],
+    }))
+    // What the configuration step raised is still owed to the person, ahead of the skill failure.
+    .mapErr((failure) => ({ ...failure, warnings: [...report.warnings, ...failure.warnings] }));
 
 type ClientLookup = { client: ClientConfig; exit?: undefined } | { client?: undefined; exit: number };
 

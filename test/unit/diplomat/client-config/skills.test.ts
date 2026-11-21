@@ -19,6 +19,12 @@ describe('the packaged skills are pointers', () => {
     expect(skill.split('\n').length).toBeLessThan(30);
   });
 
+  it('dashboard-building keeps the guide, the contract and the save on one server', () => {
+    const skill = packaged('dashboard-building');
+    expect(skill).toContain('patty-demo');
+    expect(skill).toContain('the same instance');
+  });
+
   it('patty-tour keeps its name and description, and sends the agent to get_workflow with the tour', () => {
     const skill = packaged('patty-tour');
     expect(skill).toMatch(/^---\nname: patty-tour\ndescription: Use when the user wants a tour/);

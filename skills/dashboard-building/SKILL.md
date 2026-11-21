@@ -9,8 +9,10 @@ description: Use when the user asks to build, change, extend, or "show me" a das
 
 The guide lives in PATTY itself, so it is always the version that matches the server you are talking to.
 
-1. Call the `get_dashboard_guide` tool of the `patty` MCP server.
-2. Follow what it returns: read the API contract with `get_api_contract`, then build the fragment and save it with
-   `save_dashboard`.
+1. Pick the PATTY MCP server the dashboard is for: `patty`, or `patty-demo` when you are in the demo tour. Use that one
+   server for every call below, so the guide, the contract and the save all come from the same instance.
+2. Call its `get_dashboard_guide` tool.
+3. Follow what it returns: read the API contract with its `get_api_contract`, then build the fragment and save it with
+   its `save_dashboard`.
 
 Do not build a dashboard from memory: the guide holds the hard rules (a dashboard never contains data, it fetches it).
