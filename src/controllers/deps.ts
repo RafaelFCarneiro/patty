@@ -108,6 +108,11 @@ export type ClientConfig = {
   run: (profile: string) => Result<ClientSetupReport, ClientConfigFailure>;
   addDemo: (databasePath: string) => Result<ClientSetupReport, ClientConfigFailure>;
   removeDemo: () => Result<ClientSetupReport, ClientConfigFailure>;
+  /** Present for a client that loads skills from a folder: the pointers `setup` installs there, and takes out. */
+  skills?: {
+    install: () => Result<ClientSetupReport, ClientConfigFailure>;
+    remove: () => Result<ClientSetupReport, ClientConfigFailure>;
+  };
 };
 
 export type ClientConfigs = {

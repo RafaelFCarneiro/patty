@@ -61,12 +61,11 @@ export const SetAssetPriceSchema = z.object({
 });
 export type SetAssetPriceInput = z.infer<typeof SetAssetPriceSchema>;
 
+export const STALE_ONLY_DESCRIPTION = 'Only assets whose price is missing or stale — the ones that need a refresh';
+
 export const ListAssetsSchema = z.object({
   assetClass: AssetClass.optional().describe('Only assets of this class'),
-  staleOnly: z
-    .boolean()
-    .optional()
-    .describe('Only assets whose price is missing or stale — the ones that need a refresh'),
+  staleOnly: z.boolean().optional().describe(STALE_ONLY_DESCRIPTION),
 });
 export type ListAssetsInput = z.infer<typeof ListAssetsSchema>;
 

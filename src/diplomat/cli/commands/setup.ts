@@ -1,3 +1,5 @@
+import { ok } from 'neverthrow';
+import type { ClientConfig, ClientSetupReport } from '../../../controllers/deps.js';
 import { ClientConfigFailureCode, type ClientConfigFailure } from '../../../models/client-config.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/sign-in.js';
 import { DEMO_SERVER_NAME } from '../../../models/demo/core.js';
@@ -7,6 +9,7 @@ import {
   DemoEntryChange,
   PASSWORD_STDIN_FLAG,
   REMOVE_DEMO_FLAG,
+  REMOVE_SKILLS_FLAG,
   SETUP_POSITIONALS,
   SetupOptionsSchema,
 } from '../../../wire/in/cli.js';
@@ -20,6 +23,7 @@ const SETUP_FLAGS = {
   profile: { type: 'string' },
   [DEMO_FLAG]: { type: 'boolean' },
   [REMOVE_DEMO_FLAG]: { type: 'boolean' },
+  [REMOVE_SKILLS_FLAG]: { type: 'boolean' },
 } as const;
 
 const CONFIG_FAILURE_VERB: Readonly<Record<ClientConfigFailureCode, string>> = {
@@ -32,9 +36,10 @@ export const SETUP_MESSAGES = {
   help: `
 Usage: ${NPX_COMMAND} setup <tool> [--username <name>] [--${PASSWORD_STDIN_FLAG}] [--profile <name>]
        ${NPX_COMMAND} setup <tool> --${DEMO_FLAG} | --${REMOVE_DEMO_FLAG}
+       ${NPX_COMMAND} setup <tool> --${REMOVE_SKILLS_FLAG}
 
 Available tools:
-  claude-code      Claude Code CLI      (~/.claude/mcp.json)
+  claude-code      Claude Code CLI      (~/.claude/mcp.json, and the skills in ~/.claude/skills)
   claude-desktop   Claude Desktop       (OS-specific config path)
   copilot          VS Code / GitHub Copilot    (.vscode/mcp.json in current directory)
   vscode           VS Code / GitHub Copilot    (alias for copilot)
@@ -53,6 +58,7 @@ Options:
   --${DEMO_FLAG}           add a second MCP entry, ${DEMO_SERVER_NAME}, that runs on the demo database (see: ${NPX_COMMAND} demo);
                      the patty entry is never touched, and no login is needed
   --${REMOVE_DEMO_FLAG}    remove only the ${DEMO_SERVER_NAME} entry
+  --${REMOVE_SKILLS_FLAG}  take out the skills setup installed (only PATTY's own files; the MCP entry stays)
 
 Examples:
   ${NPX_COMMAND} setup claude-code
@@ -65,6 +71,8 @@ Examples:
   settingUp: (label: string) => `Setting up ${PRODUCT_NAME} MCP for ${label}...`,
   settingUpDemo: (change: DemoEntryChange, label: string) =>
     `${change === DemoEntryChange.enum.add ? 'Adding' : 'Removing'} the ${DEMO_SERVER_NAME} MCP entry for ${label}...`,
+  noSkills: (label: string) => `  ${label} has no skills folder PATTY installs into.`,
+  removingSkills: (label: string) => `Taking the ${PRODUCT_NAME} skills out of ${label}...`,
   demoNotCreated: `  Run \`${NPX_COMMAND} demo\` once to create the demo data.`,
   done: 'Done.',
   /** Said when a client's configuration file could not be used: the same words whichever file it was. */
@@ -77,34 +85,56 @@ type SetupIo = Pick<CliIo, 'out' | 'err' | 'clients'>;
 
 type DemoSetupIo = SetupIo & { demo: Pick<CliIo['demo'], 'databasePath' | 'hasDatabase'> };
 
+const withSkills = (
+  skills: ReturnType<NonNullable<ClientConfig['skills']>['install']> | undefined,
+  report: ClientSetupReport,
+) =>
+  (skills ?? ok({ warnings: [], lines: [] }))
+    .map((installed): ClientSetupReport => ({
+      warnings: [...report.warnings, ...installed.warnings],
+      lines: [...report.lines, ...installed.lines],
+    }))
+    // What the configuration step raised is still owed to the person, ahead of the skill failure.
+    .mapErr((failure) => ({ ...failure, warnings: [...report.warnings, ...failure.warnings] }));
+
+type ClientLookup = { client: ClientConfig; exit?: undefined } | { client?: undefined; exit: number };
+
+/** The client `tool` names, or the exit code to end with: none named prints the help, an unknown one fails. */
+const lookupClient = (io: Pick<SetupIo, 'out' | 'err' | 'clients'>, tool: string | undefined): ClientLookup => {
+  if (!tool) {
+    io.out(SETUP_MESSAGES.help);
+    return { exit: EXIT_OK };
+  }
+  const client = io.clients.find(tool);
+  if (client) return { client };
+  io.err(SETUP_MESSAGES.unknownTool(tool));
+  return { exit: EXIT_FAILURE };
+};
+
 /** Writes the client's configuration and answers the exit code: help is `EXIT_OK`, an unknown tool or a configuration
  *  file that cannot be read or written is reported on stderr and is `EXIT_FAILURE`. */
 export const runSetup = (io: SetupIo, tool: string | undefined, profile: string = DEFAULT_PROFILE): number => {
-  if (!tool) {
-    io.out(SETUP_MESSAGES.help);
-    return EXIT_OK;
-  }
-
-  const client = io.clients.find(tool);
-  if (!client) {
-    io.err(SETUP_MESSAGES.unknownTool(tool));
-    return EXIT_FAILURE;
-  }
+  const found = lookupClient(io, tool);
+  if (found.exit !== undefined) return found.exit;
+  const { client } = found;
 
   io.out(SETUP_MESSAGES.settingUp(client.label));
-  return client.run(profile).match(
-    (report) => {
-      report.warnings.forEach((warning) => io.err(warning));
-      report.lines.forEach((line) => io.out(line));
-      io.out(SETUP_MESSAGES.done);
-      return EXIT_OK;
-    },
-    (failure) => {
-      failure.warnings.forEach((warning) => io.err(warning));
-      io.err(SETUP_MESSAGES.configFailure(failure));
-      return EXIT_FAILURE;
-    },
-  );
+  return client
+    .run(profile)
+    .andThen((report) => withSkills(client.skills?.install(), report))
+    .match(
+      (report) => {
+        report.warnings.forEach((warning) => io.err(warning));
+        report.lines.forEach((line) => io.out(line));
+        io.out(SETUP_MESSAGES.done);
+        return EXIT_OK;
+      },
+      (failure) => {
+        failure.warnings.forEach((warning) => io.err(warning));
+        io.err(SETUP_MESSAGES.configFailure(failure));
+        return EXIT_FAILURE;
+      },
+    );
 };
 
 /** Claims the owner first, writes the client config only if that succeeded, then offers to sign the client in
@@ -126,15 +156,9 @@ export const runGuidedSetup = async (
 };
 
 export const runDemoEntry = (io: DemoSetupIo, tool: string | undefined, change: DemoEntryChange): number => {
-  if (!tool) {
-    io.out(SETUP_MESSAGES.help);
-    return EXIT_OK;
-  }
-  const client = io.clients.find(tool);
-  if (!client) {
-    io.err(SETUP_MESSAGES.unknownTool(tool));
-    return EXIT_FAILURE;
-  }
+  const found = lookupClient(io, tool);
+  if (found.exit !== undefined) return found.exit;
+  const { client } = found;
   io.out(SETUP_MESSAGES.settingUpDemo(change, client.label));
   return (change === DemoEntryChange.enum.add ? client.addDemo(io.demo.databasePath) : client.removeDemo()).match(
     (report) => {
@@ -152,10 +176,34 @@ export const runDemoEntry = (io: DemoSetupIo, tool: string | undefined, change: 
   );
 };
 
+/** `--remove-skills`: takes out the skills `setup` installed, and nothing else of the client's. */
+export const runSkillsRemoval = (io: SetupIo, tool: string | undefined): number => {
+  const found = lookupClient(io, tool);
+  if (found.exit !== undefined) return found.exit;
+  const { client } = found;
+  if (!client.skills) {
+    io.out(SETUP_MESSAGES.noSkills(client.label));
+    return EXIT_OK;
+  }
+  io.out(SETUP_MESSAGES.removingSkills(client.label));
+  return client.skills.remove().match(
+    (report) => {
+      report.lines.forEach((line) => io.out(line));
+      io.out(SETUP_MESSAGES.done);
+      return EXIT_OK;
+    },
+    (failure) => {
+      io.err(SETUP_MESSAGES.configFailure(failure));
+      return EXIT_FAILURE;
+    },
+  );
+};
+
 export const runSetupCommand = async (args: readonly string[], io: CliIo): Promise<number> => {
   const parsed = parseFlags(args, SETUP_FLAGS, SetupOptionsSchema, SETUP_POSITIONALS);
   if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
   const [client] = parsed.positionals;
+  if (parsed.options.removeSkills) return runSkillsRemoval(io, client);
   if (parsed.options.demo) return runDemoEntry(io, client, DemoEntryChange.enum.add);
   if (parsed.options.removeDemo) return runDemoEntry(io, client, DemoEntryChange.enum.remove);
   return runGuidedSetup(

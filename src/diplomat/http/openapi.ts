@@ -9,6 +9,7 @@ import './principal.js';
 import type { OpenAPIObject } from 'openapi3-ts/oas30';
 import { z } from 'zod';
 import { scopedFor, type Scoped, type Tenancy } from '../../controllers/deps.js';
+import { HttpMethod } from '../../models/api-contract.js';
 import type { Scope } from '../../models/auth/scope.js';
 import { LOG_PREFIX, PRODUCT_NAME } from '../../models/package.js';
 
@@ -26,7 +27,7 @@ import { LOG_PREFIX, PRODUCT_NAME } from '../../models/package.js';
 
 extendZodWithOpenApi(z);
 
-export type HttpMethod = 'get' | 'post' | 'patch' | 'delete';
+export { HttpMethod };
 /** The request's user-scoped dependencies; throws without a principal (fails closed). Public routes never ask. */
 export type ScopeOf = () => Scoped;
 export type RouteHandler = (req: FastifyRequest, reply: FastifyReply, scope: ScopeOf) => unknown;

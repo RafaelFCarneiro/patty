@@ -416,7 +416,7 @@ describe('MCP scopes over HTTP', () => {
     const writing = await connect(writer.token);
     const created = await writing.callTool({ name: 'create_account', arguments: ACCOUNT });
     expect(created.isError).toBeFalsy();
-    expect((await writing.listTools()).tools).toHaveLength(63);
+    expect((await writing.listTools()).tools).toHaveLength(68);
     await writing.close();
 
     const reading = await connect(reader.token);

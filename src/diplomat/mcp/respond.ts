@@ -8,6 +8,9 @@ export const json = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
 });
 
+/** A plain-text tool result — for a document the agent reads (a guide, an index), not data it parses. */
+export const text = (value: string) => ({ content: [{ type: 'text' as const, text: value }] });
+
 export const jsonError = (e: AppError) => ({
   content: [{ type: 'text' as const, text: JSON.stringify({ error: withToolHint(e) }, null, 2) }],
   isError: true,

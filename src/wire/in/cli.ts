@@ -49,11 +49,14 @@ export type ResetOptions = z.infer<typeof ResetOptionsSchema>;
 
 export const DEMO_FLAG = 'demo';
 export const REMOVE_DEMO_FLAG = 'remove-demo';
+export const REMOVE_SKILLS_FLAG = 'remove-skills';
 
 export const DemoEntryChange = z.enum(['add', 'remove']);
 export type DemoEntryChange = z.infer<typeof DemoEntryChange>;
 
 const DEMO_EXCLUSIVE_MESSAGE = `--${DEMO_FLAG} and --${REMOVE_DEMO_FLAG} only edit the client's demo entry: use them alone`;
+
+const REMOVE_SKILLS_EXCLUSIVE_MESSAGE = `--${REMOVE_SKILLS_FLAG} only takes out the skills setup installed: use it alone`;
 
 export const SetupOptionsSchema = z
   .object({
@@ -62,6 +65,7 @@ export const SetupOptionsSchema = z
     profile: ProfileSchema.optional(),
     [DEMO_FLAG]: z.boolean().default(false),
     [REMOVE_DEMO_FLAG]: z.boolean().default(false),
+    [REMOVE_SKILLS_FLAG]: z.boolean().default(false),
   })
   .refine(
     (flags) =>
@@ -72,12 +76,25 @@ export const SetupOptionsSchema = z
         flags.profile === undefined),
     { error: DEMO_EXCLUSIVE_MESSAGE },
   )
+  .refine(
+    (flags) =>
+      !flags[REMOVE_SKILLS_FLAG] ||
+      !(
+        flags[DEMO_FLAG] ||
+        flags[REMOVE_DEMO_FLAG] ||
+        flags[PASSWORD_STDIN_FLAG] ||
+        flags.username !== undefined ||
+        flags.profile !== undefined
+      ),
+    { error: REMOVE_SKILLS_EXCLUSIVE_MESSAGE },
+  )
   .transform((flags) => ({
     passwordStdin: flags[PASSWORD_STDIN_FLAG],
     username: flags.username,
     profile: flags.profile ?? DEFAULT_PROFILE,
     demo: flags[DEMO_FLAG],
     removeDemo: flags[REMOVE_DEMO_FLAG],
+    removeSkills: flags[REMOVE_SKILLS_FLAG],
   }));
 export type SetupOptions = z.infer<typeof SetupOptionsSchema>;
 

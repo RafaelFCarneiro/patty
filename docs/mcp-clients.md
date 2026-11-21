@@ -109,6 +109,12 @@ claude mcp add patty -- npx -y @rfc0/patty@latest
 
 Or edit `~/.claude/mcp.json` directly with the same `command`/`args` shape as VS Code above.
 
+`npx @rfc0/patty@latest setup claude-code` also installs two short skills, `~/.claude/skills/patty-dashboard/` and
+`~/.claude/skills/patty-tour/`. Each is a pointer: it tells Claude to call `get_dashboard_guide` or
+`get_workflow({ name: "tour" })`, so the guide always matches the server. A file is written only when absent or when it
+is PATTY's own earlier copy (it carries a `patty:skill-pointer` marker); one of yours is left alone.
+`npx @rfc0/patty@latest setup claude-code --remove-skills` takes out only PATTY's own files and leaves the MCP entry.
+
 ### Google Antigravity (2.0, CLI, IDE) ✅
 
 Global config at `~/.gemini/config/mcp_config.json` (or workspace-scoped at `.agents/mcp_config.json`):
@@ -153,6 +159,26 @@ Verify with `opencode mcp list` (or `/mcps` inside OpenCode).
 
 **Demo:** `setup opencode --demo` adds a second entry, `mcp.servers.patty-demo`, with the demo `environment`
 (`DB_PATH`, `PORT`, `PATTY_DEMO`) and never touches `patty`; `setup opencode --remove-demo` removes only it.
+
+## Clients that only receive tools
+
+Some setups forward a server's **tools only**: a remote agent behind a bridge, for one. Prompts, resources and
+installed skills never arrive. PATTY makes everything it offers beyond tools reachable through a tool:
+
+| Instead of | Call |
+|---|---|
+| the prompts (`monthly_review`, `budget_checkup`, `import_statement`, `refresh_quotes`, `tour`) | `get_workflow({ name, … })`; with no `name`, the list |
+| `patty://openapi` | `get_api_contract` (the index), then `get_api_contract({ path })` per route |
+| the `dashboard-building` skill | `get_dashboard_guide` |
+| `patty://categories`, `accounts`, `tags`, `credit-cards`, `exchange-rates`, `assets`, `currencies`, `merchants/top` | `list_categories`, `list_accounts`, `list_tags`, `list_credit_cards`, `list_exchange_rates`, `list_assets`, `list_currencies`, `list_top_merchants` |
+
+A dashboard can be built from such a session: `get_dashboard_guide`, `get_api_contract`, `save_dashboard`. The holdings
+have REST reads for it (`/api/portfolio`, `/api/assets`, `/api/investment-events`).
+
+**Skills in a Claude account (Desktop, claude.ai, Cowork).** `setup` cannot reach an account's skills. To get the same
+pointers there, add `skills/dashboard-building/SKILL.md` and `skills/patty-tour/SKILL.md` from the package (or the
+repository) in the account's skills settings, as custom skills. Each is a few lines that call the tool above, so they
+never go stale; the MCP server must be connected for them to work.
 
 ## HTTP sidecar (alongside stdio)
 
