@@ -229,7 +229,10 @@ every guide class against `ui/app.css`):
   that tag (`baseCurrency` reads `window.BASE_CURRENCY`, so it follows the user's setting). A missing value
   (`null`, `undefined`, `NaN`, an invalid date) formats as `—` (`EMPTY_VALUE`), never 0.
   `formatMoney(value, code, opts)` wraps `window.formatMoney` (`ui/money.js`, crypto-aware precision and
-  symbols) with the UI locale as default; `formatDate` renders a `YYYY-MM-DD` day as that calendar day.
+  symbols) with the UI locale as default; `formatDate` renders a `YYYY-MM-DD` day as that calendar day. Passing component options (`year`, `month`, `hour`, …)
+  replaces the default `dateStyle`/`timeStyle`. Every member reads the current locale and base currency when called
+  (`baseCurrency` falls back to the default currency), and a `userSettings` event re-reads `/api/status` and
+  `<html lang>` before the fragment is told. A history navigation waits for the shell to be ready.
 - **Chart.js**: `Chart.defaults.color`, `borderColor` (grid), `font.family` and `plugins.legend.labels.color`
   are read from `:root` (`--text-muted`, `--chart-grid`, `--font-family`), so a fragment's charts read on the dark background. A chart sits in a `.chart-box`
   with `maintainAspectRatio: false`.

@@ -17,6 +17,7 @@ const bootShell = async (
 ) => {
   let onReady: (() => void) | undefined;
   const loaded: string[] = [];
+  const windowHandlers: Record<string, () => void> = {};
   const stream: { onmessage?: (event: { data: string }) => void } = {};
   const respond = (url: string) => {
     const path = url.split('?')[0] ?? '';
@@ -68,7 +69,9 @@ const bootShell = async (
     },
     location: { pathname: '/ui/overview', search: '' },
     history: { pushState() {} },
-    addEventListener() {},
+    addEventListener: (type: string, handler: () => void) => {
+      windowHandlers[type] = handler;
+    },
     Chart: chart,
     getComputedStyle: () => ({ getPropertyValue: (name: string) => theme[name] ?? '' }),
   };
@@ -78,7 +81,7 @@ const bootShell = async (
   vm.runInContext(read('app.js'), sandbox);
   onReady?.();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  return { sandbox, loaded, stream, document };
+  return { sandbox, loaded, stream, document, windowHandlers };
 };
 
 const currencies = Object.values(currencyMetadata);
@@ -215,6 +218,61 @@ describe('shell boot (ui/app.js)', () => {
         '/api/preferences': () => ({ baseCurrency: 'COP' }),
       });
       expect((sandbox.PATTY as { baseCurrency: string }).baseCurrency).toBe('COP');
+    });
+
+    it('formats with component options instead of throwing on the style defaults', async () => {
+      const { sandbox } = await bootShell(statusFor('en'));
+      const patty = sandbox.PATTY as {
+        formatDate: (v: string, o?: object) => string;
+        formatDateTime: (v: Date, o?: object) => string;
+      };
+      expect(patty.formatDate('2026-03-05', { year: 'numeric', month: 'short' })).toBe('Mar 2026');
+      expect(
+        patty.formatDateTime(new Date(Date.UTC(2026, 2, 5, 15, 4)), {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'UTC',
+          hour12: false,
+        }),
+      ).toBe('15:04');
+    });
+
+    it('follows a locale change on a userSettings event, for a reference the fragment already holds', async () => {
+      let locale = 'en';
+      const { sandbox, stream, document } = await bootShell({ '/api/status': () => ({ locale }) });
+      const held = sandbox.PATTY as { locale: string; formatNumber: (v: number) => string };
+      const { formatNumber } = held;
+      expect(formatNumber(1234.5)).toBe('1,234.5');
+      locale = 'pt';
+      stream.onmessage?.({ data: JSON.stringify({ entities: ['userSettings'] }) });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(held.locale).toBe('pt-BR');
+      expect(document.documentElement.lang).toBe('pt-BR');
+      expect(formatNumber(1234.5)).toBe('1.234,5');
+    });
+
+    it('falls back to the default currency when no base currency resolved', async () => {
+      const { sandbox } = await bootShell({
+        ...statusFor('en'),
+        '/api/preferences': () => {
+          throw new Error('down');
+        },
+      });
+      expect((sandbox.PATTY as { baseCurrency: string }).baseCurrency).toBe('BRL');
+    });
+
+    it('holds a history navigation until the shell is ready', async () => {
+      let release: () => void = () => {};
+      const gate = new Promise<{ locale: string }>((resolve) => {
+        release = () => resolve({ locale: 'en' });
+      });
+      const { loaded, windowHandlers } = await bootShell({ '/api/status': () => gate });
+      windowHandlers.popstate?.();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(loaded).toEqual([]);
+      release();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(loaded.length).toBeGreaterThanOrEqual(2);
     });
 
     it('falls back to en-US when /api/status fails', async () => {

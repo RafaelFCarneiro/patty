@@ -139,6 +139,11 @@
   // Set by onerror, consumed by the next onopen: the stream was down, so events may have been missed.
   var streamErrored = false;
   var reconnectTimer = null;
+  var markShellReady;
+  // Resolves once locale, currency metadata and preferences are in (the PATTY API exists then).
+  var shellReady = new Promise(function (resolve) {
+    markShellReady = resolve;
+  });
 
   function htmlLang() {
     return HTML_LANG_BY_LOCALE[currentLocale] || DEFAULT_HTML_LANG;
@@ -161,35 +166,56 @@
     return isMissingNumber(value) ? EMPTY_VALUE : new Intl.NumberFormat(tag, opts).format(Number(value));
   }
 
-  function formatDateWith(tag, value, defaults, opts) {
+  // dateStyle/timeStyle cannot coexist with component options (year, month, hour…): the style defaults
+  // apply only when the caller passes no options of its own.
+  function formatDateWith(value, base, styleDefaults, opts) {
     var date = dateOf(value);
     if (isMissingDate(date)) return EMPTY_VALUE;
-    return new Intl.DateTimeFormat(tag, Object.assign({}, defaults, opts)).format(date);
+    var chosen = opts && Object.keys(opts).length > 0 ? opts : styleDefaults;
+    return new Intl.DateTimeFormat(htmlLang(), Object.assign({}, base, chosen)).format(date);
+  }
+
+  function syncLanguage() {
+    document.documentElement.lang = htmlLang();
+  }
+
+  // The status call resolves the effective locale (configuration override included); a failure keeps the last one.
+  function refreshLocale() {
+    return fetchJson(Api.status)
+      .then(function (status) {
+        if (status && status.locale) currentLocale = status.locale;
+      })
+      .catch(function (err) {
+        console.error('Could not refresh the locale:', err);
+      })
+      .then(syncLanguage);
   }
 
   // The fragment-facing API: everything formats with the resolved UI language, never the browser's,
-  // and a missing value is EMPTY_VALUE, never a 0 or a 1970 date.
+  // and a missing value is EMPTY_VALUE, never a 0 or a 1970 date. Every member reads the current
+  // locale and base currency when called, so a reference a fragment holds stays correct after a setting changes.
   function exposeShellApi() {
-    var tag = htmlLang();
-    document.documentElement.lang = tag;
+    syncLanguage();
     applyChartDefaults();
     window.PATTY = {
-      locale: tag,
+      get locale() {
+        return htmlLang();
+      },
       get baseCurrency() {
-        return window.BASE_CURRENCY;
+        return window.BASE_CURRENCY || window.DEFAULT_CURRENCY;
       },
       formatMoney: function (value, currencyCode, opts) {
         if (isMissingNumber(value)) return EMPTY_VALUE;
-        return window.formatMoney(value, currencyCode, Object.assign({ locale: tag }, opts));
+        return window.formatMoney(value, currencyCode, Object.assign({ locale: htmlLang() }, opts));
       },
       formatNumber: function (value, opts) {
-        return formatNumberWith(tag, value, opts);
+        return formatNumberWith(htmlLang(), value, opts);
       },
       formatDate: function (value, opts) {
-        return formatDateWith(tag, value, { dateStyle: 'medium', timeZone: 'UTC' }, opts);
+        return formatDateWith(value, { timeZone: 'UTC' }, { dateStyle: 'medium' }, opts);
       },
       formatDateTime: function (value, opts) {
-        return formatDateWith(tag, value, { dateStyle: 'medium', timeStyle: 'short' }, opts);
+        return formatDateWith(value, {}, { dateStyle: 'medium', timeStyle: 'short' }, opts);
       },
     };
   }
@@ -465,8 +491,11 @@
     return loadDashboard(name);
   }
 
+  // History navigation before the shell is ready would run a fragment without window.PATTY.
   window.addEventListener('popstate', function () {
-    navigate(currentDashboardName(), false);
+    shellReady.then(function () {
+      navigate(currentDashboardName(), false);
+    });
   });
 
   // ADR-027 Phase 3 live update, ADR-036 §4 recovery (the as-built flow is in docs/ui.md). One
@@ -479,8 +508,11 @@
       if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(entities);
     };
     if (entities.indexOf('userSettings') === -1) return forward();
-    // A base-currency change updates the default before the fragment re-renders with it.
-    fetchJson(Api.preferences)
+    // A locale or base-currency change updates the shell before the fragment re-renders with it.
+    refreshLocale()
+      .then(function () {
+        return fetchJson(Api.preferences);
+      })
       .then(function (prefs) {
         window.setBaseCurrency(prefs && prefs.baseCurrency);
       })
@@ -622,7 +654,8 @@
       })
       .catch(function (err) {
         console.error('Could not load preferences; keeping the default currency:', err);
-      });
+      })
+      .then(markShellReady);
 
     bootPromise
       .then(function () {
