@@ -140,6 +140,7 @@
   var streamErrored = false;
   var reconnectTimer = null;
   var markShellReady;
+  var settingsRefresh = Promise.resolve();
   // Resolves once locale, currency metadata and preferences are in (the PATTY API exists then).
   var shellReady = new Promise(function (resolve) {
     markShellReady = resolve;
@@ -503,13 +504,8 @@
   // window.onAppDataChanged slot it delivers into, and a message with no fragment registered is
   // dropped (the next fetch reflects current data anyway). Events that pass while the stream is
   // down are lost for good, hence the resync on reopen.
-  function forwardEntities(entities) {
-    var forward = function () {
-      if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(entities);
-    };
-    if (entities.indexOf('userSettings') === -1) return forward();
-    // A locale or base-currency change updates the shell before the fragment re-renders with it.
-    refreshLocale()
+  function refreshSettings() {
+    return refreshLocale()
       .then(function () {
         return fetchJson(Api.preferences);
       })
@@ -518,8 +514,24 @@
       })
       .catch(function (err) {
         console.error('Could not refresh preferences:', err);
-      })
-      .then(forward);
+      });
+  }
+
+  function forwardEntities(entities) {
+    var forward = function () {
+      if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(entities);
+    };
+    if (entities.indexOf('userSettings') === -1) return forward();
+    // A locale or base-currency change updates the shell before the fragment re-renders with it. Refreshes
+    // run one at a time in event order, so a slow earlier response cannot overwrite newer state.
+    settingsRefresh = settingsRefresh.then(function () {
+      return refreshSettings()
+        .then(forward)
+        .catch(function (err) {
+          console.error('A settings update handler failed:', err); // never break the queue for later events
+        });
+    });
+    return settingsRefresh;
   }
 
   function goToLogin() {

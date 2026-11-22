@@ -251,6 +251,33 @@ describe('shell boot (ui/app.js)', () => {
       expect(formatNumber(1234.5)).toBe('1.234,5');
     });
 
+    it('applies overlapping userSettings refreshes in event order, forwarding each after its own', async () => {
+      const replies: Array<(value: { locale: string }) => void> = [];
+      let calls = 0;
+      const { sandbox, stream, document } = await bootShell({
+        '/api/status': () =>
+          ++calls === 1
+            ? { locale: 'en' }
+            : new Promise<{ locale: string }>((resolve) => {
+                replies.push(resolve);
+              }),
+      });
+      const seen: string[] = [];
+      sandbox.onAppDataChanged = () => seen.push(document.documentElement.lang);
+      const event = { data: JSON.stringify({ entities: ['userSettings'] }) };
+      stream.onmessage?.(event);
+      stream.onmessage?.(event);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(replies).toHaveLength(1);
+      replies[0]?.({ locale: 'pt' });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(replies).toHaveLength(2);
+      replies[1]?.({ locale: 'es' });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(seen).toEqual(['pt-BR', 'es']);
+      expect(document.documentElement.lang).toBe('es');
+    });
+
     it('falls back to the default currency when no base currency resolved', async () => {
       const { sandbox } = await bootShell({
         ...statusFor('en'),
