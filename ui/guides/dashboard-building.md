@@ -150,13 +150,17 @@ dashboard data-less; the save endpoint won't catch a violation for you.
     one inline `<script>` and, only when needed, one short `<style>` block for layout specific to that
     dashboard — the same shape `save_dashboard` stores and the shell injects into `#content`. Shared shapes
     use the shell's classes (`ui/app.css`), never a re-declared copy:
+    <!-- shell-classes -->
     `panel` (section box), `cards-grid` + `card` (+ `card-label`, `card-value`), `chart-box`,
-    `table-wrap` + `data-table`, `state` + `state-error`, `muted`.
+    `table-wrap` + `data-table`, `state` + `state-error`, `muted`, `visually-hidden`, and
+    `dashboard-header` + `header-actions` (a title row with its actions).
+    <!-- /shell-classes -->
 11. **Format with `window.PATTY`.** The shell sets the page language from the user's PATTY locale and exposes
-    `window.PATTY = { locale, formatMoney, formatNumber, formatDate, formatDateTime }` (`locale` is the BCP-47
-    tag: `en-US`, `pt-BR` or `es`). Every displayed money amount, number and date goes through these — never
+    `window.PATTY = { locale, baseCurrency, formatMoney, formatNumber, formatDate, formatDateTime }` (`locale`
+    is the BCP-47 tag: `en-US`, `pt-BR` or `es`; `baseCurrency` is the user's, kept current). Every displayed money amount, number and date goes through these — never
     the page's or the browser's language, never a hard-coded `'en-US'`. `formatMoney(value, currencyCode)`
-    handles crypto precision; `formatDate` takes a `YYYY-MM-DD` day.
+    handles crypto precision; `formatDate` takes a `YYYY-MM-DD` day. A missing value (`null`, `undefined`,
+    `NaN`, an invalid date) renders as `—`, never as `0`: pass it through unchanged instead of defaulting it.
 12. **Charts: a `.chart-box` and `maintainAspectRatio: false`.** Put each `<canvas>` alone inside a
     `.chart-box` (fixed height, `position: relative`) and pass `options: { maintainAspectRatio: false }`. The
     shell already sets `Chart.defaults` (text, grid and legend colors) for the dark theme — don't override them

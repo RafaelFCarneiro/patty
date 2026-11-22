@@ -220,15 +220,18 @@ every guide class against `ui/app.css`):
 
 - **Classes** (`ui/app.css`, "Fragment component layer"): `.panel` (section box), `.cards-grid` + `.card` with
   `.card-label`/`.card-value`, `.chart-box` (fixed height, `position: relative`), `.table-wrap` + `.data-table`,
-  `.state` + `.state-error`, `.muted`. Layout specific to one dashboard goes in a short `<style>` block in the
+  `.state` + `.state-error`, `.muted`, `.visually-hidden`, `.dashboard-header` + `.header-actions` (title row with
+  actions). Layout specific to one dashboard goes in a short `<style>` block in the
   fragment; the bundled dashboards keep their own `<style>` blocks untouched.
 - **Language**: once `/api/status` answers, the shell sets `<html lang>` to the BCP-47 tag of the resolved UI
   locale (`pt` → `pt-BR`, `es` → `es`, `en` → `en-US`; `en-US` if the call fails) and
-  `window.PATTY = { locale, formatMoney, formatNumber, formatDate, formatDateTime }`, all `Intl` with that tag.
+  `window.PATTY = { locale, baseCurrency, formatMoney, formatNumber, formatDate, formatDateTime }`, all `Intl` with
+  that tag (`baseCurrency` reads `window.BASE_CURRENCY`, so it follows the user's setting). A missing value
+  (`null`, `undefined`, `NaN`, an invalid date) formats as `—` (`EMPTY_VALUE`), never 0.
   `formatMoney(value, code, opts)` wraps `window.formatMoney` (`ui/money.js`, crypto-aware precision and
   symbols) with the UI locale as default; `formatDate` renders a `YYYY-MM-DD` day as that calendar day.
 - **Chart.js**: `Chart.defaults.color`, `borderColor` (grid), `font.family` and `plugins.legend.labels.color`
-  are set from the theme, so a fragment's charts read on the dark background. A chart sits in a `.chart-box`
+  are read from `:root` (`--text-muted`, `--chart-grid`, `--font-family`), so a fragment's charts read on the dark background. A chart sits in a `.chart-box`
   with `maintainAspectRatio: false`.
 
 ## Routes

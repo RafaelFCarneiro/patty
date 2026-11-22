@@ -11,7 +11,10 @@ const read = (file: string) => readFileSync(fileURLToPath(new URL(UI_DIR + file,
 
 type Routes = Record<string, () => unknown>;
 
-const bootShell = async (routes: Routes, { demo = false, chart }: { demo?: boolean; chart?: unknown } = {}) => {
+const bootShell = async (
+  routes: Routes,
+  { demo = false, chart, theme = {} }: { demo?: boolean; chart?: unknown; theme?: Record<string, string> } = {},
+) => {
   let onReady: (() => void) | undefined;
   const loaded: string[] = [];
   const stream: { onmessage?: (event: { data: string }) => void } = {};
@@ -67,6 +70,7 @@ const bootShell = async (routes: Routes, { demo = false, chart }: { demo?: boole
     history: { pushState() {} },
     addEventListener() {},
     Chart: chart,
+    getComputedStyle: () => ({ getPropertyValue: (name: string) => theme[name] ?? '' }),
   };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
@@ -158,12 +162,59 @@ describe('shell boot (ui/app.js)', () => {
       expect(page(sandbox).locale).toBe(tag);
     });
 
-    it('sets Chart.js defaults from the theme', async () => {
+    it('reads the Chart.js defaults from the CSS theme variables', async () => {
       const defaults = { font: {}, plugins: { legend: { labels: {} } } } as Record<string, any>;
-      const { sandbox } = await bootShell({ ...statusFor('en') }, { chart: { defaults } });
-      expect(sandbox.Chart).toBeDefined();
-      expect(defaults.color).toBe('#9ca3af');
-      expect(defaults.plugins.legend.labels.color).toBe('#9ca3af');
+      const theme = { '--text-muted': ' #111111 ', '--chart-grid': 'rgba(1, 2, 3, 0.1)', '--font-family': 'Test Sans' };
+      await bootShell(statusFor('en'), { chart: { defaults }, theme });
+      expect(defaults.color).toBe('#111111');
+      expect(defaults.plugins.legend.labels.color).toBe('#111111');
+      expect(defaults.borderColor).toBe('rgba(1, 2, 3, 0.1)');
+      expect(defaults.font.family).toBe('Test Sans');
+    });
+
+    it('leaves Chart.js defaults alone for a variable the theme does not define', async () => {
+      const defaults = { color: 'keep', font: {}, plugins: { legend: { labels: {} } } } as Record<string, any>;
+      await bootShell(statusFor('en'), { chart: { defaults } });
+      expect(defaults.color).toBe('keep');
+    });
+
+    describe('a missing value is never shown as 0', () => {
+      const missing = [null, undefined, Number.NaN];
+      const formatters = (patty: ReturnType<typeof page>) => ({
+        formatMoney: (value: unknown) => patty.formatMoney(value as number, 'USD'),
+        formatNumber: (value: unknown) => patty.formatNumber(value as number),
+        formatDate: (value: unknown) => patty.formatDate(value as string),
+        formatDateTime: (value: unknown) => patty.formatDateTime(value as Date),
+      });
+
+      it.each(['formatMoney', 'formatNumber', 'formatDate', 'formatDateTime'] as const)(
+        '%s renders null, undefined and NaN as the empty value',
+        async (name) => {
+          const { sandbox } = await bootShell({ ...statusFor('en'), '/api/currencies': () => currencies });
+          const format = formatters(page(sandbox))[name];
+          expect(missing.map(format)).toEqual(['—', '—', '—']);
+        },
+      );
+
+      it('still formats a real zero', async () => {
+        const { sandbox } = await bootShell({ ...statusFor('en'), '/api/currencies': () => currencies });
+        expect(page(sandbox).formatNumber(0)).toBe('0');
+        expect(page(sandbox).formatMoney(0, 'USD')).toBe('$0.00');
+      });
+
+      it('formatDate renders an invalid date as the empty value', async () => {
+        const { sandbox } = await bootShell(statusFor('en'));
+        expect(page(sandbox).formatDate('not-a-date')).toBe('—');
+      });
+    });
+
+    it('exposes the base currency, kept in step with the setting', async () => {
+      const { sandbox } = await bootShell({
+        ...statusFor('en'),
+        '/api/currencies': () => currencies,
+        '/api/preferences': () => ({ baseCurrency: 'COP' }),
+      });
+      expect((sandbox.PATTY as { baseCurrency: string }).baseCurrency).toBe('COP');
     });
 
     it('falls back to en-US when /api/status fails', async () => {

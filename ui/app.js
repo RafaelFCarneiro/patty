@@ -74,8 +74,10 @@
   var currentLocale = 'en';
   var HTML_LANG_BY_LOCALE = { pt: 'pt-BR', es: 'es', en: 'en-US' };
   var DEFAULT_HTML_LANG = 'en-US';
-  var CHART_GRID_COLOR = 'rgba(255, 255, 255, 0.08)';
-  var CHART_TEXT_COLOR = '#9ca3af'; // --text-muted: Chart.js draws on a canvas, which cannot read CSS variables
+  var EMPTY_VALUE = '—';
+  var THEME_TEXT_VAR = '--text-muted';
+  var THEME_GRID_VAR = '--chart-grid';
+  var THEME_FONT_VAR = '--font-family';
 
   var DASHBOARD_ICONS = {
     overview: 'fa-chart-pie',
@@ -142,44 +144,73 @@
     return HTML_LANG_BY_LOCALE[currentLocale] || DEFAULT_HTML_LANG;
   }
 
-  // The fragment-facing API: everything formats with the resolved UI language, never the browser's.
-  function exposeShellApi() {
-    document.documentElement.lang = htmlLang();
-    applyChartDefaults();
-    var tag = htmlLang();
-    window.PATTY = {
-      locale: tag,
-      formatMoney: function (value, currencyCode, opts) {
-        return window.formatMoney(value, currencyCode, Object.assign({ locale: tag }, opts));
-      },
-      formatNumber: function (value, opts) {
-        return new Intl.NumberFormat(tag, opts).format(Number(value) || 0);
-      },
-      formatDate: function (value, opts) {
-        return new Intl.DateTimeFormat(tag, Object.assign({ dateStyle: 'medium', timeZone: 'UTC' }, opts)).format(
-          dateOf(value),
-        );
-      },
-      formatDateTime: function (value, opts) {
-        return new Intl.DateTimeFormat(tag, Object.assign({ dateStyle: 'medium', timeStyle: 'short' }, opts)).format(
-          dateOf(value),
-        );
-      },
-    };
+  function isMissingNumber(value) {
+    return value === null || value === undefined || Number.isNaN(Number(value));
+  }
+
+  function isMissingDate(date) {
+    return Number.isNaN(date.getTime());
   }
 
   // A bare YYYY-MM-DD is a calendar day, not an instant: it parses as UTC and formatDate renders in UTC.
   function dateOf(value) {
-    return value instanceof Date ? value : new Date(value);
+    return value instanceof Date ? value : new Date(value === null || value === undefined ? NaN : value);
   }
 
+  function formatNumberWith(tag, value, opts) {
+    return isMissingNumber(value) ? EMPTY_VALUE : new Intl.NumberFormat(tag, opts).format(Number(value));
+  }
+
+  function formatDateWith(tag, value, defaults, opts) {
+    var date = dateOf(value);
+    if (isMissingDate(date)) return EMPTY_VALUE;
+    return new Intl.DateTimeFormat(tag, Object.assign({}, defaults, opts)).format(date);
+  }
+
+  // The fragment-facing API: everything formats with the resolved UI language, never the browser's,
+  // and a missing value is EMPTY_VALUE, never a 0 or a 1970 date.
+  function exposeShellApi() {
+    var tag = htmlLang();
+    document.documentElement.lang = tag;
+    applyChartDefaults();
+    window.PATTY = {
+      locale: tag,
+      get baseCurrency() {
+        return window.BASE_CURRENCY;
+      },
+      formatMoney: function (value, currencyCode, opts) {
+        if (isMissingNumber(value)) return EMPTY_VALUE;
+        return window.formatMoney(value, currencyCode, Object.assign({ locale: tag }, opts));
+      },
+      formatNumber: function (value, opts) {
+        return formatNumberWith(tag, value, opts);
+      },
+      formatDate: function (value, opts) {
+        return formatDateWith(tag, value, { dateStyle: 'medium', timeZone: 'UTC' }, opts);
+      },
+      formatDateTime: function (value, opts) {
+        return formatDateWith(tag, value, { dateStyle: 'medium', timeStyle: 'short' }, opts);
+      },
+    };
+  }
+
+  // Chart.js draws on a canvas, which cannot read CSS variables itself: the theme is read from :root.
   function applyChartDefaults() {
-    if (!window.Chart) return;
+    if (!window.Chart || typeof window.getComputedStyle !== 'function') return;
+    var theme = window.getComputedStyle(document.documentElement);
+    var read = function (name) {
+      return String(theme.getPropertyValue(name) || '').trim();
+    };
     var defaults = window.Chart.defaults;
-    defaults.color = CHART_TEXT_COLOR;
-    defaults.borderColor = CHART_GRID_COLOR;
-    defaults.font.family = "'Plus Jakarta Sans', sans-serif";
-    defaults.plugins.legend.labels.color = CHART_TEXT_COLOR;
+    var text = read(THEME_TEXT_VAR);
+    var grid = read(THEME_GRID_VAR);
+    var font = read(THEME_FONT_VAR);
+    if (text) {
+      defaults.color = text;
+      defaults.plugins.legend.labels.color = text;
+    }
+    if (grid) defaults.borderColor = grid;
+    if (font) defaults.font.family = font;
   }
 
   var Api = {

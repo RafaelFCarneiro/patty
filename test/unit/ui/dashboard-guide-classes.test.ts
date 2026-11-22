@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const read = (file: string) => readFileSync(fileURLToPath(new URL(`../../../ui/${file}`, import.meta.url)), 'utf-8');
 
-const RULE_TEN = /^10\. \*\*A fragment, not a full page\.\*\*[\s\S]*?(?=^11\. )/m;
+const SHELL_CLASSES = /<!-- shell-classes -->([\s\S]*?)<!-- \/shell-classes -->/;
 const BACKTICKED_CLASS = /`([a-z][a-z-]*)`/g;
 const CSS_CLASS = /\.([a-z][a-z-]*)/g;
 
@@ -13,7 +13,11 @@ const names = (text: string, pattern: RegExp) => new Set([...text.matchAll(patte
 describe('dashboard guide ↔ ui/app.css', () => {
   const guide = read('guides/dashboard-building.md');
   const cssClasses = names(read('app.css'), CSS_CLASS);
-  const named = [...names(guide.match(RULE_TEN)?.[0].split('use the shell')[1] ?? '', BACKTICKED_CLASS)];
+  const named = [...names(guide.match(SHELL_CLASSES)?.[1] ?? '', BACKTICKED_CLASS)];
+
+  it('marks a non-empty class list', () => {
+    expect(named.length).toBeGreaterThan(0);
+  });
 
   it('names the component classes the shell provides', () => {
     expect(named).toEqual(
@@ -29,6 +33,9 @@ describe('dashboard guide ↔ ui/app.css', () => {
         'state',
         'state-error',
         'muted',
+        'visually-hidden',
+        'dashboard-header',
+        'header-actions',
       ]),
     );
   });
