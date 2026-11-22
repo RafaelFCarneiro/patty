@@ -6,12 +6,10 @@ import { ImportStatementSource, PromptName } from '../../models/prompts.js';
 import { definePrompt, type PromptDefinition } from './definition.js';
 import { tourPromptText } from './tour.js';
 import { ToolName } from './tool-name.js';
+import { workflowCall } from './workflow-call.js';
 import { PRODUCT_NAME } from '../../models/package.js';
 
 const T = ToolName.enum;
-
-/** How a client that only receives tools runs the same workflow. */
-export const workflowCall = (name: PromptName): string => `${T.get_workflow}({ name: "${name}" })`;
 
 const withToolEquivalent = (name: PromptName, description: string): string =>
   `${description} Tool-only clients: ${workflowCall(name)}.`;

@@ -3,13 +3,14 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ok, Result } from 'neverthrow';
 import * as R from 'remeda';
-import type { ClientSetupReport } from '../../controllers/deps.js';
+import type { ClientSetupReport, ClientSetupResult } from '../../controllers/deps.js';
 import {
   clientConfigFailures,
   leftUnchangedNotOwn,
   SKILL_POINTER_MARKER,
   SKILL_POINTERS,
   type ClientConfigFailure,
+  type SkillOutcome,
   type SkillPointer,
 } from '../../models/client-config.js';
 import { readText, writeText } from './fs.js';
@@ -18,9 +19,6 @@ import { readText, writeText } from './fs.js';
 export const SKILLS_ROOT = fileURLToPath(new URL('../../../skills', import.meta.url));
 
 const SKILL_FILE = 'SKILL.md';
-
-type SkillReport = Result<ClientSetupReport, ClientConfigFailure>;
-type SkillOutcome = Result<string, ClientConfigFailure>;
 
 const fileOf = (root: string, { directory }: SkillPointer): string => join(root, directory, SKILL_FILE);
 
@@ -64,13 +62,13 @@ const removeOne = (root: string, pointer: SkillPointer): SkillOutcome => {
     });
 };
 
-const report = (outcomes: Result<string[], ClientConfigFailure>): SkillReport =>
+const report = (outcomes: Result<string[], ClientConfigFailure>): ClientSetupResult =>
   outcomes.map((lines): ClientSetupReport => ({ warnings: [], lines }));
 
 /** Writes each pointer skill into `root` — only where there is none, or where the file is PATTY's own earlier copy. */
-export const installSkills = (root: string): SkillReport =>
+export const installSkills = (root: string): ClientSetupResult =>
   report(Result.combine(SKILL_POINTERS.map((pointer) => installOne(root, pointer))));
 
 /** Takes out the pointer skills PATTY installed in `root`; a skill that is not PATTY's own is left alone. */
-export const removeSkills = (root: string): SkillReport =>
+export const removeSkills = (root: string): ClientSetupResult =>
   report(Result.combine(SKILL_POINTERS.map((pointer) => removeOne(root, pointer))));

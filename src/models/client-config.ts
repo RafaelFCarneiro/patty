@@ -1,3 +1,4 @@
+import type { Result } from 'neverthrow';
 import { z } from 'zod';
 import { reasonOf } from './error.js';
 
@@ -47,3 +48,9 @@ export const leftUnchangedNotOwn = (path: string): string => `  Left unchanged (
 
 /** Marks a skill file as PATTY's own: `setup` replaces or removes only files that carry it, never a person's. */
 export const SKILL_POINTER_MARKER = '<!-- patty:skill-pointer -->';
+
+/** What installing or removing one skill reports: the line to print. */
+export type SkillOutcome = Result<string, ClientConfigFailure>;
+
+/** The client a `setup` tool names, or the exit code to end with. */
+export type ClientLookup<Client> = { client: Client; exit?: undefined } | { client?: undefined; exit: number };

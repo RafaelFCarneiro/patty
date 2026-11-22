@@ -5,6 +5,7 @@ import { NPX_COMMAND, PRODUCT_NAME } from '../../models/package.js';
 import type { TourContext, TourStatementDated } from '../../models/demo/tour.js';
 import { PromptName } from '../../models/prompts.js';
 import { ToolName } from './tool-name.js';
+import { workflowCall } from './workflow-call.js';
 
 const T = ToolName.enum;
 
@@ -23,9 +24,6 @@ type TourCopy = {
   /** A standard database: the tour is the demo's. */
   notDemo: string;
 };
-
-/** The tour as a tool-only client runs it. */
-const TOUR_WORKFLOW_CALL = `${T.get_workflow}({ name: "${PromptName.enum.tour}" })`;
 
 const SETUP_DEMO = `${NPX_COMMAND} setup <client> --demo`;
 const REMOVE_DEMO = `${NPX_COMMAND} setup <client> --remove-demo`;
@@ -55,7 +53,7 @@ const TOUR_COPY = {
     notDemo:
       `The tour is for the ${PRODUCT_NAME} demo, and this server holds real data, so do not run it here. Tell the person to ` +
       `start the demo with \`${DEMO_COMMAND}\` and to add it to their AI client with \`${SETUP_DEMO}\`, then run the ` +
-      `tour prompt, or ${TOUR_WORKFLOW_CALL} for a client that only receives tools, on the \`${DEMO_SERVER_NAME}\` server.`,
+      `tour prompt, or ${workflowCall(PromptName.enum.tour)} for a client that only receives tools, on the \`${DEMO_SERVER_NAME}\` server.`,
   },
   [Locale.enum.pt]: {
     intro:
@@ -80,7 +78,7 @@ const TOUR_COPY = {
     notDemo:
       `O tour é da demo do ${PRODUCT_NAME} e este servidor guarda dados reais, então não o execute aqui. Diga à pessoa para ` +
       `iniciar a demo com \`${DEMO_COMMAND}\` e adicioná-la ao cliente de IA com \`${SETUP_DEMO}\`, e então rodar o ` +
-      `prompt tour, ou ${TOUR_WORKFLOW_CALL} num cliente que só recebe ferramentas, no servidor \`${DEMO_SERVER_NAME}\`.`,
+      `prompt tour, ou ${workflowCall(PromptName.enum.tour)} num cliente que só recebe ferramentas, no servidor \`${DEMO_SERVER_NAME}\`.`,
   },
   [Locale.enum.es]: {
     intro:
@@ -105,7 +103,7 @@ const TOUR_COPY = {
     notDemo:
       `El tour es de la demo de ${PRODUCT_NAME} y este servidor guarda datos reales, así que no lo ejecutes aquí. Dile a la ` +
       `persona que inicie la demo con \`${DEMO_COMMAND}\` y la agregue a su cliente de IA con \`${SETUP_DEMO}\`, y ` +
-      `luego ejecute el prompt tour, o ${TOUR_WORKFLOW_CALL} en un cliente que solo recibe herramientas, en el servidor \`${DEMO_SERVER_NAME}\`.`,
+      `luego ejecute el prompt tour, o ${workflowCall(PromptName.enum.tour)} en un cliente que solo recibe herramientas, en el servidor \`${DEMO_SERVER_NAME}\`.`,
   },
 } as const satisfies Record<Locale, TourCopy>;
 

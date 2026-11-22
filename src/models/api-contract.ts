@@ -1,3 +1,4 @@
+import type { OperationObject } from 'openapi3-ts/oas30';
 import { z } from 'zod';
 
 /** The verbs the REST API uses. */
@@ -17,3 +18,9 @@ export type ContractIndexEntry = {
 
 /** A route's full request and response schema: its OpenAPI operation, `$ref`s resolved. */
 export type ContractRouteDetail = { method: HttpMethod; path: string } & Record<string, unknown>;
+
+/** A route's operations, one per method it answers. */
+export type ContractOperations = ReadonlyArray<readonly [HttpMethod, OperationObject]>;
+
+/** A path of the document with its operations. */
+export type ContractRoute = { path: string; operations: ContractOperations };

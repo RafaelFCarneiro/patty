@@ -5,7 +5,7 @@ import { SetExchangeRateSchema } from '../../../models/currency-rate.js';
 import { SetExchangeRatesSchema } from '../../../wire/in/currency-rates.js';
 import * as currencyRateAdapters from '../../../adapters/currency-rates.js';
 import { defineTool } from '../definition.js';
-import { workflowCall } from '../prompts.js';
+import { workflowCall } from '../workflow-call.js';
 import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 import { PromptName } from '../../../models/prompts.js';

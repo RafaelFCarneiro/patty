@@ -28,7 +28,7 @@ import { SetAssetPricesSchema } from '../../../wire/in/assets.js';
 import { PromptName } from '../../../models/prompts.js';
 import { PRODUCT_NAME } from '../../../models/package.js';
 import { defineTool } from '../definition.js';
-import { workflowCall } from '../prompts.js';
+import { workflowCall } from '../workflow-call.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 import { fromResult, json } from '../respond.js';
 import * as assetRules from '../../../logic/investment/asset.js';

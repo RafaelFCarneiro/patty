@@ -1,6 +1,6 @@
 import { ok } from 'neverthrow';
-import type { ClientConfig, ClientSetupReport } from '../../../controllers/deps.js';
-import { ClientConfigFailureCode, type ClientConfigFailure } from '../../../models/client-config.js';
+import type { ClientConfig, ClientSetupReport, ClientSetupResult } from '../../../controllers/deps.js';
+import { ClientConfigFailureCode, type ClientConfigFailure, type ClientLookup } from '../../../models/client-config.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/sign-in.js';
 import { DEMO_SERVER_NAME } from '../../../models/demo/core.js';
 import { NPX_COMMAND, PRODUCT_NAME } from '../../../models/package.js';
@@ -85,10 +85,7 @@ type SetupIo = Pick<CliIo, 'out' | 'err' | 'clients'>;
 
 type DemoSetupIo = SetupIo & { demo: Pick<CliIo['demo'], 'databasePath' | 'hasDatabase'> };
 
-const withSkills = (
-  skills: ReturnType<NonNullable<ClientConfig['skills']>['install']> | undefined,
-  report: ClientSetupReport,
-) =>
+const withSkills = (skills: ClientSetupResult | undefined, report: ClientSetupReport): ClientSetupResult =>
   (skills ?? ok({ warnings: [], lines: [] }))
     .map((installed): ClientSetupReport => ({
       warnings: [...report.warnings, ...installed.warnings],
@@ -97,10 +94,11 @@ const withSkills = (
     // What the configuration step raised is still owed to the person, ahead of the skill failure.
     .mapErr((failure) => ({ ...failure, warnings: [...report.warnings, ...failure.warnings] }));
 
-type ClientLookup = { client: ClientConfig; exit?: undefined } | { client?: undefined; exit: number };
-
 /** The client `tool` names, or the exit code to end with: none named prints the help, an unknown one fails. */
-const lookupClient = (io: Pick<SetupIo, 'out' | 'err' | 'clients'>, tool: string | undefined): ClientLookup => {
+const lookupClient = (
+  io: Pick<SetupIo, 'out' | 'err' | 'clients'>,
+  tool: string | undefined,
+): ClientLookup<ClientConfig> => {
   if (!tool) {
     io.out(SETUP_MESSAGES.help);
     return { exit: EXIT_OK };

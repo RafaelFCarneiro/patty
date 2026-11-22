@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PROMPT_TOOL_PATH, RESOURCE_TOOL_PATHS } from '../../../../src/diplomat/mcp/tool-paths.js';
-import { promptDefinitions, workflowCall } from '../../../../src/diplomat/mcp/prompts.js';
+import { promptDefinitions } from '../../../../src/diplomat/mcp/prompts.js';
+import { workflowCall } from '../../../../src/diplomat/mcp/workflow-call.js';
 import { resourceDefinitions } from '../../../../src/diplomat/mcp/resources.js';
 import { ToolName } from '../../../../src/diplomat/mcp/tool-name.js';
 import { toolDefinitions } from '../../../../src/diplomat/mcp/tools/index.js';

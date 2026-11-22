@@ -2,7 +2,13 @@ import { err, ok, type Result } from 'neverthrow';
 import type { OpenAPIObject, OperationObject, ParameterObject, PathItemObject } from 'openapi3-ts/oas30';
 import * as R from 'remeda';
 import { validation, type ValidationError } from '../models/error.js';
-import { HttpMethod, type ContractIndexEntry, type ContractRouteDetail } from '../models/api-contract.js';
+import {
+  HttpMethod,
+  type ContractIndexEntry,
+  type ContractOperations,
+  type ContractRoute,
+  type ContractRouteDetail,
+} from '../models/api-contract.js';
 
 /**
  * The API contract as a client that only receives tools reads it: an index of the routes, then one route's schema.
@@ -13,12 +19,10 @@ const CLOSE_MATCH_LIMIT = 5;
 const FIRST_SUCCESS_STATUS = /^2\d\d$/;
 const REF_PREFIX = '#/';
 
-type Operations = ReadonlyArray<readonly [HttpMethod, OperationObject]>;
-
-const operationsOf = (item: PathItemObject): Operations =>
+const operationsOf = (item: PathItemObject): ContractOperations =>
   HttpMethod.options.flatMap((method) => (item[method] ? [[method, item[method]] as const] : []));
 
-const routesOf = (doc: OpenAPIObject): ReadonlyArray<{ path: string; operations: Operations }> =>
+const routesOf = (doc: OpenAPIObject): readonly ContractRoute[] =>
   Object.entries(doc.paths ?? {}).map(([path, item]) => ({ path, operations: operationsOf(item) }));
 
 /** `:name` and `{name}` are the same path; the document spells it `{name}`. */
@@ -57,9 +61,11 @@ const typeName = (schema: Record<string, unknown> | undefined): string => {
 };
 
 const queryParameterNames = (operation: OperationObject): string[] =>
-  ((operation.parameters ?? []) as ParameterObject[])
-    .filter((parameter) => parameter.in === 'query')
-    .map((p) => p.name);
+  R.pipe(
+    (operation.parameters ?? []) as ParameterObject[],
+    R.filter((parameter) => parameter.in === 'query'),
+    R.map(R.prop('name')),
+  );
 
 const responseOf = (operation: OperationObject): string => {
   const status = Object.keys(operation.responses ?? {}).find((code) => FIRST_SUCCESS_STATUS.test(code));
@@ -98,10 +104,8 @@ const commonPrefixLength = (a: string, b: string): number => {
 
 /** How much of each segment of `path` the candidate's best segment shares from the start: `summaries` ≈ `summary`. */
 const closeness = (candidate: string, path: string): number =>
-  segmentsOf(path).reduce(
-    (total, segment) =>
-      total + Math.max(0, ...segmentsOf(candidate).map((other) => commonPrefixLength(segment, other))),
-    0,
+  R.sumBy(segmentsOf(path), (segment) =>
+    Math.max(0, ...segmentsOf(candidate).map((other) => commonPrefixLength(segment, other))),
   );
 
 const closeMatches = (doc: OpenAPIObject, path: string): string[] =>
