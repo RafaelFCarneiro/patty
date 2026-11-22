@@ -72,6 +72,10 @@
     'userSettings',
   ];
   var currentLocale = 'en';
+  var HTML_LANG_BY_LOCALE = { pt: 'pt-BR', es: 'es', en: 'en-US' };
+  var DEFAULT_HTML_LANG = 'en-US';
+  var CHART_GRID_COLOR = 'rgba(255, 255, 255, 0.08)';
+  var CHART_TEXT_COLOR = '#9ca3af'; // --text-muted: Chart.js draws on a canvas, which cannot read CSS variables
 
   var DASHBOARD_ICONS = {
     overview: 'fa-chart-pie',
@@ -133,6 +137,50 @@
   // Set by onerror, consumed by the next onopen: the stream was down, so events may have been missed.
   var streamErrored = false;
   var reconnectTimer = null;
+
+  function htmlLang() {
+    return HTML_LANG_BY_LOCALE[currentLocale] || DEFAULT_HTML_LANG;
+  }
+
+  // The fragment-facing API: everything formats with the resolved UI language, never the browser's.
+  function exposeShellApi() {
+    document.documentElement.lang = htmlLang();
+    applyChartDefaults();
+    var tag = htmlLang();
+    window.PATTY = {
+      locale: tag,
+      formatMoney: function (value, currencyCode, opts) {
+        return window.formatMoney(value, currencyCode, Object.assign({ locale: tag }, opts));
+      },
+      formatNumber: function (value, opts) {
+        return new Intl.NumberFormat(tag, opts).format(Number(value) || 0);
+      },
+      formatDate: function (value, opts) {
+        return new Intl.DateTimeFormat(tag, Object.assign({ dateStyle: 'medium', timeZone: 'UTC' }, opts)).format(
+          dateOf(value),
+        );
+      },
+      formatDateTime: function (value, opts) {
+        return new Intl.DateTimeFormat(tag, Object.assign({ dateStyle: 'medium', timeStyle: 'short' }, opts)).format(
+          dateOf(value),
+        );
+      },
+    };
+  }
+
+  // A bare YYYY-MM-DD is a calendar day, not an instant: it parses as UTC and formatDate renders in UTC.
+  function dateOf(value) {
+    return value instanceof Date ? value : new Date(value);
+  }
+
+  function applyChartDefaults() {
+    if (!window.Chart) return;
+    var defaults = window.Chart.defaults;
+    defaults.color = CHART_TEXT_COLOR;
+    defaults.borderColor = CHART_GRID_COLOR;
+    defaults.font.family = "'Plus Jakarta Sans', sans-serif";
+    defaults.plugins.legend.labels.color = CHART_TEXT_COLOR;
+  }
 
   var Api = {
     status: '/api/status',
@@ -513,6 +561,7 @@
         // Fallback to English silently
       })
       .then(function () {
+        exposeShellApi();
         return fetchJson(Api.currencies);
       })
       .then(function (currencies) {

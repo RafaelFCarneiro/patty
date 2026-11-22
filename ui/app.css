@@ -777,3 +777,92 @@ body[data-instance-kind='demo'] {
 body[data-instance-kind='demo'] .sidebar {
   top: 2.25rem;
 }
+
+/* ============================================================
+   Fragment component layer (dashboard-building guide)
+   ============================================================
+   The classes a saved dashboard fragment may use without its own <style> (ui/guides/dashboard-building.md
+   names exactly these; a test pins the list). Built from the shapes the bundled dashboards repeat, on the
+   theme variables above. Fragment-specific layout stays in the fragment's own short <style> block.
+     .panel                    section box (rule above; add padding in the fragment or on an inner wrapper)
+     .cards-grid / .card       responsive grid of metric cards
+     .card-label / .card-value a card's caption and its figure
+     .chart-box                fixed-height, positioned wrapper for one Chart.js canvas
+     .table-wrap / .data-table scrollable table box and its table
+     .state / .state-error     loading, empty and error messages
+     .muted                    secondary text */
+.cards-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.card {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.card-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.card-value {
+  color: var(--text-main);
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.chart-box {
+  height: 300px;
+  position: relative;
+  width: 100%;
+}
+
+.table-wrap {
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  overflow-x: auto;
+}
+
+.data-table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  text-align: left;
+  width: 100%;
+}
+
+.data-table th {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+}
+
+.data-table td {
+  border-top: 1px solid var(--panel-border);
+  padding: 0.75rem 1rem;
+}
+
+.state {
+  color: var(--text-muted);
+  padding: 1rem;
+  text-align: center;
+}
+
+.state-error {
+  color: var(--expense-color);
+}
+
+.muted {
+  color: var(--text-muted);
+}

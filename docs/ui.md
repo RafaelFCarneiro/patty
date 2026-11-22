@@ -213,6 +213,24 @@ byte-for-byte identical — not just spot-checked.
 [#164](https://github.com/RafaelFCarneiro/patty/issues/164) tracked this as deferred work when the
 fragments were first converted to files.
 
+## The fragment's shell API
+
+What a saved fragment can rely on without declaring it (the dashboard guide names exactly this; a test checks
+every guide class against `ui/app.css`):
+
+- **Classes** (`ui/app.css`, "Fragment component layer"): `.panel` (section box), `.cards-grid` + `.card` with
+  `.card-label`/`.card-value`, `.chart-box` (fixed height, `position: relative`), `.table-wrap` + `.data-table`,
+  `.state` + `.state-error`, `.muted`. Layout specific to one dashboard goes in a short `<style>` block in the
+  fragment; the bundled dashboards keep their own `<style>` blocks untouched.
+- **Language**: once `/api/status` answers, the shell sets `<html lang>` to the BCP-47 tag of the resolved UI
+  locale (`pt` → `pt-BR`, `es` → `es`, `en` → `en-US`; `en-US` if the call fails) and
+  `window.PATTY = { locale, formatMoney, formatNumber, formatDate, formatDateTime }`, all `Intl` with that tag.
+  `formatMoney(value, code, opts)` wraps `window.formatMoney` (`ui/money.js`, crypto-aware precision and
+  symbols) with the UI locale as default; `formatDate` renders a `YYYY-MM-DD` day as that calendar day.
+- **Chart.js**: `Chart.defaults.color`, `borderColor` (grid), `font.family` and `plugins.legend.labels.color`
+  are set from the theme, so a fragment's charts read on the dark background. A chart sits in a `.chart-box`
+  with `maintainAspectRatio: false`.
+
 ## Routes
 
 - **`GET /ui` and `GET /ui/:name`** (`registerUiRoutes`, `diplomat/http/routes/ui.ts`) both serve the **same

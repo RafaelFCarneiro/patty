@@ -11,7 +11,7 @@ const read = (file: string) => readFileSync(fileURLToPath(new URL(UI_DIR + file,
 
 type Routes = Record<string, () => unknown>;
 
-const bootShell = async (routes: Routes, { demo = false }: { demo?: boolean } = {}) => {
+const bootShell = async (routes: Routes, { demo = false, chart }: { demo?: boolean; chart?: unknown } = {}) => {
   let onReady: (() => void) | undefined;
   const loaded: string[] = [];
   const stream: { onmessage?: (event: { data: string }) => void } = {};
@@ -39,6 +39,7 @@ const bootShell = async (routes: Routes, { demo = false }: { demo?: boolean } = 
       if (type === 'DOMContentLoaded') onReady = handler;
     },
     body,
+    documentElement: { lang: 'en' },
   };
   const sandbox: Record<string, unknown> = {
     document,
@@ -65,6 +66,7 @@ const bootShell = async (routes: Routes, { demo = false }: { demo?: boolean } = 
     location: { pathname: '/ui/overview', search: '' },
     history: { pushState() {} },
     addEventListener() {},
+    Chart: chart,
   };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
@@ -132,6 +134,59 @@ describe('shell boot (ui/app.js)', () => {
     it('starts with [Demo] when the server marked the page as a demo', async () => {
       const { document } = await bootShell(overview, { demo: true });
       expect(document.title).toBe('[Demo] PATTY — Overview');
+    });
+  });
+
+  describe('UI language', () => {
+    const statusFor = (locale: string) => ({ '/api/status': () => ({ locale }) });
+    const page = (sandbox: Record<string, unknown>) =>
+      sandbox.PATTY as {
+        locale: string;
+        formatMoney: (v: number, c: string) => string;
+        formatDate: (v: string) => string;
+        formatNumber: (v: number) => string;
+        formatDateTime: (v: Date) => string;
+      };
+
+    it.each([
+      ['pt', 'pt-BR'],
+      ['es', 'es'],
+      ['en', 'en-US'],
+    ])('sets <html lang> and PATTY.locale for %s to %s', async (locale, tag) => {
+      const { sandbox, document } = await bootShell(statusFor(locale));
+      expect(document.documentElement.lang).toBe(tag);
+      expect(page(sandbox).locale).toBe(tag);
+    });
+
+    it('sets Chart.js defaults from the theme', async () => {
+      const defaults = { font: {}, plugins: { legend: { labels: {} } } } as Record<string, any>;
+      const { sandbox } = await bootShell({ ...statusFor('en') }, { chart: { defaults } });
+      expect(sandbox.Chart).toBeDefined();
+      expect(defaults.color).toBe('#9ca3af');
+      expect(defaults.plugins.legend.labels.color).toBe('#9ca3af');
+    });
+
+    it('falls back to en-US when /api/status fails', async () => {
+      const { sandbox } = await bootShell({
+        '/api/status': () => {
+          throw new Error('down');
+        },
+      });
+      expect(page(sandbox).locale).toBe('en-US');
+    });
+
+    it('formats money, numbers and dates in pt-BR for pt', async () => {
+      const { sandbox } = await bootShell({ ...statusFor('pt'), '/api/currencies': () => currencies });
+      const patty = page(sandbox);
+      expect(patty.formatMoney(1234.5, 'USD')).toBe('US$\u00a01.234,50');
+      expect(patty.formatNumber(1234.5)).toBe('1.234,5');
+      expect(patty.formatDate('2026-03-05')).toBe('5 de mar. de 2026');
+      expect(patty.formatDateTime(new Date(Date.UTC(2026, 2, 5, 12, 0)))).toContain('2026');
+    });
+
+    it('keeps the crypto-aware precision of money.js', async () => {
+      const { sandbox } = await bootShell({ ...statusFor('pt'), '/api/currencies': () => currencies });
+      expect(page(sandbox).formatMoney(0.12345678, 'BTC')).toContain('0,12345678');
     });
   });
 });
