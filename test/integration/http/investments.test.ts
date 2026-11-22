@@ -136,6 +136,27 @@ describe('GET /api/portfolio, /api/assets, /api/investment-events', () => {
     expect((await viaRoute('/api/investment-events?asset=ZZZ')).status).toBe(404);
   });
 
+  it('answers an ambiguous account or asset with the 409 the OpenAPI document declares', async () => {
+    await ctx.db.insert(accounts).values({
+      id: 'acc-broker-2',
+      userId: OWNER_USER_ID,
+      name: 'Broker 2',
+      type: 'investment',
+      currency: 'USD',
+      initialBalance: 0,
+    });
+    const route = await viaRoute('/api/portfolio?account=Brok');
+    const tool = await viaTool('get_portfolio', { account: 'Brok' });
+    expect(route.status).toBe(409);
+    expect(route.payload.error.code).toBe('ambiguous_account');
+    expect(tool.payload.error.code).toBe('ambiguous_account');
+    expect((await viaRoute('/api/investment-events?account=Brok')).status).toBe(409);
+
+    const { payload } = await viaRoute('/api/openapi.json');
+    expect(payload.paths['/api/portfolio'].get.responses['409']).toBeDefined();
+    expect(payload.paths['/api/investment-events'].get.responses['409']).toBeDefined();
+  });
+
   it('documents the three routes in the OpenAPI document', async () => {
     const { payload } = await viaRoute('/api/openapi.json');
     expect(Object.keys(payload.paths)).toEqual(

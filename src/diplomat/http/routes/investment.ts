@@ -12,7 +12,7 @@ import {
 } from '../../../models/investment/core.js';
 import { ListAssetsInputSchema, ListAssetsQuerySchema } from '../../../wire/in/investment.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
-import { notFound404, parse, send, validation422 } from '../respond.js';
+import { conflict409, notFound404, parse, send, validation422 } from '../respond.js';
 
 const INVESTMENTS_TAG = 'Investments';
 
@@ -23,7 +23,12 @@ const getPortfolioRoute: RouteDefinition = {
   tags: [INVESTMENTS_TAG],
   summary: 'Get the portfolio: positions valued at read time',
   request: { query: GetPortfolioSchema },
-  responses: { 200: okResponse('Portfolio', PortfolioViewSchema), 404: notFound404, 422: validation422 },
+  responses: {
+    200: okResponse('Portfolio', PortfolioViewSchema),
+    404: notFound404,
+    409: conflict409,
+    422: validation422,
+  },
   handler: async (req, reply, scope) => {
     const input = parse(GetPortfolioSchema, req.query, reply);
     if (!input) return reply;
@@ -56,6 +61,7 @@ const listInvestmentEventsRoute: RouteDefinition = {
   responses: {
     200: okResponse('Investment events, oldest first', z.array(InvestmentEventViewSchema)),
     404: notFound404,
+    409: conflict409,
     422: validation422,
   },
   handler: async (req, reply, scope) => {
