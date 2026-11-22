@@ -2,7 +2,6 @@ import type { z } from 'zod';
 import { ListAssetsSchema, STALE_ONLY_DESCRIPTION, type ListAssetsInput } from '../../models/investment/asset.js';
 import { BooleanQuerySchema } from './common.js';
 
-/** `staleOnly` arrives as a query string, not a real boolean. */
 export const ListAssetsQuerySchema = ListAssetsSchema.extend({
   staleOnly: BooleanQuerySchema.optional().describe(STALE_ONLY_DESCRIPTION),
 });

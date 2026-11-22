@@ -15,10 +15,6 @@ import { ResourceUri } from '../resources.js';
 import { fromResult, json, jsonError, text } from '../respond.js';
 import { ToolName } from '../tool-name.js';
 
-/**
- * What a client that only receives tools gets in place of the resources, prompts and skills the server also offers:
- * each tool returns the same content from the same source.
- */
 const T = ToolName.enum;
 
 const CONTRACT_INDEX_INTRO =

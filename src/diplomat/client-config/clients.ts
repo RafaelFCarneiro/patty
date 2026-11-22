@@ -163,7 +163,6 @@ type FileClient = {
   key: ServersKey;
   entry: Record<string, unknown>;
   next: string;
-  /** Where the client loads skills from, when it does. */
   skillsRoot?: () => string;
 };
 

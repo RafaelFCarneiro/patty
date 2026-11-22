@@ -9,7 +9,6 @@ export const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
 
 export const UI_ROOT = fileURLToPath(new URL('../../../ui', import.meta.url));
 
-/** The dashboard-building guide: shipped with `ui/`, read by `get_dashboard_guide` — the one source of its text. */
 export const DASHBOARD_GUIDE_PATH = `${UI_ROOT}/guides/dashboard-building.md`;
 
 // The files under ui/ are fixed package assets — never rewritten at runtime — so the first read of

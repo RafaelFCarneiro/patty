@@ -91,10 +91,8 @@ const withSkills = (skills: ClientSetupResult | undefined, report: ClientSetupRe
       warnings: [...report.warnings, ...installed.warnings],
       lines: [...report.lines, ...installed.lines],
     }))
-    // What the configuration step raised is still owed to the person, ahead of the skill failure.
     .mapErr((failure) => ({ ...failure, warnings: [...report.warnings, ...failure.warnings] }));
 
-/** The client `tool` names, or the exit code to end with: none named prints the help, an unknown one fails. */
 const lookupClient = (
   io: Pick<SetupIo, 'out' | 'err' | 'clients'>,
   tool: string | undefined,
@@ -174,7 +172,6 @@ export const runDemoEntry = (io: DemoSetupIo, tool: string | undefined, change: 
   );
 };
 
-/** `--remove-skills`: takes out the skills `setup` installed, and nothing else of the client's. */
 export const runSkillsRemoval = (io: SetupIo, tool: string | undefined): number => {
   const found = lookupClient(io, tool);
   if (found.exit !== undefined) return found.exit;

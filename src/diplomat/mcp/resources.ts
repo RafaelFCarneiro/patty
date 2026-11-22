@@ -12,7 +12,6 @@ import { jsonResource } from './respond.js';
 import { ToolName } from './tool-name.js';
 import { PRODUCT_NAME } from '../../models/package.js';
 
-/** The one spelling of each resource URI: the definitions and `tool-paths.ts` both name them. */
 export const ResourceUri = {
   openapi: 'patty://openapi',
   categories: 'patty://categories',

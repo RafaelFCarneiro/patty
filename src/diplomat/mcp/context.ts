@@ -7,9 +7,7 @@ import { LOG_PREFIX } from '../../models/package.js';
  *  so a domain's tools/resources/prompts don't each carry the full parameter list. */
 export type McpContext = {
   version: string;
-  /** The REST contract, built once from the route array — what `patty://openapi` and `get_api_contract` serve. */
   openApiDocument: OpenAPIObject;
-  /** The dashboard-building guide, read once from the installed package — what `get_dashboard_guide` returns. */
   dashboardGuide: () => Promise<string>;
   as: (extra: unknown) => Scoped;
 };

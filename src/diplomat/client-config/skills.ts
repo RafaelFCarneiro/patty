@@ -20,7 +20,7 @@ export const SKILLS_ROOT = fileURLToPath(new URL('../../../skills', import.meta.
 
 const SKILL_FILE = 'SKILL.md';
 
-const fileOf = (root: string, { directory }: SkillPointer): string => join(root, directory, SKILL_FILE);
+const fileOf = (root: string, { installDirectory }: SkillPointer): string => join(root, installDirectory, SKILL_FILE);
 
 const isPattyOwn = (content: string): boolean => content.split(/\r?\n/).includes(SKILL_POINTER_MARKER);
 
@@ -31,8 +31,8 @@ const installOne = (root: string, pointer: SkillPointer): SkillOutcome => {
     .mapErr((cause) => clientConfigFailures.readFailed(target, cause))
     .andThen((current): SkillOutcome => {
       if (current !== null && !isPattyOwn(current)) return ok(leftUnchangedNotOwn(target));
-      return readText(join(SKILLS_ROOT, pointer.source, SKILL_FILE))
-        .mapErr((cause) => clientConfigFailures.readFailed(join(SKILLS_ROOT, pointer.source, SKILL_FILE), cause))
+      return readText(join(SKILLS_ROOT, pointer.packagedSkill, SKILL_FILE))
+        .mapErr((cause) => clientConfigFailures.readFailed(join(SKILLS_ROOT, pointer.packagedSkill, SKILL_FILE), cause))
         .andThen((pointerText) =>
           writeText(target, pointerText).mapErr((cause) => clientConfigFailures.writeFailed(target, cause)),
         )
@@ -56,7 +56,7 @@ const removeOne = (root: string, pointer: SkillPointer): SkillOutcome => {
     .mapErr((cause) => clientConfigFailures.readFailed(target, cause))
     .andThen((current): SkillOutcome => {
       if (!isPattyOwn(current)) return ok(leftUnchangedNotOwn(target));
-      return removeFile(target, join(root, pointer.directory))
+      return removeFile(target, join(root, pointer.installDirectory))
         .mapErr((cause) => clientConfigFailures.writeFailed(target, cause))
         .map(() => `  Removed skill: ${target}`);
     });
@@ -65,10 +65,8 @@ const removeOne = (root: string, pointer: SkillPointer): SkillOutcome => {
 const report = (outcomes: Result<string[], ClientConfigFailure>): ClientSetupResult =>
   outcomes.map((lines): ClientSetupReport => ({ warnings: [], lines }));
 
-/** Writes each pointer skill into `root` — only where there is none, or where the file is PATTY's own earlier copy. */
 export const installSkills = (root: string): ClientSetupResult =>
   report(Result.combine(SKILL_POINTERS.map((pointer) => installOne(root, pointer))));
 
-/** Takes out the pointer skills PATTY installed in `root`; a skill that is not PATTY's own is left alone. */
 export const removeSkills = (root: string): ClientSetupResult =>
   report(Result.combine(SKILL_POINTERS.map((pointer) => removeOne(root, pointer))));

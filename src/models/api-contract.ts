@@ -1,11 +1,9 @@
 import type { OperationObject } from 'openapi3-ts/oas30';
 import { z } from 'zod';
 
-/** The verbs the REST API uses. */
 export const HttpMethod = z.enum(['get', 'post', 'patch', 'delete']);
 export type HttpMethod = z.infer<typeof HttpMethod>;
 
-/** One line of the API contract index: what a client needs to pick a route before asking for its schema. */
 export type ContractIndexEntry = {
   method: HttpMethod;
   /** In OpenAPI form (`/api/dashboards/{name}`). */
@@ -16,11 +14,8 @@ export type ContractIndexEntry = {
   response: string;
 };
 
-/** A route's full request and response schema: its OpenAPI operation, `$ref`s resolved. */
 export type ContractRouteDetail = { method: HttpMethod; path: string } & Record<string, unknown>;
 
-/** A route's operations, one per method it answers. */
 export type ContractOperations = ReadonlyArray<readonly [HttpMethod, OperationObject]>;
 
-/** A path of the document with its operations. */
 export type ContractRoute = { path: string; operations: ContractOperations };

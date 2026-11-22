@@ -10,11 +10,6 @@ import {
   type ContractRouteDetail,
 } from '../models/api-contract.js';
 
-/**
- * The API contract as a client that only receives tools reads it: an index of the routes, then one route's schema.
- * Both are views of the OpenAPI document, which is built from `buildRouteDefinitions` — nothing here lists a route.
- */
-
 const CLOSE_MATCH_LIMIT = 5;
 const FIRST_SUCCESS_STATUS = /^2\d\d$/;
 const REF_PREFIX = '#/';
@@ -25,10 +20,8 @@ const operationsOf = (item: PathItemObject): ContractOperations =>
 const routesOf = (doc: OpenAPIObject): readonly ContractRoute[] =>
   Object.entries(doc.paths ?? {}).map(([path, item]) => ({ path, operations: operationsOf(item) }));
 
-/** `:name` and `{name}` are the same path; the document spells it `{name}`. */
 const toDocumentPath = (path: string): string => path.trim().replace(/:([A-Za-z]+)/g, '{$1}');
 
-/** Replaces each `$ref` by what it points to; a reference that cannot be followed, or loops, is left as it is. */
 const resolveRefs =
   (doc: OpenAPIObject) =>
   (node: unknown, followed: readonly string[] = []): unknown => {
@@ -83,13 +76,11 @@ const indexEntry = (path: string, [method, operation]: readonly [HttpMethod, Ope
   response: responseOf(operation),
 });
 
-/** Every route of the document, one entry per method and path, in document order. */
 export const index = (doc: OpenAPIObject): ContractIndexEntry[] =>
   routesOf(doc).flatMap(({ path, operations }) => operations.map((operation) => indexEntry(path, operation)));
 
 const listOrDash = (names: string[]): string => (names.length === 0 ? '-' : names.join(','));
 
-/** One line per route: `GET /api/summary — Get spending summary | query: month,year | body: - | returns: …`. */
 export const formatIndexEntry = ({ method, path, summary, query, body, response }: ContractIndexEntry): string =>
   `${method.toUpperCase()} ${path} — ${summary} | query: ${listOrDash(query)} | body: ${listOrDash(body)} | returns: ${response}`;
 
@@ -128,7 +119,6 @@ const unknownPath = (doc: OpenAPIObject, path: string): ValidationError => {
 const detailOf = (doc: OpenAPIObject, path: string, [method, operation]: readonly [HttpMethod, OperationObject]) =>
   ({ method, path, ...(resolveRefs(doc)(operation) as Record<string, unknown>) }) satisfies ContractRouteDetail;
 
-/** The route's operation(s), `$ref`s resolved: the one `method` names, or every method of the path without one. */
 export const routeDetail = (
   doc: OpenAPIObject,
   rawPath: string,
