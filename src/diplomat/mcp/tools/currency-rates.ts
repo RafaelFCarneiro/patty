@@ -5,14 +5,17 @@ import { SetExchangeRateSchema } from '../../../models/currency-rate.js';
 import { SetExchangeRatesSchema } from '../../../wire/in/currency-rates.js';
 import * as currencyRateAdapters from '../../../adapters/currency-rates.js';
 import { defineTool } from '../definition.js';
+import { workflowCall } from '../workflow-call.js';
 import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
+import { PromptName } from '../../../models/prompts.js';
 import { PRODUCT_NAME } from '../../../models/package.js';
 
 const RATE_TOOL_DESCRIPTION_PREFIX =
   `${PRODUCT_NAME} never fetches exchange rates itself (local-first, zero external calls — ADR-026). ` +
   'The AI agent is responsible for sourcing current rates (e.g. PTAX for fiat, a crypto price API) ' +
-  'and upserting them here so read-time valuation has data to work with. ';
+  'and upserting them here so read-time valuation has data to work with. ' +
+  `The whole refresh is a workflow: ${workflowCall(PromptName.enum.refresh_quotes)}. `;
 
 const setExchangeRateDescription =
   RATE_TOOL_DESCRIPTION_PREFIX +

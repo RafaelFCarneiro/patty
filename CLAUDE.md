@@ -50,6 +50,7 @@ npm run lint && npm run typecheck && npm run test:all && npm run build && npm ru
 - `diplomat/*` stays thin: parse, delegate, translate. Orchestration belongs in controllers. Composition-root wiring that touches several `diplomat/*` modules lives in `src/composition/`, not in a diplomat.
 - Decode every external input (HTTP body, MCP args, SQL rows) with zod at the boundary; expected failures stay on the Result track.
 - Controllers return `ResultAsync<T, AppError>` via `safeTry` pipelines (gather → decide → persist; the decide step is a pure `logic/` function). Unexpected errors throw and become 500s.
+- Tools are the one surface every client gets: anything offered as a prompt, resource or skill is also reachable through a tool.
 - Edge vocabulary stays at the edge: `models/`, `logic/` and `controllers/` never name a tool, route or CLI command. A domain error whose fix is another operation carries a neutral message and a `Remedy`; each edge turns it into a hint. `ToolName` is lint-restricted to the MCP edge.
 - One named definition per MCP tool and HTTP route, in the module for its domain (`diplomat/mcp/tools/<domain>.ts`, `diplomat/http/routes/<domain>.ts`); `server.ts` and `routes.ts` only aggregate. A handler adapts args → model, runs the flow and maps the result in about ten lines.
 - A repo queries only its own aggregate's table; correlating aggregates is controller orchestration plus a pure rule in `logic/`. A label-only `LEFT JOIN` is fine. A repo factory only binds the caller's scope; each query is a named function.

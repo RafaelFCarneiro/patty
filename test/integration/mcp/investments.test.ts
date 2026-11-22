@@ -46,7 +46,15 @@ type Portfolio = {
 };
 type AssetRow = { symbol: string; price: number | null; stale: boolean; noPrice: boolean; priceAsOf: string | null };
 
-const ASOF = '2026-11-18T21:00:00.000Z';
+const HOUR_MS = 60 * 60 * 1000;
+/** Prices are dated from now, not from a fixed day: a fixed date goes stale once PRICE_STALE_HOURS pass. */
+const ASOF_MS = Date.now() - 48 * HOUR_MS;
+const hoursFromAsof = (hours: number): string => new Date(ASOF_MS + hours * HOUR_MS).toISOString();
+const ASOF = hoursFromAsof(0);
+const A_DAY_LATER = hoursFromAsof(24);
+const EIGHT_DAYS_EARLIER = hoursFromAsof(-8 * 24);
+const SEVEN_DAYS_EARLIER = hoursFromAsof(-7 * 24);
+const SIX_DAYS_EARLIER = hoursFromAsof(-6 * 24);
 
 describe('MCP integration > investment holdings (Feature Design 023 step 1)', () => {
   let client: Client;
@@ -124,7 +132,7 @@ describe('MCP integration > investment holdings (Feature Design 023 step 1)', ()
     expect(portfolio.allocation.byAssetClass).toEqual([{ key: 'stock', value: 1584, pct: 100 }]);
 
     // Mark-to-market never writes a transaction: a new price moves the portfolio, not the ledger.
-    await tool('set_asset_prices', { prices: [{ asset: 'AAA', price: 15, asOf: '2026-11-19T21:00:00.000Z' }] });
+    await tool('set_asset_prices', { prices: [{ asset: 'AAA', price: 15, asOf: A_DAY_LATER }] });
     expect(((await tool('get_portfolio', {})) as Portfolio).positions[0]?.marketValue).toBe(1800);
     expect(await searchTransactions(client, {})).toEqual(transactionsBefore);
   });
@@ -279,9 +287,9 @@ describe('MCP integration > investment holdings (Feature Design 023 step 1)', ()
     await registerNu('HHH');
     const result = (await tool('set_asset_prices', {
       prices: [
-        { asset: 'HHH', price: 1, asOf: '2026-11-10T21:00:00.000Z' },
-        { asset: 'HHH', price: 2, asOf: '2026-11-12T21:00:00.000Z' },
-        { asset: 'ZZZ-NONE', price: 3, asOf: '2026-11-12T21:00:00.000Z' },
+        { asset: 'HHH', price: 1, asOf: EIGHT_DAYS_EARLIER },
+        { asset: 'HHH', price: 2, asOf: SIX_DAYS_EARLIER },
+        { asset: 'ZZZ-NONE', price: 3, asOf: SIX_DAYS_EARLIER },
       ],
     })) as { items: Array<{ status: string; asset?: string; error?: string }> };
     expect(result.items.map((i) => i.status)).toEqual(['ok', 'ok', 'error']);
@@ -289,11 +297,11 @@ describe('MCP integration > investment holdings (Feature Design 023 step 1)', ()
     expect(result.items[2]!.error).toContain('unknown_asset');
 
     const latest = async () => ((await tool('list_assets', {})) as AssetRow[]).find((asset) => asset.symbol === 'HHH');
-    expect(await latest()).toMatchObject({ price: 2, priceAsOf: '2026-11-12T21:00:00.000Z', noPrice: false });
+    expect(await latest()).toMatchObject({ price: 2, priceAsOf: SIX_DAYS_EARLIER, noPrice: false });
 
-    await tool('set_asset_prices', { prices: [{ asset: 'HHH', price: 2.5, asOf: '2026-11-12T21:00:00.000Z' }] });
+    await tool('set_asset_prices', { prices: [{ asset: 'HHH', price: 2.5, asOf: SIX_DAYS_EARLIER }] });
     expect(await latest()).toMatchObject({ price: 2.5 });
-    await tool('set_asset_prices', { prices: [{ asset: 'HHH', price: 9, asOf: '2026-11-11T21:00:00.000Z' }] });
+    await tool('set_asset_prices', { prices: [{ asset: 'HHH', price: 9, asOf: SEVEN_DAYS_EARLIER }] });
     expect(await latest()).toMatchObject({ price: 2.5 });
   });
 

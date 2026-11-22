@@ -25,8 +25,10 @@ import {
   UpdateInvestmentEventSchema,
 } from '../../../models/investment/core.js';
 import { SetAssetPricesSchema } from '../../../wire/in/assets.js';
+import { PromptName } from '../../../models/prompts.js';
 import { PRODUCT_NAME } from '../../../models/package.js';
 import { defineTool } from '../definition.js';
+import { workflowCall } from '../workflow-call.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 import { fromResult, json } from '../respond.js';
 import * as assetRules from '../../../logic/investment/asset.js';
@@ -36,7 +38,8 @@ const T = ToolName.enum;
 const PRICE_SOURCING_NOTE =
   `${PRODUCT_NAME} never fetches prices itself (local-first, zero external calls — ADR-026, Feature Design 023). ` +
   'The AI agent sources current quotes (or asks the user for a manually valued asset) and posts them with ' +
-  `${T.set_asset_prices}; a price change is never a transaction, so cash-flow reports are untouched. `;
+  `${T.set_asset_prices}; a price change is never a transaction, so cash-flow reports are untouched. ` +
+  `The whole refresh is a workflow: ${workflowCall(PromptName.enum.refresh_quotes)}. `;
 
 const registerAssetTool = defineTool({
   name: T.register_asset,

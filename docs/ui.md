@@ -292,11 +292,13 @@ same-origin `/api/*` path when expressed as a literal or template literal (no `/
 `fetch(someVariable)` call is opaque to this static check either way and stays uncovered); a companion test
 asserts `GET /ui` (the shell itself) references no external host outside that same allowlist.
 
-`skills/dashboard-building/SKILL.md` is the guardrail checklist an MCP client follows to build or adapt a
-dashboard: read the contract (`patty://openapi`) first, map each section to a real endpoint, start from the
+`ui/guides/dashboard-building.md` is the guardrail checklist an MCP client follows to build or adapt a
+dashboard, from any client: `get_dashboard_guide` returns it and `get_api_contract` the routes (the index, then each
+route used), so a session that receives tools only can build one too; `skills/dashboard-building/SKILL.md` is a pointer
+to that tool. The guide: read the contract first, map each section to a real endpoint, start from the
 baseline fragment, and self-check (fragment not full page; no embedded data; same-origin `/api` only; no own
 `<script src>`; per-currency grouping; localized labels; loading/empty/error states) before calling
-`save_dashboard`. Docs-only — no runtime behavior depends on it — shipped in the npm package.
+`save_dashboard`. Read from the installed package (never rewritten), shipped in the npm package and the image.
 
 ## Live update — SSE, entity-tagged (ADR-027 Phase 3)
 

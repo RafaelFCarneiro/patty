@@ -1,3 +1,4 @@
+import type { OpenAPIObject } from 'openapi3-ts/oas30';
 import { scopedFor, type Scoped, type Tenancy } from '../../controllers/deps.js';
 import type { Principal } from '../../models/auth/principal.js';
 import { LOG_PREFIX } from '../../models/package.js';
@@ -6,6 +7,8 @@ import { LOG_PREFIX } from '../../models/package.js';
  *  so a domain's tools/resources/prompts don't each carry the full parameter list. */
 export type McpContext = {
   version: string;
+  openApiDocument: OpenAPIObject;
+  dashboardGuide: () => Promise<string>;
   as: (extra: unknown) => Scoped;
 };
 
@@ -20,7 +23,14 @@ export const callerOf = (extra: unknown): Principal => {
   return principal;
 };
 
-export const createMcpContext = (tenancy: Tenancy, version: string): McpContext => ({
+export const createMcpContext = (
+  tenancy: Tenancy,
+  version: string,
+  openApiDocument: OpenAPIObject,
+  dashboardGuide: McpContext['dashboardGuide'],
+): McpContext => ({
   version,
+  openApiDocument,
+  dashboardGuide,
   as: (extra) => scopedFor(tenancy, callerOf(extra)),
 });

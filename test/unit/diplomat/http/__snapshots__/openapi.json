@@ -17823,6 +17823,1206 @@
           }
         }
       }
+    },
+    "/api/portfolio": {
+      "get": {
+        "tags": [
+          "Investments"
+        ],
+        "summary": "Get the portfolio: positions valued at read time",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Only this investment account (by name); omit for every account"
+            },
+            "required": false,
+            "description": "Only this investment account (by name); omit for every account",
+            "name": "account",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Portfolio",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "baseCurrency": {
+                      "type": "string",
+                      "enum": [
+                        "USD",
+                        "BRL",
+                        "MXN",
+                        "COP",
+                        "USDC",
+                        "BTC"
+                      ]
+                    },
+                    "positions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "accountId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "account": {
+                            "type": "string",
+                            "description": "Account name"
+                          },
+                          "assetId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "asset": {
+                            "type": "string",
+                            "description": "EXCHANGE:SYMBOL"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "assetClass": {
+                            "type": "string",
+                            "enum": [
+                              "stock",
+                              "etf",
+                              "reit",
+                              "bdr",
+                              "fixed_income"
+                            ]
+                          },
+                          "pricing": {
+                            "type": "string",
+                            "enum": [
+                              "market",
+                              "manual"
+                            ]
+                          },
+                          "currency": {
+                            "type": "string",
+                            "enum": [
+                              "USD",
+                              "BRL",
+                              "MXN",
+                              "COP",
+                              "USDC",
+                              "BTC"
+                            ],
+                            "description": "Asset (quote) currency"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "avgCost": {
+                            "type": "number"
+                          },
+                          "costBasis": {
+                            "type": "number",
+                            "description": "quantity × avgCost, in the asset currency"
+                          },
+                          "price": {
+                            "type": "number",
+                            "nullable": true,
+                            "description": "Latest price of one unit; null when none is on file"
+                          },
+                          "priceAsOf": {
+                            "type": "string",
+                            "nullable": true,
+                            "format": "date-time"
+                          },
+                          "marketValue": {
+                            "type": "number",
+                            "nullable": true,
+                            "description": "quantity × price in the asset currency; null with no price — never 0"
+                          },
+                          "unrealized": {
+                            "type": "number",
+                            "nullable": true,
+                            "description": "marketValue − costBasis in the asset currency"
+                          },
+                          "base": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "USD",
+                                  "BRL",
+                                  "MXN",
+                                  "COP",
+                                  "USDC",
+                                  "BTC"
+                                ],
+                                "description": "The base currency these figures are expressed in"
+                              },
+                              "rate": {
+                                "type": "number",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "description": "Exchange rate applied (1 when the asset already is in the base currency)"
+                              },
+                              "rateAsOf": {
+                                "type": "string",
+                                "format": "date-time",
+                                "description": "When the applied rate was observed/sourced"
+                              },
+                              "costBasis": {
+                                "type": "number"
+                              },
+                              "marketValue": {
+                                "type": "number",
+                                "nullable": true,
+                                "description": "Null when the position has no price — never 0"
+                              },
+                              "unrealized": {
+                                "type": "number",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "currency",
+                              "rate",
+                              "rateAsOf",
+                              "costBasis",
+                              "marketValue",
+                              "unrealized"
+                            ],
+                            "description": "The same figures in the base currency; null with no exchange rate"
+                          },
+                          "asOf": {
+                            "type": "string",
+                            "nullable": true,
+                            "format": "date-time",
+                            "description": "The older of the price and the rate used"
+                          },
+                          "stale": {
+                            "type": "boolean",
+                            "description": "True when the price or the rate is older than its class allows"
+                          },
+                          "noPrice": {
+                            "type": "boolean"
+                          },
+                          "noRate": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "accountId",
+                          "account",
+                          "assetId",
+                          "asset",
+                          "name",
+                          "assetClass",
+                          "pricing",
+                          "currency",
+                          "quantity",
+                          "avgCost",
+                          "costBasis",
+                          "price",
+                          "priceAsOf",
+                          "marketValue",
+                          "unrealized",
+                          "base",
+                          "asOf",
+                          "stale",
+                          "noPrice",
+                          "noRate"
+                        ]
+                      }
+                    },
+                    "totals": {
+                      "type": "object",
+                      "properties": {
+                        "baseCurrency": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "BRL",
+                            "MXN",
+                            "COP",
+                            "USDC",
+                            "BTC"
+                          ]
+                        },
+                        "marketValue": {
+                          "type": "number",
+                          "description": "Sum of every valued position in the base currency"
+                        },
+                        "costBasis": {
+                          "type": "number",
+                          "description": "Cost of the same positions in the base currency"
+                        },
+                        "unrealized": {
+                          "type": "number"
+                        },
+                        "stale": {
+                          "type": "boolean",
+                          "description": "True when any contributing price or rate is stale"
+                        },
+                        "asOf": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time",
+                          "description": "The oldest contributing price or rate; null when nothing was valued"
+                        },
+                        "excluded": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "account": {
+                                "type": "string",
+                                "description": "Account name"
+                              },
+                              "asset": {
+                                "type": "string",
+                                "description": "EXCHANGE:SYMBOL"
+                              },
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "no_price",
+                                  "no_rate"
+                                ],
+                                "description": "no_price: no price on file | no_rate: no exchange rate to the base currency"
+                              }
+                            },
+                            "required": [
+                              "account",
+                              "asset",
+                              "reason"
+                            ]
+                          },
+                          "description": "Positions left out of the totals, and why"
+                        }
+                      },
+                      "required": [
+                        "baseCurrency",
+                        "marketValue",
+                        "costBasis",
+                        "unrealized",
+                        "stale",
+                        "asOf",
+                        "excluded"
+                      ]
+                    },
+                    "allocation": {
+                      "type": "object",
+                      "properties": {
+                        "byAssetClass": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "description": "The asset class or the currency"
+                              },
+                              "value": {
+                                "type": "number",
+                                "description": "Market value in the base currency"
+                              },
+                              "pct": {
+                                "type": "number",
+                                "description": "Share of the valued total, in percent"
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value",
+                              "pct"
+                            ]
+                          }
+                        },
+                        "byCurrency": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "description": "The asset class or the currency"
+                              },
+                              "value": {
+                                "type": "number",
+                                "description": "Market value in the base currency"
+                              },
+                              "pct": {
+                                "type": "number",
+                                "description": "Share of the valued total, in percent"
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value",
+                              "pct"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "byAssetClass",
+                        "byCurrency"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "baseCurrency",
+                    "positions",
+                    "totals",
+                    "allocation"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "query": {
+                              "type": "string"
+                            },
+                            "candidates": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "query",
+                            "candidates"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "unknown_transaction"
+                              ]
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "id"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "unknown_bill"
+                              ]
+                            },
+                            "card": {
+                              "type": "string"
+                            },
+                            "month": {
+                              "type": "number"
+                            },
+                            "year": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "card",
+                            "month",
+                            "year"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "query": {
+                              "type": "string"
+                            },
+                            "candidates": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "query",
+                            "candidates"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "duplicate_name"
+                              ]
+                            },
+                            "entity": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "entity",
+                            "name"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "in_use"
+                              ]
+                            },
+                            "entity": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "references": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "nullable": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "entity",
+                            "name",
+                            "references"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "conflict"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "validation"
+                              ]
+                            },
+                            "issues": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "hint": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "issues"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "category_kind_mismatch"
+                              ]
+                            },
+                            "transactionType": {
+                              "type": "string"
+                            },
+                            "categoryName": {
+                              "type": "string"
+                            },
+                            "categoryKind": {
+                              "type": "string"
+                            },
+                            "hint": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "transactionType",
+                            "categoryName",
+                            "categoryKind",
+                            "hint"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets": {
+      "get": {
+        "tags": [
+          "Investments"
+        ],
+        "summary": "List assets with their latest price",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stock",
+                "etf",
+                "reit",
+                "bdr",
+                "fixed_income"
+              ],
+              "description": "Only assets of this class"
+            },
+            "required": false,
+            "description": "Only assets of this class",
+            "name": "assetClass",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "Only assets whose price is missing or stale — the ones that need a refresh"
+            },
+            "required": false,
+            "description": "Only assets whose price is missing or stale — the ones that need a refresh",
+            "name": "staleOnly",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Unique asset identifier"
+                      },
+                      "symbol": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Ticker or product code, e.g. NU, KNCR11, TESOURO-SELIC-2031"
+                      },
+                      "exchange": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Where it is quoted, e.g. NYSE, B3; unique together with the symbol"
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Display name, e.g. \"Nu Holdings\""
+                      },
+                      "assetClass": {
+                        "type": "string",
+                        "enum": [
+                          "stock",
+                          "etf",
+                          "reit",
+                          "bdr",
+                          "fixed_income"
+                        ],
+                        "description": "stock | etf | reit (FII) | bdr | fixed_income"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "enum": [
+                          "USD",
+                          "BRL",
+                          "MXN",
+                          "COP",
+                          "USDC",
+                          "BTC"
+                        ],
+                        "description": "Quote currency: the price of one unit is expressed in this currency"
+                      },
+                      "pricing": {
+                        "type": "string",
+                        "enum": [
+                          "market",
+                          "manual"
+                        ],
+                        "description": "market (a public quote exists) | manual (the agent posts the value)"
+                      },
+                      "price": {
+                        "type": "number",
+                        "nullable": true,
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "description": "Latest price of one unit; null when none was ever posted"
+                      },
+                      "priceAsOf": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "date-time",
+                        "description": "When the latest price was observed"
+                      },
+                      "stale": {
+                        "type": "boolean",
+                        "description": "True when the latest price is older than its pricing class allows"
+                      },
+                      "noPrice": {
+                        "type": "boolean",
+                        "description": "True when no price was ever posted"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "symbol",
+                      "exchange",
+                      "name",
+                      "assetClass",
+                      "currency",
+                      "pricing",
+                      "price",
+                      "priceAsOf",
+                      "stale",
+                      "noPrice"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "validation"
+                              ]
+                            },
+                            "issues": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "hint": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "issues"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "category_kind_mismatch"
+                              ]
+                            },
+                            "transactionType": {
+                              "type": "string"
+                            },
+                            "categoryName": {
+                              "type": "string"
+                            },
+                            "categoryKind": {
+                              "type": "string"
+                            },
+                            "hint": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "transactionType",
+                            "categoryName",
+                            "categoryKind",
+                            "hint"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/investment-events": {
+      "get": {
+        "tags": [
+          "Investments"
+        ],
+        "summary": "List investment events (the events that make up the positions)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Only events of this investment account (by name)"
+            },
+            "required": false,
+            "description": "Only events of this investment account (by name)",
+            "name": "account",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Only events of this asset (symbol or \"EXCHANGE:SYMBOL\")"
+            },
+            "required": false,
+            "description": "Only events of this asset (symbol or \"EXCHANGE:SYMBOL\")",
+            "name": "asset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Investment events, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "account": {
+                        "type": "string",
+                        "description": "Account name"
+                      },
+                      "asset": {
+                        "type": "string",
+                        "description": "EXCHANGE:SYMBOL"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "opening",
+                          "buy",
+                          "sell",
+                          "split"
+                        ]
+                      },
+                      "date": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      "quantity": {
+                        "type": "number"
+                      },
+                      "avgCost": {
+                        "type": "number",
+                        "description": "Unit cost in the asset currency"
+                      },
+                      "note": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "account",
+                      "asset",
+                      "type",
+                      "date",
+                      "quantity",
+                      "avgCost",
+                      "note"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "query": {
+                              "type": "string"
+                            },
+                            "candidates": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "query",
+                            "candidates"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "unknown_transaction"
+                              ]
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "id"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "unknown_bill"
+                              ]
+                            },
+                            "card": {
+                              "type": "string"
+                            },
+                            "month": {
+                              "type": "number"
+                            },
+                            "year": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "card",
+                            "month",
+                            "year"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "query": {
+                              "type": "string"
+                            },
+                            "candidates": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "query",
+                            "candidates"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "duplicate_name"
+                              ]
+                            },
+                            "entity": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "entity",
+                            "name"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "in_use"
+                              ]
+                            },
+                            "entity": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "references": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "nullable": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "entity",
+                            "name",
+                            "references"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "conflict"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "validation"
+                              ]
+                            },
+                            "issues": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "hint": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "issues"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "category_kind_mismatch"
+                              ]
+                            },
+                            "transactionType": {
+                              "type": "string"
+                            },
+                            "categoryName": {
+                              "type": "string"
+                            },
+                            "categoryKind": {
+                              "type": "string"
+                            },
+                            "hint": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "transactionType",
+                            "categoryName",
+                            "categoryKind",
+                            "hint"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

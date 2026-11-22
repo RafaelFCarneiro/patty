@@ -53,4 +53,8 @@ describe('tourPromptText — a standard database', () => {
     expect(text).toContain(DEMO_SERVER_NAME);
     expect(text).not.toContain(ToolName.enum.get_account_balances);
   });
+
+  it.each(LOCALES)('names the tool-only way to start the tour on the demo server (%s)', (locale) => {
+    expect(tourPromptText(standardTourContext(locale))).toContain(`${ToolName.enum.get_workflow}({ name: "tour" })`);
+  });
 });

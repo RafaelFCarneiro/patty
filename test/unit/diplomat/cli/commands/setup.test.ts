@@ -351,6 +351,8 @@ describe('runGuidedSetup — everything a successful setup prints, in order', ()
       'Setting up PATTY MCP for Claude Code (CLI)...',
       `  Updated: ${join(homeDir, '.claude', 'mcp.json')}`,
       '  Verify with: claude mcp list',
+      `  Installed skill: ${join(homeDir, '.claude', 'skills', 'patty-dashboard', 'SKILL.md')}`,
+      `  Installed skill: ${join(homeDir, '.claude', 'skills', 'patty-tour', 'SKILL.md')}`,
       'Done.',
     ]);
     expect(err).toEqual([]);
@@ -370,6 +372,23 @@ describe('runGuidedSetup — everything a successful setup prints, in order', ()
     expect(await runGuidedSetup('claude-code', async () => EXIT_OK)).toBe(0);
 
     expect(err).toEqual([expect.stringMatching(/mcp\.json does not contain a JSON object at the root/)]);
-    expect(out).toHaveLength(4);
+    expect(out).toHaveLength(6);
+  });
+  it('keeps the replaced-config warning when installing a skill then fails', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'patty-setup-'));
+    originalCwd = process.cwd();
+    process.chdir(homeDir);
+    vi.resetModules();
+    vi.doMock('node:os', () => ({ homedir: () => homeDir }));
+    mkdirSync(join(homeDir, '.claude'), { recursive: true });
+    writeFileSync(join(homeDir, '.claude', 'mcp.json'), '[]', 'utf8');
+    mkdirSync(join(homeDir, '.claude', 'skills', 'patty-dashboard', 'SKILL.md'), { recursive: true });
+    const { runGuidedSetup, out, err } = await importSetup();
+
+    expect(await runGuidedSetup('claude-code', async () => EXIT_OK)).toBe(EXIT_FAILURE);
+
+    expect(err[0]).toMatch(/mcp\.json does not contain a JSON object at the root/);
+    expect(err[1]).toMatch(/failed to read .*SKILL\.md/);
+    expect(out).toEqual(['Setting up PATTY MCP for Claude Code (CLI)...']);
   });
 });

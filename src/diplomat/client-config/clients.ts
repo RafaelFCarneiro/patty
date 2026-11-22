@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { err, ok, Result } from 'neverthrow';
 import * as R from 'remeda';
 import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../controllers/deps.js';
@@ -14,6 +14,8 @@ import {
 import { DEMO_SERVER_NAME } from '../../models/demo/core.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
 import { EnvKey, ServersKey } from '../../wire/out/client-config.js';
+import { readText, writeText } from './fs.js';
+import { installSkills, removeSkills } from './skills.js';
 import {
   detectLayout,
   layoutRefusal,
@@ -44,12 +46,6 @@ import {
 const invalidConfigWarning = (path: string): string =>
   `patty setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`;
 
-// The throwing system calls, wrapped once: everything below this block is Results.
-const readText = Result.fromThrowable((path: string) => readFileSync(path, 'utf8'), R.identity());
-const writeText = Result.fromThrowable((path: string, text: string) => {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, text, 'utf8');
-}, R.identity());
 const parseJson = Result.fromThrowable((text: string): unknown => JSON.parse(text), R.identity());
 
 type ConfigRead = { config: Record<string, unknown>; warnings: string[] };
@@ -167,6 +163,7 @@ type FileClient = {
   key: ServersKey;
   entry: Record<string, unknown>;
   next: string;
+  skillsRoot?: () => string;
 };
 
 const MERGE_BY_KEY = {
@@ -174,7 +171,7 @@ const MERGE_BY_KEY = {
   [ServersKey.enum.servers]: mergeServersKey,
 } as const satisfies Record<ServersKey, typeof mergeMcpServersKey>;
 
-const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig => ({
+const fileClient = ({ label, path, key, entry, next, skillsRoot }: FileClient): ClientConfig => ({
   label,
   run: (profile) => writeEntry(path(), MERGE_BY_KEY[key], withProfile(entry, profile, EnvKey.enum.env), next),
   addDemo: (databasePath) =>
@@ -186,6 +183,9 @@ const fileClient = ({ label, path, key, entry, next }: FileClient): ClientConfig
       refuseUnusable,
     ),
   removeDemo: () => removeDemoEntry(path(), key, next),
+  ...(skillsRoot && {
+    skills: { install: () => installSkills(skillsRoot()), remove: () => removeSkills(skillsRoot()) },
+  }),
 });
 
 type JsoncClient = {
@@ -274,6 +274,7 @@ const claudeCode = fileClient({
   key: ServersKey.enum.mcpServers,
   entry: STDIO_ENTRY,
   next: '  Verify with: claude mcp list',
+  skillsRoot: () => join(home, '.claude', 'skills'),
 });
 const claudeDesktop = fileClient({
   label: 'Claude Desktop',

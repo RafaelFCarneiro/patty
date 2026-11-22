@@ -9,15 +9,29 @@ import { listTags } from '../../controllers/tags.js';
 import { DEFAULT_TOP_MERCHANTS_LIMIT } from '../../models/merchant.js';
 import type { ResourceDefinition } from './definition.js';
 import { jsonResource } from './respond.js';
+import { ToolName } from './tool-name.js';
 import { PRODUCT_NAME } from '../../models/package.js';
 
+export const ResourceUri = {
+  openapi: 'patty://openapi',
+  categories: 'patty://categories',
+  accounts: 'patty://accounts',
+  currencies: 'patty://currencies',
+  exchangeRates: 'patty://exchange-rates',
+  assets: 'patty://assets',
+  tags: 'patty://tags',
+  creditCards: 'patty://credit-cards',
+  merchantsTop: 'patty://merchants/top',
+} as const;
+
 const openapiDescription =
-  'OpenAPI 3.0 document for the REST API (GET /api/openapi.json mirrors this). ' +
+  'OpenAPI 3.0 document for the REST API (GET /api/openapi.json mirrors this; tool-only clients use the ' +
+  `${ToolName.enum.get_api_contract} tool). ` +
   'Read this before generating fetch() calls against /api endpoints (ADR-013).';
 
 const openApiResource = (openApiDocument: unknown): ResourceDefinition => ({
   name: 'openapi',
-  uri: 'patty://openapi',
+  uri: ResourceUri.openapi,
   config: { title: `${PRODUCT_NAME} OpenAPI contract`, description: openapiDescription, mimeType: 'application/json' },
   read: async (uri) => jsonResource(uri, openApiDocument),
 });
@@ -29,7 +43,7 @@ const categoriesDescription =
 
 const categoriesResource: ResourceDefinition = {
   name: 'categories',
-  uri: 'patty://categories',
+  uri: ResourceUri.categories,
   config: { title: 'Category taxonomy', description: categoriesDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listCategories(deps)),
 };
@@ -40,19 +54,19 @@ const accountsDescription =
 
 const accountsResource: ResourceDefinition = {
   name: 'accounts',
-  uri: 'patty://accounts',
+  uri: ResourceUri.accounts,
   config: { title: 'Accounts', description: accountsDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listAccounts(deps)),
 };
 
-const currenciesDescription =
-  'All currencies (fiat and crypto) with symbol and decimals — the same data GET /api/currencies returns. ' +
-  "Read this to format an amount correctly: crypto codes (USDC, BTC) aren't ISO 4217, so a generic currency " +
-  'formatter must use the symbol + decimals given here instead of assuming 2 decimal places.';
+export const currenciesDescription =
+  `All currencies (fiat and crypto) with symbol and decimals — the same data as ${ToolName.enum.list_currencies}, ` +
+  `${ResourceUri.currencies} and GET /api/currencies. Format an amount with the symbol and decimals given here: crypto ` +
+  "codes (USDC, BTC) aren't ISO 4217, so a generic currency formatter must not assume 2 decimal places.";
 
 const currenciesResource: ResourceDefinition = {
   name: 'currencies',
-  uri: 'patty://currencies',
+  uri: ResourceUri.currencies,
   config: { title: 'Currencies', description: currenciesDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listCurrencies(deps)),
 };
@@ -64,7 +78,7 @@ const exchangeRatesDescription =
 
 const exchangeRatesResource: ResourceDefinition = {
   name: 'exchange-rates',
-  uri: 'patty://exchange-rates',
+  uri: ResourceUri.exchangeRates,
   config: { title: 'Exchange rates', description: exchangeRatesDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listExchangeRates(deps)),
 };
@@ -76,14 +90,14 @@ const assetsDescription =
 
 const assetsResource: ResourceDefinition = {
   name: 'assets',
-  uri: 'patty://assets',
+  uri: ResourceUri.assets,
   config: { title: 'Assets', description: assetsDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listAssets(deps, {})),
 };
 
 const tagsResource: ResourceDefinition = {
   name: 'tags',
-  uri: 'patty://tags',
+  uri: ResourceUri.tags,
   config: {
     title: 'Tags',
     description:
@@ -99,12 +113,12 @@ const creditCardsDescription =
 
 const creditCardsResource: ResourceDefinition = {
   name: 'credit-cards',
-  uri: 'patty://credit-cards',
+  uri: ResourceUri.creditCards,
   config: { title: 'Credit cards', description: creditCardsDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await listCreditCards(deps)),
 };
 
-const merchantsTopDescription =
+export const merchantsTopDescription =
   `The ${DEFAULT_TOP_MERCHANTS_LIMIT} merchants with the most effective, non-transfer transactions, each ` +
   'with the category it is most often classified into — the vocabulary of merchants the user actually ' +
   'deals with (e.g. "iFood → Alimentação"), by transaction frequency (not spend). Not a money report: no ' +
@@ -112,7 +126,7 @@ const merchantsTopDescription =
 
 const merchantsTopResource: ResourceDefinition = {
   name: 'merchants-top',
-  uri: 'patty://merchants/top',
+  uri: ResourceUri.merchantsTop,
   config: { title: 'Top merchants', description: merchantsTopDescription, mimeType: 'application/json' },
   read: async (uri, { deps }) => jsonResource(uri, await topMerchants(deps)),
 };

@@ -265,6 +265,20 @@ const TOOL_CASES: Record<string, ToolCase | ToolCase[]> = {
   get_preferences: { args: () => ({}), expected: scoped() },
   set_base_currency: { args: () => ({ baseCurrency: 'BTC' }), expected: { kind: 'ok' } },
   get_status: { args: () => ({}), expected: scoped() },
+  // Tool-only clients (Feature Design 024): the contract, the guide and the workflows are the same for everyone; the
+  // workflows that read data (the tour, the quote refresh) read B's own.
+  get_api_contract: [
+    { args: () => ({}), expected: scoped() },
+    { args: () => ({ path: '/api/portfolio' }), expected: scoped() },
+  ],
+  get_dashboard_guide: { args: () => ({}), expected: scoped() },
+  get_workflow: [
+    { args: () => ({}), expected: scoped() },
+    { args: () => ({ name: 'refresh_quotes' }), expected: scoped() },
+    { args: () => ({ name: 'tour' }), expected: scoped() },
+  ],
+  list_currencies: { args: () => ({}), expected: scoped(['USD']) },
+  list_top_merchants: { args: () => ({}), expected: scoped([], ['ZZ-A', 'zzashop']) },
 };
 
 const ROUTE_CASES: Record<string, RouteCase | RouteCase[]> = {
@@ -532,6 +546,23 @@ const ROUTE_CASES: Record<string, RouteCase | RouteCase[]> = {
     status: 200,
     expected: scoped([FOOD_FOR_B]),
   },
+  'GET /api/portfolio': [
+    { call: () => ({ url: '/api/portfolio' }), status: 200, expected: scoped(['ZZ-B Brokerage'], ['ZZ-A']) },
+    {
+      call: (a) => ({ url: `/api/portfolio?account=${enc(a.inv.name)}` }),
+      status: 404,
+      expected: notFound('unknown_account'),
+    },
+  ],
+  'GET /api/assets': { call: () => ({ url: '/api/assets' }), status: 200, expected: scoped(['ZZNU']) },
+  'GET /api/investment-events': [
+    { call: () => ({ url: '/api/investment-events' }), status: 200, expected: scoped(['ZZ-B Brokerage'], ['ZZ-A']) },
+    {
+      call: (a) => ({ url: `/api/investment-events?account=${enc(a.inv.name)}` }),
+      status: 404,
+      expected: notFound('unknown_account'),
+    },
+  ],
   'GET /api/budgets': { call: () => ({ url: '/api/budgets' }), status: 200, expected: scoped([FOOD_FOR_B]) },
   'GET /api/budgets/status': {
     call: (a) => ({ url: `/api/budgets/status?month=${a.bill.month}&year=${a.bill.year}` }),

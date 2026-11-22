@@ -103,11 +103,17 @@ export type ClientSetupReport = {
   lines: readonly string[];
 };
 
+export type ClientSetupResult = Result<ClientSetupReport, ClientConfigFailure>;
+
 export type ClientConfig = {
   label: string;
-  run: (profile: string) => Result<ClientSetupReport, ClientConfigFailure>;
-  addDemo: (databasePath: string) => Result<ClientSetupReport, ClientConfigFailure>;
-  removeDemo: () => Result<ClientSetupReport, ClientConfigFailure>;
+  run: (profile: string) => ClientSetupResult;
+  addDemo: (databasePath: string) => ClientSetupResult;
+  removeDemo: () => ClientSetupResult;
+  skills?: {
+    install: () => ClientSetupResult;
+    remove: () => ClientSetupResult;
+  };
 };
 
 export type ClientConfigs = {

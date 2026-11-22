@@ -1,3 +1,4 @@
+import type { Result } from 'neverthrow';
 import { z } from 'zod';
 import { reasonOf } from './error.js';
 
@@ -32,3 +33,18 @@ export const clientConfigFailures = {
     warnings,
   }),
 };
+
+export type SkillPointer = { installDirectory: string; packagedSkill: string };
+
+export const SKILL_POINTERS: readonly SkillPointer[] = [
+  { installDirectory: 'patty-dashboard', packagedSkill: 'dashboard-building' },
+  { installDirectory: 'patty-tour', packagedSkill: 'patty-tour' },
+];
+
+export const leftUnchangedNotOwn = (path: string): string => `  Left unchanged (not PATTY's own): ${path}`;
+
+export const SKILL_POINTER_MARKER = '<!-- patty:skill-pointer -->';
+
+export type SkillOutcome = Result<string, ClientConfigFailure>;
+
+export type ClientLookup<Client> = { client: Client; exit?: undefined } | { client?: undefined; exit: number };

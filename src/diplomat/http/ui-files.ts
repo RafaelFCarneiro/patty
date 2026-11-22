@@ -9,6 +9,8 @@ export const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
 
 export const UI_ROOT = fileURLToPath(new URL('../../../ui', import.meta.url));
 
+export const DASHBOARD_GUIDE_PATH = `${UI_ROOT}/guides/dashboard-building.md`;
+
 // The files under ui/ are fixed package assets — never rewritten at runtime — so the first read of
 // each is cached in memory for the life of the process; only a *successful* read is cached (never
 // a rejected promise), so a transient read error doesn't wedge every later request into repeating
