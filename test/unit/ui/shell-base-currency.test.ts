@@ -247,6 +247,14 @@ describe('shell boot (ui/app.js)', () => {
       ).toBe('15:04');
     });
 
+    it('keeps the date and time styles when only non-component options are passed', async () => {
+      const { sandbox } = await bootShell(statusFor('en'));
+      const patty = sandbox.PATTY as { formatDateTime: (v: Date, o?: object) => string };
+      expect(patty.formatDateTime(new Date(Date.UTC(2026, 2, 5, 15, 4)), { timeZone: 'UTC' })).toMatch(
+        /^Mar 5, 2026, 3:04\s?PM$/,
+      );
+    });
+
     it('follows a locale change on a userSettings event, for a reference the fragment already holds', async () => {
       let locale = 'en';
       const { sandbox, stream, document } = await bootShell({ '/api/status': () => ({ locale }) });

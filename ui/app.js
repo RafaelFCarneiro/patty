@@ -75,6 +75,19 @@
   var HTML_LANG_BY_LOCALE = { pt: 'pt-BR', es: 'es', en: 'en-US' };
   var DEFAULT_HTML_LANG = 'en-US';
   var EMPTY_VALUE = '—';
+  var DATE_COMPONENT_OPTIONS = [
+    'year',
+    'month',
+    'day',
+    'weekday',
+    'hour',
+    'minute',
+    'second',
+    'era',
+    'timeZoneName',
+    'dayPeriod',
+    'fractionalSecondDigits',
+  ];
   var THEME_TEXT_VAR = '--text-muted';
   var THEME_GRID_VAR = '--chart-grid';
   var THEME_FONT_VAR = '--font-family';
@@ -140,9 +153,7 @@
   var streamErrored = false;
   var reconnectTimer = null;
   var settingsRefresh = Promise.resolve();
-  // True once locale, currency metadata and preferences are in (the PATTY API exists then).
   var shellIsReady = false;
-  // Bumped per dashboard load; only the latest load may render.
   var loadTicket = 0;
 
   function htmlLang() {
@@ -166,13 +177,19 @@
     return isMissingNumber(value) ? EMPTY_VALUE : new Intl.NumberFormat(tag, opts).format(Number(value));
   }
 
-  // dateStyle/timeStyle cannot coexist with component options (year, month, hour…): the style defaults
-  // apply only when the caller passes no options of its own.
+  // dateStyle/timeStyle cannot coexist with component options: the style defaults are dropped only when
+  // the caller passes one; any other option (timeZone, hour12, calendar…) merges over them.
+  function hasDateComponent(opts) {
+    return Object.keys(opts || {}).some(function (key) {
+      return DATE_COMPONENT_OPTIONS.indexOf(key) !== -1;
+    });
+  }
+
   function formatDateWith(value, base, styleDefaults, opts) {
     var date = dateOf(value);
     if (isMissingDate(date)) return EMPTY_VALUE;
-    var chosen = opts && Object.keys(opts).length > 0 ? opts : styleDefaults;
-    return new Intl.DateTimeFormat(htmlLang(), Object.assign({}, base, chosen)).format(date);
+    var defaults = hasDateComponent(opts) ? {} : styleDefaults;
+    return new Intl.DateTimeFormat(htmlLang(), Object.assign({}, base, defaults, opts)).format(date);
   }
 
   function syncLanguage() {
@@ -371,7 +388,7 @@
     var ticket = ++loadTicket;
     return fetchJson(Api.dashboard(name) + '?t=' + Date.now())
       .then(function (dashboard) {
-        if (ticket !== loadTicket) return; // a newer load superseded this one
+        if (ticket !== loadTicket) return;
         document.title = demoTitlePrefix() + 'PATTY — ' + dashboard.name;
         renderFragment(container, dashboard.html);
       })
@@ -493,8 +510,6 @@
     return loadDashboard(name);
   }
 
-  // Before the shell is ready history navigation is ignored: boot loads whatever the URL names by then,
-  // and a fragment run earlier would find no window.PATTY.
   window.addEventListener('popstate', function () {
     if (shellIsReady) navigate(currentDashboardName(), false);
   });
@@ -522,8 +537,7 @@
       if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(entities);
     };
     if (entities.indexOf('userSettings') === -1) return forward();
-    // A locale or base-currency change updates the shell before the fragment re-renders with it. Refreshes
-    // run one at a time in event order, so a slow earlier response cannot overwrite newer state.
+    // A locale or base-currency change updates the shell before the fragment re-renders with it.
     settingsRefresh = settingsRefresh.then(function () {
       return refreshSettings()
         .then(forward)

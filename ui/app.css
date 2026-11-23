@@ -795,6 +795,7 @@ body[data-instance-kind='demo'] .sidebar {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 0;
   padding: 1.25rem 1.5rem;
 }
 
@@ -812,8 +813,15 @@ body[data-instance-kind='demo'] .sidebar {
 
 .chart-box {
   height: 300px;
+  min-width: 0;
+  overflow: hidden;
   position: relative;
   width: 100%;
+}
+
+.chart-box > canvas {
+  max-height: 100%;
+  max-width: 100%;
 }
 
 .table-wrap {
