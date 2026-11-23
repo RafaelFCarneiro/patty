@@ -12,8 +12,10 @@
 is a surrogate identity, internal only (Feature Design 013 Phase 1) — never on the wire, never a tool argument.
 
 A **fragment** is `<section>`-level markup plus an inline `<script>` that runs its own init immediately once
-injected — **not** a full HTML page (no `<!doctype>`/`<html>`/`<head>` root; the shell owns those and the one
-Chart.js `<script>`).
+injected, and — only if needed — one short `<style>` for layout specific to that dashboard. It is **not** a full
+HTML page (no `<!doctype>`/`<html>`/`<head>`/`<body>`; the shell owns those and the one Chart.js `<script>`).
+Shared shapes use the shell's classes and formatting uses `window.PATTY` (see "The fragment's shell API");
+`get_dashboard_guide` holds the rules.
 
 A `CHECK` constraint (`dashboard_source_content`, `diplomat/db/schema.ts`) enforces **exactly one of
 `html`/`path` per source** at the schema level; `saveDashboard`/`renameDashboard` (`controllers/dashboards.ts`)

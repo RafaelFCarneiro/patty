@@ -9,6 +9,13 @@ import { validation, type DuplicateName, type NotFound, type ValidationError } f
 // against an oversized save, without constraining realistic dashboard sizes.
 export const DASHBOARD_HTML_MAX_LENGTH = 500_000;
 
+// What a saved dashboard is, worded once for every agent-facing description (the html field, the
+// save_dashboard tool); the dashboard guide carries the rules behind it.
+export const FRAGMENT_SHAPE =
+  'a content fragment: <section>s, one inline <script> and, only if needed, one short <style> for layout ' +
+  'specific to this dashboard; no <!doctype>/<html>/<head>/<body> — the app shell provides them, plus shared ' +
+  'classes and window.PATTY';
+
 // ADR-027 Phase 2: `source` is the sole default/custom discriminator (no separate `kind` column).
 // `file` — content resolved from a repo-relative .html file under ui/dashboards/ at read time;
 // only bootstrap ever registers one (never save_dashboard — see dashboardErrors/saveDashboard).
@@ -21,11 +28,7 @@ export const DashboardSchema = z.object({
   html: z
     .string()
     .max(DASHBOARD_HTML_MAX_LENGTH)
-    .describe(
-      "Content fragment (sections + script) rendered into the app shell's #content (GET /ui) — not a full " +
-        'HTML page: no <!doctype>/<html>/<head>/<style> root, the shell already provides those. Must fetch ' +
-        'data from /api on load — never embeds financial data',
-    ),
+    .describe(`${FRAGMENT_SHAPE}. Must fetch data from /api on load — never embeds financial data`),
   updatedAt: z.string().describe('ISO 8601 timestamp of the last save'),
   source: DashboardSource.describe(
     'inline: DB-stored, editable via save_dashboard. file: a bundled default read from ui/dashboards/, ' +
