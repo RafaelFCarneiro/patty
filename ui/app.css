@@ -267,6 +267,7 @@ header,
 
 .header-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
 }
@@ -783,7 +784,7 @@ body[data-instance-kind='demo'] .sidebar {
 .cards-grid {
   display: grid;
   gap: 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
 }
 
 .card {
@@ -807,8 +808,9 @@ body[data-instance-kind='demo'] .sidebar {
 
 .card-value {
   color: var(--text-main);
-  font-size: 1.6rem;
+  font-size: clamp(1.2rem, 4vw, 1.6rem);
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .chart-box {

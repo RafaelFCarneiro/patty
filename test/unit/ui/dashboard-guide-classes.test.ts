@@ -70,6 +70,11 @@ describe('dashboard guide ↔ ui/app.css', () => {
     expect(shadowed).toEqual([]);
   });
 
+  it('keeps the card grid from forcing a minimum wider than its container', () => {
+    const grid = read('app.css').match(/\.cards-grid\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(grid).toMatch(/minmax\(min\([^,]+, 100%\), 1fr\)/);
+  });
+
   it('sends formatting through window.PATTY', () => {
     expect(guide).toContain('window.PATTY');
     expect(guide).toContain('maintainAspectRatio: false');

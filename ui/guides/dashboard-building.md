@@ -144,8 +144,8 @@ dashboard data-less; the save endpoint won't catch a violation for you.
    comes from fetching on every load. Never inline a "data as of <time>" snapshot as if it were live — the
    only "as of" text allowed is a client-side "last updated" label set from `new Date()` at fetch time.
 9. **Accessible and responsive.** Label form controls, use semantic headings/landmarks, and keep the layout
-   usable on narrow viewports (`.cards-grid` reflows on its own; give any grid of your own in the fragment's
-   `<style>` an `auto-fit`/`minmax` or a `@media` breakpoint).
+   usable on narrow viewports (the shell classes reflow on their own; a grid of the fragment's own uses
+   `repeat(auto-fit, minmax(min(<width>, 100%), 1fr))` or its own `@media`).
 10. **A fragment, not a full page.** No `<!doctype>`, `<html>`, `<head>` or `<body>` — just the `<section>`s,
     one inline `<script>` and, only when needed, one short `<style>` block for layout specific to that
     dashboard — the same shape `save_dashboard` stores and the shell injects into `#content`. Shared shapes
