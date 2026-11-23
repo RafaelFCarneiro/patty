@@ -1,4 +1,5 @@
 import * as R from 'remeda';
+import * as timestamp from '../timestamp.js';
 import type { Account } from '../../models/account.js';
 import type { Asset, AssetPrice } from '../../models/investment/asset.js';
 import {
@@ -63,7 +64,7 @@ export const olderOf = (instants: readonly (string | null)[]): string | null =>
   R.pipe(
     instants,
     R.filter(R.isNonNullish),
-    R.firstBy((instant) => new Date(instant).getTime()),
+    R.firstBy((instant) => timestamp.parseTimestamp(instant).getTime()),
   ) ?? null;
 
 const NO_PRICE: PriceReading = { price: null, priceAsOf: null, noPrice: true, stale: false };

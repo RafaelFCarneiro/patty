@@ -22,6 +22,7 @@ import {
 } from '../../models/investment/asset.js';
 import type { BulkItemShape } from '../../models/bulk.js';
 import type { Resolution } from '../../models/resolution.js';
+import * as timestamp from '../timestamp.js';
 import { buildBulkItems, toBulkItem as toGenericBulkItem } from '../bulk-item.js';
 import { fold } from '../resolve.js';
 import { isStale } from '../currency-rate.js';
@@ -105,15 +106,13 @@ export const registerResult = (plan: RegisterPlan): RegisterAssetResult => ({
   ...(plan.warnings.length > 0 ? { warnings: plan.warnings } : {}),
 });
 
-export const canonicalTimestamp = (asOf: string): string => new Date(asOf).toISOString();
-
 export const planPrice = (
   id: string,
   asset: Asset,
   input: SetAssetPriceInput,
   existing: AssetPriceEntity | null,
 ): PricePlan => {
-  const asOf = canonicalTimestamp(input.asOf);
+  const asOf = timestamp.canonical(input.asOf);
   const price: AssetPrice = {
     id: existing?.id ?? id,
     assetId: asset.id,
@@ -150,7 +149,7 @@ export const latestPrice = <P extends Pick<AssetPrice, 'assetId' | 'asOf'>>(
   R.pipe(
     prices,
     R.filter((price) => price.assetId === assetId),
-    R.firstBy([(price) => new Date(price.asOf).getTime(), 'desc']),
+    R.firstBy([(price) => timestamp.parseTimestamp(price.asOf).getTime(), 'desc']),
   );
 
 export const withLatestPrice =

@@ -81,6 +81,15 @@ describe('setAssetPrice', () => {
     expect((await decided(setAssetPrice(deps, { ...input, asset: 'B3:NU' }))).response.asset).toBe('B3:NU');
   });
 
+  it.each(['2026-11-18T18:00:00-03', '2026-11-18T18:00:00-0300'])(
+    'stores a compact offset (%s) as UTC instead of failing',
+    async (asOf) => {
+      const deps = investmentDeps({ assets: [entity()], ids: ['price-new'] });
+      const { response } = await decided(setAssetPrice(deps, { ...input, asOf }));
+      expect(response.asOf).toBe('2026-11-18T21:00:00.000Z');
+    },
+  );
+
   it('adds a point to the history with an insert at the canonical UTC instant', async () => {
     const deps = investmentDeps({ assets: [entity()], ids: ['price-new'] });
     const { persist, response } = await decided(setAssetPrice(deps, { ...input, asOf: '2026-11-18T18:00:00-03:00' }));

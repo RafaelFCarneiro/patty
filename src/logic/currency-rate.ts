@@ -21,6 +21,7 @@ import {
 } from '../models/currency-rate.js';
 import { buildBulkItems, toBulkItem as toGenericBulkItem } from './bulk-item.js';
 import { roundToDecimals } from './money.js';
+import * as timestamp from './timestamp.js';
 
 const bulkShape = <E>(): BulkItemShape<
   SetExchangeRateInput,
@@ -47,7 +48,7 @@ export const isCryptoPair = (from: CurrencyCode, to: CurrencyCode): boolean =>
   CRYPTO_CURRENCIES.has(from) || CRYPTO_CURRENCIES.has(to);
 
 export const isStale = (asOf: string, now: Date, thresholdHours: number): boolean =>
-  now.getTime() - new Date(asOf).getTime() > thresholdHours * MS_PER_HOUR;
+  now.getTime() - timestamp.parseTimestamp(asOf).getTime() > thresholdHours * MS_PER_HOUR;
 
 export const convert = (
   amount: number,
@@ -101,7 +102,7 @@ const consolidate = <K>(
   decimals: number,
 ): { total: number; stale: boolean; asOf: string | null; excludedKeys: K[] } => {
   const [included, excluded] = R.partition(contributions, (c) => c.converted !== undefined);
-  const oldest = R.firstBy(included, (c) => new Date(c.converted!.asOf).getTime());
+  const oldest = R.firstBy(included, (c) => timestamp.parseTimestamp(c.converted!.asOf).getTime());
   return {
     total: roundToDecimals(
       R.sumBy(included, (c) => c.converted!.value),

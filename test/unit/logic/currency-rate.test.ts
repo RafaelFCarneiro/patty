@@ -71,6 +71,13 @@ describe('isStale', () => {
   it('is false for a fresh timestamp', () => {
     expect(isStale(NOW.toISOString(), NOW, 24)).toBe(false);
   });
+
+  it.each(['-03', '-0300'])('reads a compact offset (%s) as its real instant', (offset) => {
+    const fresh = `2026-08-10T08:00:00${offset}`; // 11:00Z, one hour before NOW
+    const old = `2026-08-09T08:00:00${offset}`; // 11:00Z the day before, 25h before NOW
+    expect(isStale(fresh, NOW, 24)).toBe(false);
+    expect(isStale(old, NOW, 24)).toBe(true);
+  });
 });
 
 describe('convert', () => {
@@ -244,6 +251,15 @@ describe('valueAccount / consolidateNetWorth (ADR-026 Phase 3, ADR-028 controlle
 
 describe('consolidateInCurrency', () => {
   const amount = (currency: CurrencyCode, value: number) => ({ currency, amount: value });
+
+  it('picks the oldest contributing rate by instant when an offset is compact', () => {
+    const rates = [
+      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: '2026-08-10T08:00:00-03' }), // 11:00Z
+      rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: '2026-08-10T11:30:00.000Z' }),
+    ];
+    const result = consolidateInCurrency([amount(BRL, 100), amount(BTC, 1)], USD, rates, NOW, OPTIONS.thresholds, 2);
+    expect(result.asOf).toBe('2026-08-10T08:00:00-03');
+  });
 
   it('target === source is identity: converts at rate 1, asOf = now, never stale', () => {
     const result = consolidateInCurrency([amount(USD, 100)], USD, [], NOW, OPTIONS.thresholds, 2);

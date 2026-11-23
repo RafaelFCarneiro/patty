@@ -126,12 +126,8 @@ describe('assetRules.planRegister — idempotent on symbol and exchange', () => 
   });
 });
 
-describe('assetRules.planPrice / assetRules.canonicalTimestamp', () => {
+describe('assetRules.planPrice', () => {
   const input = { asset: 'NU', price: 13.2, asOf: '2026-11-18T18:00:00-03:00', source: 'NYSE close' };
-
-  it('stores the instant as canonical UTC', () => {
-    expect(assetRules.canonicalTimestamp('2026-11-18T18:00:00-03:00')).toBe('2026-11-18T21:00:00.000Z');
-  });
 
   it('adds a point to the history under a fresh id when none exists at that instant', () => {
     const plan = assetRules.planPrice('new-id', nuAsset(), input, null);
