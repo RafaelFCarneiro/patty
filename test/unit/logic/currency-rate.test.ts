@@ -11,6 +11,7 @@ import {
   valueAccount,
 } from '../../../src/logic/currency-rate.js';
 import { CurrencyCode } from '../../../src/models/money.js';
+import * as timestamp from '../../../src/logic/timestamp.js';
 import type {
   ValuableBalance,
   CurrencyRate,
@@ -259,6 +260,25 @@ describe('consolidateInCurrency', () => {
     ];
     const result = consolidateInCurrency([amount(BRL, 100), amount(BTC, 1)], USD, rates, NOW, OPTIONS.thresholds, 2);
     expect(result.asOf).toBe('2026-08-10T11:00:00.000Z');
+  });
+
+  it.each([
+    ['the offset rate first', [BRL, BTC]],
+    ['the UTC rate first', [BTC, BRL]],
+  ] as const)('reads an hour-only offset when picking the oldest rate: %s', (_order, currencies) => {
+    const rates = [
+      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: '2026-08-10T09:00:00-03' }), // 12:00Z
+      rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: '2026-08-10T11:30:00.000Z' }),
+    ];
+    const result = consolidateInCurrency(
+      currencies.map((currency) => amount(currency, 1)),
+      USD,
+      rates,
+      NOW,
+      OPTIONS.thresholds,
+      2,
+    );
+    expect(timestamp.parse(result.asOf!).toISOString()).toBe('2026-08-10T11:30:00.000Z');
   });
 
   it('target === source is identity: converts at rate 1, asOf = now, never stale', () => {
