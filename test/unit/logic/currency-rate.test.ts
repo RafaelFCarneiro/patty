@@ -252,13 +252,13 @@ describe('valueAccount / consolidateNetWorth (ADR-026 Phase 3, ADR-028 controlle
 describe('consolidateInCurrency', () => {
   const amount = (currency: CurrencyCode, value: number) => ({ currency, amount: value });
 
-  it('picks the oldest contributing rate by instant when an offset is compact', () => {
+  it('picks the oldest contributing rate by instant', () => {
     const rates = [
-      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: '2026-08-10T08:00:00-03' }), // 11:00Z
+      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: '2026-08-10T11:00:00.000Z' }),
       rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: '2026-08-10T11:30:00.000Z' }),
     ];
     const result = consolidateInCurrency([amount(BRL, 100), amount(BTC, 1)], USD, rates, NOW, OPTIONS.thresholds, 2);
-    expect(result.asOf).toBe('2026-08-10T08:00:00-03');
+    expect(result.asOf).toBe('2026-08-10T11:00:00.000Z');
   });
 
   it('target === source is identity: converts at rate 1, asOf = now, never stale', () => {

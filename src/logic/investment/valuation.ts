@@ -64,7 +64,7 @@ export const olderOf = (instants: readonly (string | null)[]): string | null =>
   R.pipe(
     instants,
     R.filter(R.isNonNullish),
-    R.firstBy((instant) => timestamp.parseTimestamp(instant).getTime()),
+    R.firstBy((instant) => timestamp.parse(instant).getTime()),
   ) ?? null;
 
 const NO_PRICE: PriceReading = { price: null, priceAsOf: null, noPrice: true, stale: false };

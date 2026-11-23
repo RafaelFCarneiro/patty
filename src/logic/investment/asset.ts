@@ -149,7 +149,7 @@ export const latestPrice = <P extends Pick<AssetPrice, 'assetId' | 'asOf'>>(
   R.pipe(
     prices,
     R.filter((price) => price.assetId === assetId),
-    R.firstBy([(price) => timestamp.parseTimestamp(price.asOf).getTime(), 'desc']),
+    R.firstBy([(price) => timestamp.parse(price.asOf).getTime(), 'desc']),
   );
 
 export const withLatestPrice =

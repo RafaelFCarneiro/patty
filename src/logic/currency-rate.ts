@@ -48,7 +48,7 @@ export const isCryptoPair = (from: CurrencyCode, to: CurrencyCode): boolean =>
   CRYPTO_CURRENCIES.has(from) || CRYPTO_CURRENCIES.has(to);
 
 export const isStale = (asOf: string, now: Date, thresholdHours: number): boolean =>
-  now.getTime() - timestamp.parseTimestamp(asOf).getTime() > thresholdHours * MS_PER_HOUR;
+  now.getTime() - timestamp.parse(asOf).getTime() > thresholdHours * MS_PER_HOUR;
 
 export const convert = (
   amount: number,
@@ -102,7 +102,7 @@ const consolidate = <K>(
   decimals: number,
 ): { total: number; stale: boolean; asOf: string | null; excludedKeys: K[] } => {
   const [included, excluded] = R.partition(contributions, (c) => c.converted !== undefined);
-  const oldest = R.firstBy(included, (c) => timestamp.parseTimestamp(c.converted!.asOf).getTime());
+  const oldest = R.firstBy(included, (c) => timestamp.parse(c.converted!.asOf).getTime());
   return {
     total: roundToDecimals(
       R.sumBy(included, (c) => c.converted!.value),

@@ -3,11 +3,11 @@ import * as timestamp from '../../../src/logic/timestamp.js';
 
 const INSTANT = '2026-08-10T20:00:00.000Z';
 
-describe('parseTimestamp', () => {
+describe('parse', () => {
   it.each(['2026-08-10T17:00:00-03:00', '2026-08-10T17:00:00-0300', '2026-08-10T17:00:00-03', INSTANT])(
     'reads %s as the same instant',
     (text) => {
-      expect(timestamp.parseTimestamp(text).toISOString()).toBe(INSTANT);
+      expect(timestamp.parse(text).toISOString()).toBe(INSTANT);
     },
   );
 
@@ -16,7 +16,7 @@ describe('parseTimestamp', () => {
     ['2026-08-10T22:00:00+0200', '2026-08-10T20:00:00.000Z'],
     ['2026-08-11T01:30:00+0530', '2026-08-10T20:00:00.000Z'],
   ])('normalizes the compact offset in %s', (text, expected) => {
-    expect(timestamp.parseTimestamp(text).toISOString()).toBe(expected);
+    expect(timestamp.parse(text).toISOString()).toBe(expected);
   });
 });
 
