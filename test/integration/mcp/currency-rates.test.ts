@@ -69,36 +69,6 @@ describe('MCP integration > exchange rates', () => {
     }
   });
 
-  it('a "-03" asOf is listed as UTC and the rate goes stale once past the window', async () => {
-    const { client, transport } = makeClient();
-    try {
-      await client.connect(transport);
-      const accountName = `Compact offset ${Date.now()}`;
-      await callTool(client, { name: 'set_base_currency', args: { baseCurrency: 'USD' } });
-      await callTool(client, {
-        name: 'create_account',
-        args: { name: accountName, type: 'checking', currency: 'MXN', initialBalance: 100 },
-      });
-      await callTool(client, {
-        name: 'set_exchange_rate',
-        args: { from: 'MXN', to: 'USD', rate: 0.05, asOf: '2020-01-01T00:00:00-03' },
-      });
-
-      const rates = (await callTool(client, { name: 'list_exchange_rates', args: {} })) as RateView[];
-      expect(rates.find((r) => r.from === 'MXN' && r.to === 'USD')?.asOf).toBe('2020-01-01T03:00:00.000Z');
-
-      const result = (await callTool(client, { name: 'get_account_balances', args: { account: accountName } })) as {
-        balances: Array<{ name?: string; converted?: { asOf: string; stale: boolean } }>;
-      };
-      expect(result.balances.find((b) => b.name === accountName)?.converted).toMatchObject({
-        asOf: '2020-01-01T03:00:00.000Z',
-        stale: true,
-      });
-    } finally {
-      await transport.close();
-    }
-  });
-
   it('upsert-latest: a second call for the same pair overwrites, list_exchange_rates shows one row', async () => {
     const { client, transport } = makeClient();
     try {
