@@ -18,6 +18,7 @@ const bootShell = async (
   let onReady: (() => void) | undefined;
   const loaded: string[] = [];
   const windowHandlers: Record<string, () => void> = {};
+  const activeLinks: string[] = [];
   const stream: { onmessage?: (event: { data: string }) => void } = {};
   const respond = (url: string) => {
     const path = url.split('?')[0] ?? '';
@@ -38,7 +39,16 @@ const bootShell = async (
     getElementById: () => makeStubElement(),
     querySelector: () => makeStubElement(),
     querySelectorAll: () => [],
-    createElement: () => makeStubElement(),
+    createElement: () => {
+      let href = '';
+      const el = makeStubElement();
+      return Object.assign(el, {
+        setAttribute(key: string, value: string) {
+          if (key === 'href') href = value;
+        },
+        classList: { ...el.classList, add: () => activeLinks.push(href) },
+      });
+    },
     addEventListener: (type: string, handler: () => void) => {
       if (type === 'DOMContentLoaded') onReady = handler;
     },
@@ -81,7 +91,7 @@ const bootShell = async (
   vm.runInContext(read('app.js'), sandbox);
   onReady?.();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  return { sandbox, loaded, stream, document, windowHandlers };
+  return { sandbox, loaded, stream, document, windowHandlers, activeLinks };
 };
 
 const currencies = Object.values(currencyMetadata);
@@ -288,18 +298,48 @@ describe('shell boot (ui/app.js)', () => {
       expect((sandbox.PATTY as { baseCurrency: string }).baseCurrency).toBe('BRL');
     });
 
-    it('holds a history navigation until the shell is ready', async () => {
+    it('loads and activates the dashboard the URL names once ready when history moved during boot', async () => {
       let release: () => void = () => {};
       const gate = new Promise<{ locale: string }>((resolve) => {
         release = () => resolve({ locale: 'en' });
       });
-      const { loaded, windowHandlers } = await bootShell({ '/api/status': () => gate });
+      const { sandbox, loaded, windowHandlers, activeLinks } = await bootShell({
+        '/api/status': () => gate,
+        '/api/dashboards': () => [
+          { name: 'overview', source: 'file' },
+          { name: 'pending', source: 'file' },
+        ],
+      });
+      (sandbox.location as { pathname: string }).pathname = '/ui/pending';
       windowHandlers.popstate?.();
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(loaded).toEqual([]);
       release();
       await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(loaded.length).toBeGreaterThanOrEqual(2);
+      expect(loaded).toEqual(['/api/dashboards/pending']);
+      expect(activeLinks).toEqual(['/ui/pending']);
+    });
+
+    it('lets only the latest dashboard load render', async () => {
+      const replies: Record<string, (value: { name: string; html: string }) => void> = {};
+      const { sandbox, document, windowHandlers } = await bootShell({
+        ...statusFor('en'),
+        '/api/dashboards/overview': () => ({ name: 'Overview', html: '<p>o</p>' }),
+        '/api/dashboards/budget': () =>
+          new Promise((resolve) => {
+            replies.budget = resolve;
+          }),
+        '/api/dashboards/pending': () => ({ name: 'Pending', html: '<p>p</p>' }),
+      });
+      const location = sandbox.location as { pathname: string };
+      location.pathname = '/ui/budget';
+      windowHandlers.popstate?.();
+      location.pathname = '/ui/pending';
+      windowHandlers.popstate?.();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      replies.budget?.({ name: 'Budget', html: '<p>b</p>' });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(document.title).toBe('PATTY — Pending');
     });
 
     it('falls back to en-US when /api/status fails', async () => {

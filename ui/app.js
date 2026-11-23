@@ -139,12 +139,11 @@
   // Set by onerror, consumed by the next onopen: the stream was down, so events may have been missed.
   var streamErrored = false;
   var reconnectTimer = null;
-  var markShellReady;
   var settingsRefresh = Promise.resolve();
-  // Resolves once locale, currency metadata and preferences are in (the PATTY API exists then).
-  var shellReady = new Promise(function (resolve) {
-    markShellReady = resolve;
-  });
+  // True once locale, currency metadata and preferences are in (the PATTY API exists then).
+  var shellIsReady = false;
+  // Bumped per dashboard load; only the latest load may render.
+  var loadTicket = 0;
 
   function htmlLang() {
     return HTML_LANG_BY_LOCALE[currentLocale] || DEFAULT_HTML_LANG;
@@ -369,13 +368,15 @@
   function loadDashboard(name) {
     var container = document.getElementById('content');
     setLoading(container, 'Loading dashboard…');
+    var ticket = ++loadTicket;
     return fetchJson(Api.dashboard(name) + '?t=' + Date.now())
       .then(function (dashboard) {
+        if (ticket !== loadTicket) return; // a newer load superseded this one
         document.title = demoTitlePrefix() + 'PATTY — ' + dashboard.name;
         renderFragment(container, dashboard.html);
       })
       .catch(function (err) {
-        setError(container, err.message);
+        if (ticket === loadTicket) setError(container, err.message);
       });
   }
 
@@ -492,11 +493,10 @@
     return loadDashboard(name);
   }
 
-  // History navigation before the shell is ready would run a fragment without window.PATTY.
+  // Before the shell is ready history navigation is ignored: boot loads whatever the URL names by then,
+  // and a fragment run earlier would find no window.PATTY.
   window.addEventListener('popstate', function () {
-    shellReady.then(function () {
-      navigate(currentDashboardName(), false);
-    });
+    if (shellIsReady) navigate(currentDashboardName(), false);
   });
 
   // ADR-027 Phase 3 live update, ADR-036 §4 recovery (the as-built flow is in docs/ui.md). One
@@ -620,8 +620,6 @@
       });
     }
 
-    var initialName = currentDashboardName();
-
     // Currency metadata (symbol/decimals) must be cached before the first dashboard renders — its
     // fragment script calls window.formatMoney synchronously while rendering, with no re-render on
     // late-arriving data. Sequenced with locale (both fast local calls); the dashboards list fetch
@@ -667,11 +665,13 @@
       .catch(function (err) {
         console.error('Could not load preferences; keeping the default currency:', err);
       })
-      .then(markShellReady);
+      .then(function () {
+        shellIsReady = true;
+      });
 
     bootPromise
       .then(function () {
-        return loadDashboard(initialName);
+        return loadDashboard(currentDashboardName());
       })
       .then(function () {
         connectEvents();
@@ -682,7 +682,7 @@
         return fetchJson(Api.dashboards);
       })
       .then(function (dashboards) {
-        renderMenu(dashboards, initialName);
+        renderMenu(dashboards, currentDashboardName());
       })
       .catch(function (err) {
         setError(menu, err.message);
