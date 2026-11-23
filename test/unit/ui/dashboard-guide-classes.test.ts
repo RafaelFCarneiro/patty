@@ -8,7 +8,8 @@ const SHELL_CLASSES = /<!-- shell-classes -->([\s\S]*?)<!-- \/shell-classes -->/
 const BACKTICKED_CLASS = /`([a-z][a-z-]*)`/g;
 const CSS_CLASS = /\.([a-z][a-z-]*)/g;
 
-// .panel predates the layer: ui/app.css holds its base and every bundled dashboard adds its own padding (docs/ui.md, #164).
+// .panel predates the layer: ui/app.css holds its base and every bundled dashboard
+// adds its own padding (docs/ui.md, #164).
 const LOCALLY_EXTENDED = new Set(['panel']);
 const STYLE_BLOCK = /<style[^>]*>([\s\S]*?)<\/style>/g;
 const declaresClass = (css: string, name: string) => new RegExp(`\\.${name}(?![\\w-])[^{}]*\\{`).test(css);
