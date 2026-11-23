@@ -9,8 +9,9 @@ import {
   type AssetPrice,
   type PriceStalenessThresholds,
 } from './asset.js';
-import { IsoTimestamp, type CurrencyRate, type StalenessThresholds } from '../currency-rate.js';
+import { type CurrencyRate, type StalenessThresholds } from '../currency-rate.js';
 import { IsoDate } from '../date.js';
+import { IsoTimestamp } from '../timestamp.js';
 import type { NotFound, ValidationError } from '../error.js';
 import { Id } from '../id.js';
 import { CurrencyCode, type DecimalsFor } from '../money.js';

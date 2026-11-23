@@ -14,8 +14,25 @@ import {
   valuationContext,
 } from '../../fixtures/investment.js';
 import * as valuation from '../../../../src/logic/investment/valuation.js';
+import * as timestamp from '../../../../src/logic/timestamp.js';
 
 const { USD, BRL, BTC } = CurrencyCode.enum;
+
+describe('valuation.olderOf', () => {
+  const OFFSET = '2026-08-10T09:00:00-03'; // 12:00Z
+  const UTC = '2026-08-10T11:30:00.000Z';
+
+  it.each([
+    ['the offset instant first', [OFFSET, UTC]],
+    ['the UTC instant first', [UTC, OFFSET]],
+  ])('reads an hour-only offset when picking the older instant: %s', (_order, instants) => {
+    expect(timestamp.parse(valuation.olderOf(instants)!).toISOString()).toBe('2026-08-10T11:30:00.000Z');
+  });
+
+  it('is null when there is no instant', () => {
+    expect(valuation.olderOf([null, null])).toBeNull();
+  });
+});
 
 describe('valuation.value — read-time valuation (Feature Design 023 §4)', () => {
   const account = investmentAccount();

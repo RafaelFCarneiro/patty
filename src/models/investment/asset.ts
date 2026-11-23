@@ -3,6 +3,7 @@ import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { Ambiguous, NotFound, ValidationError } from '../error.js';
 import { Id } from '../id.js';
 import { CurrencyCode } from '../money.js';
+import { IsoTimestamp } from '../timestamp.js';
 
 export const ASSET_ENTITY_TAG = 'asset';
 export const ASSET_PRICE_ENTITY_TAG = 'asset_price';
@@ -56,7 +57,7 @@ export type AssetPriceEntity = z.infer<typeof AssetPriceEntitySchema>;
 export const SetAssetPriceSchema = z.object({
   asset: z.string().min(1).describe('Asset symbol (e.g. "NU"), or "EXCHANGE:SYMBOL" (e.g. "NYSE:NU") when ambiguous'),
   price: z.number().positive().describe('Price of ONE unit in the asset currency, as of `asOf`'),
-  asOf: AssetTimestamp.describe('ISO 8601 timestamp this price was observed/sourced'),
+  asOf: IsoTimestamp.describe('ISO 8601 timestamp this price was observed/sourced'),
   source: z.string().min(1).optional().describe('Free-text provenance, e.g. "B3 close", "yahoo"'),
 });
 export type SetAssetPriceInput = z.infer<typeof SetAssetPriceSchema>;

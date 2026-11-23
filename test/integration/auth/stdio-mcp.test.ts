@@ -1,5 +1,4 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,6 +9,7 @@ import { createStdioSession } from '../../../src/diplomat/mcp/stdio-session.js';
 import { createSignInInterpreter } from '../../../src/composition/sign-in/interpreter.js';
 import { authDepsOf, answerConnect, claimOwner, memoryStore, useAuthApp, SIGN_IN_ORIGIN } from './helpers.js';
 import type { AppContext } from '../app-builder.js';
+import { connectInProcess } from '../mcp-in-process.js';
 
 const createApp = useAuthApp();
 
@@ -35,13 +35,10 @@ const connectStdioClient = async (ctx: AppContext, options: { owner?: boolean; e
   const mcp = buildMcpServer(ctx.runtime, ctx.version, {
     gate: options.owner ? ownerGate : () => session.resolve(),
   });
-  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: 'test-client', version: '9.9.9' });
-  await Promise.all([mcp.connect(serverSide), client.connect(clientSide)]);
+  const { client, close } = await connectInProcess(mcp);
   cleanups.push(async () => {
     await session.close();
-    await client.close();
-    await mcp.close();
+    await close();
   });
   return { client, session, store };
 };

@@ -20,6 +20,7 @@ import {
 import type { Deps } from '../deps.js';
 import { resolveAssetRef } from '../resolve.js';
 import * as assetRules from '../../logic/investment/asset.js';
+import * as timestamp from '../../logic/timestamp.js';
 
 const registrationWrites = (plan: RegisterPlan, existing: AssetEntity | null): Persistable[] => {
   if (plan.created) return [persistence.insert({ entity: ASSET_ENTITY_TAG, model: plan.asset })];
@@ -52,7 +53,7 @@ export const setAssetPrice = (
 ): ResultAsync<FlowOutcome<AssetPriceView>, AppError> =>
   safeTry(async function* () {
     const asset = yield* resolveAssetRef(deps, input.asset);
-    const existing = await deps.assetPrices.findAt(asset.id, assetRules.canonicalTimestamp(input.asOf));
+    const existing = await deps.assetPrices.findAt(asset.id, timestamp.canonical(input.asOf));
     const plan = assetRules.planPrice(deps.newId(), asset, input, existing);
     return ok({ persist: [priceWrite(plan, existing)], response: plan.view });
   });

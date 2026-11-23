@@ -2,6 +2,7 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import { guard } from '../common/result.js';
 import * as persistence from '../logic/persistence.js';
+import * as timestamp from '../logic/timestamp.js';
 import {
   CURRENCY_RATE_ENTITY_TAG,
   currencyRateErrors,
@@ -35,7 +36,7 @@ export const setExchangeRate = (
       from: input.from,
       to: input.to,
       rate: input.rate,
-      asOf: input.asOf,
+      asOf: timestamp.canonical(input.asOf),
       source: input.source,
     };
     const row = {

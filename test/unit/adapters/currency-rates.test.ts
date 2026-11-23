@@ -16,6 +16,20 @@ const row: CurrencyRateRow = {
 };
 
 describe('dbToEntity', () => {
+  it.each(['2026-08-10T09:00:00-03', '2026-08-10T09:00:00-0300'])(
+    'serves a row stored raw with the compact offset %s as UTC',
+    (asOf) => {
+      expect(currencyRateAdapters.dbToEntity({ ...row, asOf }).asOf).toBe('2026-08-10T12:00:00.000Z');
+    },
+  );
+
+  it.each(['2026-02-30T12:00:00Z', '2026-08-10T12:00:00', '2026-08-10'])(
+    'refuses the malformed stored timestamp %s instead of reinterpreting it',
+    (asOf) => {
+      expect(() => currencyRateAdapters.dbToEntity({ ...row, asOf })).toThrow();
+    },
+  );
+
   it('maps a db row to the entity 1:1', () => {
     expect(currencyRateAdapters.dbToEntity(row)).toEqual({
       id: 'rate-1',
