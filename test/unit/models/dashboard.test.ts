@@ -5,6 +5,7 @@ import {
   DashboardListItemSchema,
   DashboardSchema,
   DashboardSource,
+  FRAGMENT_SHAPE,
   SaveDashboardSchema,
 } from '../../../src/models/dashboard.js';
 
@@ -108,5 +109,12 @@ describe('dashboardErrors.invalidHtml', () => {
       code: 'validation',
       issues: ['html must contain a <!doctype html> or <html> root element'],
     });
+  });
+});
+
+describe('FRAGMENT_SHAPE', () => {
+  it('allows a short <style> and is what the html field description states', () => {
+    expect(FRAGMENT_SHAPE).toContain('one short <style>');
+    expect(SaveDashboardSchema.shape.html.description).toContain(FRAGMENT_SHAPE);
   });
 });

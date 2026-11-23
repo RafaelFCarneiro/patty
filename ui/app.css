@@ -3,6 +3,7 @@
   --bg-color: #0c0e17;
   --panel-bg: rgba(20, 24, 43, 0.6);
   --panel-border: rgba(255, 255, 255, 0.06);
+  --chart-grid: rgba(255, 255, 255, 0.08);
   --accent-primary: #8b5cf6;
   --accent-primary-glow: rgba(139, 92, 246, 0.35);
   --income-color: #10b981;
@@ -266,6 +267,7 @@ header,
 
 .header-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
 }
@@ -776,4 +778,102 @@ body[data-instance-kind='demo'] {
 }
 body[data-instance-kind='demo'] .sidebar {
   top: 2.25rem;
+}
+
+/* Fragment component layer: the classes ui/guides/dashboard-building.md names (a test pins the list). */
+.cards-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+}
+
+.card {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 1.25rem 1.5rem;
+}
+
+.card-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.card-value {
+  color: var(--text-main);
+  font-size: clamp(1.2rem, 4vw, 1.6rem);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.chart-box {
+  height: 300px;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.chart-box > canvas {
+  max-height: 100%;
+  max-width: 100%;
+}
+
+.table-wrap {
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  overflow-x: auto;
+}
+
+.data-table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  text-align: left;
+  width: 100%;
+}
+
+.data-table th {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+}
+
+.data-table td {
+  border-top: 1px solid var(--panel-border);
+  padding: 0.75rem 1rem;
+}
+
+.state {
+  color: var(--text-muted);
+  padding: 1rem;
+  text-align: center;
+}
+
+.state-error {
+  color: var(--expense-color);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.visually-hidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }

@@ -12,8 +12,10 @@
 is a surrogate identity, internal only (Feature Design 013 Phase 1) — never on the wire, never a tool argument.
 
 A **fragment** is `<section>`-level markup plus an inline `<script>` that runs its own init immediately once
-injected — **not** a full HTML page (no `<!doctype>`/`<html>`/`<head>` root; the shell owns those and the one
-Chart.js `<script>`).
+injected, and — only if needed — one short `<style>` for layout specific to that dashboard. It is **not** a full
+HTML page (no `<!doctype>`/`<html>`/`<head>`/`<body>`; the shell owns those and the one Chart.js `<script>`).
+Shared shapes use the shell's classes and formatting uses `window.PATTY` (see "The fragment's shell API");
+`get_dashboard_guide` holds the rules.
 
 A `CHECK` constraint (`dashboard_source_content`, `diplomat/db/schema.ts`) enforces **exactly one of
 `html`/`path` per source** at the schema level; `saveDashboard`/`renameDashboard` (`controllers/dashboards.ts`)
@@ -212,6 +214,36 @@ over the full property set of every one of these selectors) before and after the
 byte-for-byte identical — not just spot-checked.
 [#164](https://github.com/RafaelFCarneiro/patty/issues/164) tracked this as deferred work when the
 fragments were first converted to files.
+
+## The fragment's shell API
+
+What a saved fragment can rely on without declaring it (the dashboard guide names exactly this; a test checks
+every guide class against `ui/app.css`):
+
+- **Classes** (`ui/app.css`, "Fragment component layer"): `.panel` (section box), `.cards-grid` + `.card` with
+  `.card-label`/`.card-value`, `.chart-box` (fixed height, `position: relative`), `.table-wrap` + `.data-table`,
+  `.state` + `.state-error`, `.muted`, `.visually-hidden`, `.dashboard-header` + `.header-actions` (title row with
+  actions). Layout specific to one dashboard goes in a short `<style>` block in the fragment. The bundled
+  dashboards keep their own `<style>` blocks and never declare a selector for one of these classes, except
+  `.panel`, whose base predates the layer and which each bundled dashboard extends locally (a test pins it;
+  `pending.html`'s own chart wrapper is `.pending-chart`).
+- **Language**: once `/api/status` answers, the shell sets `<html lang>` to the BCP-47 tag of the resolved UI
+  locale (`pt` → `pt-BR`, `es` → `es`, `en` → `en-US`; `en-US` if the call fails) and
+  `window.PATTY = { locale, baseCurrency, formatMoney, formatNumber, formatDate, formatDateTime }`, all `Intl`
+  with that tag.
+  - `baseCurrency` reads `window.BASE_CURRENCY` and falls back to the default currency.
+  - A missing value (`null`, `undefined`, `NaN`, an invalid date) formats as `—` (`EMPTY_VALUE`), never 0.
+  - `formatMoney(value, code, opts)` wraps `window.formatMoney` (`ui/money.js`, crypto-aware precision and
+    symbols) with the UI locale as default.
+  - `formatDate` renders a `YYYY-MM-DD` day as that calendar day. A date or time component option (`year`,
+    `month`, `hour`, …) replaces the default `dateStyle`/`timeStyle`; any other option (`timeZone`, `hour12`, …)
+    merges over them.
+  - Every member reads the current locale and base currency when called. A `userSettings` event re-reads
+    `/api/status` and `<html lang>` before the fragment is told. History navigation before the shell is ready
+    is ignored: boot loads whatever the URL names by then, and only the latest dashboard load renders.
+- **Chart.js**: `Chart.defaults.color`, `borderColor` (grid), `font.family` and `plugins.legend.labels.color` are
+  read from `:root` (`--text-muted`, `--chart-grid`, `--font-family`), so a fragment's charts read on the dark
+  background. A chart sits in a `.chart-box` with `maintainAspectRatio: false`.
 
 ## Routes
 

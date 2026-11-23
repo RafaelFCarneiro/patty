@@ -72,6 +72,25 @@
     'userSettings',
   ];
   var currentLocale = 'en';
+  var HTML_LANG_BY_LOCALE = { pt: 'pt-BR', es: 'es', en: 'en-US' };
+  var DEFAULT_HTML_LANG = 'en-US';
+  var EMPTY_VALUE = '—';
+  var DATE_COMPONENT_OPTIONS = [
+    'year',
+    'month',
+    'day',
+    'weekday',
+    'hour',
+    'minute',
+    'second',
+    'era',
+    'timeZoneName',
+    'dayPeriod',
+    'fractionalSecondDigits',
+  ];
+  var THEME_TEXT_VAR = '--text-muted';
+  var THEME_GRID_VAR = '--chart-grid';
+  var THEME_FONT_VAR = '--font-family';
 
   var DASHBOARD_ICONS = {
     overview: 'fa-chart-pie',
@@ -133,6 +152,109 @@
   // Set by onerror, consumed by the next onopen: the stream was down, so events may have been missed.
   var streamErrored = false;
   var reconnectTimer = null;
+  var settingsRefresh = Promise.resolve();
+  var shellIsReady = false;
+  var loadTicket = 0;
+
+  function htmlLang() {
+    return HTML_LANG_BY_LOCALE[currentLocale] || DEFAULT_HTML_LANG;
+  }
+
+  function isMissingNumber(value) {
+    return value === null || value === undefined || Number.isNaN(Number(value));
+  }
+
+  function isMissingDate(date) {
+    return Number.isNaN(date.getTime());
+  }
+
+  // A bare YYYY-MM-DD is a calendar day, not an instant: it parses as UTC and formatDate renders in UTC.
+  function dateOf(value) {
+    return value instanceof Date ? value : new Date(value === null || value === undefined ? NaN : value);
+  }
+
+  function formatNumberWith(tag, value, opts) {
+    return isMissingNumber(value) ? EMPTY_VALUE : new Intl.NumberFormat(tag, opts).format(Number(value));
+  }
+
+  // dateStyle/timeStyle cannot coexist with component options: the style defaults are dropped only when
+  // the caller passes one; any other option (timeZone, hour12, calendar…) merges over them.
+  function hasDateComponent(opts) {
+    return Object.keys(opts || {}).some(function (key) {
+      return DATE_COMPONENT_OPTIONS.indexOf(key) !== -1;
+    });
+  }
+
+  function formatDateWith(value, base, styleDefaults, opts) {
+    var date = dateOf(value);
+    if (isMissingDate(date)) return EMPTY_VALUE;
+    var defaults = hasDateComponent(opts) ? {} : styleDefaults;
+    return new Intl.DateTimeFormat(htmlLang(), Object.assign({}, base, defaults, opts)).format(date);
+  }
+
+  function syncLanguage() {
+    document.documentElement.lang = htmlLang();
+  }
+
+  // The status call resolves the effective locale (configuration override included); a failure keeps the last one.
+  function refreshLocale() {
+    return fetchJson(Api.status)
+      .then(function (status) {
+        if (status && status.locale) currentLocale = status.locale;
+      })
+      .catch(function (err) {
+        console.error('Could not refresh the locale:', err);
+      })
+      .then(syncLanguage);
+  }
+
+  // The fragment-facing API: everything formats with the resolved UI language, never the browser's,
+  // and a missing value is EMPTY_VALUE, never a 0 or a 1970 date. Every member reads the current
+  // locale and base currency when called, so a reference a fragment holds stays correct after a setting changes.
+  function exposeShellApi() {
+    syncLanguage();
+    applyChartDefaults();
+    window.PATTY = {
+      get locale() {
+        return htmlLang();
+      },
+      get baseCurrency() {
+        return window.BASE_CURRENCY || window.DEFAULT_CURRENCY;
+      },
+      formatMoney: function (value, currencyCode, opts) {
+        if (isMissingNumber(value)) return EMPTY_VALUE;
+        return window.formatMoney(value, currencyCode, Object.assign({ locale: htmlLang() }, opts));
+      },
+      formatNumber: function (value, opts) {
+        return formatNumberWith(htmlLang(), value, opts);
+      },
+      formatDate: function (value, opts) {
+        return formatDateWith(value, { timeZone: 'UTC' }, { dateStyle: 'medium' }, opts);
+      },
+      formatDateTime: function (value, opts) {
+        return formatDateWith(value, {}, { dateStyle: 'medium', timeStyle: 'short' }, opts);
+      },
+    };
+  }
+
+  // Chart.js draws on a canvas, which cannot read CSS variables itself: the theme is read from :root.
+  function applyChartDefaults() {
+    if (!window.Chart || typeof window.getComputedStyle !== 'function') return;
+    var theme = window.getComputedStyle(document.documentElement);
+    var read = function (name) {
+      return String(theme.getPropertyValue(name) || '').trim();
+    };
+    var defaults = window.Chart.defaults;
+    var text = read(THEME_TEXT_VAR);
+    var grid = read(THEME_GRID_VAR);
+    var font = read(THEME_FONT_VAR);
+    if (text) {
+      defaults.color = text;
+      defaults.plugins.legend.labels.color = text;
+    }
+    if (grid) defaults.borderColor = grid;
+    if (font) defaults.font.family = font;
+  }
 
   var Api = {
     status: '/api/status',
@@ -263,13 +385,15 @@
   function loadDashboard(name) {
     var container = document.getElementById('content');
     setLoading(container, 'Loading dashboard…');
+    var ticket = ++loadTicket;
     return fetchJson(Api.dashboard(name) + '?t=' + Date.now())
       .then(function (dashboard) {
+        if (ticket !== loadTicket) return;
         document.title = demoTitlePrefix() + 'PATTY — ' + dashboard.name;
         renderFragment(container, dashboard.html);
       })
       .catch(function (err) {
-        setError(container, err.message);
+        if (ticket === loadTicket) setError(container, err.message);
       });
   }
 
@@ -387,7 +511,7 @@
   }
 
   window.addEventListener('popstate', function () {
-    navigate(currentDashboardName(), false);
+    if (shellIsReady) navigate(currentDashboardName(), false);
   });
 
   // ADR-027 Phase 3 live update, ADR-036 §4 recovery (the as-built flow is in docs/ui.md). One
@@ -395,20 +519,33 @@
   // window.onAppDataChanged slot it delivers into, and a message with no fragment registered is
   // dropped (the next fetch reflects current data anyway). Events that pass while the stream is
   // down are lost for good, hence the resync on reopen.
-  function forwardEntities(entities) {
-    var forward = function () {
-      if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(entities);
-    };
-    if (entities.indexOf('userSettings') === -1) return forward();
-    // A base-currency change updates the default before the fragment re-renders with it.
-    fetchJson(Api.preferences)
+  function refreshSettings() {
+    return refreshLocale()
+      .then(function () {
+        return fetchJson(Api.preferences);
+      })
       .then(function (prefs) {
         window.setBaseCurrency(prefs && prefs.baseCurrency);
       })
       .catch(function (err) {
         console.error('Could not refresh preferences:', err);
-      })
-      .then(forward);
+      });
+  }
+
+  function forwardEntities(entities) {
+    var forward = function () {
+      if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(entities);
+    };
+    if (entities.indexOf('userSettings') === -1) return forward();
+    // A locale or base-currency change updates the shell before the fragment re-renders with it.
+    settingsRefresh = settingsRefresh.then(function () {
+      return refreshSettings()
+        .then(forward)
+        .catch(function (err) {
+          console.error('A settings update handler failed:', err); // never break the queue for later events
+        });
+    });
+    return settingsRefresh;
   }
 
   function goToLogin() {
@@ -497,8 +634,6 @@
       });
     }
 
-    var initialName = currentDashboardName();
-
     // Currency metadata (symbol/decimals) must be cached before the first dashboard renders — its
     // fragment script calls window.formatMoney synchronously while rendering, with no re-render on
     // late-arriving data. Sequenced with locale (both fast local calls); the dashboards list fetch
@@ -513,6 +648,7 @@
         // Fallback to English silently
       })
       .then(function () {
+        exposeShellApi();
         return fetchJson(Api.currencies);
       })
       .then(function (currencies) {
@@ -542,11 +678,14 @@
       })
       .catch(function (err) {
         console.error('Could not load preferences; keeping the default currency:', err);
+      })
+      .then(function () {
+        shellIsReady = true;
       });
 
     bootPromise
       .then(function () {
-        return loadDashboard(initialName);
+        return loadDashboard(currentDashboardName());
       })
       .then(function () {
         connectEvents();
@@ -557,7 +696,7 @@
         return fetchJson(Api.dashboards);
       })
       .then(function (dashboards) {
-        renderMenu(dashboards, initialName);
+        renderMenu(dashboards, currentDashboardName());
       })
       .catch(function (err) {
         setError(menu, err.message);

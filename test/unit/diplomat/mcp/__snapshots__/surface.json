@@ -2536,7 +2536,7 @@
     {
       "name": "save_dashboard",
       "title": "Save dashboard",
-      "description": "Call get_dashboard_guide and get_api_contract first: the guide holds the rules, the contract the routes to fetch from. Create or override a named dashboard: a content FRAGMENT you author (sections + an inline <script>, no <!doctype>/<html>/<head>/<style> root — the app shell at GET /ui already provides those and is what actually renders it, at GET /ui/:name) (ADR-013, fragment model ADR-027). Upsert semantics — saving to an existing name replaces it immediately, no rebuild or restart needed. CRITICAL: the fragment must NEVER embed financial data, secrets, or tokens inline — render layout/styling only and fetch data client-side from the documented /api endpoints on load, so the dashboard is always live and safe to share. Rejected (validation error) if the content is empty, still carries a full <!doctype>/<html> document root, an external <script src> reference (the shell already loads Chart.js once — a fragment carries zero external references of its own), or an inline <script> has a syntax error — fix the reported issue and save again.",
+      "description": "Call get_dashboard_guide and get_api_contract first: the guide holds the rules, the contract the routes to fetch from. Create or override a named dashboard as a content fragment: <section>s, one inline <script> and, only if needed, one short <style> for layout specific to this dashboard; no <!doctype>/<html>/<head>/<body> — the app shell provides them, plus shared classes and window.PATTY. It renders at GET /ui/:name. Upsert semantics — saving to an existing name replaces it immediately, no rebuild or restart needed. CRITICAL: the fragment must NEVER embed financial data, secrets, or tokens inline — render layout/styling only and fetch data client-side from the documented /api endpoints on load, so the dashboard is always live and safe to share. Rejected (validation error) if the content is empty, still carries a full <!doctype>/<html> document root, an external <script src> reference (the shell already loads Chart.js once — a fragment carries zero external references of its own), or an inline <script> has a syntax error — fix the reported issue and save again.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -2548,7 +2548,7 @@
           "html": {
             "type": "string",
             "maxLength": 500000,
-            "description": "Content fragment (sections + script) rendered into the app shell's #content (GET /ui) — not a full HTML page: no <!doctype>/<html>/<head>/<style> root, the shell already provides those. Must fetch data from /api on load — never embeds financial data"
+            "description": "a content fragment: <section>s, one inline <script> and, only if needed, one short <style> for layout specific to this dashboard; no <!doctype>/<html>/<head>/<body> — the app shell provides them, plus shared classes and window.PATTY. Must fetch data from /api on load — never embeds financial data"
           }
         },
         "required": [

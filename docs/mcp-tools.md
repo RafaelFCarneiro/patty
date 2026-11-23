@@ -586,10 +586,11 @@ REST mirror: `GET /api/budgets` (`list_budgets`), `GET /api/budgets/status?month
 ## save_dashboard / list_dashboards / delete_dashboard / rename_dashboard
 
 LLM-generated local dashboards over the HTTP API, rendered as **content fragments** in a shared app
-shell. A dashboard is a fragment — `<section>`s + one inline `<script>`, no
-`<!doctype>`/`<html>`/`<head>`/`<style>` — stored by name; the shell at `GET /ui`/`GET /ui/:name`
-(`ui/shell.html` + `ui/app.css` + `ui/app.js`) provides the document root, shared styling, menu, and Chart.js,
-and injects the fragment into `#content` client-side. Every dashboard carries a `source: 'inline' | 'file'`:
+shell. A dashboard is a fragment — `<section>`s, one inline `<script>` and, only if needed, one short `<style>` for
+layout specific to it; no `<!doctype>`/`<html>`/`<head>`/`<body>` — stored by name. The shell at
+`GET /ui`/`GET /ui/:name` (`ui/shell.html` + `ui/app.css` + `ui/app.js`) provides the document root, the menu,
+Chart.js, the shared classes (`.cards-grid`, `.chart-box`, `.data-table`, …) and `window.PATTY` (formatting in the
+UI language), and injects the fragment into `#content` client-side; `get_dashboard_guide` has the rest. Every dashboard carries a `source: 'inline' | 'file'`:
 `file` — a bundled default read from a git-versioned `.html` file under `ui/dashboards/`
 (`overview`, `accounts`, `cards`, `budget` and the others there — data-less, fetch-on-load),
 read-only at the install location; `inline` — DB-stored, `save_dashboard`'s only output shape. The menu

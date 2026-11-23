@@ -1,7 +1,7 @@
 import { ToolName } from '../tool-name.js';
 import { z } from 'zod';
 import { deleteDashboard, listDashboards, renameDashboard, saveDashboard } from '../../../controllers/dashboards.js';
-import { RenameDashboardSchema, SaveDashboardSchema } from '../../../models/dashboard.js';
+import { FRAGMENT_SHAPE, RenameDashboardSchema, SaveDashboardSchema } from '../../../models/dashboard.js';
 import * as dashboardAdapters from '../../../adapters/dashboards.js';
 import { defineTool } from '../definition.js';
 import { fromResult, json } from '../respond.js';
@@ -10,9 +10,7 @@ import { MUTATING, READ_ONLY } from '../annotations.js';
 const saveDashboardDescription =
   `Call ${ToolName.enum.get_dashboard_guide} and ${ToolName.enum.get_api_contract} first: the guide holds the rules, ` +
   'the contract the routes to fetch from. ' +
-  'Create or override a named dashboard: a content FRAGMENT you author (sections + an inline ' +
-  '<script>, no <!doctype>/<html>/<head>/<style> root — the app shell at GET /ui already provides ' +
-  'those and is what actually renders it, at GET /ui/:name) (ADR-013, fragment model ADR-027). ' +
+  `Create or override a named dashboard as ${FRAGMENT_SHAPE}. It renders at GET /ui/:name. ` +
   'Upsert semantics — saving to an existing name replaces it immediately, no rebuild or restart ' +
   'needed. CRITICAL: the fragment must NEVER embed financial data, secrets, or tokens inline — ' +
   'render layout/styling only and fetch data client-side from the documented /api endpoints on load, ' +

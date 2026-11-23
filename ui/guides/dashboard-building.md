@@ -2,7 +2,8 @@
 
 PATTY dashboards are data-less content **fragments** stored server-side and rendered live inside a shared
 app shell at `GET /ui/:name` (ADR-013, fragment model ADR-027). A fragment is `<section>`s + one inline
-`<script>` — no `<!doctype>`, `<html>`, `<head>`, or `<style>` root: the shell (`ui/shell.html` +
+`<script>` — no `<!doctype>`, `<html>`, `<head>` root (a short `<style>` block for layout specific to the
+dashboard is allowed, rule 10): the shell (`ui/shell.html` +
 `ui/app.css` + `ui/app.js`, served by the same PATTY HTTP server) already provides the document, shared
 styling, the menu, and Chart.js. The non-negotiable rule behind everything below: **a dashboard never
 contains data — it fetches it.** The fragment you write is layout, styling, and `fetch()` calls; every
@@ -143,12 +144,27 @@ dashboard data-less; the save endpoint won't catch a violation for you.
    comes from fetching on every load. Never inline a "data as of <time>" snapshot as if it were live — the
    only "as of" text allowed is a client-side "last updated" label set from `new Date()` at fetch time.
 9. **Accessible and responsive.** Label form controls, use semantic headings/landmarks, and keep the layout
-   usable on narrow viewports (see the baseline fragment's `.dashboard-toolbar`/`.cards-grid` classes and
-   `ui/app.css`'s `@media` breakpoint).
-10. **A fragment, not a full page.** No `<!doctype>`, `<html>`, `<head>`, `<body>`, or `<style>` — just the
-    `<section>`s and one inline `<script>`, the same shape `save_dashboard` stores and the shell injects into
-    `#content`. Shared styling lives in `ui/app.css`; reuse its existing classes (`card`, `cards-grid`,
-    `table-wrap`, `data-table`, `state`, `state-error`, `placeholder-card`, …) instead of inventing new ones.
+   usable on narrow viewports (the shell classes reflow on their own; a grid of the fragment's own uses
+   `repeat(auto-fit, minmax(min(<width>, 100%), 1fr))` or its own `@media`).
+10. **A fragment, not a full page.** No `<!doctype>`, `<html>`, `<head>` or `<body>` — just the `<section>`s,
+    one inline `<script>` and, only when needed, one short `<style>` block for layout specific to that
+    dashboard — the same shape `save_dashboard` stores and the shell injects into `#content`. Shared shapes
+    use the shell's classes (`ui/app.css`), never a re-declared copy:
+    <!-- shell-classes -->
+    `panel` (section box), `cards-grid` + `card` (+ `card-label`, `card-value`), `chart-box`,
+    `table-wrap` + `data-table`, `state` + `state-error`, `muted`, `visually-hidden`, and
+    `dashboard-header` + `header-actions` (a title row with its actions).
+    <!-- /shell-classes -->
+11. **Format with `window.PATTY`.** The shell sets the page language from the user's PATTY locale and exposes
+    `window.PATTY = { locale, baseCurrency, formatMoney, formatNumber, formatDate, formatDateTime }` (`locale`
+    is the BCP-47 tag: `en-US`, `pt-BR` or `es`; `baseCurrency` is the user's, kept current). Every displayed money amount, number and date goes through these — never
+    the page's or the browser's language, never a hard-coded `'en-US'`. `formatMoney(value, currencyCode)`
+    handles crypto precision; `formatDate` takes a `YYYY-MM-DD` day. A missing value (`null`, `undefined`,
+    `NaN`, an invalid date) renders as `—`, never as `0`: pass it through unchanged instead of defaulting it.
+12. **Charts: a `.chart-box` and `maintainAspectRatio: false`.** Put each `<canvas>` alone inside a
+    `.chart-box` (fixed height, `position: relative`) and pass `options: { maintainAspectRatio: false }`. The
+    shell already sets `Chart.defaults` (text, grid and legend colors) for the dark theme — don't override them
+    per chart.
 
 ## Overriding an existing dashboard
 
@@ -191,6 +207,9 @@ specific environment, not the general-purpose fallback.
       (no own chart-library `<script src>` — the shell already loads one).
 - [ ] Every currency-bearing section groups/loops by `currency` — nothing sums two currencies together.
 - [ ] Every section has a loading, empty, and error branch.
+- [ ] Money, numbers and dates are formatted with `window.PATTY.*`; each chart sits in a `.chart-box` with
+      `maintainAspectRatio: false`; the only classes used are the ones in rule 10 plus the fragment's own
+      `<style>` block.
 - [ ] The content is non-empty, does **NOT** start with `<!doctype html>` or have an `<html>` root (the shell
       owns that), and every inline `<script>` is syntactically valid.
 - [ ] The `patty:dashboard-manifest` comment is present, reflects the user's chosen perspectives, and
