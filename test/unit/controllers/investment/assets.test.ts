@@ -187,6 +187,11 @@ describe('the boundary refuses a bad price before any flow runs', () => {
     expect(SetAssetPriceSchema.safeParse({ asset: 'NU', price, asOf: '2026-11-18T21:00:00Z' }).success).toBe(false);
   });
 
+  it.each(['2026-11-18T18:00:00-03', '2026-11-18T18:00:00-0300'])('accepts the compact offset in %s', (asOf) => {
+    expect(SetAssetPriceSchema.safeParse({ asset: 'NU', price: 1, asOf }).success).toBe(true);
+    expect(SetAssetPricesSchema.safeParse({ prices: [{ asset: 'NU', price: 1, asOf }] }).success).toBe(true);
+  });
+
   it('an instant without an offset', () => {
     expect(SetAssetPriceSchema.safeParse({ asset: 'NU', price: 1, asOf: '2026-11-18' }).success).toBe(false);
   });
