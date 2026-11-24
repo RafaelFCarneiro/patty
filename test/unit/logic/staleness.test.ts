@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { isStale } from '../../../src/logic/staleness.js';
-import { StalenessClass } from '../../../src/models/timestamp.js';
+import { MS_PER_HOUR, StalenessClass } from '../../../src/models/timestamp.js';
 
 const { fiat_rate, crypto_rate, market_price, manual_price } = StalenessClass.enum;
 
 const WEDNESDAY_NOON = new Date('2026-08-12T12:00:00.000Z');
-const HOUR_MS = 60 * 60 * 1000;
-const hoursBefore = (hours: number, from = WEDNESDAY_NOON) => new Date(from.getTime() - hours * HOUR_MS).toISOString();
+const hoursBefore = (hours: number, from = WEDNESDAY_NOON) =>
+  new Date(from.getTime() - hours * MS_PER_HOUR).toISOString();
 
 describe('isStale', () => {
   it.each([fiat_rate, crypto_rate, market_price, manual_price])('%s: false exactly at the threshold', (kind) => {

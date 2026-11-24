@@ -1,4 +1,4 @@
-import { expandCompactOffset, MS_PER_HOUR } from '../models/timestamp.js';
+import { expandCompactOffset, HOURS_PER_DAY, MS_PER_HOUR } from '../models/timestamp.js';
 
 /** Parses any timestamp `IsoTimestamp` accepts, compact offsets (`-03`, `-0300`) included. */
 export const parse = (text: string): Date => new Date(expandCompactOffset(text));
@@ -6,7 +6,7 @@ export const parse = (text: string): Date => new Date(expandCompactOffset(text))
 /** The UTC ISO form (`YYYY-MM-DDTHH:mm:ss.sssZ`) of any accepted timestamp. */
 export const canonical = (text: string): string => parse(text).toISOString();
 
-const MS_PER_DAY = 24 * MS_PER_HOUR;
+const MS_PER_DAY = HOURS_PER_DAY * MS_PER_HOUR;
 const DAYS_PER_WEEK = 7;
 const WEEKEND_DAYS = 2;
 const MS_PER_WEEK = DAYS_PER_WEEK * MS_PER_DAY;

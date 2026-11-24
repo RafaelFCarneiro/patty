@@ -26,9 +26,7 @@ import * as timestamp from '../timestamp.js';
 import { buildBulkItems, toBulkItem as toGenericBulkItem } from '../bulk-item.js';
 import { fold } from '../resolve.js';
 import { isStale } from '../staleness.js';
-import { StalenessClass } from '../../models/timestamp.js';
-
-const HOURS_PER_DAY = 24;
+import { HOURS_PER_DAY, StalenessClass } from '../../models/timestamp.js';
 
 const PRICE_STALENESS = {
   [AssetPricingEnum.enum.market]: {

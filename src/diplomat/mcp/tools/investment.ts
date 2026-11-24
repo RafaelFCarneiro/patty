@@ -1,3 +1,4 @@
+import { WEEKDAY_HOURS_NOTE } from '../../../models/timestamp.js';
 import { ToolName } from '../tool-name.js';
 import * as accountAdapters from '../../../adapters/accounts.js';
 import * as assetAdapters from '../../../adapters/assets.js';
@@ -68,9 +69,9 @@ const listAssetsTool = defineTool({
     title: 'List assets',
     description:
       'Registered assets with their latest price, `priceAsOf`, `stale` and `noPrice`. Staleness is per pricing ' +
-      `class: market quotes after PRICE_STALE_HOURS (default ${DEFAULT_PRICE_STALE_HOURS} h of weekdays — Saturday and ` +
-      'Sunday UTC do not count, so a Friday close is still fresh on Monday; holidays are not covered), manual values ' +
-      `after MANUAL_PRICE_STALE_DAYS (default ${DEFAULT_MANUAL_PRICE_STALE_DAYS} elapsed days). ` +
+      `class: market quotes after PRICE_STALE_HOURS (default ${DEFAULT_PRICE_STALE_HOURS} h of weekdays), manual ` +
+      `values after MANUAL_PRICE_STALE_DAYS (default ${DEFAULT_MANUAL_PRICE_STALE_DAYS} elapsed days). ` +
+      `${WEEKDAY_HOURS_NOTE} ` +
       'Filter by `assetClass`, or pass `staleOnly` for the ' +
       `assets that need a fresh price. ${PRICE_SOURCING_NOTE}`,
     inputSchema: ListAssetsSchema.shape,

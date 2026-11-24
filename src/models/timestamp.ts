@@ -3,6 +3,10 @@ import { z } from 'zod';
 const strictTimestamp = z.iso.datetime({ offset: true });
 
 export const MS_PER_HOUR = 60 * 60 * 1000;
+export const HOURS_PER_DAY = 24;
+
+export const WEEKDAY_HOURS_NOTE =
+  'Weekday hours: Saturday and Sunday (UTC) do not count, so a Friday-evening quote is still fresh on Monday; holidays are not covered.';
 const COMPACT_OFFSET = /([+-]\d{2})(\d{2})?$/;
 const MINUTES_WHEN_ABSENT = '00';
 const EARLIEST_INSTANT = Date.parse('0000-01-01T00:00:00.000Z');

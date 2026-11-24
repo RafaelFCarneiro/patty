@@ -12,7 +12,7 @@ import * as timestamp from '../logic/timestamp.js';
 import { BulkSetExchangeRatesOut, type BulkExchangeRateItemOut } from '../wire/out/currency-rates.js';
 import type { CurrencyRateRow } from '../wire/db/currency-rates.js';
 
-const decodeRow = (row: CurrencyRateRow): CurrencyRateEntity =>
+export const dbToEntity = (row: CurrencyRateRow): CurrencyRateEntity =>
   CurrencyRateEntitySchema.parse({
     id: row.id,
     fromCode: row.fromCode,
@@ -22,8 +22,6 @@ const decodeRow = (row: CurrencyRateRow): CurrencyRateEntity =>
     source: row.source,
     version: row.version,
   });
-
-export const dbToEntity = (row: CurrencyRateRow): CurrencyRateEntity => decodeRow(row);
 
 // Identity: a versioned CurrencyRateEntity is already row-shaped.
 export const modelToDb = (entity: CurrencyRateEntity): CurrencyRateRow => entity;
