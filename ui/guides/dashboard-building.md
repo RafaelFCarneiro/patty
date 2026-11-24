@@ -157,7 +157,9 @@ dashboard data-less; the save endpoint won't catch a violation for you.
     `panel` (section box), `cards-grid` + `card` (+ `card-label`, `card-value`), `chart-box`,
     `table-wrap` + `data-table`, `state` + `state-error`, `muted`, `visually-hidden`, and
     `dashboard-header` + `header-actions` (a title row with its actions), `dashboard-container` (the page
-    wrapper) and `header-title-area` (the title + subtitle block of the page header).
+    wrapper) and `header-title-area` (the title + subtitle block of the page header), and the header's
+    controls: `controls-area` (a labelled group of selectors), `select-custom`, `btn-action-primary` and
+    `btn-action-secondary`.
     <!-- /shell-classes -->
 
     **Page header.** Start every dashboard with the header the bundled dashboards use (Font Awesome is loaded
@@ -170,7 +172,13 @@ dashboard data-less; the save endpoint won't catch a violation for you.
                 <h1><i class="fa-solid fa-chart-line"></i> Title</h1>
                 <p>Subtitle</p>
             </div>
-            <div class="header-actions">…</div>
+            <div class="header-actions">
+                <div class="controls-area">
+                    <label for="month-select">Month</label>
+                    <select id="month-select" class="select-custom">…</select>
+                </div>
+                <button type="button" class="btn-action-secondary">Refresh</button>
+            </div>
         </header>
         …sections…
     </div>

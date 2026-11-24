@@ -8,9 +8,17 @@ const SHELL_CLASSES = /<!-- shell-classes -->([\s\S]*?)<!-- \/shell-classes -->/
 const BACKTICKED_CLASS = /`([a-z][a-z-]*)`/g;
 const CSS_CLASS = /\.([a-z][a-z-]*)/g;
 
-// .panel predates the layer: ui/app.css holds its base and every bundled dashboard
-// adds its own padding (docs/ui.md, #164).
-const LOCALLY_EXTENDED = new Set(['panel']);
+// Classes whose base lives in ui/app.css while a bundled dashboard still declares the part that differs
+// (docs/ui.md, #164): .panel predates the layer and every dashboard adds its padding; budget.html's
+// .controls-area is wider and wraps; overview.html's .select-custom is plainer; the .btn-action-* padding,
+// radius and display differ per dashboard.
+const LOCALLY_EXTENDED = new Set([
+  'panel',
+  'controls-area',
+  'select-custom',
+  'btn-action-primary',
+  'btn-action-secondary',
+]);
 const STYLE_BLOCK = /<style[^>]*>([\s\S]*?)<\/style>/g;
 const declaresClass = (css: string, name: string) => new RegExp(`\\.${name}(?![\\w-])[^{}]*\\{`).test(css);
 
@@ -53,6 +61,10 @@ describe('dashboard guide ↔ ui/app.css', () => {
         'header-actions',
         'dashboard-container',
         'header-title-area',
+        'controls-area',
+        'select-custom',
+        'btn-action-primary',
+        'btn-action-secondary',
       ]),
     );
   });
@@ -85,8 +97,28 @@ describe('dashboard guide ↔ ui/app.css', () => {
     expect(grid).toMatch(/minmax\(min\([^,]+, 100%\), 1fr\)/);
   });
 
+  it('lets a wide table scroll inside its box and keeps card figures on one line', () => {
+    const css = read('app.css');
+    const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    expect(rule('main#content')).toMatch(/min-width:\s*0;/);
+    expect(rule('\\.card')).toMatch(/container-type:\s*inline-size;/);
+    expect(rule('\\.card-value')).not.toContain('overflow-wrap: anywhere');
+    expect(rule('\\.card-value')).toMatch(/white-space:\s*nowrap;/);
+    expect(rule('\\.card-value')).toMatch(/overflow-x:\s*auto;/);
+  });
+
+  it.each(['btn-action-primary', 'btn-action-secondary'])('makes .%s complete from the shell alone', (name) => {
+    const rule = read('app.css').match(new RegExp(`(?:^|\\n)\\.${name}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    expect(rule).toMatch(/display:\s*inline-flex;/);
+    expect(rule).toMatch(/padding:\s*0\.6rem 1\.25rem;/);
+    expect(rule).toMatch(/border-radius:\s*10px;/);
+  });
+
   it('shows a page header that uses only shell classes', () => {
     const snippet = guide.match(PAGE_HEADER_SNIPPET)?.[1] ?? '';
+    const buttons = [...snippet.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]);
+    expect(buttons.length).toBeGreaterThan(0);
+    expect(buttons.every((button) => /class="[^"]*\bbtn-action-[a-z]+/.test(button))).toBe(true);
     expect(snippet).toMatch(HEADER_SHAPE);
     const used = [...snippet.matchAll(/class="([^"]+)"/g)].flatMap((match) => (match[1] ?? '').split(/\s+/));
     const unknown = used.filter((name) => !name.startsWith('fa-') && !cssClasses.has(name));
