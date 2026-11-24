@@ -143,6 +143,9 @@ dashboard data-less; the save endpoint won't catch a violation for you.
 8. **Real-time, not cached.** The fragment is re-fetched (no-cache) every time the shell loads it; freshness
    comes from fetching on every load. Never inline a "data as of <time>" snapshot as if it were live — the
    only "as of" text allowed is a client-side "last updated" label set from `new Date()` at fetch time.
+   To flag an old quote, read the flags the API returns — never compare `asOf` dates yourself, since a fiat rate
+   or a market price ages by weekday hours: on a position or a holdings block, `priceStale` means the quote is old
+   ("cotação antiga") and `rateStale` that the exchange rate is ("câmbio antigo"); `stale` is either of them.
 9. **Accessible and responsive.** Label form controls, use semantic headings/landmarks, and keep the layout
    usable on narrow viewports (the shell classes reflow on their own; a grid of the fragment's own uses
    `repeat(auto-fit, minmax(min(<width>, 100%), 1fr))` or its own `@media`).

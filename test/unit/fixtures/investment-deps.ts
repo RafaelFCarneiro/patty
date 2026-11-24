@@ -102,7 +102,7 @@ export const investmentDeps = (world: InvestmentWorld = {}): Deps => {
     newId: () => ids.shift() ?? 'generated-id',
     locale: async () => Locale.enum.en,
     rateStaleness: { fiatHours: 24, cryptoHours: 1 },
-    priceStaleness: { marketHours: 72, manualDays: 31 },
+    priceStaleness: { marketHours: 24, manualDays: 31 },
   };
 };
 

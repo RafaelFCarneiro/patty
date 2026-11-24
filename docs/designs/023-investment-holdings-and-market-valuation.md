@@ -75,8 +75,9 @@ are `real` like amounts (ADR-026 §2; fractional shares allowed).
 
 Per position: `marketValue = qty × latestPrice` (asset currency), converted to the base currency with `convert`;
 `costBasis = qty × avgCost`; `unrealized = marketValue − costBasis`, both in asset and base currency. Every valued
-figure carries `asOf` and `stale`; prices use their own threshold `PRICE_STALE_HOURS` (default 72 h, so a Friday close
-is still fresh on Monday) and `MANUAL_PRICE_STALE_DAYS` for manual assets (default 31). **A missing price never
+figure carries `asOf` and `stale`; prices use their own threshold `PRICE_STALE_HOURS` (default 24 weekday hours — Saturday and Sunday UTC do not
+count, so a Friday close is still fresh on Monday; holidays are not covered) and `MANUAL_PRICE_STALE_DAYS` for manual
+assets (default 31 elapsed days). `stale` is `priceStale` or `rateStale`, and a position says which input is old. **A missing price never
 becomes zero:** the position is listed with quantity and cost and `value: null, noPrice: true`, and is excluded from
 totals with the exclusion listed, as `consolidateNetWorth` already does for a missing rate.
 

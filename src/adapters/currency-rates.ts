@@ -5,6 +5,7 @@ import {
   type CurrencyRateEntity,
   type CurrencyRateBulkItem,
 } from '../models/currency-rate.js';
+import { IsoTimestamp } from '../models/timestamp.js';
 import { BulkItemStatus } from '../models/bulk.js';
 import * as persistence from '../logic/persistence.js';
 import * as timestamp from '../logic/timestamp.js';
@@ -17,15 +18,12 @@ const decodeRow = (row: CurrencyRateRow): CurrencyRateEntity =>
     fromCode: row.fromCode,
     toCode: row.toCode,
     rate: row.rate,
-    asOf: row.asOf,
+    asOf: timestamp.canonical(IsoTimestamp.parse(row.asOf)),
     source: row.source,
     version: row.version,
   });
 
-export const dbToEntity = (row: CurrencyRateRow): CurrencyRateEntity => {
-  const entity = decodeRow(row);
-  return { ...entity, asOf: timestamp.canonical(entity.asOf) };
-};
+export const dbToEntity = (row: CurrencyRateRow): CurrencyRateEntity => decodeRow(row);
 
 // Identity: a versioned CurrencyRateEntity is already row-shaped.
 export const modelToDb = (entity: CurrencyRateEntity): CurrencyRateRow => entity;

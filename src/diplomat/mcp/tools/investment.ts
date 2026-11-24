@@ -68,8 +68,9 @@ const listAssetsTool = defineTool({
     title: 'List assets',
     description:
       'Registered assets with their latest price, `priceAsOf`, `stale` and `noPrice`. Staleness is per pricing ' +
-      `class: market quotes after PRICE_STALE_HOURS (default ${DEFAULT_PRICE_STALE_HOURS} h, so a Friday close is ` +
-      `still fresh on Monday), manual values after MANUAL_PRICE_STALE_DAYS (default ${DEFAULT_MANUAL_PRICE_STALE_DAYS}). ` +
+      `class: market quotes after PRICE_STALE_HOURS (default ${DEFAULT_PRICE_STALE_HOURS} h of weekdays — Saturday and ` +
+      'Sunday UTC do not count, so a Friday close is still fresh on Monday; holidays are not covered), manual values ' +
+      `after MANUAL_PRICE_STALE_DAYS (default ${DEFAULT_MANUAL_PRICE_STALE_DAYS} elapsed days). ` +
       'Filter by `assetClass`, or pass `staleOnly` for the ' +
       `assets that need a fresh price. ${PRICE_SOURCING_NOTE}`,
     inputSchema: ListAssetsSchema.shape,
@@ -181,7 +182,8 @@ const getPortfolioTool = defineTool({
     description:
       'The positions, valued at read time: quantity, average cost, latest price, market value, cost basis and ' +
       'unrealized P&L, in the asset currency and in the base currency, each with `asOf`, `stale`, `noPrice` and ' +
-      '`noRate`. A position with no price or no exchange rate is listed with null values — never 0 — and named in ' +
+      '`noRate`. `stale` is `priceStale` or `rateStale` (the price or the rate to the base currency is old), with ' +
+      '`priceAsOf` and `rateAsOf` beside them; fiat rates and market prices age by weekday hours. A position with no price or no exchange rate is listed with null values — never 0 — and named in ' +
       '`totals.excluded`. Also totals in the base currency and the allocation by asset class and by currency. ' +
       'Optionally one account by name.',
     inputSchema: GetPortfolioSchema.shape,

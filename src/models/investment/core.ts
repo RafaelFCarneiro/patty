@@ -1,17 +1,10 @@
 import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { Account, AccountEntity, PendingParts } from '../account.js';
-import {
-  AssetClass,
-  AssetPricing,
-  AssetTimestamp,
-  type Asset,
-  type AssetPrice,
-  type PriceStalenessThresholds,
-} from './asset.js';
+import { AssetClass, AssetPricing, type Asset, type AssetPrice, type PriceStalenessThresholds } from './asset.js';
 import { type CurrencyRate, type StalenessThresholds } from '../currency-rate.js';
 import { IsoDate } from '../date.js';
-import { IsoTimestamp } from '../timestamp.js';
+import { UtcTimestamp } from '../timestamp.js';
 import type { NotFound, ValidationError } from '../error.js';
 import { Id } from '../id.js';
 import { CurrencyCode, type DecimalsFor } from '../money.js';
@@ -140,7 +133,7 @@ export type ExcludedPosition = z.infer<typeof ExcludedPositionSchema>;
 export const BaseValuationSchema = z.object({
   currency: CurrencyCode.describe('The base currency these figures are expressed in'),
   rate: z.number().positive().describe('Exchange rate applied (1 when the asset already is in the base currency)'),
-  rateAsOf: IsoTimestamp.describe('When the applied rate was observed/sourced'),
+  rateAsOf: UtcTimestamp.describe('When the applied rate was observed/sourced'),
   costBasis: z.number(),
   marketValue: z.number().nullable().describe('Null when the position has no price — never 0'),
   unrealized: z.number().nullable(),
@@ -160,13 +153,16 @@ export const PositionValuationSchema = z.object({
   avgCost: z.number(),
   costBasis: z.number().describe('quantity × avgCost, in the asset currency'),
   price: z.number().nullable().describe('Latest price of one unit; null when none is on file'),
-  priceAsOf: AssetTimestamp.nullable(),
+  priceAsOf: UtcTimestamp.nullable(),
+  priceStale: z.boolean().describe('True when the price is older than its pricing class allows'),
   marketValue: z.number().nullable().describe('quantity × price in the asset currency; null with no price — never 0'),
   unrealized: z.number().nullable().describe('marketValue − costBasis in the asset currency'),
   base: BaseValuationSchema.nullable().describe('The same figures in the base currency; null with no exchange rate'),
-  asOf: IsoTimestamp.nullable().describe('The older of the price and the rate used'),
-  stale: z.boolean().describe('True when the price or the rate is older than its class allows'),
+  asOf: UtcTimestamp.nullable().describe('The older of the price and the rate used'),
+  stale: z.boolean().describe('priceStale or rateStale'),
   noPrice: z.boolean(),
+  rateAsOf: UtcTimestamp.nullable().describe('When the rate to the base currency was observed; null without a rate'),
+  rateStale: z.boolean().describe('True when the rate to the base currency is older than its class allows'),
   noRate: z.boolean(),
 });
 export type PositionValuation = z.infer<typeof PositionValuationSchema>;
@@ -176,8 +172,10 @@ export const PortfolioTotalsSchema = z.object({
   marketValue: z.number().describe('Sum of every valued position in the base currency'),
   costBasis: z.number().describe('Cost of the same positions in the base currency'),
   unrealized: z.number(),
-  stale: z.boolean().describe('True when any contributing price or rate is stale'),
-  asOf: IsoTimestamp.nullable().describe('The oldest contributing price or rate; null when nothing was valued'),
+  stale: z.boolean().describe('priceStale or rateStale'),
+  priceStale: z.boolean().describe('True when any contributing price is stale'),
+  rateStale: z.boolean().describe('True when any contributing rate is stale'),
+  asOf: UtcTimestamp.nullable().describe('The oldest contributing price or rate; null when nothing was valued'),
   excluded: z.array(ExcludedPositionSchema).describe('Positions left out of the totals, and why'),
 });
 export type PortfolioTotals = z.infer<typeof PortfolioTotalsSchema>;
@@ -210,16 +208,20 @@ export const AccountHoldingsSchema = z.object({
   holdingsValue: z.number().describe('Market value of the positions in the base currency'),
   baseCurrency: CurrencyCode,
   total: z.number().nullable().describe('Cash converted to the base currency + holdingsValue; null without a rate'),
-  stale: z.boolean().describe('True when any contributing price or rate is stale'),
-  asOf: IsoTimestamp.nullable(),
+  stale: z.boolean().describe('priceStale or rateStale'),
+  priceStale: z.boolean().describe('True when any contributing price is stale'),
+  rateStale: z.boolean().describe('True when any contributing rate (cash included) is stale'),
+  asOf: UtcTimestamp.nullable(),
   excluded: z.array(ExcludedPositionSchema).describe('Positions left out of holdingsValue, and why'),
 });
 export type AccountHoldings = z.infer<typeof AccountHoldingsSchema>;
 
 export const NetWorthHoldingsSchema = z.object({
   value: z.number().describe('Market value of the valued positions in the base currency'),
-  stale: z.boolean(),
-  asOf: IsoTimestamp.nullable(),
+  stale: z.boolean().describe('priceStale or rateStale'),
+  priceStale: z.boolean().describe('True when any contributing price is stale'),
+  rateStale: z.boolean().describe('True when any contributing rate is stale'),
+  asOf: UtcTimestamp.nullable(),
   excluded: z.array(ExcludedPositionSchema),
 });
 export type NetWorthHoldings = z.infer<typeof NetWorthHoldingsSchema>;
@@ -310,9 +312,9 @@ export type AssetFigures = Pick<PositionValuation, 'costBasis' | 'marketValue' |
 
 export type BaseFigures = { base: BaseValuation; rateStale: boolean };
 
-export type PriceReading = Pick<PositionValuation, 'price' | 'priceAsOf' | 'noPrice' | 'stale'>;
+export type PriceReading = Pick<PositionValuation, 'price' | 'priceAsOf' | 'noPrice' | 'priceStale'>;
 
-export type RateReading = Pick<PositionValuation, 'base' | 'noRate'> & { stale: boolean };
+export type RateReading = Pick<PositionValuation, 'base' | 'noRate' | 'rateAsOf' | 'rateStale'>;
 
 export type ValuedPosition = PositionValuation & { base: BaseValuation & { marketValue: number } };
 

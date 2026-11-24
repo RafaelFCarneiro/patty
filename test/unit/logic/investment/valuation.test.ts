@@ -120,6 +120,45 @@ describe('valuation.value — read-time valuation (Feature Design 023 §4)', () 
     expect(valued).toMatchObject({ stale: true, asOf: hoursBeforeNow(48) });
   });
 
+  it('says the price is old when only the price is: priceStale, not rateStale', () => {
+    const valued = valuation.value(
+      { position, account, asset: nu, price: priceOf(nu, 13, hoursBeforeNow(100)) },
+      valuationContext({ rates: [rateOf(USD, BRL, 5, FRESH)] }),
+    );
+    expect(valued).toMatchObject({ priceStale: true, rateStale: false, stale: true, rateAsOf: FRESH });
+  });
+
+  it('says the rate is old when only the rate is: rateStale, not priceStale', () => {
+    const valued = valuation.value(
+      { position, account, asset: nu, price: priceOf(nu, 13, FRESH) },
+      valuationContext({ rates: [rateOf(USD, BRL, 5, hoursBeforeNow(48))] }),
+    );
+    expect(valued).toMatchObject({
+      priceStale: false,
+      rateStale: true,
+      stale: true,
+      priceAsOf: FRESH,
+      rateAsOf: hoursBeforeNow(48),
+    });
+  });
+
+  it('reports no rate age without a rate, and the totals carry the same split', () => {
+    const noRate = valuation.value(
+      { position, account, asset: nu, price: priceOf(nu, 13, FRESH) },
+      valuationContext({ rates: [] }),
+    );
+    expect(noRate).toMatchObject({ noRate: true, rateAsOf: null, rateStale: false, priceStale: false });
+    const old = valuation.value(
+      { position, account, asset: nu, price: priceOf(nu, 13, hoursBeforeNow(100)) },
+      valuationContext({ rates: [rateOf(USD, BRL, 5, FRESH)] }),
+    );
+    expect(valuation.consolidate([old], BRL, 2).totals).toMatchObject({
+      stale: true,
+      priceStale: true,
+      rateStale: false,
+    });
+  });
+
   it('with no price the market value is null — never 0 — but the cost is still known', () => {
     const valued = valuation.value({ position, account, asset: nu, price: undefined }, valuationContext());
     expect(valued).toMatchObject({

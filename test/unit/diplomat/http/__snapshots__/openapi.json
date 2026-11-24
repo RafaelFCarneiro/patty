@@ -746,7 +746,15 @@
                               },
                               "stale": {
                                 "type": "boolean",
-                                "description": "True when any contributing price or rate is stale"
+                                "description": "priceStale or rateStale"
+                              },
+                              "priceStale": {
+                                "type": "boolean",
+                                "description": "True when any contributing price is stale"
+                              },
+                              "rateStale": {
+                                "type": "boolean",
+                                "description": "True when any contributing rate (cash included) is stale"
                               },
                               "asOf": {
                                 "type": "string",
@@ -790,6 +798,8 @@
                               "baseCurrency",
                               "total",
                               "stale",
+                              "priceStale",
+                              "rateStale",
                               "asOf",
                               "excluded"
                             ],
@@ -844,7 +854,16 @@
                               "description": "Market value of the valued positions in the base currency"
                             },
                             "stale": {
-                              "type": "boolean"
+                              "type": "boolean",
+                              "description": "priceStale or rateStale"
+                            },
+                            "priceStale": {
+                              "type": "boolean",
+                              "description": "True when any contributing price is stale"
+                            },
+                            "rateStale": {
+                              "type": "boolean",
+                              "description": "True when any contributing rate is stale"
                             },
                             "asOf": {
                               "type": "string",
@@ -884,6 +903,8 @@
                           "required": [
                             "value",
                             "stale",
+                            "priceStale",
+                            "rateStale",
                             "asOf",
                             "excluded"
                           ],
@@ -11974,7 +11995,7 @@
                       "asOf": {
                         "type": "string",
                         "format": "date-time",
-                        "description": "ISO 8601 timestamp this rate was observed/sourced"
+                        "description": "UTC timestamp this rate was observed/sourced"
                       },
                       "source": {
                         "type": "string",
@@ -12098,7 +12119,7 @@
                     "asOf": {
                       "type": "string",
                       "format": "date-time",
-                      "description": "ISO 8601 timestamp this rate was observed/sourced"
+                      "description": "UTC timestamp this rate was observed/sourced"
                     },
                     "source": {
                       "type": "string",
@@ -12325,7 +12346,7 @@
                                   "asOf": {
                                     "type": "string",
                                     "format": "date-time",
-                                    "description": "ISO 8601 timestamp this rate was observed/sourced"
+                                    "description": "UTC timestamp this rate was observed/sourced"
                                   },
                                   "source": {
                                     "type": "string",
@@ -17935,6 +17956,10 @@
                             "nullable": true,
                             "format": "date-time"
                           },
+                          "priceStale": {
+                            "type": "boolean",
+                            "description": "True when the price is older than its pricing class allows"
+                          },
                           "marketValue": {
                             "type": "number",
                             "nullable": true,
@@ -18003,10 +18028,20 @@
                           },
                           "stale": {
                             "type": "boolean",
-                            "description": "True when the price or the rate is older than its class allows"
+                            "description": "priceStale or rateStale"
                           },
                           "noPrice": {
                             "type": "boolean"
+                          },
+                          "rateAsOf": {
+                            "type": "string",
+                            "nullable": true,
+                            "format": "date-time",
+                            "description": "When the rate to the base currency was observed; null without a rate"
+                          },
+                          "rateStale": {
+                            "type": "boolean",
+                            "description": "True when the rate to the base currency is older than its class allows"
                           },
                           "noRate": {
                             "type": "boolean"
@@ -18026,12 +18061,15 @@
                           "costBasis",
                           "price",
                           "priceAsOf",
+                          "priceStale",
                           "marketValue",
                           "unrealized",
                           "base",
                           "asOf",
                           "stale",
                           "noPrice",
+                          "rateAsOf",
+                          "rateStale",
                           "noRate"
                         ]
                       }
@@ -18063,7 +18101,15 @@
                         },
                         "stale": {
                           "type": "boolean",
-                          "description": "True when any contributing price or rate is stale"
+                          "description": "priceStale or rateStale"
+                        },
+                        "priceStale": {
+                          "type": "boolean",
+                          "description": "True when any contributing price is stale"
+                        },
+                        "rateStale": {
+                          "type": "boolean",
+                          "description": "True when any contributing rate is stale"
                         },
                         "asOf": {
                           "type": "string",
@@ -18108,6 +18154,8 @@
                         "costBasis",
                         "unrealized",
                         "stale",
+                        "priceStale",
+                        "rateStale",
                         "asOf",
                         "excluded"
                       ]

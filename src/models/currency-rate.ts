@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
-import { IsoTimestamp } from './timestamp.js';
+import { IsoTimestamp, UtcTimestamp } from './timestamp.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { ValidationError } from './error.js';
 
@@ -26,7 +26,7 @@ export const CurrencyRateSchema = z.object({
   fromCode: CurrencyCode.describe('Base currency — 1 unit of this equals `rate` units of toCode'),
   toCode: CurrencyCode.describe('Quote currency — the unit `rate` is expressed in'),
   rate: z.number().positive().describe('1 unit of fromCode = `rate` units of toCode, as of `asOf`'),
-  asOf: IsoTimestamp.describe('ISO 8601 timestamp this rate was observed/sourced (agent-supplied)'),
+  asOf: UtcTimestamp.describe('UTC timestamp this rate was observed/sourced'),
   source: z
     .string()
     .min(1)
@@ -46,7 +46,7 @@ export const CurrencyRateViewSchema = z.object({
   from: CurrencyCode.describe('Base currency'),
   to: CurrencyCode.describe('Quote currency'),
   rate: z.number().positive().describe('1 unit of `from` = `rate` units of `to`, as of `asOf`'),
-  asOf: IsoTimestamp.describe('ISO 8601 timestamp this rate was observed/sourced'),
+  asOf: UtcTimestamp.describe('UTC timestamp this rate was observed/sourced'),
   source: z.string().min(1).optional().describe('Free-text provenance, e.g. "PTAX", "coingecko"'),
 });
 export type CurrencyRateView = z.infer<typeof CurrencyRateViewSchema>;
@@ -57,7 +57,7 @@ export const ConvertedValueSchema = z.object({
   baseCurrency: CurrencyCode.describe('The currency this value is expressed in'),
   value: z.number().describe('Amount converted to baseCurrency, rounded to its own decimals'),
   rate: z.number().positive().describe('Exchange rate applied (1 when the source currency already is baseCurrency)'),
-  asOf: IsoTimestamp.describe('When the applied rate was observed/sourced'),
+  asOf: UtcTimestamp.describe('When the applied rate was observed/sourced'),
   stale: z.boolean().describe('True when the rate is older than its class staleness threshold'),
 });
 export type ConvertedValue = z.infer<typeof ConvertedValueSchema>;
@@ -81,7 +81,7 @@ export const ConvertedTotalSchema = z.object({
   displayCurrency: CurrencyCode.describe('Currency the grand total is expressed in'),
   total: z.number().describe('Sum of every convertible per-currency amount, rounded to displayCurrency decimals'),
   stale: z.boolean().describe('True when any contributing rate is older than its class staleness threshold'),
-  asOf: IsoTimestamp.nullable().describe('Oldest contributing rate timestamp, or null when nothing was converted'),
+  asOf: UtcTimestamp.nullable().describe('Oldest contributing rate timestamp, or null when nothing was converted'),
   excluded: z.array(ExcludedCurrencySchema).describe('Currencies with no rate to displayCurrency, left out of total'),
 });
 export type ConvertedTotal = z.infer<typeof ConvertedTotalSchema>;
@@ -103,8 +103,6 @@ export type CurrencyRateBulkItem<E = unknown> =
 export const CRYPTO_CURRENCIES: ReadonlySet<CurrencyCode> = new Set([CurrencyCode.enum.USDC, CurrencyCode.enum.BTC]);
 
 export type StalenessThresholds = { fiatHours: number; cryptoHours: number };
-
-export const MS_PER_HOUR = 60 * 60 * 1000;
 
 export type ConversionResult = {
   value: number | null;

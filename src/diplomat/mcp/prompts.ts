@@ -93,7 +93,8 @@ export const importStatementPromptText = (source: ImportStatementSource | undefi
 
 export const refreshQuotesPromptText = (): string =>
   `You are refreshing the user's quotes and exchange rates. Call ${T.get_portfolio} first and keep what it returns ` +
-  `(per position: quantity, price, the base-currency value and rate) as the "before". Then call ${T.list_assets} with ` +
+  `(per position: quantity, price, the base-currency value and rate) as the "before"; each position says which input ` +
+  `is old: priceStale (the quote) or rateStale (the exchange rate). Then call ${T.list_assets} with ` +
   `staleOnly true: those are the assets whose price is missing or stale. The FX pairs you need are one rate, from ` +
   `the currency to the base currency, for each distinct currency other than the base among the held positions ` +
   `(the portfolio's position currencies) AND among every account: call ${T.get_account_balances} and take the ` +
@@ -104,7 +105,8 @@ export const refreshQuotesPromptText = (): string =>
   `Prices and rates are market data: never record a change as income or an expense. Then call ${T.get_portfolio} ` +
   'again as the "after" and report, in prose: the portfolio total before and after; per position the change split ' +
   'into the price effect qty·(p1−p0)·fx0 and the FX effect qty·p1·(fx1−fx0), where p is the price in the asset ' +
-  'currency and fx the rate to the base currency; and anything still stale, without a price or without a rate. ' +
+  'currency and fx the rate to the base currency; and anything still stale, saying which input is old from priceStale (the quote) and rateStale (the exchange ' +
+  'rate) instead of comparing dates, without a price or without a rate. ' +
   `${CURRENCY_RULE}`;
 
 const periodPrompt =

@@ -318,7 +318,7 @@ describe('updateAccount — functional core (ADR-021 phase 3a)', () => {
 });
 
 describe('getAccountBalances — valuation (ADR-026 Phase 3, controller-orchestrated per ADR-028)', () => {
-  const NOW = new Date('2026-08-10T12:00:00.000Z');
+  const NOW = new Date('2026-08-12T12:00:00.000Z');
   const ZERO_PARTS = { income: 0, expenses: 0, transfersIn: 0, transfersOut: 0 };
   const CURRENCIES: Currency[] = [
     { code: CurrencyCode.enum.BRL, symbol: 'R$', name: 'Real', decimals: 2 },

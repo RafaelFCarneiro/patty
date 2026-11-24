@@ -67,7 +67,7 @@ export const olderOf = (instants: readonly (string | null)[]): string | null =>
     R.firstBy((instant) => timestamp.parse(instant).getTime()),
   ) ?? null;
 
-const NO_PRICE: PriceReading = { price: null, priceAsOf: null, noPrice: true, stale: false };
+const NO_PRICE: PriceReading = { price: null, priceAsOf: null, noPrice: true, priceStale: false };
 
 const readPrice = ({ asset, price }: PositionFacts, context: ValuationContext): PriceReading =>
   price
@@ -75,14 +75,16 @@ const readPrice = ({ asset, price }: PositionFacts, context: ValuationContext): 
         price: price.price,
         priceAsOf: price.asOf,
         noPrice: false,
-        stale: assetRules.isPriceStale(asset.pricing, price.asOf, context.now, context.priceThresholds),
+        priceStale: assetRules.isPriceStale(asset.pricing, price.asOf, context.now, context.priceThresholds),
       }
     : NO_PRICE;
 
-const NO_RATE: RateReading = { base: null, noRate: true, stale: false };
+const NO_RATE: RateReading = { base: null, noRate: true, rateAsOf: null, rateStale: false };
 
 const readRate = (converted: BaseFigures | null): RateReading =>
-  converted ? { base: converted.base, noRate: false, stale: converted.rateStale } : NO_RATE;
+  converted
+    ? { base: converted.base, noRate: false, rateAsOf: converted.base.rateAsOf, rateStale: converted.rateStale }
+    : NO_RATE;
 
 const identityOf = ({ position, account, asset }: PositionFacts) => ({
   accountId: account.id,
@@ -106,11 +108,14 @@ export const value = (facts: PositionFacts, context: ValuationContext): Position
     ...figures,
     price: priceReading.price,
     priceAsOf: priceReading.priceAsOf,
+    priceStale: priceReading.priceStale,
     noPrice: priceReading.noPrice,
     base: rateReading.base,
+    rateAsOf: rateReading.rateAsOf,
+    rateStale: rateReading.rateStale,
     noRate: rateReading.noRate,
-    asOf: olderOf([priceReading.priceAsOf, rateReading.base?.rateAsOf ?? null]),
-    stale: priceReading.stale || rateReading.stale,
+    asOf: olderOf([priceReading.priceAsOf, rateReading.rateAsOf]),
+    stale: priceReading.priceStale || rateReading.rateStale,
   };
 };
 
@@ -160,6 +165,8 @@ const totalsOf = (valued: readonly ValuedPosition[], left: readonly PositionValu
     costBasis,
     unrealized: roundToDecimals(marketValue - costBasis, base.decimals),
     stale: valued.some((v) => v.stale),
+    priceStale: valued.some((v) => v.priceStale),
+    rateStale: valued.some((v) => v.rateStale),
     asOf: olderOf(valued.map((v) => v.asOf)),
     excluded: R.map(left, exclusionOf),
   } satisfies PortfolioTotals;
