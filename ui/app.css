@@ -143,6 +143,9 @@ main#content {
 }
 
 .dashboard-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
   max-width: 100% !important;
   margin: 0 !important;
 }
