@@ -10,9 +10,15 @@ const CSS_CLASS = /\.([a-z][a-z-]*)/g;
 
 // .panel predates the layer: ui/app.css holds its base and every bundled dashboard
 // adds its own padding (docs/ui.md, #164).
-const LOCALLY_EXTENDED = new Set(['panel']);
+const LOCALLY_EXTENDED = new Set(['panel', 'dashboard-container']);
 const STYLE_BLOCK = /<style[^>]*>([\s\S]*?)<\/style>/g;
 const declaresClass = (css: string, name: string) => new RegExp(`\\.${name}(?![\\w-])[^{}]*\\{`).test(css);
+
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+const PAGE_HEADER_SNIPPET = /```html\n\s*(<div class="dashboard-container"><header>[\s\S]*?)```/;
+const HEADER_SHAPE =
+  /<header>\s*<div class="header-title-area">\s*<h1><i class="fa-solid fa-[a-z-]+"><\/i>[\s\S]*?<\/h1>\s*<p[^>]*>[\s\S]*?<\/p>\s*<\/div>/;
+const bundled = readdirSync(fileURLToPath(new URL('../../../ui/dashboards/', import.meta.url)));
 
 const names = (text: string, pattern: RegExp) =>
   new Set([...text.matchAll(pattern)].flatMap((match) => (match[1] ? [match[1]] : [])));
@@ -43,6 +49,8 @@ describe('dashboard guide ↔ ui/app.css', () => {
         'visually-hidden',
         'dashboard-header',
         'header-actions',
+        'dashboard-container',
+        'header-title-area',
       ]),
     );
   });
@@ -73,6 +81,19 @@ describe('dashboard guide ↔ ui/app.css', () => {
   it('keeps the card grid from forcing a minimum wider than its container', () => {
     const grid = read('app.css').match(/\.cards-grid\s*\{[^}]*\}/)?.[0] ?? '';
     expect(grid).toMatch(/minmax\(min\([^,]+, 100%\), 1fr\)/);
+  });
+
+  it('shows a page header that uses only shell classes', () => {
+    const snippet = guide.match(PAGE_HEADER_SNIPPET)?.[1] ?? '';
+    expect(snippet).toMatch(HEADER_SHAPE);
+    const used = [...snippet.matchAll(/class="([^"]+)"/g)].flatMap((match) => (match[1] ?? '').split(/\s+/));
+    const unknown = used.filter((name) => !name.startsWith('fa-') && name !== 'fa-solid' && !cssClasses.has(name));
+    expect(unknown).toEqual([]);
+  });
+
+  it.each(bundled)('opens %s with the guide’s page header', (file) => {
+    const body = read(`dashboards/${file}`).replace(STYLE_BLOCK, '').replace(HTML_COMMENT, '').trim();
+    expect(body).toMatch(new RegExp(`^(?:<div class="dashboard-container">\\s*)?${HEADER_SHAPE.source}`));
   });
 
   it('sends formatting through window.PATTY', () => {

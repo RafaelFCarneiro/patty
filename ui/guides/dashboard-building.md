@@ -156,8 +156,17 @@ dashboard data-less; the save endpoint won't catch a violation for you.
     <!-- shell-classes -->
     `panel` (section box), `cards-grid` + `card` (+ `card-label`, `card-value`), `chart-box`,
     `table-wrap` + `data-table`, `state` + `state-error`, `muted`, `visually-hidden`, and
-    `dashboard-header` + `header-actions` (a title row with its actions).
+    `dashboard-header` + `header-actions` (a title row with its actions), `dashboard-container` (the page
+    wrapper) and `header-title-area` (the title + subtitle block of the page header).
     <!-- /shell-classes -->
+
+    **Page header.** Start every dashboard with the header the bundled dashboards use (Font Awesome is loaded
+    by the shell, so `fa-solid fa-…` icons work without any reference of your own):
+
+    ```html
+    <div class="dashboard-container"><header><div class="header-title-area"><h1><i class="fa-solid fa-chart-line"></i> Title</h1><p>Subtitle</p></div><div class="header-actions">…</div></header>
+    …sections…</div>
+    ```
 11. **Format with `window.PATTY`.** The shell sets the page language from the user's PATTY locale and exposes
     `window.PATTY = { locale, baseCurrency, formatMoney, formatNumber, formatDate, formatDateTime }` (`locale`
     is the BCP-47 tag: `en-US`, `pt-BR` or `es`; `baseCurrency` is the user's, kept current). Every displayed money amount, number and date goes through these — never

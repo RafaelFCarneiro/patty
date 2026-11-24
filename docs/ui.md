@@ -223,7 +223,11 @@ every guide class against `ui/app.css`):
 - **Classes** (`ui/app.css`, "Fragment component layer"): `.panel` (section box), `.cards-grid` + `.card` with
   `.card-label`/`.card-value`, `.chart-box` (fixed height, `position: relative`), `.table-wrap` + `.data-table`,
   `.state` + `.state-error`, `.muted`, `.visually-hidden`, `.dashboard-header` + `.header-actions` (title row with
-  actions). Layout specific to one dashboard goes in a short `<style>` block in the fragment. The bundled
+  actions), `.dashboard-container` (page wrapper) and `.header-title-area` (title + subtitle block). Every
+  fragment opens with the same page header, which the guide shows and a test pins against the bundled
+  dashboards: `<div class="dashboard-container"><header><div class="header-title-area"><h1><i class="fa-solid
+  fa-…"></i> Title</h1><p>Subtitle</p></div><div class="header-actions">…</div></header>…</div>` (the
+  wrapper is optional; Font Awesome comes from the shell). Layout specific to one dashboard goes in a short `<style>` block in the fragment. The bundled
   dashboards keep their own `<style>` blocks and never declare a selector for one of these classes, except
   `.panel`, whose base predates the layer and which each bundled dashboard extends locally (a test pins it;
   `pending.html`'s own chart wrapper is `.pending-chart`).
