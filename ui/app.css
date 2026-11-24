@@ -878,6 +878,7 @@ body[data-instance-kind='demo'] .sidebar {
   font-size: clamp(1.1rem, 11cqi, 1.6rem);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+  overflow-x: auto;
   white-space: nowrap;
 }
 

@@ -242,7 +242,8 @@ every guide class against `ui/app.css`):
 - **Overflow**: `main#content` has `min-width: 0`, so a wide table scrolls inside its `.table-wrap` instead of
   stretching the page. `.card` is an inline-size container and `.card-value` is sized to it
   (`clamp(1.1rem, 11cqi, 1.6rem)`, `white-space: nowrap`, tabular numerals), so a figure shrinks and never
-  wraps.
+  wraps; one still too long for a very narrow card scrolls sideways (`overflow-x: auto`) so every digit stays
+  reachable.
 - **Language**: once `/api/status` answers, the shell sets `<html lang>` to the BCP-47 tag of the resolved UI
   locale (`pt` → `pt-BR`, `es` → `es`, `en` → `en-US`; `en-US` if the call fails) and
   `window.PATTY = { locale, baseCurrency, formatMoney, formatNumber, formatDate, formatDateTime }`, all `Intl`

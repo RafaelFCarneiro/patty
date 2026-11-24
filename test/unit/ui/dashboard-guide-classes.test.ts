@@ -104,6 +104,7 @@ describe('dashboard guide ↔ ui/app.css', () => {
     expect(rule('\\.card')).toMatch(/container-type:\s*inline-size;/);
     expect(rule('\\.card-value')).not.toContain('overflow-wrap: anywhere');
     expect(rule('\\.card-value')).toMatch(/white-space:\s*nowrap;/);
+    expect(rule('\\.card-value')).toMatch(/overflow-x:\s*auto;/);
   });
 
   it.each(['btn-action-primary', 'btn-action-secondary'])('makes .%s complete from the shell alone', (name) => {
