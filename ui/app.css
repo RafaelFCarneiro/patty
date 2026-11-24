@@ -131,6 +131,7 @@ body {
 
 main#content {
   flex: 1;
+  min-width: 0;
   margin-left: 70px;
   padding: 2rem;
   max-width: 1400px;
@@ -451,6 +452,71 @@ header,
   font-weight: 600;
   gap: 0.5rem;
   padding: 0.6rem 1.25rem;
+}
+
+/* Header controls: the date selectors and actions every dashboard puts in its page header. A fragment
+   extends them locally only for what differs (budget.html's .controls-area is wider and wraps). */
+.controls-area {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  padding: 0.5rem 1rem;
+  border-radius: 14px;
+  backdrop-filter: blur(12px);
+}
+
+.controls-area label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.select-custom,
+.select-native {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  color: var(--text-main);
+  padding: 0.5rem 1.5rem 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-family: var(--font-family);
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: var(--transition-smooth);
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+}
+
+.select-custom:focus,
+.select-native:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-glow);
+}
+
+/* Shared look only: padding, radius, display and width differ per fragment and stay local. */
+.btn-action-secondary {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--text-main);
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-weight: 600;
+  gap: 0.5rem;
+  justify-content: center;
+  transition: var(--transition-smooth);
+}
+
+.btn-action-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 /* Consolidated net worth badge (ADR-026 Phase 3) — accounts.html and overview.html declare
@@ -801,6 +867,7 @@ body[data-instance-kind='demo'] .sidebar {
   gap: 0.5rem;
   min-width: 0;
   padding: 1.25rem 1.5rem;
+  container-type: inline-size;
 }
 
 .card-label {
@@ -811,9 +878,10 @@ body[data-instance-kind='demo'] .sidebar {
 
 .card-value {
   color: var(--text-main);
-  font-size: clamp(1.2rem, 4vw, 1.6rem);
+  font-size: clamp(1.1rem, 11cqi, 1.6rem);
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .chart-box {

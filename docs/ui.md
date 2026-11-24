@@ -230,8 +230,18 @@ every guide class against `ui/app.css`):
   Awesome comes from the shell). Only `overview`, `tags`, `categories` and `dashboards` open on the bare
   `<header>` without the wrapper (their spacing comes from their own margins); a test names them. Layout specific to one dashboard goes in a short `<style>` block in the fragment. The bundled
   dashboards keep their own `<style>` blocks and never declare a selector for one of these classes, except
-  `.panel`, whose base predates the layer and which each bundled dashboard extends locally (a test pins it;
-  `pending.html`'s own chart wrapper is `.pending-chart`).
+  the ones a test lists as locally extended (`LOCALLY_EXTENDED`): `.panel`, whose base predates the layer;
+  `.controls-area`, which `budget.html` widens and wraps; `.select-custom`, which `overview.html` styles more
+  plainly; and `.btn-action-primary`/`.btn-action-secondary`, whose padding, radius and display differ per
+  fragment (`pending.html`'s own chart wrapper is `.pending-chart`).
+- **Header controls**: `.controls-area` (a labelled group of selectors: panel background, border, 14px radius),
+  `.select-custom` (also `.select-native`), `.btn-action-primary` and `.btn-action-secondary`. The header's
+  `.header-actions` holds a `.controls-area` with a `<label>` and its controls, and buttons carry a
+  `btn-action-*` class — a bare `<button>` renders as the browser default.
+- **Overflow**: `main#content` has `min-width: 0`, so a wide table scrolls inside its `.table-wrap` instead of
+  stretching the page. `.card` is an inline-size container and `.card-value` is sized to it
+  (`clamp(1.1rem, 11cqi, 1.6rem)`, `white-space: nowrap`, tabular numerals), so a figure shrinks and never
+  wraps.
 - **Language**: once `/api/status` answers, the shell sets `<html lang>` to the BCP-47 tag of the resolved UI
   locale (`pt` → `pt-BR`, `es` → `es`, `en` → `en-US`; `en-US` if the call fails) and
   `window.PATTY = { locale, baseCurrency, formatMoney, formatNumber, formatDate, formatDateTime }`, all `Intl`
