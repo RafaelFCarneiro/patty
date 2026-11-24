@@ -102,6 +102,9 @@ export type CurrencyRateBulkItem<E = unknown> =
 
 export const CRYPTO_CURRENCIES: ReadonlySet<CurrencyCode> = new Set([CurrencyCode.enum.USDC, CurrencyCode.enum.BTC]);
 
+export const DEFAULT_FIAT_RATE_STALE_HOURS = 24;
+export const DEFAULT_CRYPTO_RATE_STALE_HOURS = 1;
+
 export type StalenessThresholds = { fiatHours: number; cryptoHours: number };
 
 export type ConversionResult = {

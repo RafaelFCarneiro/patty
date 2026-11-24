@@ -1428,7 +1428,7 @@
     {
       "name": "list_exchange_rates",
       "title": "List exchange rates",
-      "description": "All stored exchange rates, each with its own `asOf`. Staleness is not evaluated here — this is the raw cached table (ADR-026); use it to decide which pairs need refreshing: a fiat rate is stale after 24 weekday hours, a crypto rate after 1 elapsed hour. Weekday hours: Saturday and Sunday (UTC) do not count, so a Friday-evening quote is still fresh on Monday; holidays are not covered.",
+      "description": "All stored exchange rates, each with its own `asOf`. Staleness is not evaluated here — this is the raw cached table (ADR-026); use it to decide which pairs need refreshing: a fiat rate is stale after FIAT_RATE_STALE_HOURS (default 24 weekday hours), a crypto rate after CRYPTO_RATE_STALE_HOURS (default 1 elapsed hour). Weekday hours: Saturday and Sunday (UTC) do not count, so a Friday-evening quote is still fresh on Monday; holidays are not covered.",
       "inputSchema": {
         "type": "object",
         "properties": {},

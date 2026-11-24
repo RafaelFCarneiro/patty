@@ -47,7 +47,10 @@ export const isPriceStale = (
   asOf: string,
   now: Date,
   thresholds: PriceStalenessThresholds,
-): boolean => isStale(PRICE_STALENESS[pricing].kind, asOf, now, PRICE_STALENESS[pricing].hours(thresholds));
+): boolean => {
+  const { kind, hours } = PRICE_STALENESS[pricing];
+  return isStale(kind, asOf, now, hours(thresholds));
+};
 
 export const label = (asset: Pick<Asset, 'symbol' | 'exchange'>): string =>
   `${asset.exchange}${EXCHANGE_SEPARATOR}${asset.symbol}`;

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const strictTimestamp = z.iso.datetime({ offset: true });
+const utcTimestamp = z.iso.datetime();
 
 export const MS_PER_HOUR = 60 * 60 * 1000;
 export const HOURS_PER_DAY = 24;
@@ -33,9 +34,9 @@ export const IsoTimestamp = z
     error: 'Invalid datetime',
   });
 
-/** The strict canonical form PATTY serves: a full ISO 8601 timestamp with an offset (what `logic/timestamp.canonical`
- *  produces). Every stored or returned `asOf` uses it; `IsoTimestamp` stays for inputs. */
-export const UtcTimestamp = strictTimestamp;
+/** The form PATTY serves: an ISO 8601 UTC timestamp ending in `Z` (what `logic/timestamp.canonical` produces), never
+ *  another offset. Every stored or returned `asOf` uses it; `IsoTimestamp` stays for inputs. */
+export const UtcTimestamp = utcTimestamp;
 
 /** What a quote's age is measured in: weekday hours for what only trades on weekdays, elapsed hours otherwise. */
 export const StalenessClass = z.enum(['fiat_rate', 'crypto_rate', 'market_price', 'manual_price']);
