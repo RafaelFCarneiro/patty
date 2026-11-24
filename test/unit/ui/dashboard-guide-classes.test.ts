@@ -9,9 +9,8 @@ const BACKTICKED_CLASS = /`([a-z][a-z-]*)`/g;
 const CSS_CLASS = /\.([a-z][a-z-]*)/g;
 
 // .panel predates the layer: ui/app.css holds its base and every bundled dashboard
-// adds its own padding (docs/ui.md, #164). .dashboard-container is redefined by each
-// bundled dashboard; app.css forces its width and margin.
-const LOCALLY_EXTENDED = new Set(['panel', 'dashboard-container']);
+// adds its own padding (docs/ui.md, #164).
+const LOCALLY_EXTENDED = new Set(['panel']);
 const STYLE_BLOCK = /<style[^>]*>([\s\S]*?)<\/style>/g;
 const declaresClass = (css: string, name: string) => new RegExp(`\\.${name}(?![\\w-])[^{}]*\\{`).test(css);
 
@@ -19,6 +18,8 @@ const HTML_COMMENT = /<!--[\s\S]*?-->/g;
 const PAGE_HEADER_SNIPPET = /```html\n\s*(<div class="dashboard-container">\s*<header>[\s\S]*?)```/;
 const HEADER_SHAPE =
   /<header>\s*<div class="header-title-area">\s*<h1><i class="fa-solid fa-[a-z-]+"><\/i>[\s\S]*?<\/h1>\s*<p[^>]*>[\s\S]*?<\/p>\s*<\/div>/;
+// These open on the bare <header>; their spacing comes from their own margins.
+const WITHOUT_WRAPPER = new Set(['overview.html', 'tags.html', 'categories.html', 'dashboards.html']);
 const bundled = readdirSync(fileURLToPath(new URL('../../../ui/dashboards/', import.meta.url)));
 
 const names = (text: string, pattern: RegExp) =>
@@ -94,7 +95,8 @@ describe('dashboard guide ↔ ui/app.css', () => {
 
   it.each(bundled)('opens %s with the guide’s page header', (file) => {
     const body = read(`dashboards/${file}`).replace(STYLE_BLOCK, '').replace(HTML_COMMENT, '').trim();
-    expect(body).toMatch(new RegExp(`^<div class="dashboard-container">\\s*${HEADER_SHAPE.source}`));
+    const wrapper = WITHOUT_WRAPPER.has(file) ? '' : '<div class="dashboard-container">\\s*';
+    expect(body).toMatch(new RegExp(`^${wrapper}${HEADER_SHAPE.source}`));
   });
 
   it('sends formatting through window.PATTY', () => {

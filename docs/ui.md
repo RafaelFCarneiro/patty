@@ -223,14 +223,14 @@ every guide class against `ui/app.css`):
 - **Classes** (`ui/app.css`, "Fragment component layer"): `.panel` (section box), `.cards-grid` + `.card` with
   `.card-label`/`.card-value`, `.chart-box` (fixed height, `position: relative`), `.table-wrap` + `.data-table`,
   `.state` + `.state-error`, `.muted`, `.visually-hidden`, `.dashboard-header` + `.header-actions` (title row with
-  actions), `.dashboard-container` (page wrapper) and `.header-title-area` (title + subtitle block). Every
+  actions), `.dashboard-container` (page wrapper with the shell's column layout: flex, column, 1.5rem gap) and `.header-title-area` (title + subtitle block). Every
   fragment opens with the same page header, which the guide shows and a test pins against the bundled
   dashboards: `<div class="dashboard-container"><header><div class="header-title-area"><h1><i class="fa-solid
   fa-…"></i> Title</h1><p>Subtitle</p></div><div class="header-actions">…</div></header>…</div>` (Font
-  Awesome comes from the shell). Layout specific to one dashboard goes in a short `<style>` block in the fragment. The bundled
+  Awesome comes from the shell). Only `overview`, `tags`, `categories` and `dashboards` open on the bare
+  `<header>` without the wrapper (their spacing comes from their own margins); a test names them. Layout specific to one dashboard goes in a short `<style>` block in the fragment. The bundled
   dashboards keep their own `<style>` blocks and never declare a selector for one of these classes, except
-  `.panel` (its base predates the layer) and `.dashboard-container` (app.css forces its width and margin), which
-  each bundled dashboard extends locally (a test pins it;
+  `.panel`, whose base predates the layer and which each bundled dashboard extends locally (a test pins it;
   `pending.html`'s own chart wrapper is `.pending-chart`).
 - **Language**: once `/api/status` answers, the shell sets `<html lang>` to the BCP-47 tag of the resolved UI
   locale (`pt` → `pt-BR`, `es` → `es`, `en` → `en-US`; `en-US` if the call fails) and
