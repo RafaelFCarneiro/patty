@@ -1,4 +1,12 @@
 <style>
+.dashboard-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
 /* Tooltip styling */
         .sidebar-menu a[data-tooltip]::after {
             content: attr(data-tooltip);
@@ -3411,6 +3419,7 @@
         }
 </style>
 
+<div class="dashboard-container">
 <header>
             <div class="header-title-area">
                 <h1><i class="fa-solid fa-tags"></i> Árvore de Categorias</h1>
@@ -3492,6 +3501,8 @@
         </section>
 
         <div class="toast-container" id="toast-container"></div>
+
+</div>
 
 <script>
 // State

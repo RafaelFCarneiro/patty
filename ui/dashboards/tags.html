@@ -1,4 +1,12 @@
 <style>
+.dashboard-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
 /* Dashboard Panel Containers (base: ui/app.css, #164) */
         .panel {
             backdrop-filter: blur(20px);
@@ -352,6 +360,7 @@
         }
 </style>
 
+<div class="dashboard-container">
 <header>
             <div class="header-title-area">
                 <h1><i class="fa-solid fa-tag"></i> <span data-i18n="tags_title">Gerenciar Tags</span></h1>
@@ -396,6 +405,8 @@
         </section>
 
         <div class="toast-container" id="toast-container"></div>
+
+</div>
 
 <script>
 // State variables

@@ -226,10 +226,11 @@ every guide class against `ui/app.css`):
   actions), `.dashboard-container` (page wrapper) and `.header-title-area` (title + subtitle block). Every
   fragment opens with the same page header, which the guide shows and a test pins against the bundled
   dashboards: `<div class="dashboard-container"><header><div class="header-title-area"><h1><i class="fa-solid
-  fa-…"></i> Title</h1><p>Subtitle</p></div><div class="header-actions">…</div></header>…</div>` (the
-  wrapper is optional; Font Awesome comes from the shell). Layout specific to one dashboard goes in a short `<style>` block in the fragment. The bundled
+  fa-…"></i> Title</h1><p>Subtitle</p></div><div class="header-actions">…</div></header>…</div>` (Font
+  Awesome comes from the shell). Layout specific to one dashboard goes in a short `<style>` block in the fragment. The bundled
   dashboards keep their own `<style>` blocks and never declare a selector for one of these classes, except
-  `.panel`, whose base predates the layer and which each bundled dashboard extends locally (a test pins it;
+  `.panel` (its base predates the layer) and `.dashboard-container` (app.css forces its width and margin), which
+  each bundled dashboard extends locally (a test pins it;
   `pending.html`'s own chart wrapper is `.pending-chart`).
 - **Language**: once `/api/status` answers, the shell sets `<html lang>` to the BCP-47 tag of the resolved UI
   locale (`pt` → `pt-BR`, `es` → `es`, `en` → `en-US`; `en-US` if the call fails) and

@@ -164,8 +164,16 @@ dashboard data-less; the save endpoint won't catch a violation for you.
     by the shell, so `fa-solid fa-…` icons work without any reference of your own):
 
     ```html
-    <div class="dashboard-container"><header><div class="header-title-area"><h1><i class="fa-solid fa-chart-line"></i> Title</h1><p>Subtitle</p></div><div class="header-actions">…</div></header>
-    …sections…</div>
+    <div class="dashboard-container">
+        <header>
+            <div class="header-title-area">
+                <h1><i class="fa-solid fa-chart-line"></i> Title</h1>
+                <p>Subtitle</p>
+            </div>
+            <div class="header-actions">…</div>
+        </header>
+        …sections…
+    </div>
     ```
 11. **Format with `window.PATTY`.** The shell sets the page language from the user's PATTY locale and exposes
     `window.PATTY = { locale, baseCurrency, formatMoney, formatNumber, formatDate, formatDateTime }` (`locale`
