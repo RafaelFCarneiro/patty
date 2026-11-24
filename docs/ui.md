@@ -110,7 +110,7 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   one — `accounts.html` reads `get_account_balances`'s `consolidatedNetWorth` (`{ baseCurrency, total,
   excluded }`) as-is, no `displayCurrency` param needed; `budget.html` requests `get_budget_status` with
   `?displayCurrency=<baseCurrency>` and reads its `converted` block (`{ displayCurrency, total, stale, asOf,
-  excluded }`, Feature Design 021). `overview.html` follows `accounts.html`'s pattern: its own
+  excluded }`, Feature Design 021). A fragment flags an old quote from the API's own flags, never by comparing `asOf` dates (a fiat rate or market price ages by weekday hours, holidays not covered): `priceStale` is "cotação antiga" and `rateStale` "câmbio antigo" on a position or holdings block, `stale` either one (`ui/guides/dashboard-building.md`). `overview.html` follows `accounts.html`'s pattern: its own
   `/api/accounts/balances` call already returns `consolidatedNetWorth`, so the "Net worth (home currency)"
   badge on the Bank Accounts widget needs no extra fetch — same `window.formatMoney(total, baseCurrency)` +
   excluded-count note rendering, with an "n.a." fallback when the field is absent (e.g. the balances fetch

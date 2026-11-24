@@ -6,7 +6,6 @@ import {
   consolidateNetWorth,
   convert,
   isCryptoPair,
-  isStale,
   toBulkItem,
   valueAccount,
 } from '../../../src/logic/currency-rate.js';
@@ -26,13 +25,13 @@ const rate = (overrides: Partial<CurrencyRate> = {}): CurrencyRate => ({
   fromCode: USD,
   toCode: BRL,
   rate: 5,
-  asOf: '2026-08-10T12:00:00.000Z',
+  asOf: '2026-08-12T12:00:00.000Z',
   source: null,
   ...overrides,
 });
 
 const OPTIONS = { decimals: 2, thresholds: { fiatHours: 24, cryptoHours: 1 } };
-const NOW = new Date('2026-08-10T12:00:00.000Z');
+const NOW = new Date('2026-08-12T12:00:00.000Z');
 
 describe('isCryptoPair', () => {
   it('is false for a pure fiat pair', () => {
@@ -55,29 +54,6 @@ describe('isCryptoPair', () => {
 
   it('is true when both sides are crypto', () => {
     expect(isCryptoPair(BTC, USDC)).toBe(true);
-  });
-});
-
-describe('isStale', () => {
-  it('is false exactly at the threshold boundary', () => {
-    const asOf = new Date(NOW.getTime() - 24 * 60 * 60 * 1000).toISOString();
-    expect(isStale(asOf, NOW, 24)).toBe(false);
-  });
-
-  it('is true just past the threshold boundary', () => {
-    const asOf = new Date(NOW.getTime() - 24 * 60 * 60 * 1000 - 1).toISOString();
-    expect(isStale(asOf, NOW, 24)).toBe(true);
-  });
-
-  it('is false for a fresh timestamp', () => {
-    expect(isStale(NOW.toISOString(), NOW, 24)).toBe(false);
-  });
-
-  it.each(['-03', '-0300'])('reads a compact offset (%s) as its real instant', (offset) => {
-    const fresh = `2026-08-10T08:00:00${offset}`; // 11:00Z, one hour before NOW
-    const old = `2026-08-09T08:00:00${offset}`; // 11:00Z the day before, 25h before NOW
-    expect(isStale(fresh, NOW, 24)).toBe(false);
-    expect(isStale(old, NOW, 24)).toBe(true);
   });
 });
 
@@ -255,11 +231,11 @@ describe('consolidateInCurrency', () => {
 
   it('picks the oldest contributing rate by instant', () => {
     const rates = [
-      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: '2026-08-10T11:00:00.000Z' }),
-      rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: '2026-08-10T11:30:00.000Z' }),
+      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: '2026-08-12T11:00:00.000Z' }),
+      rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: '2026-08-12T11:30:00.000Z' }),
     ];
     const result = consolidateInCurrency([amount(BRL, 100), amount(BTC, 1)], USD, rates, NOW, OPTIONS.thresholds, 2);
-    expect(result.asOf).toBe('2026-08-10T11:00:00.000Z');
+    expect(result.asOf).toBe('2026-08-12T11:00:00.000Z');
   });
 
   it.each([
@@ -267,8 +243,8 @@ describe('consolidateInCurrency', () => {
     ['the UTC rate first', [BTC, BRL]],
   ] as const)('reads an hour-only offset when picking the oldest rate: %s', (_order, currencies) => {
     const rates = [
-      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: '2026-08-10T09:00:00-03' }), // 12:00Z
-      rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: '2026-08-10T11:30:00.000Z' }),
+      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: '2026-08-12T09:00:00-03' }), // 12:00Z
+      rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: '2026-08-12T11:30:00.000Z' }),
     ];
     const result = consolidateInCurrency(
       currencies.map((currency) => amount(currency, 1)),
@@ -278,7 +254,7 @@ describe('consolidateInCurrency', () => {
       OPTIONS.thresholds,
       2,
     );
-    expect(timestamp.parse(result.asOf!).toISOString()).toBe('2026-08-10T11:30:00.000Z');
+    expect(timestamp.parse(result.asOf!).toISOString()).toBe('2026-08-12T11:30:00.000Z');
   });
 
   it('target === source is identity: converts at rate 1, asOf = now, never stale', () => {
@@ -393,5 +369,31 @@ describe('toBulkItem / buildBulkResult', () => {
       { status: 'ok', rate: view(USD, BRL) },
       { status: 'error', from: USD, to: USD, error: 'same pair' },
     ]);
+  });
+});
+
+describe('convert — the weekend does not age a fiat rate, a crypto rate keeps elapsed hours', () => {
+  const FRIDAY_EVENING = '2026-08-14T20:00:00.000Z';
+  const atFiat = (now: string) => convert(10, USD, BRL, [rate({ asOf: FRIDAY_EVENING })], new Date(now), OPTIONS).stale;
+
+  it.each(['2026-08-15T12:00:00.000Z', '2026-08-16T12:00:00.000Z', '2026-08-17T19:00:00.000Z'])(
+    'a Friday 20:00Z fiat rate is fresh at %s',
+    (now) => expect(atFiat(now)).toBe(false),
+  );
+
+  it('a Friday 20:00Z fiat rate is stale Monday 21:00Z', () => {
+    expect(atFiat('2026-08-17T21:00:00.000Z')).toBe(true);
+  });
+
+  it('a Wednesday fiat rate is stale Thursday evening', () => {
+    const wednesday = rate({ asOf: '2026-08-12T12:00:00.000Z' });
+    expect(convert(10, USD, BRL, [wednesday], new Date('2026-08-13T11:00:00.000Z'), OPTIONS).stale).toBe(false);
+    expect(convert(10, USD, BRL, [wednesday], new Date('2026-08-13T19:00:00.000Z'), OPTIONS).stale).toBe(true);
+  });
+
+  it('a crypto rate is stale after one elapsed hour, weekend included', () => {
+    const btc = rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: '2026-08-15T10:00:00.000Z' });
+    expect(convert(1, BTC, USD, [btc], new Date('2026-08-15T10:30:00.000Z'), OPTIONS).stale).toBe(false);
+    expect(convert(1, BTC, USD, [btc], new Date('2026-08-15T11:30:00.000Z'), OPTIONS).stale).toBe(true);
   });
 });

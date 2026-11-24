@@ -11,7 +11,6 @@ import {
   type CurrencyRateBulkItem,
   CRYPTO_CURRENCIES,
   type StalenessThresholds,
-  MS_PER_HOUR,
   type ConversionResult,
   type ConvertOptions,
   type ValuableBalance,
@@ -19,8 +18,10 @@ import {
   type CurrencyAmount,
   type ConsolidatedInCurrency,
 } from '../models/currency-rate.js';
+import { StalenessClass } from '../models/timestamp.js';
 import { buildBulkItems, toBulkItem as toGenericBulkItem } from './bulk-item.js';
 import { roundToDecimals } from './money.js';
+import { isStale } from './staleness.js';
 import * as timestamp from './timestamp.js';
 
 const bulkShape = <E>(): BulkItemShape<
@@ -47,8 +48,10 @@ export const buildBulkResult = <E>(
 export const isCryptoPair = (from: CurrencyCode, to: CurrencyCode): boolean =>
   CRYPTO_CURRENCIES.has(from) || CRYPTO_CURRENCIES.has(to);
 
-export const isStale = (asOf: string, now: Date, thresholdHours: number): boolean =>
-  now.getTime() - timestamp.parse(asOf).getTime() > thresholdHours * MS_PER_HOUR;
+const RATE_STALENESS = {
+  [StalenessClass.enum.fiat_rate]: (thresholds) => thresholds.fiatHours,
+  [StalenessClass.enum.crypto_rate]: (thresholds) => thresholds.cryptoHours,
+} as const satisfies Partial<Record<StalenessClass, (thresholds: StalenessThresholds) => number>>;
 
 export const convert = (
   amount: number,
@@ -71,12 +74,12 @@ export const convert = (
   const match = R.find(rates, (r) => r.fromCode === from && r.toCode === to);
   if (!match) return { value: null, rate: null, asOf: null, stale: false, noRate: true };
 
-  const thresholdHours = isCryptoPair(from, to) ? options.thresholds.cryptoHours : options.thresholds.fiatHours;
+  const kind = isCryptoPair(from, to) ? StalenessClass.enum.crypto_rate : StalenessClass.enum.fiat_rate;
   return {
     value: roundToDecimals(amount * match.rate, options.decimals),
     rate: match.rate,
     asOf: match.asOf,
-    stale: isStale(match.asOf, now, thresholdHours),
+    stale: isStale(kind, match.asOf, now, RATE_STALENESS[kind](options.thresholds)),
     noRate: false,
   };
 };

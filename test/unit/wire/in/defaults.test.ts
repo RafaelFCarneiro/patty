@@ -49,7 +49,7 @@ describe('defaults next to a transform (config, CLI flags)', () => {
   });
 
   it('price staleness: unset gives the defaults, a value is coerced', () => {
-    expect(env({}).PRICE_STALE_HOURS).toBe(72);
+    expect(env({}).PRICE_STALE_HOURS).toBe(24);
     expect(env({}).MANUAL_PRICE_STALE_DAYS).toBe(31);
     expect(env({ PRICE_STALE_HOURS: '48' }).PRICE_STALE_HOURS).toBe(48);
   });

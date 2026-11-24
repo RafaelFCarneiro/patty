@@ -6,7 +6,7 @@ import { cdbAsset, kncrAsset, NOW, nuAsset, priceOf } from '../../fixtures/inves
 import * as assetRules from '../../../../src/logic/investment/asset.js';
 import * as timestamp from '../../../../src/logic/timestamp.js';
 
-const THRESHOLDS = { marketHours: 72, manualDays: 31 };
+const THRESHOLDS = { marketHours: 24, manualDays: 31 };
 const HOUR_MS = 60 * 60 * 1000;
 const hoursBeforeNow = (hours: number): string => new Date(NOW.getTime() - hours * HOUR_MS).toISOString();
 
@@ -61,9 +61,30 @@ describe('assetRules.resolve', () => {
 });
 
 describe('assetRules.isPriceStale — each pricing class has its own window', () => {
-  it('ages a market price in hours: a Friday close is still fresh 71 hours later, stale at 73', () => {
-    expect(assetRules.isPriceStale(AssetPricing.enum.market, hoursBeforeNow(71), NOW, THRESHOLDS)).toBe(false);
-    expect(assetRules.isPriceStale(AssetPricing.enum.market, hoursBeforeNow(73), NOW, THRESHOLDS)).toBe(true);
+  it('ages a market price by weekday hours: a Friday 20:00Z close is fresh to Monday 19:00Z, stale at 21:00Z', () => {
+    const friday = '2026-11-13T20:00:00.000Z';
+    const at = (now: string) => assetRules.isPriceStale(AssetPricing.enum.market, friday, new Date(now), THRESHOLDS);
+    expect(at('2026-11-14T12:00:00.000Z')).toBe(false);
+    expect(at('2026-11-15T12:00:00.000Z')).toBe(false);
+    expect(at('2026-11-16T19:00:00.000Z')).toBe(false);
+    expect(at('2026-11-16T21:00:00.000Z')).toBe(true);
+  });
+
+  it('a Wednesday market price is stale on Thursday evening', () => {
+    const wednesday = '2026-11-18T12:00:00.000Z';
+    const at = (now: string) => assetRules.isPriceStale(AssetPricing.enum.market, wednesday, new Date(now), THRESHOLDS);
+    expect(at('2026-11-19T11:00:00.000Z')).toBe(false);
+    expect(at('2026-11-19T19:00:00.000Z')).toBe(true);
+  });
+
+  it('a manual price keeps elapsed time: the weekend counts', () => {
+    const friday = '2026-11-13T20:00:00.000Z';
+    expect(
+      assetRules.isPriceStale(AssetPricing.enum.manual, friday, new Date('2026-12-14T19:00:00.000Z'), THRESHOLDS),
+    ).toBe(false);
+    expect(
+      assetRules.isPriceStale(AssetPricing.enum.manual, friday, new Date('2026-12-14T21:00:00.000Z'), THRESHOLDS),
+    ).toBe(true);
   });
 
   it('ages a manual price in days: fresh at 30 days, stale at 32', () => {

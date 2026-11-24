@@ -5,6 +5,7 @@ import { isLoopbackHost, LOOPBACK_HOST } from './common/net.js';
 import { AuthMode, DEFAULT_AUTH_MODE } from './models/auth/mode.js';
 import { DEFAULT_PROFILE, ProfileSchema } from './models/auth/sign-in.js';
 import { DEMO_DB_KEY, DEMO_ENV_ON, DEMO_ENV_VAR, DEMO_PORT } from './models/demo/core.js';
+import { DEFAULT_CRYPTO_RATE_STALE_HOURS, DEFAULT_FIAT_RATE_STALE_HOURS } from './models/currency-rate.js';
 import { DEFAULT_MANUAL_PRICE_STALE_DAYS, DEFAULT_PRICE_STALE_HOURS } from './models/investment/asset.js';
 import { EncryptionKey } from './models/encryption-key.js';
 import { Locale } from './models/locale.js';
@@ -117,8 +118,8 @@ const Env = z
       .transform((v) => v !== 'false'),
     // Per-class staleness windows for currency_rates (ADR-026 Phase 2) — crypto moves fast enough to
     // need a much tighter window than fiat; both configurable rather than hardcoded in logic/.
-    FIAT_RATE_STALE_HOURS: z.coerce.number().positive().default(24),
-    CRYPTO_RATE_STALE_HOURS: z.coerce.number().positive().default(1),
+    FIAT_RATE_STALE_HOURS: z.coerce.number().positive().default(DEFAULT_FIAT_RATE_STALE_HOURS),
+    CRYPTO_RATE_STALE_HOURS: z.coerce.number().positive().default(DEFAULT_CRYPTO_RATE_STALE_HOURS),
     PRICE_STALE_HOURS: z.coerce.number().positive().default(DEFAULT_PRICE_STALE_HOURS),
     MANUAL_PRICE_STALE_DAYS: z.coerce.number().positive().default(DEFAULT_MANUAL_PRICE_STALE_DAYS),
   })

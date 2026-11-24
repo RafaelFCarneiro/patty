@@ -25,21 +25,32 @@ import type { Resolution } from '../../models/resolution.js';
 import * as timestamp from '../timestamp.js';
 import { buildBulkItems, toBulkItem as toGenericBulkItem } from '../bulk-item.js';
 import { fold } from '../resolve.js';
-import { isStale } from '../currency-rate.js';
+import { isStale } from '../staleness.js';
+import { HOURS_PER_DAY, StalenessClass } from '../../models/timestamp.js';
 
-const HOURS_PER_DAY = 24;
-
-const STALE_AFTER_HOURS = {
-  [AssetPricingEnum.enum.market]: (thresholds) => thresholds.marketHours,
-  [AssetPricingEnum.enum.manual]: (thresholds) => thresholds.manualDays * HOURS_PER_DAY,
-} as const satisfies Record<AssetPricing, (thresholds: PriceStalenessThresholds) => number>;
+const PRICE_STALENESS = {
+  [AssetPricingEnum.enum.market]: {
+    kind: StalenessClass.enum.market_price,
+    hours: (thresholds) => thresholds.marketHours,
+  },
+  [AssetPricingEnum.enum.manual]: {
+    kind: StalenessClass.enum.manual_price,
+    hours: (thresholds) => thresholds.manualDays * HOURS_PER_DAY,
+  },
+} as const satisfies Record<
+  AssetPricing,
+  { kind: StalenessClass; hours: (thresholds: PriceStalenessThresholds) => number }
+>;
 
 export const isPriceStale = (
   pricing: AssetPricing,
   asOf: string,
   now: Date,
   thresholds: PriceStalenessThresholds,
-): boolean => isStale(asOf, now, STALE_AFTER_HOURS[pricing](thresholds));
+): boolean => {
+  const { kind, hours } = PRICE_STALENESS[pricing];
+  return isStale(kind, asOf, now, hours(thresholds));
+};
 
 export const label = (asset: Pick<Asset, 'symbol' | 'exchange'>): string =>
   `${asset.exchange}${EXCHANGE_SEPARATOR}${asset.symbol}`;

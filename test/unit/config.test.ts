@@ -136,10 +136,10 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow();
   });
 
-  it('price staleness defaults to 72 h for a market price and 31 days for a manual one', () => {
+  it('price staleness defaults to 24 weekday hours for a market price and 31 days for a manual one', () => {
     delete process.env['PRICE_STALE_HOURS'];
     delete process.env['MANUAL_PRICE_STALE_DAYS'];
-    expect(loadConfig()).toMatchObject({ PRICE_STALE_HOURS: 72, MANUAL_PRICE_STALE_DAYS: 31 });
+    expect(loadConfig()).toMatchObject({ PRICE_STALE_HOURS: 24, MANUAL_PRICE_STALE_DAYS: 31 });
   });
 
   it('PRICE_STALE_HOURS and MANUAL_PRICE_STALE_DAYS env overrides are respected', () => {

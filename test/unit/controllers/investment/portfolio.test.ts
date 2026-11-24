@@ -170,7 +170,7 @@ describe('getAccountBalances — holdings in balances and net worth (Feature Des
       baseCurrency: BRL,
       total: 2150,
       excluded: [],
-      holdings: { value: 650, stale: false, asOf: FRESH, excluded: [] },
+      holdings: { value: 650, stale: false, priceStale: false, rateStale: false, asOf: FRESH, excluded: [] },
     });
   });
 
@@ -213,7 +213,12 @@ describe('getAccountBalances — holdings in balances and net worth (Feature Des
         { account: 'Nu Holdings (NYSE:NU)' },
       )
     )._unsafeUnwrap();
-    expect(result.balances[0]?.holdings).toMatchObject({ stale: true, asOf: oldRate });
+    expect(result.balances[0]?.holdings).toMatchObject({
+      stale: true,
+      priceStale: false,
+      rateStale: true,
+      asOf: oldRate,
+    });
   });
 
   it('after the last attempt, holdings of an account that still moves are reported stale', async () => {

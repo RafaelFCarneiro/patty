@@ -93,7 +93,7 @@ export const rateOf = (fromCode: CurrencyCode, toCode: CurrencyCode, rate: numbe
 
 export const THRESHOLDS = {
   rateThresholds: { fiatHours: 24, cryptoHours: 1 },
-  priceThresholds: { marketHours: 72, manualDays: 31 },
+  priceThresholds: { marketHours: 24, manualDays: 31 },
 };
 
 export const FRESH = '2026-11-18T12:00:00.000Z';

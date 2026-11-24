@@ -3,14 +3,12 @@ import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { Ambiguous, NotFound, ValidationError } from '../error.js';
 import { Id } from '../id.js';
 import { CurrencyCode } from '../money.js';
-import { IsoTimestamp } from '../timestamp.js';
+import { IsoTimestamp, UtcTimestamp } from '../timestamp.js';
 
 export const ASSET_ENTITY_TAG = 'asset';
 export const ASSET_PRICE_ENTITY_TAG = 'asset_price';
 
 export const EXCHANGE_SEPARATOR = ':';
-
-export const AssetTimestamp = z.iso.datetime({ offset: true });
 
 export const AssetClass = z.enum(['stock', 'etf', 'reit', 'bdr', 'fixed_income']);
 export type AssetClass = z.infer<typeof AssetClass>;
@@ -46,7 +44,7 @@ export const AssetPriceSchema = z.object({
   id: Id.describe('Unique asset price identifier'),
   assetId: Id.describe('The asset this price quotes'),
   price: z.number().positive().describe('Price of ONE unit in the asset currency, as of `asOf`'),
-  asOf: AssetTimestamp.describe('ISO 8601 timestamp this price was observed/sourced (agent-supplied)'),
+  asOf: UtcTimestamp.describe('UTC timestamp this price was observed/sourced'),
   source: z.string().min(1).nullable().describe('Free-text provenance (e.g. "B3 close"), or null if unspecified'),
 });
 export type AssetPrice = z.infer<typeof AssetPriceSchema>;
@@ -72,7 +70,7 @@ export type ListAssetsInput = z.infer<typeof ListAssetsSchema>;
 
 export const AssetViewSchema = AssetSchema.extend({
   price: z.number().positive().nullable().describe('Latest price of one unit; null when none was ever posted'),
-  priceAsOf: AssetTimestamp.nullable().describe('When the latest price was observed'),
+  priceAsOf: UtcTimestamp.nullable().describe('When the latest price was observed'),
   stale: z.boolean().describe('True when the latest price is older than its pricing class allows'),
   noPrice: z.boolean().describe('True when no price was ever posted'),
 });
@@ -88,7 +86,7 @@ export type RegisterAssetResult = z.infer<typeof RegisterAssetResultSchema>;
 export const AssetPriceViewSchema = z.object({
   asset: z.string().describe('EXCHANGE:SYMBOL of the priced asset'),
   price: z.number().positive(),
-  asOf: AssetTimestamp,
+  asOf: UtcTimestamp,
   source: z.string().min(1).optional(),
 });
 export type AssetPriceView = z.infer<typeof AssetPriceViewSchema>;
@@ -100,7 +98,7 @@ export type AssetError = NotFound<'asset'> | Ambiguous<'asset'> | ValidationErro
 
 export type AssetRef = { symbol: string; exchange: string | null };
 
-export const DEFAULT_PRICE_STALE_HOURS = 72;
+export const DEFAULT_PRICE_STALE_HOURS = 24;
 export const DEFAULT_MANUAL_PRICE_STALE_DAYS = 31;
 
 export type PriceStalenessThresholds = { marketHours: number; manualDays: number };

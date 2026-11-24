@@ -463,7 +463,7 @@
     {
       "name": "get_account_balances",
       "title": "Get account balances",
-      "description": "Returns { balances, consolidatedNetWorth }. Each balance is derived: initialBalance + income − expenses + transfers in − transfers out, plus an optional converted block (read-time valuation against the base currency, with rate/asOf/stale — absent when no exchange rate is on file). consolidatedNetWorth sums every convertible balance in the base currency; accounts with no rate are listed in its excluded array. An investment account that holds positions (open_position) also carries a holdings block — cashBalance (the same as balance), holdingsValue (market value in the base currency, with stale/asOf) and total — and consolidatedNetWorth includes the holdings; a position with no price or no rate is named in holdings.excluded instead of counted as zero. Accounts without positions answer as before. Optionally filter by account name or type.",
+      "description": "Returns { balances, consolidatedNetWorth }. Each balance is derived: initialBalance + income − expenses + transfers in − transfers out, plus an optional converted block (read-time valuation against the base currency, with rate/asOf/stale — absent when no exchange rate is on file). consolidatedNetWorth sums every convertible balance in the base currency; accounts with no rate are listed in its excluded array. An investment account that holds positions (open_position) also carries a holdings block — cashBalance (the same as balance), holdingsValue (market value in the base currency, with stale/priceStale/rateStale/asOf) and total — and consolidatedNetWorth includes the holdings; a position with no price or no rate is named in holdings.excluded instead of counted as zero. Accounts without positions answer as before. Optionally filter by account name or type.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1428,7 +1428,7 @@
     {
       "name": "list_exchange_rates",
       "title": "List exchange rates",
-      "description": "All stored exchange rates, each with its own `asOf`. Staleness is not evaluated here — this is the raw cached table (ADR-026); use it to decide which pairs need refreshing.",
+      "description": "All stored exchange rates, each with its own `asOf`. Staleness is not evaluated here — this is the raw cached table (ADR-026); use it to decide which pairs need refreshing: a fiat rate is stale after FIAT_RATE_STALE_HOURS (default 24 weekday hours), a crypto rate after CRYPTO_RATE_STALE_HOURS (default 1 elapsed hour). Weekday hours: Saturday and Sunday (UTC) do not count, so a Friday-evening quote is still fresh on Monday; holidays are not covered.",
       "inputSchema": {
         "type": "object",
         "properties": {},
@@ -1516,7 +1516,7 @@
     {
       "name": "list_assets",
       "title": "List assets",
-      "description": "Registered assets with their latest price, `priceAsOf`, `stale` and `noPrice`. Staleness is per pricing class: market quotes after PRICE_STALE_HOURS (default 72 h, so a Friday close is still fresh on Monday), manual values after MANUAL_PRICE_STALE_DAYS (default 31). Filter by `assetClass`, or pass `staleOnly` for the assets that need a fresh price. PATTY never fetches prices itself (local-first, zero external calls — ADR-026, Feature Design 023). The AI agent sources current quotes (or asks the user for a manually valued asset) and posts them with set_asset_prices; a price change is never a transaction, so cash-flow reports are untouched. The whole refresh is a workflow: get_workflow({ name: \"refresh_quotes\" }). ",
+      "description": "Registered assets with their latest price, `priceAsOf`, `stale` and `noPrice`. Staleness is per pricing class: market quotes after PRICE_STALE_HOURS (default 24 h of weekdays), manual values after MANUAL_PRICE_STALE_DAYS (default 31 elapsed days). Weekday hours: Saturday and Sunday (UTC) do not count, so a Friday-evening quote is still fresh on Monday; holidays are not covered. Filter by `assetClass`, or pass `staleOnly` for the assets that need a fresh price. PATTY never fetches prices itself (local-first, zero external calls — ADR-026, Feature Design 023). The AI agent sources current quotes (or asks the user for a manually valued asset) and posts them with set_asset_prices; a price change is never a transaction, so cash-flow reports are untouched. The whole refresh is a workflow: get_workflow({ name: \"refresh_quotes\" }). ",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1770,7 +1770,7 @@
     {
       "name": "get_portfolio",
       "title": "Get portfolio",
-      "description": "The positions, valued at read time: quantity, average cost, latest price, market value, cost basis and unrealized P&L, in the asset currency and in the base currency, each with `asOf`, `stale`, `noPrice` and `noRate`. A position with no price or no exchange rate is listed with null values — never 0 — and named in `totals.excluded`. Also totals in the base currency and the allocation by asset class and by currency. Optionally one account by name.",
+      "description": "The positions, valued at read time: quantity, average cost, latest price, market value, cost basis and unrealized P&L, in the asset currency and in the base currency, each with `asOf`, `stale`, `noPrice` and `noRate`. `stale` is `priceStale` or `rateStale` (the price or the rate to the base currency is old), with `priceAsOf` and `rateAsOf` beside them; fiat rates and market prices age by weekday hours. A position with no price or no exchange rate is listed with null values — never 0 — and named in `totals.excluded`. Also totals in the base currency and the allocation by asset class and by currency. Optionally one account by name.",
       "inputSchema": {
         "type": "object",
         "properties": {

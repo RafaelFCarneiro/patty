@@ -1,7 +1,12 @@
+import { WEEKDAY_HOURS_NOTE } from '../../../models/timestamp.js';
 import { ToolName } from '../tool-name.js';
 import { listExchangeRates, setExchangeRate } from '../../../controllers/currency-rates.js';
 import { buildBulkResult } from '../../../logic/currency-rate.js';
-import { SetExchangeRateSchema } from '../../../models/currency-rate.js';
+import {
+  DEFAULT_CRYPTO_RATE_STALE_HOURS,
+  DEFAULT_FIAT_RATE_STALE_HOURS,
+  SetExchangeRateSchema,
+} from '../../../models/currency-rate.js';
 import { SetExchangeRatesSchema } from '../../../wire/in/currency-rates.js';
 import * as currencyRateAdapters from '../../../adapters/currency-rates.js';
 import { defineTool } from '../definition.js';
@@ -62,7 +67,9 @@ const setExchangeRatesTool = defineTool({
 
 const listExchangeRatesDescription =
   'All stored exchange rates, each with its own `asOf`. Staleness is not evaluated here — this ' +
-  'is the raw cached table (ADR-026); use it to decide which pairs need refreshing.';
+  'is the raw cached table (ADR-026); use it to decide which pairs need refreshing: a fiat rate is stale after ' +
+  `FIAT_RATE_STALE_HOURS (default ${DEFAULT_FIAT_RATE_STALE_HOURS} weekday hours), a crypto rate after ` +
+  `CRYPTO_RATE_STALE_HOURS (default ${DEFAULT_CRYPTO_RATE_STALE_HOURS} elapsed hour). ${WEEKDAY_HOURS_NOTE}`;
 
 const listExchangeRatesTool = defineTool({
   name: ToolName.enum.list_exchange_rates,

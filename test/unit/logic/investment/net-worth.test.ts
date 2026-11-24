@@ -53,6 +53,8 @@ describe('holdings in balances and net worth (Feature Design 023 §6)', () => {
       baseCurrency: BRL,
       total: 1150,
       stale: false,
+      priceStale: false,
+      rateStale: false,
       asOf: FRESH,
       excluded: [],
     });
@@ -66,7 +68,13 @@ describe('holdings in balances and net worth (Feature Design 023 §6)', () => {
       BRL,
       2,
     );
-    expect(entry?.holdings).toMatchObject({ total: 1150, stale: true, asOf: staleRate });
+    expect(entry?.holdings).toMatchObject({
+      total: 1150,
+      stale: true,
+      priceStale: false,
+      rateStale: true,
+      asOf: staleRate,
+    });
   });
 
   it('fresh cash and fresh holdings stay fresh, as of the older of the two', () => {
@@ -97,7 +105,7 @@ describe('holdings in balances and net worth (Feature Design 023 §6)', () => {
       BRL,
       2,
     );
-    expect(entry?.holdings).toMatchObject({ stale: true, asOf: oldPrice });
+    expect(entry?.holdings).toMatchObject({ stale: true, priceStale: true, rateStale: false, asOf: oldPrice });
   });
 
   it('has no total when the cash cannot be converted, but still reports the holdings', () => {
