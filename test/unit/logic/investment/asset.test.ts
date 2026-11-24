@@ -4,6 +4,7 @@ import { AssetClass, AssetPricing, type AssetPriceEntity } from '../../../../src
 import { CurrencyCode } from '../../../../src/models/money.js';
 import { cdbAsset, kncrAsset, NOW, nuAsset, priceOf } from '../../fixtures/investment.js';
 import * as assetRules from '../../../../src/logic/investment/asset.js';
+import * as timestamp from '../../../../src/logic/timestamp.js';
 
 const THRESHOLDS = { marketHours: 72, manualDays: 31 };
 const HOUR_MS = 60 * 60 * 1000;
@@ -126,12 +127,8 @@ describe('assetRules.planRegister — idempotent on symbol and exchange', () => 
   });
 });
 
-describe('assetRules.planPrice / assetRules.canonicalTimestamp', () => {
+describe('assetRules.planPrice', () => {
   const input = { asset: 'NU', price: 13.2, asOf: '2026-11-18T18:00:00-03:00', source: 'NYSE close' };
-
-  it('stores the instant as canonical UTC', () => {
-    expect(assetRules.canonicalTimestamp('2026-11-18T18:00:00-03:00')).toBe('2026-11-18T21:00:00.000Z');
-  });
 
   it('adds a point to the history under a fresh id when none exists at that instant', () => {
     const plan = assetRules.planPrice('new-id', nuAsset(), input, null);
@@ -179,6 +176,18 @@ describe('assetRules.latestPrice', () => {
       priceOf(nu, 2, '2026-11-18T20:00:00Z', 'later'),
     ];
     expect(assetRules.latestPrice(offsets, 'asset-nu')?.id).toBe('later');
+  });
+
+  it.each([
+    ['the offset price first', ['2026-11-18T19:00:00-03', '2026-11-18T21:30:00.000Z']],
+    ['the UTC price first', ['2026-11-18T21:30:00.000Z', '2026-11-18T19:00:00-03']],
+  ])('reads an hour-only offset when picking the latest price: %s', (_order, instants) => {
+    const [first, second] = instants as [string, string];
+    const latest = assetRules.latestPrice(
+      [priceOf(nu, 1, first, 'first'), priceOf(nu, 2, second, 'second')],
+      'asset-nu',
+    );
+    expect(timestamp.parse(latest!.asOf).toISOString()).toBe('2026-11-18T22:00:00.000Z');
   });
 
   it('is undefined for an asset with no price', () => {

@@ -7,10 +7,11 @@ import {
 } from '../models/currency-rate.js';
 import { BulkItemStatus } from '../models/bulk.js';
 import * as persistence from '../logic/persistence.js';
+import * as timestamp from '../logic/timestamp.js';
 import { BulkSetExchangeRatesOut, type BulkExchangeRateItemOut } from '../wire/out/currency-rates.js';
 import type { CurrencyRateRow } from '../wire/db/currency-rates.js';
 
-export const dbToEntity = (row: CurrencyRateRow): CurrencyRateEntity =>
+const decodeRow = (row: CurrencyRateRow): CurrencyRateEntity =>
   CurrencyRateEntitySchema.parse({
     id: row.id,
     fromCode: row.fromCode,
@@ -20,6 +21,11 @@ export const dbToEntity = (row: CurrencyRateRow): CurrencyRateEntity =>
     source: row.source,
     version: row.version,
   });
+
+export const dbToEntity = (row: CurrencyRateRow): CurrencyRateEntity => {
+  const entity = decodeRow(row);
+  return { ...entity, asOf: timestamp.canonical(entity.asOf) };
+};
 
 // Identity: a versioned CurrencyRateEntity is already row-shaped.
 export const modelToDb = (entity: CurrencyRateEntity): CurrencyRateRow => entity;
