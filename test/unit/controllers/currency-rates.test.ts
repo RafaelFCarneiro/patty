@@ -90,6 +90,16 @@ describe('setExchangeRate', () => {
     ]);
   });
 
+  it.each(['2026-08-10T07:00:00-03', '2026-08-10T07:00:00-0300'])(
+    'stores and returns %s as canonical UTC',
+    async (asOf) => {
+      const result = await setExchangeRate(makeDeps(), { from: USD, to: BRL, rate: 5, asOf });
+      const outcome = result._unsafeUnwrap();
+      expect(outcome.response).toMatchObject({ asOf: '2026-08-10T10:00:00.000Z' });
+      expect(outcome.persist).toMatchObject([{ model: { asOf: '2026-08-10T10:00:00.000Z' } }]);
+    },
+  );
+
   it('omits source from the response when not supplied', async () => {
     const deps = makeDeps({ findByPair: async () => null });
     const result = await setExchangeRate(deps, { from: USD, to: BRL, rate: 5, asOf: '2026-08-10T10:00:00.000Z' });

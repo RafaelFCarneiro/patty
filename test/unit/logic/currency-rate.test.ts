@@ -11,6 +11,7 @@ import {
   valueAccount,
 } from '../../../src/logic/currency-rate.js';
 import { CurrencyCode } from '../../../src/models/money.js';
+import * as timestamp from '../../../src/logic/timestamp.js';
 import type {
   ValuableBalance,
   CurrencyRate,
@@ -70,6 +71,13 @@ describe('isStale', () => {
 
   it('is false for a fresh timestamp', () => {
     expect(isStale(NOW.toISOString(), NOW, 24)).toBe(false);
+  });
+
+  it.each(['-03', '-0300'])('reads a compact offset (%s) as its real instant', (offset) => {
+    const fresh = `2026-08-10T08:00:00${offset}`; // 11:00Z, one hour before NOW
+    const old = `2026-08-09T08:00:00${offset}`; // 11:00Z the day before, 25h before NOW
+    expect(isStale(fresh, NOW, 24)).toBe(false);
+    expect(isStale(old, NOW, 24)).toBe(true);
   });
 });
 
@@ -244,6 +252,34 @@ describe('valueAccount / consolidateNetWorth (ADR-026 Phase 3, ADR-028 controlle
 
 describe('consolidateInCurrency', () => {
   const amount = (currency: CurrencyCode, value: number) => ({ currency, amount: value });
+
+  it('picks the oldest contributing rate by instant', () => {
+    const rates = [
+      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: '2026-08-10T11:00:00.000Z' }),
+      rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: '2026-08-10T11:30:00.000Z' }),
+    ];
+    const result = consolidateInCurrency([amount(BRL, 100), amount(BTC, 1)], USD, rates, NOW, OPTIONS.thresholds, 2);
+    expect(result.asOf).toBe('2026-08-10T11:00:00.000Z');
+  });
+
+  it.each([
+    ['the offset rate first', [BRL, BTC]],
+    ['the UTC rate first', [BTC, BRL]],
+  ] as const)('reads an hour-only offset when picking the oldest rate: %s', (_order, currencies) => {
+    const rates = [
+      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: '2026-08-10T09:00:00-03' }), // 12:00Z
+      rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: '2026-08-10T11:30:00.000Z' }),
+    ];
+    const result = consolidateInCurrency(
+      currencies.map((currency) => amount(currency, 1)),
+      USD,
+      rates,
+      NOW,
+      OPTIONS.thresholds,
+      2,
+    );
+    expect(timestamp.parse(result.asOf!).toISOString()).toBe('2026-08-10T11:30:00.000Z');
+  });
 
   it('target === source is identity: converts at rate 1, asOf = now, never stale', () => {
     const result = consolidateInCurrency([amount(USD, 100)], USD, [], NOW, OPTIONS.thresholds, 2);

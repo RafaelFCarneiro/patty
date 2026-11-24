@@ -1,30 +1,12 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
+import { IsoTimestamp } from './timestamp.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { ValidationError } from './error.js';
 
 // Entity tag for this aggregate's `Persistable`s.
 export const CURRENCY_RATE_ENTITY_TAG = 'currency_rate';
-
-const strictTimestamp = z.iso.datetime({ offset: true });
-const COMPACT_OFFSET = /([+-]\d{2})(\d{2})?$/;
-
-/** An ISO 8601 timestamp with an offset. zod 3 also accepted the compact offsets `+0200` and `+02`, and rates stored
- *  with them are reparsed on every read, so they stay valid (ADR-037 §3: no behavior change): the offset is only
- *  normalized to `+02:00` for the check, the value itself is never rewritten. */
-export const IsoTimestamp = z
-  .string()
-  .meta({ format: 'date-time' })
-  .refine(
-    (text) =>
-      strictTimestamp.safeParse(
-        text.replace(COMPACT_OFFSET, (_: string, hours: string, minutes?: string) => `${hours}:${minutes ?? '00'}`),
-      ).success,
-    {
-      error: 'Invalid datetime',
-    },
-  );
 
 /** Agent/scheduler-supplied external data (ADR-026 Phase 2) — decoded at the boundary like any
  *  other input, never treated as authoritative beyond its own `asOf`. */
