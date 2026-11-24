@@ -436,12 +436,8 @@ header,
   width: 4px;
 }
 
-/* display is left out of this base even though every consuming fragment declares it: fragments
-   disagree between `flex` and `inline-flex`, and every fragment below declares its own value
-   explicitly rather than relying on 3 of the 6 matching the base default — one line of harmless
-   redundancy beats a property whose effective value depends on reading the base rule to know
-   whether a given fragment needed to override it. */
 .btn-action-primary {
+  display: inline-flex;
   align-items: center;
   background: var(--accent-primary);
   border: none;
@@ -454,8 +450,7 @@ header,
   padding: 0.6rem 1.25rem;
 }
 
-/* Header controls: the date selectors and actions every dashboard puts in its page header. A fragment
-   extends them locally only for what differs (budget.html's .controls-area is wider and wraps). */
+/* Header controls: the date selectors and actions every dashboard puts in its page header. */
 .controls-area {
   display: flex;
   align-items: center;
@@ -500,17 +495,19 @@ header,
   box-shadow: 0 0 0 2px var(--accent-primary-glow);
 }
 
-/* Shared look only: padding, radius, display and width differ per fragment and stay local. */
 .btn-action-secondary {
+  display: inline-flex;
   align-items: center;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--panel-border);
+  border-radius: 10px;
   color: var(--text-main);
   cursor: pointer;
   font-family: var(--font-family);
   font-weight: 600;
   gap: 0.5rem;
   justify-content: center;
+  padding: 0.6rem 1.25rem;
   transition: var(--transition-smooth);
 }
 

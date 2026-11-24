@@ -106,6 +106,13 @@ describe('dashboard guide ↔ ui/app.css', () => {
     expect(rule('\\.card-value')).toMatch(/white-space:\s*nowrap;/);
   });
 
+  it.each(['btn-action-primary', 'btn-action-secondary'])('makes .%s complete from the shell alone', (name) => {
+    const rule = read('app.css').match(new RegExp(`(?:^|\\n)\\.${name}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    expect(rule).toMatch(/display:\s*inline-flex;/);
+    expect(rule).toMatch(/padding:\s*0\.6rem 1\.25rem;/);
+    expect(rule).toMatch(/border-radius:\s*10px;/);
+  });
+
   it('shows a page header that uses only shell classes', () => {
     const snippet = guide.match(PAGE_HEADER_SNIPPET)?.[1] ?? '';
     const buttons = [...snippet.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]);

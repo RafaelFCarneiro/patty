@@ -235,9 +235,10 @@ every guide class against `ui/app.css`):
   plainly; and `.btn-action-primary`/`.btn-action-secondary`, whose padding, radius and display differ per
   fragment (`pending.html`'s own chart wrapper is `.pending-chart`).
 - **Header controls**: `.controls-area` (a labelled group of selectors: panel background, border, 14px radius),
-  `.select-custom` (also `.select-native`), `.btn-action-primary` and `.btn-action-secondary`. The header's
-  `.header-actions` holds a `.controls-area` with a `<label>` and its controls, and buttons carry a
-  `btn-action-*` class — a bare `<button>` renders as the browser default.
+  `.select-custom` (`.select-native` is the same look on a native select, for the bundled dashboards),
+  `.btn-action-primary` and `.btn-action-secondary` (inline-flex, `0.6rem 1.25rem`, 10px radius: a button is
+  complete from the shell alone). The header's `.header-actions` holds a `.controls-area` with a `<label>` and
+  its controls, and buttons carry a `btn-action-*` class — a bare `<button>` renders as the browser default.
 - **Overflow**: `main#content` has `min-width: 0`, so a wide table scrolls inside its `.table-wrap` instead of
   stretching the page. `.card` is an inline-size container and `.card-value` is sized to it
   (`clamp(1.1rem, 11cqi, 1.6rem)`, `white-space: nowrap`, tabular numerals), so a figure shrinks and never
