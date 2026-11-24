@@ -1,8 +1,7 @@
 import { StalenessClass } from '../models/timestamp.js';
 import * as timestamp from './timestamp.js';
 
-/** Hours a quote of each class has aged by: weekday hours for what only trades on weekdays, elapsed hours otherwise.
- *  Public holidays are not covered. */
+/** Holidays are not covered. */
 const AGE_HOURS = {
   [StalenessClass.enum.fiat_rate]: timestamp.hoursExcludingWeekends,
   [StalenessClass.enum.crypto_rate]: timestamp.elapsedHours,

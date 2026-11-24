@@ -48,13 +48,10 @@ export const buildBulkResult = <E>(
 export const isCryptoPair = (from: CurrencyCode, to: CurrencyCode): boolean =>
   CRYPTO_CURRENCIES.has(from) || CRYPTO_CURRENCIES.has(to);
 
-const RateClass = { fiat: 'fiat', crypto: 'crypto' } as const;
-type RateClass = (typeof RateClass)[keyof typeof RateClass];
-
 const RATE_STALENESS = {
-  [RateClass.fiat]: { kind: StalenessClass.enum.fiat_rate, hours: (thresholds) => thresholds.fiatHours },
-  [RateClass.crypto]: { kind: StalenessClass.enum.crypto_rate, hours: (thresholds) => thresholds.cryptoHours },
-} as const satisfies Record<RateClass, { kind: StalenessClass; hours: (thresholds: StalenessThresholds) => number }>;
+  [StalenessClass.enum.fiat_rate]: (thresholds) => thresholds.fiatHours,
+  [StalenessClass.enum.crypto_rate]: (thresholds) => thresholds.cryptoHours,
+} as const satisfies Partial<Record<StalenessClass, (thresholds: StalenessThresholds) => number>>;
 
 export const convert = (
   amount: number,
@@ -77,12 +74,12 @@ export const convert = (
   const match = R.find(rates, (r) => r.fromCode === from && r.toCode === to);
   if (!match) return { value: null, rate: null, asOf: null, stale: false, noRate: true };
 
-  const { kind, hours } = RATE_STALENESS[isCryptoPair(from, to) ? RateClass.crypto : RateClass.fiat];
+  const kind = isCryptoPair(from, to) ? StalenessClass.enum.crypto_rate : StalenessClass.enum.fiat_rate;
   return {
     value: roundToDecimals(amount * match.rate, options.decimals),
     rate: match.rate,
     asOf: match.asOf,
-    stale: isStale(kind, match.asOf, now, hours(options.thresholds)),
+    stale: isStale(kind, match.asOf, now, RATE_STALENESS[kind](options.thresholds)),
     noRate: false,
   };
 };
