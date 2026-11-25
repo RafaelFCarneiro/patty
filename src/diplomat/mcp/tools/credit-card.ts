@@ -13,7 +13,7 @@ import {
   importCardStatement,
   updateCardTransaction,
 } from '../../../controllers/credit-card/transaction.js';
-import { BillQuerySchema, PayBillSchema } from '../../../models/bill.js';
+import { BillQuerySchema, PayBillSchema, RevertBillPaymentSchema } from '../../../models/bill.js';
 import { DeleteTransactionSchema, TransactionSource } from '../../../models/transaction.js';
 import {
   AddCardPurchaseSchema,
@@ -183,7 +183,8 @@ const getBillTool = defineTool({
     annotations: READ_ONLY,
     title: 'Get credit card bill (fatura)',
     description:
-      'Get a card bill for a month: status (open/closed/paid), close/due dates, total, and its transactions.',
+      'Get a card bill for a month: status (open/closed/paid), close/due dates, total, what is paid and what ' +
+      'remains (`paidAmount`, `remaining`, `partiallyPaid`), its payments (oldest first) and its transactions.',
     inputSchema: BillQuerySchema.shape,
   },
   handle: async (args, { deps }) => {
@@ -192,8 +193,13 @@ const getBillTool = defineTool({
 });
 
 const payBillDescription =
-  'Pay a credit card bill. Creates a canonical transfer (payer account → card internal account) ' +
-  'for the full bill total, then marks the bill paid. Idempotent — re-calling on a paid bill is a no-op. ' +
+  'Pay a credit card bill, whole or in part. Each call creates one canonical transfer (payer account → card ' +
+  'internal account) for `amount` — omitted, it pays what remains on the bill — and marks the bill paid only when ' +
+  'nothing remains; until then the bill keeps its status and reports `partiallyPaid`, `paidAmount` and ' +
+  '`remaining`. An `amount` above what remains is refused. Repeating a call with the same bill, date and amount ' +
+  'is a no-op; pass `discriminator` to record a second identical payment. Re-calling on a paid bill is a no-op. ' +
+  'What stays unpaid remains as debt on the card; interest the bank charges on it is recorded as a card charge ' +
+  '(add_card_purchase) on the next bill. ' +
   'Paying account resolution: explicit `account` → card default `paymentAccount` → error. ' +
   'Optional `paymentDate` (defaults to today) records when the payment occurred; it must not be in the ' +
   'future — the payment transfer is always effective and dated on/before today.';
@@ -216,8 +222,9 @@ const payBillTool = defineTool({
 });
 
 const revertBillPaymentDescription =
-  'Undo a bill payment: deletes the payment transfer and flips the bill back from paid to closed. ' +
-  'Idempotent — calling on a bill that is not paid is a no-op that returns it unchanged.';
+  "Undo one bill payment: deletes its transfer (`paymentId`, from the bill's `payments`; default the latest by " +
+  'date, refused when two share that date) and, from paid, flips the bill back to closed. ' +
+  'Idempotent — calling on a bill with no payment is a no-op that returns it unchanged.';
 
 const revertBillPaymentTool = defineTool({
   name: ToolName.enum.revert_bill_payment,
@@ -225,7 +232,7 @@ const revertBillPaymentTool = defineTool({
     annotations: MUTATING,
     title: 'Revert credit card bill payment',
     description: revertBillPaymentDescription,
-    inputSchema: BillQuerySchema.shape,
+    inputSchema: RevertBillPaymentSchema.shape,
   },
   handle: async (args, { deps, runEffects }) => {
     const flow = () => revertBillPayment(deps, args).map(billAdapters.outcomeToDb).map(outcomeToDb);

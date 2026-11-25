@@ -4,7 +4,6 @@ import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
-import { billEntityFrom } from '../../logic/bill.js';
 import { internalAccountNameFor, isCardRename } from '../../logic/credit-card.js';
 import * as persistence from '../../logic/persistence.js';
 import { accountErrors, ACCOUNT_ENTITY_TAG, AccountType, type Account } from '../../models/account.js';
@@ -33,17 +32,11 @@ const assertCardNameAvailable = async (deps: Deps, name: string): Promise<boolea
 const assertAccountNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
   !(await deps.accounts.findByName(name));
 
-const billClearFor = (bill: RawBill): Persistable[] =>
-  bill.paymentTransactionId
-    ? [persistence.update({ entity: BILL_ENTITY_TAG, model: { ...billEntityFrom(bill), paymentTransactionId: null } })]
-    : [];
+const removeBill = (bill: RawBill): Persistable =>
+  persistence.remove({ entity: BILL_ENTITY_TAG, id: bill.id, version: bill.version });
 
-const billRemovalFor = (bill: RawBill): Persistable =>
-  persistence.remove({
-    entity: BILL_ENTITY_TAG,
-    id: bill.id,
-    version: bill.paymentTransactionId ? bill.version + 1 : bill.version,
-  });
+const removeTransaction = (tx: { id: string; version: number }): Persistable =>
+  persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: tx.id, version: tx.version });
 
 export const deleteCreditCard = (
   deps: Deps,
@@ -78,11 +71,8 @@ export const deleteCreditCard = (
     const correlatedTransactions = await deps.transactions.findAllCorrelatedToCard(card.id, card.accountId);
 
     const persist: Persistable[] = [
-      ...correlatedBills.flatMap(billClearFor),
-      ...correlatedTransactions.map((tx) =>
-        persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: tx.id, version: tx.version }),
-      ),
-      ...correlatedBills.map(billRemovalFor),
+      ...correlatedTransactions.map(removeTransaction),
+      ...correlatedBills.map(removeBill),
       persistence.remove({ entity: CREDIT_CARD_ENTITY_TAG, id: rawCard.id, version: rawCard.version }),
       persistence.remove({ entity: ACCOUNT_ENTITY_TAG, id: rawAccount.id, version: rawAccount.version }),
     ];

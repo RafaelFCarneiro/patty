@@ -7,6 +7,7 @@ import {
   billEntityFrom,
   billPeriodKey,
   billPeriodForCycle,
+  changesBillTotal,
   isBillPaid,
   resolveBillPeriod,
 } from '../../logic/bill.js';
@@ -24,7 +25,7 @@ import {
   viewFromOutcome,
 } from '../../logic/transaction.js';
 import { AccountType } from '../../models/account.js';
-import { BILL_ENTITY_TAG, BillStatus, type BillPeriod, type RawBill } from '../../models/bill.js';
+import { BILL_ENTITY_TAG, BillStatus, type BillPeriod, type BillTotalChange, type RawBill } from '../../models/bill.js';
 import {
   cardErrors,
   type AddCardPurchase,
@@ -43,11 +44,14 @@ import {
   type ClassifiedUpsertResult,
   type DeleteTransactionResult,
   type RawTransactionView,
+  TransactionType,
+  type TransactionEntity,
   type TransactionSource,
   type TransactionView,
 } from '../../models/transaction.js';
 import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
+import { guardTotalCoversPaid } from './bill.js';
 import {
   matchCandidatesFor,
   resolveCardRef,
@@ -65,7 +69,44 @@ const assertCreditAccountLeg = (
   resolveLegAccounts(deps, tx).map((legs) => legs.some((account) => account.type === AccountType.enum.credit));
 
 const resolveOwnCardId = (existing: Pick<TransactionView, 'cardId'>): Result<string, AppError> =>
-  okOr(existing.cardId, cardErrors.paidBillImmutable);
+  okOr(existing.cardId, cardErrors.billPaymentProtected);
+
+const guardBillChange = (
+  deps: Deps,
+  billId: string | undefined,
+  change: BillTotalChange,
+): ResultAsync<void, AppError> =>
+  safeTry(async function* () {
+    const bill = billId ? await deps.bills.findById(billId) : null;
+    if (bill) yield* guardTotalCoversPaid(deps, bill, change);
+    return ok();
+  });
+
+const guardPurchaseBill = (
+  deps: Deps,
+  bill: RawBill | null,
+  input: Pick<AddCardPurchase, 'type' | 'amount'>,
+): ResultAsync<void, AppError> =>
+  safeTry(async function* () {
+    yield* guard(!bill || !isBillPaid(bill), cardErrors.paidBillImmutable);
+    if (bill && input.type === TransactionType.enum.income) yield* guardTotalCoversPaid(deps, bill, { added: input });
+    return ok();
+  });
+
+const guardEditCoversPaid = (
+  deps: Deps,
+  existing: RawTransactionView,
+  entity: TransactionEntity,
+): ResultAsync<void, AppError> =>
+  safeTry(async function* () {
+    const sameBill = entity.refs.billId === existing.billId;
+    yield* guardBillChange(deps, existing.billId, {
+      removedId: existing.id,
+      added: sameBill ? entity : undefined,
+    });
+    if (!sameBill) yield* guardBillChange(deps, entity.refs.billId, { added: entity });
+    return ok();
+  });
 
 const touchBill = (bill: RawBill): Persistable =>
   persistence.update({ entity: BILL_ENTITY_TAG, model: billEntityFrom(bill) });
@@ -116,7 +157,7 @@ const planCardPurchase = (
       card.dueDay,
     );
     const existingBill = await deps.bills.findByCycle(card.id, billPeriod.month, billPeriod.year);
-    yield* guard(!existingBill || !isBillPaid(existingBill), cardErrors.paidBillImmutable);
+    yield* guardPurchaseBill(deps, existingBill, input);
 
     const categorySelection = yield* resolveCategorySelection(deps, input, input.type);
     const plan = planNewTransaction({
@@ -258,6 +299,7 @@ export const updateCardTransaction = (
     const patch = R.omit(input, ['billMonth', 'billYear']);
     const { categorySelection } = yield* decideTransactionUpdate(deps, patch, existing);
     const entity = mergePatch(existing, input, categorySelection, { billId: reassignedBillId });
+    if (changesBillTotal(existing, entity)) yield* guardEditCoversPaid(deps, existing, entity);
 
     const merchantCorrection = resolveMerchantCorrection(existing, entity.refs.categoryId);
     const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
@@ -283,9 +325,11 @@ export const deleteCardTransaction = (
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isCreditOwned = yield* assertCreditAccountLeg(deps, existing);
     yield* guard(isCreditOwned, transactionErrors.wrongOperation(Remedy.enum.delete_account_transaction));
+    yield* resolveOwnCardId(existing);
 
     const bill = existing.billId ? await deps.bills.findById(existing.billId) : null;
     yield* guard(!bill || !isBillPaid(bill), cardErrors.paidBillImmutable);
+    if (bill) yield* guardTotalCoversPaid(deps, bill, { removedId: existing.id });
 
     const locale = await deps.locale();
     const labeled = addLocalizedLabels(existing, locale);

@@ -9565,10 +9565,56 @@
                           "type": "string",
                           "description": "Localized status label"
                         },
+                        "paidAmount": {
+                          "type": "number",
+                          "description": "Sum of the bill payments"
+                        },
+                        "remaining": {
+                          "type": "number",
+                          "description": "Bill total minus paidAmount; what is still owed on this bill"
+                        },
+                        "partiallyPaid": {
+                          "type": "boolean",
+                          "description": "True when part of the bill is paid and part remains"
+                        },
+                        "payments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Id of the payment transfer; the `paymentId` that undoes this payment"
+                              },
+                              "date": {
+                                "type": "string",
+                                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                                "description": "Date the payment occurred"
+                              },
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "description": "Amount paid, in the card currency"
+                              },
+                              "account": {
+                                "type": "string",
+                                "description": "Name of the account the payment left"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "date",
+                              "amount"
+                            ]
+                          },
+                          "description": "The bill payments, oldest first"
+                        },
                         "paymentTransactionId": {
                           "type": "string",
                           "minLength": 1,
-                          "description": "Id of the transfer transaction that paid this bill. Absent for open/closed bills, and for paid bills settled with a non-positive total (no transfer was created)"
+                          "description": "Id of the latest payment transfer; absent without a payment. `payments` is the field to read"
                         }
                       },
                       "required": [
@@ -9577,7 +9623,11 @@
                         "year",
                         "closeDate",
                         "dueDate",
-                        "status"
+                        "status",
+                        "paidAmount",
+                        "remaining",
+                        "partiallyPaid",
+                        "payments"
                       ]
                     },
                     "cardName": {
@@ -10053,7 +10103,7 @@
         "tags": [
           "Bills"
         ],
-        "summary": "Pay a credit card bill",
+        "summary": "Pay a credit card bill, whole or in part",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10077,6 +10127,12 @@
                     "maximum": 2100,
                     "description": "Billing cycle year"
                   },
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "description": "Amount to pay now (defaults to what remains on the bill)"
+                  },
                   "account": {
                     "type": "string",
                     "minLength": 1,
@@ -10086,6 +10142,11 @@
                     "type": "string",
                     "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
                     "description": "Date the payment occurred (defaults to today); must not be in the future"
+                  },
+                  "discriminator": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Tells two genuinely distinct payments apart when bill, date and amount are the same"
                   }
                 },
                 "required": [
@@ -10099,7 +10160,7 @@
         },
         "responses": {
           "200": {
-            "description": "Bill paid",
+            "description": "Payment recorded",
             "content": {
               "application/json": {
                 "schema": {
@@ -10144,10 +10205,56 @@
                       "type": "string",
                       "description": "Localized status label"
                     },
+                    "paidAmount": {
+                      "type": "number",
+                      "description": "Sum of the bill payments"
+                    },
+                    "remaining": {
+                      "type": "number",
+                      "description": "Bill total minus paidAmount; what is still owed on this bill"
+                    },
+                    "partiallyPaid": {
+                      "type": "boolean",
+                      "description": "True when part of the bill is paid and part remains"
+                    },
+                    "payments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Id of the payment transfer; the `paymentId` that undoes this payment"
+                          },
+                          "date": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                            "description": "Date the payment occurred"
+                          },
+                          "amount": {
+                            "type": "number",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "description": "Amount paid, in the card currency"
+                          },
+                          "account": {
+                            "type": "string",
+                            "description": "Name of the account the payment left"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "date",
+                          "amount"
+                        ]
+                      },
+                      "description": "The bill payments, oldest first"
+                    },
                     "paymentTransactionId": {
                       "type": "string",
                       "minLength": 1,
-                      "description": "Id of the transfer transaction that paid this bill. Absent for open/closed bills, and for paid bills settled with a non-positive total (no transfer was created)"
+                      "description": "Id of the latest payment transfer; absent without a payment. `payments` is the field to read"
                     }
                   },
                   "required": [
@@ -10156,7 +10263,11 @@
                     "year",
                     "closeDate",
                     "dueDate",
-                    "status"
+                    "status",
+                    "paidAmount",
+                    "remaining",
+                    "partiallyPaid",
+                    "payments"
                   ]
                 }
               }
@@ -10434,7 +10545,7 @@
         "tags": [
           "Bills"
         ],
-        "summary": "Revert a credit card bill payment",
+        "summary": "Undo one credit card bill payment",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10457,6 +10568,11 @@
                     "minimum": 2000,
                     "maximum": 2100,
                     "description": "Billing cycle year"
+                  },
+                  "paymentId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The payment to undo (see `payments` on the bill); defaults to the latest one"
                   }
                 },
                 "required": [
@@ -10470,7 +10586,7 @@
         },
         "responses": {
           "200": {
-            "description": "Bill payment reverted (or no-op if not paid)",
+            "description": "Payment reverted (or no-op without a payment)",
             "content": {
               "application/json": {
                 "schema": {
@@ -10515,10 +10631,56 @@
                       "type": "string",
                       "description": "Localized status label"
                     },
+                    "paidAmount": {
+                      "type": "number",
+                      "description": "Sum of the bill payments"
+                    },
+                    "remaining": {
+                      "type": "number",
+                      "description": "Bill total minus paidAmount; what is still owed on this bill"
+                    },
+                    "partiallyPaid": {
+                      "type": "boolean",
+                      "description": "True when part of the bill is paid and part remains"
+                    },
+                    "payments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Id of the payment transfer; the `paymentId` that undoes this payment"
+                          },
+                          "date": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                            "description": "Date the payment occurred"
+                          },
+                          "amount": {
+                            "type": "number",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "description": "Amount paid, in the card currency"
+                          },
+                          "account": {
+                            "type": "string",
+                            "description": "Name of the account the payment left"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "date",
+                          "amount"
+                        ]
+                      },
+                      "description": "The bill payments, oldest first"
+                    },
                     "paymentTransactionId": {
                       "type": "string",
                       "minLength": 1,
-                      "description": "Id of the transfer transaction that paid this bill. Absent for open/closed bills, and for paid bills settled with a non-positive total (no transfer was created)"
+                      "description": "Id of the latest payment transfer; absent without a payment. `payments` is the field to read"
                     }
                   },
                   "required": [
@@ -10527,7 +10689,11 @@
                     "year",
                     "closeDate",
                     "dueDate",
-                    "status"
+                    "status",
+                    "paidAmount",
+                    "remaining",
+                    "partiallyPaid",
+                    "payments"
                   ]
                 }
               }

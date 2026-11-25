@@ -1,8 +1,25 @@
-import { ok, safeTry, type ResultAsync } from 'neverthrow';
+import { ok, safeTry, type Result, type ResultAsync } from 'neverthrow';
+import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
-import { billEntityFrom, computeBillTotal, planBillPayment, toBillView, withStatusLabel } from '../../logic/bill.js';
+import {
+  billEntityFrom,
+  billPaymentKey,
+  computeBillTotal,
+  coversPaid,
+  hasPaymentKey,
+  isBillPaid,
+  paymentsOf,
+  paymentsOnLatestDate,
+  planBillPayment,
+  settlement,
+  toBillView,
+  toSettledBill,
+  totalAfterChange,
+  withStatusLabel,
+} from '../../logic/bill.js';
+import { roundToDecimals } from '../../logic/money.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { addLocalizedLabels } from '../../logic/transaction.js';
@@ -12,17 +29,27 @@ import {
   BILL_ENTITY_TAG,
   BillStatus,
   type Bill,
-  type BillPaymentPlan,
+  type BillContext,
+  type BillPayment,
   type BillQuery,
+  type BillTotalChange,
   type BillView,
-  type RawBill,
   type PayBillInput,
+  type RawBill,
+  type RevertBillPayment,
+  type SettledBill,
 } from '../../models/bill.js';
 import type { CreditCard } from '../../models/credit-card.js';
+import { notFound } from '../../models/error.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
-import { TRANSACTION_ENTITY_TAG, type RawTransactionView } from '../../models/transaction.js';
+import { TRANSACTION_ENTITY_TAG, transactionErrors, type RawTransactionView } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
-import { resolveAccountRef, resolveCardRef } from '../resolve.js';
+import { resolveAccountRef, resolveCardRef, resolveDecimals } from '../resolve.js';
+
+const settledBillOf = (bill: Bill, items: RawTransactionView[], card: CreditCard, decimals: number): SettledBill => {
+  const payments = paymentsOf(items, card.accountId);
+  return toSettledBill(bill, payments, settlement(computeBillTotal(items), payments, decimals));
+};
 
 export const getBill = (deps: Deps, input: BillQuery): ResultAsync<BillView, AppError> =>
   safeTry(async function* () {
@@ -32,27 +59,14 @@ export const getBill = (deps: Deps, input: BillQuery): ResultAsync<BillView, App
       billErrors.notFound(card.name, input.month, input.year),
     );
     const locale = await deps.locale();
+    const decimals = await resolveDecimals(deps, card.currency);
     return ok({
       ...bill,
-      bill: withStatusLabel(bill.bill, locale),
+      bill: settledBillOf(withStatusLabel(bill.bill, locale), bill.transactions, card, decimals),
       transactions: bill.transactions.map(addLocalizedLabels(locale)),
       total: computeBillTotal(bill.transactions),
     });
   });
-
-const buildPaidBillWrite = (
-  rawBill: RawBill,
-  paymentTransactionId?: string,
-): { persistable: Persistable; response: Bill } => {
-  const status = BillStatus.enum.paid;
-  return {
-    persistable: persistence.update({
-      entity: BILL_ENTITY_TAG,
-      model: { ...billEntityFrom(rawBill), status, paymentTransactionId },
-    }),
-    response: { ...toBillView(rawBill), status, paymentTransactionId },
-  };
-};
 
 const resolvePayer = (deps: Deps, card: CreditCard, accountRef: string | undefined): ResultAsync<Account, AppError> =>
   safeTry(async function* () {
@@ -67,87 +81,157 @@ const resolvePayer = (deps: Deps, card: CreditCard, accountRef: string | undefin
     return ok(payer);
   });
 
-const settleWithoutTransfer = (rawBill: RawBill): FlowOutcome<Bill> => {
-  const { persistable, response } = buildPaidBillWrite(rawBill);
-  return { persist: [persistable], response };
-};
+const withStatus = (rawBill: RawBill, status: BillStatus): Persistable =>
+  persistence.update({ entity: BILL_ENTITY_TAG, model: { ...billEntityFrom(rawBill), status } });
 
-const settleWithTransfer = (rawBill: RawBill, plan: BillPaymentPlan): FlowOutcome<Bill> => {
-  const { persistable: billUpdate, response } = buildPaidBillWrite(rawBill, plan.transferEntity.id);
-  // The transfer is inserted before the bill update that points paymentTransactionId at it.
-  const transfer = persistence.insert({
-    entity: TRANSACTION_ENTITY_TAG,
-    model: plan.transferEntity,
-    idempotencyKey: plan.idempotencyKey,
+const settledAfter = (
+  rawBill: RawBill,
+  status: BillStatus,
+  total: number,
+  payments: BillPayment[],
+  decimals: number,
+): SettledBill => toSettledBill({ ...toBillView(rawBill), status }, payments, settlement(total, payments, decimals));
+
+const guardPaymentAmount = (amount: number, remaining: number): Result<void, AppError> =>
+  safeTry(function* () {
+    yield* guard(amount > 0, billErrors.amountBelowPrecision);
+    yield* guard(amount <= remaining, billErrors.amountExceedsRemaining(remaining));
+    return ok();
   });
-  return { persist: [transfer, billUpdate], response };
-};
 
-export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcome<Bill>, AppError> =>
+const unchanged = (bill: SettledBill): FlowOutcome<SettledBill> => ({ persist: [], response: bill });
+
+const settleWithoutTransfer = (
+  rawBill: RawBill,
+  total: number,
+  payments: BillPayment[],
+  decimals: number,
+): FlowOutcome<SettledBill> => ({
+  persist: [withStatus(rawBill, BillStatus.enum.paid)],
+  response: settledAfter(rawBill, BillStatus.enum.paid, total, payments, decimals),
+});
+
+const loadBillContext = (deps: Deps, input: BillQuery): ResultAsync<BillContext, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card);
     const billNotFound = billErrors.notFound(card.name, input.month, input.year);
+    // The version is read before the payments: a payment landing in between then makes the write conflict
+    // instead of passing the amount guard on stale data.
+    const rawBill = yield* okOr(await deps.bills.findByCycle(card.id, input.month, input.year), billNotFound);
     const existing = yield* okOr(await deps.bills.get(card.id, input.month, input.year), billNotFound);
-    if (existing.bill.status === BillStatus.enum.paid) return ok({ persist: [], response: existing.bill });
+    const decimals = await resolveDecimals(deps, card.currency);
+    const current = settledBillOf(existing.bill, existing.transactions, card, decimals);
+    return ok({ card, existing, decimals, current, total: computeBillTotal(existing.transactions), rawBill });
+  });
+
+const planPayment = (
+  deps: Deps,
+  input: PayBillInput,
+  context: BillContext,
+  rawBill: RawBill,
+  dates: { date: string; today: string },
+): ResultAsync<FlowOutcome<SettledBill>, AppError> =>
+  safeTry(async function* () {
+    const { card, existing, current, decimals, total } = context;
+    const amount = roundToDecimals(input.amount ?? current.remaining, decimals);
+    const facts = { bill: rawBill, date: dates.date, amount, decimals, discriminator: input.discriminator };
+    if (hasPaymentKey(existing.transactions, billPaymentKey(facts))) return ok(unchanged(current));
+    yield* guardPaymentAmount(amount, current.remaining);
+
+    const payer = yield* resolvePayer(deps, card, input.account);
+    const plan = planBillPayment({ ...facts, id: deps.newId(), card, payer, today: dates.today, source: input.source });
+    const payment = { id: plan.transferEntity.id, date: dates.date, amount, account: payer.name };
+    const status = amount === current.remaining ? BillStatus.enum.paid : rawBill.status;
+    const transfer = persistence.insert({
+      entity: TRANSACTION_ENTITY_TAG,
+      model: plan.transferEntity,
+      idempotencyKey: plan.idempotencyKey,
+    });
+    return ok({
+      persist: [transfer, withStatus(rawBill, status)],
+      response: settledAfter(
+        rawBill,
+        status,
+        total,
+        R.sortBy([...current.payments, payment], (p) => p.date),
+        decimals,
+      ),
+    });
+  });
+
+export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcome<SettledBill>, AppError> =>
+  safeTry(async function* () {
+    const context = yield* loadBillContext(deps, input);
+    const { existing, current, total, decimals, rawBill } = context;
+    if (isBillPaid(existing.bill)) return ok(unchanged(current));
 
     const today = toIsoDate(deps.clock());
     const date = input.paymentDate ?? today;
     yield* guard(date <= today, billErrors.futurePaymentDate(date));
 
-    const total = computeBillTotal(existing.transactions);
-    const rawBill = yield* okOr(await deps.bills.findById(existing.bill.id), billNotFound);
-    if (total <= 0) return ok(settleWithoutTransfer(rawBill));
-
-    const payer = yield* resolvePayer(deps, card, input.account);
-    const plan = planBillPayment({
-      id: deps.newId(),
-      card,
-      payer,
-      bill: rawBill,
-      total,
-      date,
-      today,
-      source: input.source,
-    });
-    return ok(settleWithTransfer(rawBill, plan));
+    if (current.remaining <= 0) return ok(settleWithoutTransfer(rawBill, total, current.payments, decimals));
+    return ok(yield* planPayment(deps, input, context, rawBill, { date, today }));
   });
 
-const buildClosedBillWrite = (rawBill: RawBill): { persistable: Persistable; response: Bill } => ({
-  persistable: persistence.update({
-    entity: BILL_ENTITY_TAG,
-    model: { ...billEntityFrom(rawBill), status: BillStatus.enum.closed, paymentTransactionId: null },
-  }),
-  response: { ...toBillView(rawBill), status: BillStatus.enum.closed, paymentTransactionId: undefined },
-});
+const pickPayment = (payments: BillPayment[], paymentId: string | undefined): Result<BillPayment, AppError> =>
+  safeTry(function* () {
+    const candidates = paymentId ? R.filter(payments, (p) => p.id === paymentId) : paymentsOnLatestDate(payments);
+    yield* guard(candidates.length <= 1, billErrors.ambiguousLatestPayment(R.map(candidates, (p) => p.id)));
+    return okOr(R.first(candidates), billErrors.paymentNotFound(paymentId));
+  });
 
-const tryFindPaymentTransaction = (deps: Deps, rawBill: RawBill): Promise<RawTransactionView | null> =>
-  rawBill.paymentTransactionId ? deps.transactions.getById(rawBill.paymentTransactionId) : Promise.resolve(null);
+const buildRevert = (
+  rawBill: RawBill,
+  transfer: RawTransactionView | undefined,
+  total: number,
+  payments: BillPayment[],
+  decimals: number,
+): FlowOutcome<SettledBill> => {
+  const status = rawBill.status === BillStatus.enum.paid ? BillStatus.enum.closed : rawBill.status;
+  const removal = transfer
+    ? [persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: transfer.id, version: transfer.version })]
+    : [];
+  return {
+    persist: [withStatus(rawBill, status), ...removal],
+    response: settledAfter(rawBill, status, total, payments, decimals),
+  };
+};
 
-export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<FlowOutcome<Bill>, AppError> =>
+export const revertBillPayment = (
+  deps: Deps,
+  input: RevertBillPayment,
+): ResultAsync<FlowOutcome<SettledBill>, AppError> =>
   safeTry(async function* () {
-    const card = yield* resolveCardRef(deps, input.card);
-    const existing = yield* okOr(
-      await deps.bills.get(card.id, input.month, input.year),
-      billErrors.notFound(card.name, input.month, input.year),
+    const { existing, current, total, decimals, rawBill } = yield* loadBillContext(deps, input);
+    if (R.isEmpty(current.payments) && !isBillPaid(existing.bill)) return ok(unchanged(current));
+
+    if (R.isEmpty(current.payments)) return ok(buildRevert(rawBill, undefined, total, [], decimals));
+
+    const payment = yield* pickPayment(current.payments, input.paymentId);
+    const transfer = yield* okOr(
+      R.find(existing.transactions, (tx) => tx.id === payment.id),
+      transactionErrors.notFound(payment.id),
     );
+    const remaining = R.filter(current.payments, (p) => p.id !== payment.id);
+    return ok(buildRevert(rawBill, transfer, total, remaining, decimals));
+  });
 
-    if (existing.bill.status !== BillStatus.enum.paid) {
-      return ok({ persist: [], response: existing.bill });
-    }
-
-    const rawBill = yield* okOr(
-      await deps.bills.findById(existing.bill.id),
-      billErrors.notFound(card.name, input.month, input.year),
+export const guardTotalCoversPaid = (
+  deps: Deps,
+  bill: Pick<RawBill, 'creditCardId' | 'month' | 'year'>,
+  change: BillTotalChange,
+): ResultAsync<void, AppError> =>
+  safeTry(async function* () {
+    const card = yield* okOr(
+      await deps.creditCards.findById(bill.creditCardId),
+      notFound('card', bill.creditCardId, []),
     );
-
-    const { persistable: billUpdate, response } = buildClosedBillWrite(rawBill);
-
-    const paymentTx = await tryFindPaymentTransaction(deps, rawBill);
-    const persist: Persistable[] = [
-      billUpdate,
-      ...(paymentTx
-        ? [persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: paymentTx.id, version: paymentTx.version })]
-        : []),
-    ];
-    return ok({ persist, response });
+    const items = (await deps.bills.get(card.id, bill.month, bill.year))?.transactions ?? [];
+    const decimals = await resolveDecimals(deps, card.currency);
+    const { paidAmount } = settlement(computeBillTotal(items), paymentsOf(items, card.accountId), decimals);
+    yield* guard(
+      coversPaid(totalAfterChange(items, change), paidAmount, decimals),
+      billErrors.totalBelowPaid(paidAmount),
+    );
+    return ok();
   });

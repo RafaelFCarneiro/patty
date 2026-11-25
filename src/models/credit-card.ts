@@ -175,6 +175,8 @@ export type CardError = NotFound<'card'> | Ambiguous<'card'> | DuplicateName<'cr
 const PAID_BILL_IMMUTABLE_MESSAGE =
   'this bill is paid; its transactions cannot be added, removed, or reassigned — revert the bill payment first';
 
+const BILL_PAYMENT_PROTECTED_MESSAGE = 'a bill payment cannot be edited or deleted here; revert the payment instead';
+
 export const cardErrors = {
   duplicateName: (name: string): CardError => ({ code: 'duplicate_name', entity: 'credit_card', name }),
   currencyMismatch: (cardCurrency: CurrencyCode, accountCurrency: CurrencyCode): CardError => ({
@@ -196,6 +198,10 @@ export const cardErrors = {
   } satisfies CardError,
   paidBillImmutable: validationWithRemedy(
     PAID_BILL_IMMUTABLE_MESSAGE,
+    Remedy.enum.revert_bill_payment,
+  ) satisfies CardError,
+  billPaymentProtected: validationWithRemedy(
+    BILL_PAYMENT_PROTECTED_MESSAGE,
     Remedy.enum.revert_bill_payment,
   ) satisfies CardError,
   accountChangeRejectedForCard: {

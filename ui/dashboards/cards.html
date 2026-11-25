@@ -1237,6 +1237,14 @@
                         <span class="compact-bill-label" id="bill-total-label">Total da Fatura</span>
                         <span class="compact-bill-total-amount" id="bill-total-val">—</span>
                     </div>
+                    <div class="compact-bill-row" id="bill-paid-row" style="display: none;">
+                        <span class="compact-bill-label" data-i18n="bill_paid_label">Pagamento</span>
+                        <span class="compact-bill-value" id="bill-paid-val">—</span>
+                    </div>
+                    <div class="compact-bill-row" id="bill-remaining-row" style="display: none;">
+                        <span class="compact-bill-label" data-i18n="bill_remaining_label">Restante</span>
+                        <span class="compact-bill-value" id="bill-remaining-val">—</span>
+                    </div>
                 </div>
 
                 <!-- Bill Actions -->
@@ -1528,8 +1536,12 @@
                     <div id="pay-bill-cycle" style="font-size:0.85rem; color:var(--text-muted);">-</div>
                 </div>
                 <div class="form-group" style="text-align:center; padding: 1rem 0; background:rgba(0,0,0,0.2); border-radius:10px; border:1px dashed var(--panel-border);">
-                    <label style="margin-bottom:0;">Valor Total a Pagar</label>
+                    <label style="margin-bottom:0;" data-i18n="pay_remaining_label">Restante a Pagar</label>
                     <div id="pay-bill-total" style="font-size:1.8rem; font-weight:800; color:var(--income-color);">—</div>
+                </div>
+                <div class="form-group">
+                    <label for="pay-amount" data-i18n="pay_amount_label">Valor a Pagar Agora</label>
+                    <input type="number" id="pay-amount" step="any" min="0" class="form-control" required>
                 </div>
                 <div class="form-group">
                     <label for="pay-account">Débito na Conta Corrente</label>
@@ -2014,15 +2026,26 @@
 
             billTotalVal.textContent = fmtAmount;
 
+            renderBillPayments(b);
+
             // Handle actions visibility
-            if (status === 'paid') {
-                btnPayBill.style.display = 'none';
-                btnRevertPay.style.display = 'flex';
-            } else {
-                btnPayBill.style.display = 'flex';
-                btnRevertPay.style.display = 'none';
-                btnPayBill.disabled = (currentBill.total === 0);
-            }
+            btnRevertPay.style.display = (b.payments || []).length > 0 || status === 'paid' ? 'flex' : 'none';
+            btnPayBill.style.display = status === 'paid' ? 'none' : 'flex';
+            btnPayBill.disabled = (currentBill.total === 0);
+        }
+
+        // "pago X de Y" and what remains, shown once any part of the bill is paid
+        function renderBillPayments(b) {
+            const paidAmount = b.paidAmount || 0;
+            const hasPayment = paidAmount > 0;
+            const format = (value) => window.formatMoney(value, activeCard.currency);
+            document.getElementById('bill-paid-row').style.display = hasPayment ? 'flex' : 'none';
+            document.getElementById('bill-remaining-row').style.display = hasPayment ? 'flex' : 'none';
+            if (!hasPayment) return;
+            document.getElementById('bill-paid-val').textContent = t('bill_paid_of')
+                .replace('{paid}', format(paidAmount))
+                .replace('{total}', format(currentBill.total || 0));
+            document.getElementById('bill-remaining-val').textContent = format(b.remaining || 0);
         }
 
         // Toggle Table sorting
@@ -2974,9 +2997,11 @@
             const b = currentBill.bill || {};
             document.getElementById('pay-bill-cycle').textContent = `Ciclo de Fatura: ${monthNames[b.month - 1]} / ${b.year}`;
 
-            const fmtAmount = window.formatMoney(currentBill.total || 0, activeCard.currency);
-
-            document.getElementById('pay-bill-total').textContent = fmtAmount;
+            const remaining = b.remaining === undefined ? currentBill.total || 0 : b.remaining;
+            document.getElementById('pay-bill-total').textContent = window.formatMoney(remaining, activeCard.currency);
+            const amountInput = document.getElementById('pay-amount');
+            amountInput.value = String(remaining);
+            amountInput.max = String(remaining);
 
             // Populate account select
             const accSelect = document.getElementById('pay-account');
@@ -3022,6 +3047,7 @@
 
             const payAccName = document.getElementById('pay-account').value;
             const payDate = document.getElementById('pay-date').value;
+            const payAmount = Number(document.getElementById('pay-amount').value);
             const b = currentBill.bill || {};
 
             closeModal('modal-pay-bill');
@@ -3035,6 +3061,7 @@
                         card: activeCard.name,
                         month: b.month,
                         year: b.year,
+                        amount: payAmount,
                         account: payAccName,
                         paymentDate: payDate
                     })
@@ -3045,7 +3072,7 @@
                     throw new Error(errRes.error?.message || "Erro no pagamento");
                 }
 
-                showToast(`Fatura de ${activeCard.name} paga com sucesso!`, 'success');
+                showToast(t('toast_payment_recorded').replace('{card}', activeCard.name), 'success');
                 await loadBillDetails();
             } catch (err) {
                 console.error("Pay bill error", err);
@@ -3295,6 +3322,12 @@ var TRANSLATIONS = {
         card_bill_details: "Card Bill Details",
         btn_pay_bill: "Pay Bill",
         btn_revert_payment: "Revert Payment",
+        bill_paid_label: "Payment",
+        bill_paid_of: "Paid {paid} of {total}",
+        bill_remaining_label: "Remaining",
+        pay_remaining_label: "Remaining to Pay",
+        pay_amount_label: "Amount to Pay Now",
+        toast_payment_recorded: "Payment on the {card} bill recorded!",
         bill_status: "Bill Status:",
         status_open: "Open",
         status_closed: "Closed",
@@ -3496,6 +3529,12 @@ var TRANSLATIONS = {
         card_bill_details: "Detalhamento de Fatura",
         btn_pay_bill: "Pagar Fatura",
         btn_revert_payment: "Estornar Pagamento",
+        bill_paid_label: "Pagamento",
+        bill_paid_of: "Pago {paid} de {total}",
+        bill_remaining_label: "Restante",
+        pay_remaining_label: "Restante a Pagar",
+        pay_amount_label: "Valor a Pagar Agora",
+        toast_payment_recorded: "Pagamento da fatura de {card} registrado!",
         bill_status: "Status da Fatura:",
         status_open: "Aberta",
         status_closed: "Fechada",
@@ -3697,6 +3736,12 @@ var TRANSLATIONS = {
         card_bill_details: "Detalle de Factura",
         btn_pay_bill: "Pagar Factura",
         btn_revert_payment: "Revertir Pago",
+        bill_paid_label: "Pago",
+        bill_paid_of: "Pagado {paid} de {total}",
+        bill_remaining_label: "Restante",
+        pay_remaining_label: "Restante por Pagar",
+        pay_amount_label: "Monto a Pagar Ahora",
+        toast_payment_recorded: "Pago de la factura de {card} registrado.",
         bill_status: "Estado de la Factura:",
         status_open: "Abierta",
         status_closed: "Cerrada",

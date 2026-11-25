@@ -1,6 +1,6 @@
 # Feature Design 025: Partial bill payment
 
-**Type:** Feature design · **Design status:** Accepted · **Implementation status:** Not started ·
+**Type:** Feature design · **Design status:** Accepted · **Implementation status:** In progress ·
 **Date:** 2026-11-25 · Revises Feature Design 011 (bill payment lifecycle) and 012 (a paid bill is
 composition-immutable); keeps ADR-010 (a bill payment is a canonical transfer into the card's account).
 
@@ -36,11 +36,15 @@ side: more than one payment per bill, knowing how much is paid and how much rema
 
 3. **Status.** A bill becomes `paid` when a payment brings `remaining` to 0. Until then it keeps its cycle
    status (`open` or `closed`), and `partiallyPaid` (`paidAmount > 0` and `remaining > 0`) says it is part paid.
-   No new status value: `paid` keeps meaning "settled", and every reader of `status` keeps working.
+   No new status value: `paid` keeps meaning "settled", and every reader of `status` keeps working. A `paid`
+   bill always reports `remaining: 0`, whatever its transfers add up to: a bill settled with a non-positive
+   total has no payment at all, and older data may hold a `paid` bill whose transfer is gone.
 
 4. **The single-payment link goes away from storage, not from the contract.** `bills.payment_transaction_id`
-   is dropped (the payments are read from the transfers). The bill view keeps `paymentTransactionId` as the id
-   of the latest payment (absent without one), so no client breaks; `payments` is the field to read.
+   is dropped (the payments are read from the transfers). Before dropping it, the migration copies the link
+   onto the transfer (`transactions.bill_id` ← the bill, where the transfer it names has none), so no existing
+   payment is lost. The bill view keeps `paymentTransactionId` as the id of the latest payment (absent without
+   one), so no client breaks; `payments` is the field to read.
 
 5. **The remainder stays as card debt.** Nothing is carried to the next bill. Interest the bank charges on an
    unpaid remainder (rotativo) is recorded by the agent as a card charge on the next bill. The docs say so.
@@ -107,8 +111,9 @@ payment), `docs/architecture.md` invariant 8, `docs/canonical/*`.
    together. `revertBillPayment` removes the chosen payment and, from `paid`, flips the bill to `closed`. The
    card-transaction flows (`update_card_transaction`, `delete_card_transaction`, and a purchase landing on the
    bill) use the new guard; their "paid bill" checks stay.
-4. **Schema**: a migration drops `bills.payment_transaction_id` (listed in `DATA_REWRITING_MIGRATIONS`, so the
-   database is copied first); `delete_credit_card` finds payments through the transfers.
+4. **Schema**: a migration first sets `transactions.bill_id` from `bills.payment_transaction_id` where the
+   transfer has none, then drops the column (listed in `DATA_REWRITING_MIGRATIONS`, so the database is copied
+   first); `delete_credit_card` finds payments through the transfers.
 5. **Edges**: the MCP tools and REST mirrors take the new inputs; descriptions say what remains, that a
    remainder stays as card debt and that interest is recorded as a card charge.
 6. **UI**: `ui/dashboards/cards.html` shows "pago X de Y" and the remaining amount for a partly paid bill,
@@ -120,7 +125,10 @@ payment), `docs/architecture.md` invariant 8, `docs/canonical/*`.
    bill raises `remaining`; deleting one that would drop the total below `paidAmount` is refused; two
    concurrent payments cannot together exceed the total; the payer's and the card account's balances after
    each step; `delete_credit_card` removes every payment; the migration keeps existing paid bills paid with
-   their payment listed; the MCP surface and OpenAPI snapshots.
+   their payment listed, including one whose transfer had no `bill_id` (linked only through the dropped column);
+   a `paid` bill with no payment (non-positive total, or a transfer gone) reports `remaining: 0`; the old
+   all-or-nothing calls give the same answers as before (pay without `amount`, pay a `paid` bill, revert the
+   only payment); the MCP surface and OpenAPI snapshots.
 8. **Docs**: `docs/mcp-tools.md` (`pay_bill`, `revert_bill_payment`, `get_bill`), `docs/architecture.md`
    invariant 8, `docs/write-path.md`, this design's status line; Designs 011 and 012 point here for what changed.
 

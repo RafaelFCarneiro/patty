@@ -2,10 +2,12 @@ import { z } from 'zod';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
-import type { ValidationError } from './error.js';
+import { validationWithRemedy, type ValidationError } from './error.js';
+import { Remedy } from './remedy.js';
 import type { LabelMap } from './locale.js';
-import type { CurrencyCode } from './money.js';
-import type { TransactionEntity, TransactionSource, TransactionView } from './transaction.js';
+import { Money, type CurrencyCode } from './money.js';
+import type { CreditCard } from './credit-card.js';
+import type { RawTransactionView, TransactionEntity, TransactionSource, TransactionView } from './transaction.js';
 
 export const BillStatus = z.enum(['open', 'closed', 'paid']);
 export type BillStatus = z.infer<typeof BillStatus>;
@@ -25,14 +27,35 @@ export const BillSchema = z.object({
   dueDate: IsoDate.describe('Payment due date'),
   status: BillStatus.describe('open | closed | paid'),
   statusLabel: z.string().optional().describe('Localized status label'),
-  paymentTransactionId: Id.optional().describe(
-    'Id of the transfer transaction that paid this bill. Absent for open/closed bills, and for paid bills ' +
-      'settled with a non-positive total (no transfer was created)',
-  ),
 });
 export type Bill = z.infer<typeof BillSchema>;
 
-export type BillView = { bill: Bill; cardName: string; transactions: TransactionView[]; total: number };
+export const BillPaymentSchema = z.object({
+  id: Id.describe('Id of the payment transfer; the `paymentId` that undoes this payment'),
+  date: IsoDate.describe('Date the payment occurred'),
+  amount: Money.describe('Amount paid, in the card currency'),
+  account: z.string().optional().describe('Name of the account the payment left'),
+});
+export type BillPayment = z.infer<typeof BillPaymentSchema>;
+
+export const SettlementSchema = z.object({
+  paidAmount: z.number().describe('Sum of the bill payments'),
+  remaining: z.number().describe('Bill total minus paidAmount; what is still owed on this bill'),
+  partiallyPaid: z.boolean().describe('True when part of the bill is paid and part remains'),
+});
+export type Settlement = z.infer<typeof SettlementSchema>;
+
+// A bill as a client sees it: the stored cycle plus what its payments (derived from the transfers) say.
+export const SettledBillSchema = BillSchema.extend({
+  ...SettlementSchema.shape,
+  payments: z.array(BillPaymentSchema).describe('The bill payments, oldest first'),
+  paymentTransactionId: Id.optional().describe(
+    'Id of the latest payment transfer; absent without a payment. `payments` is the field to read',
+  ),
+});
+export type SettledBill = z.infer<typeof SettledBillSchema>;
+
+export type BillView = { bill: SettledBill; cardName: string; transactions: TransactionView[]; total: number };
 
 // Internal persistence-side entity: `Bill` plus `version` and the credit-card FK (neither on the
 // wire — mirrors `models/account.ts`'s `AccountEntitySchema` split).
@@ -44,8 +67,6 @@ export type RawBill = z.infer<typeof RawBillSchema>;
 // Mirrors `models/account.ts`'s `ACCOUNT_ENTITY_TAG`.
 export const BILL_ENTITY_TAG = 'bill';
 
-// paymentTransactionId: undefined leaves the column unchanged (drizzle's .set() drops
-// undefined-valued keys); null explicitly clears it.
 export type BillEntity = {
   id: string;
   creditCardId: string;
@@ -54,7 +75,6 @@ export type BillEntity = {
   closeDate: string;
   dueDate: string;
   status: BillStatus;
-  paymentTransactionId?: string | null;
 };
 
 export const BillQuerySchema = z.object({
@@ -64,9 +84,20 @@ export const BillQuerySchema = z.object({
 });
 export type BillQuery = z.infer<typeof BillQuerySchema>;
 
+export const RevertBillPaymentSchema = BillQuerySchema.extend({
+  paymentId: Id.optional().describe('The payment to undo (see `payments` on the bill); defaults to the latest one'),
+});
+export type RevertBillPayment = z.infer<typeof RevertBillPaymentSchema>;
+
 export const PayBillSchema = BillQuerySchema.extend({
+  amount: Money.optional().describe('Amount to pay now (defaults to what remains on the bill)'),
   account: z.string().min(1).optional().describe('Paying account name (overrides card default)'),
   paymentDate: IsoDate.optional().describe('Date the payment occurred (defaults to today); must not be in the future'),
+  discriminator: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Tells two genuinely distinct payments apart when bill, date and amount are the same'),
 });
 export type PayBill = z.infer<typeof PayBillSchema>;
 
@@ -87,18 +118,39 @@ export const billErrors = {
     code: 'validation',
     issues: [`payment date ${date} is in the future: a bill payment records a payment that already occurred`],
   }),
+  amountBelowPrecision: {
+    code: 'validation',
+    issues: ["amount is below the card currency's smallest unit"],
+  } satisfies BillError,
+  amountExceedsRemaining: (remaining: number): BillError => ({
+    code: 'validation',
+    issues: [`amount exceeds what remains on the bill (${remaining})`],
+  }),
+  ambiguousLatestPayment: (ids: readonly string[]): BillError => ({
+    code: 'validation',
+    issues: [`several payments share the latest date: pass \`paymentId\` — one of ${ids.join(', ')}`],
+  }),
+  paymentNotFound: (paymentId?: string): BillError => ({
+    code: 'validation',
+    issues: [paymentId ? `payment ${paymentId} is not a payment of this bill` : 'the bill has no payment to undo'],
+  }),
+  totalBelowPaid: (paidAmount: number): BillError =>
+    validationWithRemedy(
+      `the change would bring the bill total below what is already paid (${paidAmount})`,
+      Remedy.enum.revert_bill_payment,
+    ),
 };
 
 export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string };
-
-export const BILL_PAYMENT_KEY_PREFIX = 'billpay-';
 
 export type BillPaymentFacts = {
   id: string;
   card: { name: string; currency: CurrencyCode; accountId: string };
   payer: { id: string };
   bill: Pick<RawBill, 'id' | 'month' | 'year'>;
-  total: number;
+  amount: number;
+  decimals: number;
+  discriminator?: string;
   date: string;
   today: string;
   source: TransactionSource;
@@ -106,4 +158,17 @@ export type BillPaymentFacts = {
 
 export type BillPaymentPlan = { transferEntity: TransactionEntity; idempotencyKey: string };
 
+export type BillPaymentDecision = { kind: 'repeat' } | { kind: 'pay'; plan: BillPaymentPlan; settles: boolean };
+
 export type PayBillInput = PayBill & { source: TransactionSource };
+
+export type BillTotalChange = { removedId?: string; added?: Pick<TransactionView, 'type' | 'amount'> };
+
+export type BillContext = {
+  card: CreditCard;
+  existing: { bill: Bill; transactions: RawTransactionView[] };
+  decimals: number;
+  current: SettledBill;
+  total: number;
+  rawBill: RawBill;
+};

@@ -274,7 +274,7 @@ describe('deleteCreditCard — functional core, two-entity batch (ADR-021 phase 
 
   it('the domain decides the cascade: transactions and an unpaid bill removed before the card', async () => {
     const deps = confirmedDeps({
-      bills: { findAllByCard: async () => [rawBill({ paymentTransactionId: undefined })] } as unknown as Deps['bills'],
+      bills: { findAllByCard: async () => [rawBill()] } as unknown as Deps['bills'],
       transactions: {
         findAllCorrelatedToCard: async () => [rawTransaction({ id: 'tx-1' }), rawTransaction({ id: 'tx-2' })],
       } as unknown as Deps['transactions'],
@@ -293,14 +293,15 @@ describe('deleteCreditCard — functional core, two-entity batch (ADR-021 phase 
     ]);
   });
 
-  it('a paid bill: clears paymentTransactionId, removes the transfer, removes the bill at version+1', async () => {
+  it('a paid bill: its payment transfers are removed with the other transactions, then the bill', async () => {
     const deps = confirmedDeps({
       bills: {
-        findAllByCard: async () => [rawBill({ paymentTransactionId: 'tx-payment', status: BillStatus.enum.paid })],
+        findAllByCard: async () => [rawBill({ status: BillStatus.enum.paid })],
       } as unknown as Deps['bills'],
       transactions: {
         findAllCorrelatedToCard: async () => [
           rawTransaction({ id: 'tx-payment', type: TransactionType.enum.transfer }),
+          rawTransaction({ id: 'tx-payment-2', type: TransactionType.enum.transfer }),
         ],
       } as unknown as Deps['transactions'],
     });
@@ -309,27 +310,10 @@ describe('deleteCreditCard — functional core, two-entity batch (ADR-021 phase 
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
-    // Bill-clear (breaking the bill<->transfer circular FK) precedes the transfer's own removal,
-    // which precedes the bill's own removal — at version+1, the version the shell will have
-    // already bumped the clearing update to by the time this delete applies in the same batch.
     expect(outcome.persist).toEqual([
-      {
-        op: PersistOp.enum.update,
-        entity: BILL_ENTITY_TAG,
-        model: {
-          id: 'bill-1',
-          creditCardId: 'card-existing',
-          month: 6,
-          year: 2026,
-          closeDate: '2026-06-28',
-          dueDate: '2026-07-05',
-          status: BillStatus.enum.paid,
-          paymentTransactionId: null,
-          version: 2,
-        },
-      },
       { op: PersistOp.enum.delete, entity: TRANSACTION_ENTITY_TAG, id: 'tx-payment', version: 0 },
-      { op: PersistOp.enum.delete, entity: BILL_ENTITY_TAG, id: 'bill-1', version: 3 },
+      { op: PersistOp.enum.delete, entity: TRANSACTION_ENTITY_TAG, id: 'tx-payment-2', version: 0 },
+      { op: PersistOp.enum.delete, entity: BILL_ENTITY_TAG, id: 'bill-1', version: 2 },
       { op: PersistOp.enum.delete, entity: CREDIT_CARD_ENTITY_TAG, id: 'card-existing', version: 7 },
       { op: PersistOp.enum.delete, entity: ACCOUNT_ENTITY_TAG, id: 'acc-card-internal', version: 4 },
     ]);
