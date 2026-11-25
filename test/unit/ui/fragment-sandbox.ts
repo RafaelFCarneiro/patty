@@ -17,6 +17,7 @@ export type StubElement = {
   textContent: string;
   value: string;
   className: string;
+  dataset: Record<string, string>;
   style: { display?: string; color?: string; setProperty: () => void };
   classList: { add: () => void; remove: () => void; toggle: () => void; contains: () => boolean };
   children: StubElement[];
@@ -41,6 +42,7 @@ export const makeStubElement = (): StubElement => {
     textContent: '',
     value: '',
     className: '',
+    dataset: {},
     style: { setProperty() {} },
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
     children: [],
