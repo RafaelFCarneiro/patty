@@ -33,9 +33,9 @@ describe('cards.html mock-ups show the card own name', () => {
     ]);
   });
 
-  it('labels the holder line from the i18n table in every locale', () => {
+  it('labels the holder line from the i18n table in every locale, re-translated when the locale arrives late', () => {
     expect(source.match(new RegExp(`${CARD_LABEL}: "`, 'g'))).toHaveLength(3);
-    expect(source.match(new RegExp(`\\$\\{t\\('${CARD_LABEL}'\\)\\}`, 'g'))).toHaveLength(3);
+    expect(source.match(new RegExp(`data-i18n="${CARD_LABEL}">\\$\\{t\\('${CARD_LABEL}'\\)\\}`, 'g'))).toHaveLength(3);
   });
 
   it('renders the upper-cased name in the carousel and both previews', () => {
