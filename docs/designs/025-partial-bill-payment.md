@@ -91,6 +91,8 @@ side: more than one payment per bill, knowing how much is paid and how much rema
   payment is reverted. Rejected: derived, like balances.
 - **`revert_bill_payment` undoes all payments.** Simpler, but undoing one mistaken payment would wipe the
   correct ones. Rejected.
+- **`revert_bill_payment` defaults to the latest payment.** Convenient, but a retried undo would remove a second
+  payment. Rejected: with several payments the caller names the one to undo.
 
 ## Plan
 

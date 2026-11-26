@@ -2055,7 +2055,6 @@
             btnPayBill.disabled = (currentBill.total === 0);
         }
 
-        // "pago X de Y" and what remains, shown once any part of the bill is paid
         function renderBillPayments(b) {
             const paidAmount = b.paidAmount || 0;
             const hasPayment = paidAmount > 0;
@@ -3050,7 +3049,6 @@
 
             if (retry) accSelect.value = retry.account;
 
-            // Pre-fill payment date to today (or the unfinished payment's date) and set max to today
             const today = new Date();
             const yyyy = today.getFullYear();
             const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -3069,9 +3067,7 @@
             openModal('modal-pay-bill');
         }
 
-        // Each deliberate payment carries its own token, kept with what was submitted until it succeeds: reopening
-        // the form after a failure resends the same payment, so a retry is a repeat to the API, while a new
-        // payment, even an identical one, is not.
+        // One token per deliberate payment, resent unchanged on retry — a retry repeats, a new payment does not.
         var payToken = null;
         var payAttempt = null;
         function newPayToken() {
@@ -3138,7 +3134,6 @@
             }
         }
 
-        // Revert Bill Payment: one payment at a time, chosen when the bill has several
         function revertBillPayment() {
             if (!currentBill || !activeCard) return;
             const payments = (currentBill.bill || {}).payments || [];
