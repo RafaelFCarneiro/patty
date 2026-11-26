@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadFragment, makeSessionStorage } from './fragment-sandbox.js';
 
@@ -74,6 +76,26 @@ describe('cards.html bill summary with a partial payment', () => {
     expect(document.getElementById('btn-pay-bill').style.display).toBe('none');
     expect(document.getElementById('btn-revert-pay').style.display).toBe('flex');
     expect(document.getElementById('bill-remaining-val').textContent).toBe(money(0));
+  });
+});
+
+describe('cards.html payment rows', () => {
+  it('lets the stylesheet yield to the rows’ inline display, so they can be hidden', () => {
+    const html = readFileSync(join(__dirname, '../../../ui/dashboards/cards.html'), 'utf-8');
+    const rule = html.match(/\.compact-bill-row \{([^}]*)\}/)?.[1] ?? '';
+
+    expect(rule).toContain('display: flex;');
+    expect(rule).not.toMatch(/display:[^;]*!important/);
+  });
+
+  it('clears the previous bill’s amounts when the shown bill has no payment', () => {
+    const { sandbox, document } = render({ paidAmount: 40, remaining: 60, payments: [{ id: 'tx-1' }] });
+    sandbox.currentBill = { bill: bill(), cardName: card.name, transactions: [], total: 100 };
+
+    sandbox.renderBillSummary();
+
+    expect(document.getElementById('bill-paid-val').textContent).toBe('');
+    expect(document.getElementById('bill-remaining-val').textContent).toBe('');
   });
 });
 
@@ -161,11 +183,18 @@ describe('cards.html unfinished payments', () => {
   const open = (
     storage: { getItem(k: string): string | null; setItem(k: string, v: string): void } = makeSessionStorage(),
   ) => {
-    const { sandbox, document } = loadFragment('cards', { sessionStorage: storage });
+    const { sandbox, document, reload } = loadFragment('cards', { sessionStorage: storage });
     const sent: Sent[] = [];
-    sandbox.activeCard = card;
-    sandbox.accounts = [];
-    sandbox.loadBillDetails = async () => undefined;
+    const prepare = () => {
+      sandbox.activeCard = card;
+      sandbox.accounts = [];
+      sandbox.loadBillDetails = async () => undefined;
+    };
+    prepare();
+    const navigateBack = () => {
+      reload();
+      prepare();
+    };
     const answer = (reply: Reply) => async (_url: string, init: { body: string }) => {
       sent.push(JSON.parse(init.body));
       if (reply === 'network') throw new Error('offline');
@@ -193,7 +222,7 @@ describe('cards.html unfinished payments', () => {
       show(shown);
       await sandbox.openPayModal();
     };
-    return { sandbox, document, sent, answer, show, submit, pay, reopen };
+    return { sandbox, document, sent, answer, show, submit, pay, reopen, navigateBack };
   };
   const kept = (storage: ReturnType<typeof makeSessionStorage>) =>
     Object.keys(JSON.parse(storage.getItem('patty.cards.payAttempts') ?? '{}'));
@@ -360,5 +389,48 @@ describe('cards.html unfinished payments', () => {
       'Deseja realmente reverter o pagamento da fatura de Nubank (6/2026)?',
     ]);
     expect(toasts).toEqual(['Error paying the bill: boom', 'Erro ao pagar fatura: boom']);
+  });
+
+  it('keeps the unsaved attempt when the page is navigated away from and back to, without storage', async () => {
+    const unavailable = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    const { sent, pay, reopen, navigateBack } = open(unavailable);
+    const lost = await pay(billA, 'network');
+
+    navigateBack();
+    await reopen(billA, 'ok');
+
+    expect(sent[1]).toEqual(lost);
+  });
+
+  it('does not resend a payment in flight after navigating back; its late answer clears only itself', async () => {
+    const storage = makeSessionStorage();
+    const { sandbox, sent, show, submit, navigateBack } = open(storage);
+    let finish: (value: unknown) => void = () => undefined;
+    sandbox.fetch = async (_url: string, init: { body: string }) => {
+      sent.push(JSON.parse(init.body));
+      return new Promise((resolve) => (finish = resolve));
+    };
+    show(billA);
+    sandbox.openPayModal();
+    const inFlight = submit();
+
+    navigateBack();
+    show(billA);
+    await sandbox.openPayModal();
+    expect(sent).toHaveLength(1);
+
+    const newer = { ...sent[0], token: 'newer', key: 'card-1:2026-6' };
+    sandbox.saveUnfinishedPayment('card-1:2026-6', newer);
+    finish({ ok: false, status: 400, json: async () => ({ error: { message: 'late' } }) });
+    await inFlight;
+
+    expect(JSON.parse(storage.getItem('patty.cards.payAttempts') ?? '{}')['card-1:2026-6'].token).toBe('newer');
   });
 });

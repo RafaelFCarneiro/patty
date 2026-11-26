@@ -787,7 +787,7 @@
         }
 
         .compact-bill-row {
-            display: flex !important;
+            display: flex;
             flex-direction: column !important;
             align-items: flex-start !important;
             justify-content: center !important;
@@ -2062,11 +2062,10 @@
             const format = (value) => window.formatMoney(value, activeCard.currency);
             document.getElementById('bill-paid-row').style.display = hasPayment ? 'flex' : 'none';
             document.getElementById('bill-remaining-row').style.display = hasPayment ? 'flex' : 'none';
-            if (!hasPayment) return;
-            document.getElementById('bill-paid-val').textContent = t('bill_paid_of')
-                .replace('{paid}', format(paidAmount))
-                .replace('{total}', format(currentBill.total || 0));
-            document.getElementById('bill-remaining-val').textContent = format(b.remaining || 0);
+            document.getElementById('bill-paid-val').textContent = hasPayment
+                ? t('bill_paid_of').replace('{paid}', format(paidAmount)).replace('{total}', format(currentBill.total || 0))
+                : '';
+            document.getElementById('bill-remaining-val').textContent = hasPayment ? format(b.remaining || 0) : '';
         }
 
         // Toggle Table sorting
@@ -3072,7 +3071,10 @@
         // Each deliberate payment is bound to its bill by a snapshot taken when the form opens (payTarget): key
         // (card id, year, month), token, card name, month, year. Submit and resend use it, never the bill on screen.
         var payTarget = null;
-        var payInFlight = {};
+        // Survives the fragment being run again when the page is navigated back to: the unsaved attempts held in
+        // memory (storage unavailable), whether storage failed, and which bills have a request in flight.
+        var paySession = (window.pattyCardsPay = window.pattyCardsPay || { attempts: {}, storageFailed: false, inFlight: {} });
+        var payInFlight = paySession.inFlight;
         var PAY_OUTCOME = { done: 'done', refused: 'refused', unsettled: 'unsettled' };
 
         function tFill(key, values) {
@@ -3084,28 +3086,26 @@
             return name.charAt(0).toUpperCase() + name.slice(1);
         }
         var PAY_ATTEMPTS_KEY = 'patty.cards.payAttempts';
-        var payAttemptsInMemory = {};
-        var payAttemptsStorageFailed = false;
         function newPayToken() {
             return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
         }
 
         function readPayAttempts() {
-            if (payAttemptsStorageFailed) return payAttemptsInMemory;
+            if (paySession.storageFailed) return paySession.attempts;
             try {
                 return JSON.parse(sessionStorage.getItem(PAY_ATTEMPTS_KEY) || '{}') || {};
             } catch (e) {
-                payAttemptsStorageFailed = true;
-                return payAttemptsInMemory;
+                paySession.storageFailed = true;
+                return paySession.attempts;
             }
         }
 
         function writePayAttempts(attempts) {
-            payAttemptsInMemory = attempts;
+            paySession.attempts = attempts;
             try {
                 sessionStorage.setItem(PAY_ATTEMPTS_KEY, JSON.stringify(attempts));
             } catch (e) {
-                payAttemptsStorageFailed = true;
+                paySession.storageFailed = true;
             }
         }
 
@@ -3122,8 +3122,10 @@
             writePayAttempts({ ...readPayAttempts(), [key]: attempt });
         }
 
-        function clearUnfinishedPayment(key) {
-            const { [key]: _settled, ...others } = readPayAttempts();
+        // With a token, only that attempt's entry goes: a late answer never clears a newer attempt of the bill.
+        function clearUnfinishedPayment(key, token) {
+            const { [key]: settled, ...others } = readPayAttempts();
+            if (token !== undefined && settled && settled.token !== token) return;
             writePayAttempts(others);
         }
 
@@ -3176,7 +3178,7 @@
                 showToast(`${t('pay_pending_kept')} (${result.message})`, 'error');
                 return false;
             }
-            clearUnfinishedPayment(attempt.key);
+            clearUnfinishedPayment(attempt.key, attempt.token);
             if (result.outcome === PAY_OUTCOME.done) {
                 showToast(t('toast_payment_recorded').replace('{card}', attempt.card), 'success');
             } else {

@@ -89,6 +89,8 @@ export type FragmentSandbox = {
   // A browser-global script's top-level names, read and driven by the tests.
   sandbox: Record<string, any>;
   document: ReturnType<typeof makeStubDocument>;
+  // Runs the fragment's script again in the same window, as the shell does when the page is navigated back to.
+  reload(): void;
   charts: { type: string; data: { labels: string[]; datasets: { data: number[]; label?: string }[] } }[];
 };
 
@@ -151,6 +153,7 @@ export const loadFragment = (
 
   const html = readFileSync(dashboardPath(name), 'utf-8');
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
-  vm.runInContext(script, sandbox, { filename: dashboardPath(name) });
-  return { sandbox, document, charts };
+  const reload = () => void vm.runInContext(script, sandbox, { filename: dashboardPath(name) });
+  reload();
+  return { sandbox, document, charts, reload };
 };

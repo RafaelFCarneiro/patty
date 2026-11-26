@@ -134,7 +134,8 @@ payment), `docs/architecture.md` invariant 8, `docs/canonical/*`.
    A payment is bound to its bill: opening the form snapshots the bill (card id, month, year), the card name
    and the token, and submit and resend use that snapshot, never the bill on screen. An unfinished attempt
    (the snapshot plus account, date, amount) is kept per bill in `sessionStorage`, falling back to memory, so
-   it survives a reload in the same tab. Opening Pay on a bill that has one first resends it exactly as stored
+   it survives a reload in the same tab, and the memory fallback and the in-flight map live on `window`, so
+   navigating away from Cards and back keeps them (a late answer clears only its own attempt's token). Opening Pay on a bill that has one first resends it exactly as stored
    ("concluding the pending payment"): a success or a 4xx answer (nothing was recorded) clears it and refreshes
    the bill, a network or 5xx error keeps it and says so; only then does the form open, with a new token. A
    bill that loads as `paid` drops its entry. While a bill's request is in flight its Pay button and the form's
