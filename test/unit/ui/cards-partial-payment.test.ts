@@ -152,8 +152,8 @@ describe('cards.html payment revert', () => {
 });
 
 describe('cards.html payment token', () => {
-  const submitPayment = async (sandbox: Record<string, any>, document: any, ok: boolean) => {
-    const sent: { discriminator?: string }[] = [];
+  const attempt = async (sandbox: Record<string, any>, document: any, ok: boolean, fill?: Record<string, string>) => {
+    const sent: Record<string, unknown>[] = [];
     sandbox.fetch = async (_url: string, init: { body: string }) => {
       sent.push(JSON.parse(init.body));
       return { ok, json: async () => ({ error: { message: 'boom' } }) };
@@ -161,20 +161,23 @@ describe('cards.html payment token', () => {
     sandbox.loadBillDetails = async () => undefined;
     sandbox.accounts = [];
     sandbox.openPayModal();
-    document.getElementById('pay-account').value = 'Checking';
+    Object.entries(fill ?? {}).forEach(([id, value]) => (document.getElementById(id).value = value));
+    document.getElementById('pay-account').value = document.getElementById('pay-account').value || 'Checking';
     await sandbox.handlePaySubmit({ preventDefault: () => undefined });
-    return sent[0]?.discriminator;
+    return { sent: sent[0], amount: document.getElementById('pay-amount').value };
   };
 
-  it('keeps the token after a failed payment, so the retry is a repeat, and renews it after a success', async () => {
-    const { sandbox, document } = render({ remaining: 60 });
+  it('resends the same payment after a failure, even when the bill has since changed, and starts fresh after a success', async () => {
+    const { sandbox, document } = render({ remaining: 100 });
 
-    const failed = await submitPayment(sandbox, document, false);
-    const retried = await submitPayment(sandbox, document, true);
-    const next = await submitPayment(sandbox, document, true);
+    const failed = await attempt(sandbox, document, false, { 'pay-amount': '30', 'pay-date': '2026-06-09' });
+    sandbox.currentBill = { ...sandbox.currentBill, bill: bill({ remaining: 70, paidAmount: 30 }) };
+    const retried = await attempt(sandbox, document, true);
+    const next = await attempt(sandbox, document, true, { 'pay-amount': '70', 'pay-date': '2026-06-10' });
 
-    expect(failed).toBeTruthy();
-    expect(retried).toBe(failed);
-    expect(next).not.toBe(failed);
+    expect(retried.sent).toEqual(failed.sent);
+    expect(retried.sent).toMatchObject({ amount: 30, paymentDate: '2026-06-09' });
+    expect(next.sent?.discriminator).not.toBe(failed.sent?.discriminator);
+    expect(next.sent).toMatchObject({ amount: 70 });
   });
 });

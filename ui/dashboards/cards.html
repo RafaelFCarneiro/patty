@@ -3020,12 +3020,13 @@
 
             const remaining = b.remaining === undefined ? currentBill.total || 0 : b.remaining;
             document.getElementById('pay-bill-total').textContent = window.formatMoney(remaining, activeCard.currency);
-            payToken = payToken || newPayToken();
+            const retry = unfinishedPayment();
+            payToken = retry ? retry.token : newPayToken();
             const amountInput = document.getElementById('pay-amount');
             const settlesWithoutPayment = remaining <= 0;
             amountInput.disabled = settlesWithoutPayment;
             amountInput.required = !settlesWithoutPayment;
-            amountInput.value = settlesWithoutPayment ? '' : String(remaining);
+            amountInput.value = settlesWithoutPayment ? '' : String(retry && retry.amount !== undefined ? retry.amount : remaining);
             amountInput.max = settlesWithoutPayment ? '' : String(remaining);
 
             // Populate account select
@@ -3047,29 +3048,41 @@
                 accSelect.appendChild(opt);
             });
 
-            // Pre-fill payment date to today and set max to today
+            if (retry) accSelect.value = retry.account;
+
+            // Pre-fill payment date to today (or the unfinished payment's date) and set max to today
             const today = new Date();
             const yyyy = today.getFullYear();
             const mm = String(today.getMonth() + 1).padStart(2, '0');
             const dd = String(today.getDate()).padStart(2, '0');
             const todayStr = `${yyyy}-${mm}-${dd}`;
             const dateInput = document.getElementById('pay-date');
+            const fillDate = retry ? retry.date : todayStr;
             if (dateInput._flatpickr) {
-                dateInput._flatpickr.setDate(todayStr, true);
+                dateInput._flatpickr.setDate(fillDate, true);
                 dateInput._flatpickr.set('maxDate', todayStr);
             } else {
-                dateInput.value = todayStr;
+                dateInput.value = fillDate;
                 dateInput.max = todayStr;
             }
 
             openModal('modal-pay-bill');
         }
 
-        // Each deliberate payment carries its own token, kept until it succeeds, so a retry of it is a repeat
-        // to the API while a new payment, even an identical one, is not.
-        let payToken = null;
+        // Each deliberate payment carries its own token, kept with what was submitted until it succeeds: reopening
+        // the form after a failure resends the same payment, so a retry is a repeat to the API, while a new
+        // payment, even an identical one, is not.
+        var payToken = null;
+        var payAttempt = null;
         function newPayToken() {
             return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        }
+
+        function unfinishedPayment() {
+            const b = (currentBill && currentBill.bill) || {};
+            const same = payAttempt && payAttempt.card === activeCard.name
+                && payAttempt.month === b.month && payAttempt.year === b.year;
+            return same ? payAttempt : null;
         }
 
         // A non-positive remainder is settled without an amount (the API records no transfer for it).
@@ -3095,6 +3108,8 @@
             const payDate = document.getElementById('pay-date').value;
             const amountInput = document.getElementById('pay-amount');
             const payAmount = amountInput.disabled ? undefined : Number(amountInput.value);
+            const b = currentBill.bill || {};
+            payAttempt = { token: payToken, card: activeCard.name, month: b.month, year: b.year, account: payAccName, date: payDate, amount: payAmount };
 
             closeModal('modal-pay-bill');
             billLoading.classList.add('active');
@@ -3112,6 +3127,7 @@
                 }
 
                 payToken = null;
+                payAttempt = null;
                 showToast(t('toast_payment_recorded').replace('{card}', activeCard.name), 'success');
                 await loadBillDetails();
             } catch (err) {
