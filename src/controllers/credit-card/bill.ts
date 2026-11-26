@@ -6,9 +6,10 @@ import { assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js
 import {
   billEntityFrom,
   billPaymentKey,
+  changesBillTotal,
   computeBillTotal,
   coversPaid,
-  hasPaymentKey,
+  hasIdempotencyKey,
   isBillPaid,
   paymentsOf,
   paymentsOnLatestDate,
@@ -39,10 +40,15 @@ import {
   type RevertBillPayment,
   type SettledBill,
 } from '../../models/bill.js';
-import type { CreditCard } from '../../models/credit-card.js';
+import { cardErrors, type CreditCard } from '../../models/credit-card.js';
 import { notFound } from '../../models/error.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
-import { TRANSACTION_ENTITY_TAG, transactionErrors, type RawTransactionView } from '../../models/transaction.js';
+import {
+  TRANSACTION_ENTITY_TAG,
+  transactionErrors,
+  type RawTransactionView,
+  type TransactionEntity,
+} from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCardRef, resolveDecimals } from '../resolve.js';
 
@@ -134,7 +140,7 @@ const planPayment = (
     const { card, existing, current, decimals, total, rawBill } = context;
     const amount = roundToDecimals(input.amount ?? current.remaining, decimals);
     const facts = { bill: rawBill, date: dates.date, amount, decimals, discriminator: input.discriminator };
-    if (hasPaymentKey(existing.transactions, billPaymentKey(facts))) return ok(unchanged(current));
+    if (hasIdempotencyKey(existing.transactions, billPaymentKey(facts))) return ok(unchanged(current));
     yield* guardPaymentAmount(amount, current.remaining);
 
     const payer = yield* resolvePayer(deps, card, input.account);
@@ -226,6 +232,7 @@ export const guardTotalCoversPaid = (
       notFound('card', bill.creditCardId, []),
     );
     const items = (await deps.bills.get(card.id, bill.month, bill.year))?.transactions ?? [];
+    if (change.addedKey && hasIdempotencyKey(items, change.addedKey)) return ok();
     const decimals = await resolveDecimals(deps, card.currency);
     const { paidAmount } = settlement(computeBillTotal(items), paymentsOf(items, card.accountId), decimals);
     yield* guard(
@@ -233,4 +240,35 @@ export const guardTotalCoversPaid = (
       billErrors.totalBelowPaid(paidAmount),
     );
     return ok();
+  });
+
+export const touchBill = (bill: RawBill): Persistable =>
+  persistence.update({ entity: BILL_ENTITY_TAG, model: billEntityFrom(bill) });
+
+const guardBillChange = (
+  deps: Deps,
+  billId: string | undefined,
+  change: BillTotalChange,
+): ResultAsync<void, AppError> =>
+  safeTry(async function* () {
+    const bill = billId ? await deps.bills.findById(billId) : null;
+    if (bill) yield* guardTotalCoversPaid(deps, bill, change);
+    return ok();
+  });
+
+/** Refuses a total-changing edit of a paid bill's transaction, or one that leaves the bill's payments uncovered.
+ *  Returns the bill read before its payments, for the caller to write back under its version. */
+export const guardBillTotalEdit = (
+  deps: Deps,
+  existing: Pick<RawTransactionView, 'id' | 'type' | 'amount' | 'billId'>,
+  entity: Pick<TransactionEntity, 'type' | 'amount' | 'refs'>,
+): ResultAsync<RawBill | null, AppError> =>
+  safeTry(async function* () {
+    if (!changesBillTotal(existing, entity)) return ok(null);
+    const currentBill = existing.billId ? await deps.bills.findById(existing.billId) : null;
+    yield* guard(!currentBill || !isBillPaid(currentBill), cardErrors.paidBillImmutable);
+    const sameBill = entity.refs.billId === existing.billId;
+    yield* guardBillChange(deps, existing.billId, { removedId: existing.id, added: sameBill ? entity : undefined });
+    if (!sameBill) yield* guardBillChange(deps, entity.refs.billId, { added: entity });
+    return ok(currentBill);
   });

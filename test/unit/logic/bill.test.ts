@@ -18,7 +18,7 @@ import {
   billPaymentDescription,
   billPaymentKey,
   coversPaid,
-  hasPaymentKey,
+  hasIdempotencyKey,
   paymentsOf,
   paymentsOnLatestDate,
   settlement,
@@ -394,10 +394,10 @@ describe('bill settlement', () => {
     });
   });
 
-  it('hasPaymentKey recognizes an already recorded payment', () => {
+  it('hasIdempotencyKey recognizes an already recorded payment', () => {
     const items = [{ ...tx(TransactionType.enum.transfer, 5), idempotencyKey: 'k1' }];
-    expect(hasPaymentKey(items, 'k1')).toBe(true);
-    expect(hasPaymentKey(items, 'k2')).toBe(false);
+    expect(hasIdempotencyKey(items, 'k1')).toBe(true);
+    expect(hasIdempotencyKey(items, 'k2')).toBe(false);
   });
 
   describe('totalAfterChange and coversPaid', () => {

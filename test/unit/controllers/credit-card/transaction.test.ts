@@ -1003,9 +1003,10 @@ describe('deleteCardTransaction — guards + is returned as data (ADR-021 phase 
 
 describe('an edit that changes the total of a paid bill is refused (Feature Design 025 §7)', () => {
   const purchase: RawTransactionView = { ...cardOwnedTx, id: 'purchase', amount: 100, type: 'expense' };
-  const depsOn = (status: BillStatus): Deps =>
+  const depsOn = (status: BillStatus, target: RawTransactionView = purchase): Deps =>
     makeDeps({
-      transactions: { getById: async () => purchase } as unknown as Deps['transactions'],
+      clock: () => new Date('2026-06-15'),
+      transactions: { getById: async () => target } as unknown as Deps['transactions'],
       accounts: {
         findById: async () => account({ id: 'acc-card-internal', type: AccountType.enum.credit }),
       } as unknown as Deps['accounts'],
@@ -1088,6 +1089,15 @@ describe('a bill whose payments exceed its new total is refused (Feature Design 
     expect((await updateCardTransaction(deps, { id: 'purchase', amount: 500 })).isOk()).toBe(true);
   });
 
+  it('an amount edit that stays on the bill writes the bill back under its version', async () => {
+    const result = await updateCardTransaction(partlyPaidDeps(purchase), { id: 'purchase', amount: 500 });
+
+    const { persist } = result._unsafeUnwrap();
+    expect(persist.filter((p) => p.entity === 'bill')).toEqual([
+      expect.objectContaining({ op: PersistOp.enum.update, entity: 'bill' }),
+    ]);
+  });
+
   it('turning the purchase into a refund is refused', async () => {
     const result = await updateCardTransaction(partlyPaidDeps(purchase), { id: 'purchase', type: 'income' });
 
@@ -1105,6 +1115,39 @@ describe('a bill whose payments exceed its new total is refused (Feature Design 
     const result = await updateCardTransaction(moving, { id: 'purchase', billMonth: 7, billYear: 2026 });
 
     refused(result._unsafeUnwrapErr());
+  });
+
+  it('repeating a refund already on the bill is a no-op, not a second refund', async () => {
+    const input = { description: 'Refund', amount: 30, date: '2026-06-15', card: 'Test Card', type: 'income' as const };
+    const withCard = {
+      creditCards: { list: async () => [card()], findById: async () => card() } as unknown as Deps['creditCards'],
+    };
+    const base = partlyPaidDeps(purchase, { clock: () => new Date('2026-06-15'), ...withCard });
+    const first = (await addCardPurchase(base, input, TransactionSource.enum.mcp))._unsafeUnwrap();
+    const refund: RawTransactionView = {
+      ...purchase,
+      id: 'refund',
+      type: 'income',
+      amount: 30,
+      idempotencyKey: idempotencyKeyOfPurchase(first.persist),
+    };
+    const replayDeps = {
+      ...base,
+      bills: {
+        ...base.bills,
+        get: async () => ({ bill: rawBill(), cardName: 'Test Card', transactions: [purchase, refund, payment] }),
+      } as unknown as Deps['bills'],
+    };
+
+    const replay = await addCardPurchase(replayDeps, input, TransactionSource.enum.mcp);
+    const another = await addCardPurchase(
+      replayDeps,
+      { ...input, description: 'Other refund' },
+      TransactionSource.enum.mcp,
+    );
+
+    expect(replay.isOk()).toBe(true);
+    refused(another._unsafeUnwrapErr());
   });
 
   it('a refund that brings the total below what is paid is refused; a purchase is not', async () => {

@@ -403,6 +403,9 @@ export type TransactionError =
 const CONFIRM_EDIT_NOT_ALLOWED_MESSAGE =
   "cannot edit amount/date of a transfer or bill-payment transaction at confirm — correct a transfer's " +
   'amount/date by updating it, a bill payment by paying or reverting its bill, then confirm';
+const CONFIRM_BILLED_AMOUNT_MESSAGE =
+  "cannot change the amount of a credit-card purchase at confirm — its bill's total and payments depend on it; " +
+  'update the purchase (amount and status together), then confirm';
 const WRONG_OPERATION_MESSAGE =
   'this transaction is not owned by this operation; use the one for its other aggregate instead';
 
@@ -449,6 +452,10 @@ export const transactionErrors = {
   confirmEditNotAllowedForTransfer: validationWithRemedy(
     CONFIRM_EDIT_NOT_ALLOWED_MESSAGE,
     Remedy.enum.update_account_transaction,
+  ) satisfies TransactionError,
+  confirmBilledAmountNotAllowed: validationWithRemedy(
+    CONFIRM_BILLED_AMOUNT_MESSAGE,
+    Remedy.enum.update_card_transaction,
   ) satisfies TransactionError,
   // ADR-017 ownership guard: raised by whichever of the four aggregate-specific update/delete operations
   // was used on a transaction it does not own — a guard, not a dispatcher (the caller re-addresses

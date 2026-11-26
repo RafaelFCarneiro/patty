@@ -88,3 +88,76 @@ describe('cards.html pay form', () => {
     expect(document.getElementById('pay-bill-total').textContent).toBe(money(60));
   });
 });
+
+describe('cards.html pay request', () => {
+  const requestBody = (billFields: Record<string, unknown>, fields: Record<string, unknown>) => {
+    const { sandbox } = render(billFields);
+    return JSON.parse(JSON.stringify(sandbox.payBillBody({ account: 'Checking', date: '2026-06-10', ...fields })));
+  };
+
+  it('sends no discriminator for a first payment', () => {
+    const body = requestBody({ payments: [] }, { amount: 50 });
+
+    expect(body).toMatchObject({ amount: 50, account: 'Checking', paymentDate: '2026-06-10' });
+    expect(body.discriminator).toBeUndefined();
+  });
+
+  it('numbers an identical payment on the same day, so it is not taken for a retry', () => {
+    const paid = [{ id: 'tx-1', date: '2026-06-10', amount: 50, account: 'Checking' }];
+
+    expect(requestBody({ payments: paid }, { amount: 50 }).discriminator).toBe('1');
+    expect(requestBody({ payments: paid }, { amount: 30 }).discriminator).toBeUndefined();
+    expect(requestBody({ payments: paid }, { amount: 50, date: '2026-06-11' }).discriminator).toBeUndefined();
+  });
+
+  it('sends no amount when the remainder is not positive', () => {
+    const body = requestBody({ remaining: 0 }, { amount: undefined });
+
+    expect('amount' in body).toBe(false);
+    expect('discriminator' in body).toBe(false);
+  });
+
+  it('disables the amount field for a non-positive remainder and enables it again otherwise', () => {
+    const { sandbox, document } = render({ remaining: -5 }, 95);
+    sandbox.accounts = [];
+
+    sandbox.openPayModal();
+    const input = document.getElementById('pay-amount');
+    expect([input.disabled, input.required, input.value]).toEqual([true, false, '']);
+
+    sandbox.currentBill = { ...sandbox.currentBill, bill: bill({ remaining: 60 }) };
+    sandbox.openPayModal();
+    expect([input.disabled, input.required, input.value]).toEqual([false, true, '60']);
+  });
+});
+
+describe('cards.html payment revert', () => {
+  const payments = [
+    { id: 'tx-1', date: '2026-06-10', amount: 40, account: 'Checking' },
+    { id: 'tx-2', date: '2026-06-10', amount: 60, account: 'Checking' },
+  ];
+
+  it('lets the person choose among several payments, latest first', () => {
+    const { sandbox, document } = render({ paidAmount: 100, remaining: 0, status: 'paid', payments });
+
+    sandbox.revertBillPayment();
+
+    const options = Array.from(document.getElementById('revert-payment').children) as { value: string }[];
+    expect(options.map((o) => o.value)).toEqual(['tx-2', 'tx-1']);
+  });
+
+  it('sends the chosen payment id', async () => {
+    const { sandbox } = render({ paidAmount: 100, remaining: 0, status: 'paid', payments });
+    const sent: unknown[] = [];
+    sandbox.confirm = () => true;
+    sandbox.loadBillDetails = async () => undefined;
+    sandbox.fetch = async (_url: string, init: { body: string }) => {
+      sent.push(JSON.parse(init.body));
+      return { ok: true, json: async () => ({}) };
+    };
+
+    await sandbox.submitRevert('tx-1');
+
+    expect(sent).toEqual([{ card: 'Nubank', month: 6, year: 2026, paymentId: 'tx-1' }]);
+  });
+});

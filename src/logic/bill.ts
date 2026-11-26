@@ -127,7 +127,7 @@ export const paymentsOnLatestDate = (payments: BillPayment[]): BillPayment[] =>
     latest ? R.filter(payments, (p) => p.date === latest.date) : [],
   );
 
-export const hasPaymentKey = (transactions: TransactionView[], idempotencyKey: string): boolean =>
+export const hasIdempotencyKey = (transactions: TransactionView[], idempotencyKey: string): boolean =>
   R.isNonNullish(R.find(transactions, (tx) => tx.idempotencyKey === idempotencyKey));
 
 export const billPeriodFor = (txDate: string, closingDay: number, dueDay: number): BillPeriod => {

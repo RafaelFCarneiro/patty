@@ -1521,6 +1521,27 @@
         </div>
     </div>
 
+    <!-- MODAL: REVERT BILL PAYMENT -->
+    <div class="modal-overlay" id="modal-revert-payment">
+        <div class="modal-box">
+            <button class="modal-close-btn" onclick="closeModal('modal-revert-payment')"><i class="fa-solid fa-xmark"></i></button>
+            <div class="modal-title">
+                <i class="fa-solid fa-undo"></i>
+                <span data-i18n="revert_modal_title">Reverter Pagamento</span>
+            </div>
+            <form id="form-revert-payment" onsubmit="handleRevertSubmit(event)">
+                <div class="form-group">
+                    <label for="revert-payment" data-i18n="revert_payment_label">Pagamento a reverter</label>
+                    <select id="revert-payment" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;" required></select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-revert-payment')" style="width:auto;">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" style="width:auto;" data-i18n="revert_confirm">Reverter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL: PAY BILL -->
     <div class="modal-overlay" id="modal-pay-bill">
         <div class="modal-box">
@@ -3000,8 +3021,11 @@
             const remaining = b.remaining === undefined ? currentBill.total || 0 : b.remaining;
             document.getElementById('pay-bill-total').textContent = window.formatMoney(remaining, activeCard.currency);
             const amountInput = document.getElementById('pay-amount');
-            amountInput.value = String(remaining);
-            amountInput.max = String(remaining);
+            const settlesWithoutPayment = remaining <= 0;
+            amountInput.disabled = settlesWithoutPayment;
+            amountInput.required = !settlesWithoutPayment;
+            amountInput.value = settlesWithoutPayment ? '' : String(remaining);
+            amountInput.max = settlesWithoutPayment ? '' : String(remaining);
 
             // Populate account select
             const accSelect = document.getElementById('pay-account');
@@ -3040,6 +3064,28 @@
             openModal('modal-pay-bill');
         }
 
+        // A repeat of an identical payment (same bill, day and amount) is a retry to the API unless told apart:
+        // the n-th identical payment carries the discriminator n, and the first carries none.
+        function paymentDiscriminator(payments, date, amount) {
+            const identical = (payments || []).filter(p => p.date === date && p.amount === amount).length;
+            return identical > 0 ? String(identical) : undefined;
+        }
+
+        // A non-positive remainder is settled without an amount (the API records no transfer for it).
+        function payBillBody(fields) {
+            const b = currentBill.bill || {};
+            const body = {
+                card: activeCard.name,
+                month: b.month,
+                year: b.year,
+                account: fields.account,
+                paymentDate: fields.date
+            };
+            if (fields.amount === undefined) return body;
+            const discriminator = paymentDiscriminator(b.payments, fields.date, fields.amount);
+            return { ...body, amount: fields.amount, ...(discriminator ? { discriminator } : {}) };
+        }
+
         // Pay Bill Submit
         async function handlePaySubmit(e) {
             e.preventDefault();
@@ -3047,8 +3093,8 @@
 
             const payAccName = document.getElementById('pay-account').value;
             const payDate = document.getElementById('pay-date').value;
-            const payAmount = Number(document.getElementById('pay-amount').value);
-            const b = currentBill.bill || {};
+            const amountInput = document.getElementById('pay-amount');
+            const payAmount = amountInput.disabled ? undefined : Number(amountInput.value);
 
             closeModal('modal-pay-bill');
             billLoading.classList.add('active');
@@ -3057,14 +3103,7 @@
                 const res = await fetch('/api/bills/pay', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        card: activeCard.name,
-                        month: b.month,
-                        year: b.year,
-                        amount: payAmount,
-                        account: payAccName,
-                        paymentDate: payDate
-                    })
+                    body: JSON.stringify(payBillBody({ account: payAccName, date: payDate, amount: payAmount }))
                 });
 
                 if (!res.ok) {
@@ -3082,9 +3121,30 @@
             }
         }
 
-        // Revert Bill Payment
-        async function revertBillPayment() {
+        // Revert Bill Payment: one payment at a time, chosen when the bill has several
+        function revertBillPayment() {
             if (!currentBill || !activeCard) return;
+            const payments = (currentBill.bill || {}).payments || [];
+            if (payments.length <= 1) return submitRevert(payments[0] && payments[0].id);
+
+            const select = document.getElementById('revert-payment');
+            select.innerHTML = '';
+            [...payments].reverse().forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = `${p.date} · ${window.formatMoney(p.amount, activeCard.currency)} · ${p.account}`;
+                select.appendChild(opt);
+            });
+            openModal('modal-revert-payment');
+        }
+
+        function handleRevertSubmit(e) {
+            e.preventDefault();
+            closeModal('modal-revert-payment');
+            return submitRevert(document.getElementById('revert-payment').value);
+        }
+
+        async function submitRevert(paymentId) {
             const b = currentBill.bill || {};
 
             if (!confirm(`Deseja realmente reverter o pagamento da fatura de ${activeCard.name} (${b.month}/${b.year})?`)) {
@@ -3100,7 +3160,8 @@
                     body: JSON.stringify({
                         card: activeCard.name,
                         month: b.month,
-                        year: b.year
+                        year: b.year,
+                        ...(paymentId ? { paymentId } : {})
                     })
                 });
 
@@ -3327,6 +3388,9 @@ var TRANSLATIONS = {
         bill_remaining_label: "Remaining",
         pay_remaining_label: "Remaining to Pay",
         pay_amount_label: "Amount to Pay Now",
+        revert_modal_title: "Revert Payment",
+        revert_payment_label: "Payment to revert",
+        revert_confirm: "Revert",
         toast_payment_recorded: "Payment on the {card} bill recorded!",
         bill_status: "Bill Status:",
         status_open: "Open",
@@ -3534,6 +3598,9 @@ var TRANSLATIONS = {
         bill_remaining_label: "Restante",
         pay_remaining_label: "Restante a Pagar",
         pay_amount_label: "Valor a Pagar Agora",
+        revert_modal_title: "Reverter Pagamento",
+        revert_payment_label: "Pagamento a reverter",
+        revert_confirm: "Reverter",
         toast_payment_recorded: "Pagamento da fatura de {card} registrado!",
         bill_status: "Status da Fatura:",
         status_open: "Aberta",
@@ -3741,6 +3808,9 @@ var TRANSLATIONS = {
         bill_remaining_label: "Restante",
         pay_remaining_label: "Restante por Pagar",
         pay_amount_label: "Monto a Pagar Ahora",
+        revert_modal_title: "Revertir Pago",
+        revert_payment_label: "Pago a revertir",
+        revert_confirm: "Revertir",
         toast_payment_recorded: "Pago de la factura de {card} registrado.",
         bill_status: "Estado de la Factura:",
         status_open: "Abierta",

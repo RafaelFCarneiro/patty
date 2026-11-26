@@ -13,6 +13,7 @@ import * as creditCardAdapters from '../../../src/adapters/credit-cards.js';
 import * as transactionAdapters from '../../../src/adapters/transactions.js';
 import { payBill, revertBillPayment } from '../../../src/controllers/credit-card/bill.js';
 import { deleteCreditCard } from '../../../src/controllers/credit-card/credit-card.js';
+import { updateCardTransaction } from '../../../src/controllers/credit-card/transaction.js';
 import { renameDashboard, saveDashboard } from '../../../src/controllers/dashboards.js';
 import { setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
@@ -1817,6 +1818,31 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     expect(loser._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
     expect(paidAmounts).toEqual([60]);
     expect(status).toBe(BillStatus.enum.open);
+  });
+
+  it('an edit lowering the total cannot commit beside a payment that lands after it read the bill', async () => {
+    const { deps, cardName } = await seedCardWithOpenBill();
+    const context = { runner, isTransientContention, conflictError };
+    const purchase = (await db.all<{ id: string }>(sql`SELECT id FROM transactions WHERE type = 'expense'`))[0]!;
+
+    let reads = 0;
+    const racingBills: Deps['bills'] = {
+      ...deps.bills,
+      findById: async (id) => {
+        reads += 1;
+        const stale = await deps.bills.findById(id);
+        if (reads === 1) await runEffects(context, fullRegistry, payBillFlow(deps, cardName, 60));
+        return stale;
+      },
+    };
+
+    const edit = await runEffects(context, fullRegistry, () =>
+      updateCardTransaction({ ...deps, bills: racingBills }, { id: purchase.id, amount: 50 }),
+    );
+
+    expect(edit.isErr()).toBe(true);
+    expect(edit._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
+    expect(await db.all(sql`SELECT amount FROM transactions WHERE id = ${purchase.id}`)).toEqual([{ amount: 100 }]);
   });
 
   it('two concurrent identical payments record one: the loser finds its own key there', async () => {

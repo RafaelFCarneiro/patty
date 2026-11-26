@@ -159,7 +159,11 @@ export type BillPaymentPlan = { transferEntity: TransactionEntity; idempotencyKe
 
 export type PayBillInput = PayBill & { source: TransactionSource };
 
-export type BillTotalChange = { removedId?: string; added?: Pick<TransactionView, 'type' | 'amount'> };
+export type BillTotalChange = {
+  removedId?: string;
+  added?: Pick<TransactionView, 'type' | 'amount'>;
+  addedKey?: string;
+};
 
 export type BillContext = {
   card: CreditCard;

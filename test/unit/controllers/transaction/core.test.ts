@@ -64,6 +64,23 @@ const pendingTransferTx: RawTransactionView = {
   toAccountId: 'acc-to',
 };
 
+describe('confirmTransaction — a billed card purchase keeps its amount at confirm', () => {
+  const billed: RawTransactionView = { ...pendingTx, billId: 'bill-1', cardId: 'card-1' };
+  const depsFor = (tx: RawTransactionView) =>
+    makeDeps({ transactions: { getById: async () => tx } as unknown as Deps['transactions'] });
+
+  it('refuses an amount edit, pointing at the card-transaction update', async () => {
+    const result = await confirmTransaction(depsFor(billed), { id: 'tx-1', amount: 5 });
+
+    expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation', remedy: 'update_card_transaction' });
+  });
+
+  it('still confirms it plainly, or with a new date', async () => {
+    expect((await confirmTransaction(depsFor(billed), { id: 'tx-1' })).isOk()).toBe(true);
+    expect((await confirmTransaction(depsFor(billed), { id: 'tx-1', date: '2026-06-02' })).isOk()).toBe(true);
+  });
+});
+
 describe('confirmTransaction — flips pending to effective as a functional-core flow (Design 014 phase B)', () => {
   it('errors unknown_transaction when the id does not exist', async () => {
     const deps = makeDeps({ transactions: { getById: async () => null } as unknown as Deps['transactions'] });
