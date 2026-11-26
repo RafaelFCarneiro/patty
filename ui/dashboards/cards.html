@@ -3018,9 +3018,8 @@
         function openPayForm() {
             document.getElementById('pay-card-name').textContent = activeCard.name;
             
-            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
             const b = currentBill.bill || {};
-            document.getElementById('pay-bill-cycle').textContent = `Ciclo de Fatura: ${monthNames[b.month - 1]} / ${b.year}`;
+            document.getElementById('pay-bill-cycle').textContent = tFill('pay_cycle_label', { month: monthLabel(b.month), year: b.year });
 
             const remaining = b.remaining === undefined ? currentBill.total || 0 : b.remaining;
             document.getElementById('pay-bill-total').textContent = window.formatMoney(remaining, activeCard.currency);
@@ -3074,6 +3073,16 @@
         // (card id, year, month), token, card name, month, year. Submit and resend use it, never the bill on screen.
         var payTarget = null;
         var payInFlight = {};
+        var PAY_OUTCOME = { done: 'done', refused: 'refused', unsettled: 'unsettled' };
+
+        function tFill(key, values) {
+            return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, value), t(key));
+        }
+
+        function monthLabel(month) {
+            const name = new Intl.DateTimeFormat(currentLocale, { month: 'long' }).format(new Date(2000, month - 1, 1));
+            return name.charAt(0).toUpperCase() + name.slice(1);
+        }
         var PAY_ATTEMPTS_KEY = 'patty.cards.payAttempts';
         var payAttemptsInMemory = {};
         var payAttemptsStorageFailed = false;
@@ -3147,13 +3156,14 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payBillBody(attempt))
                 });
-                if (res.ok) return { outcome: 'done' };
+                if (res.ok) return { outcome: PAY_OUTCOME.done };
                 const errRes = await res.json().catch(() => ({}));
-                const message = (errRes.error && errRes.error.message) || 'Erro no pagamento';
-                return { outcome: res.status >= 400 && res.status < 500 ? 'refused' : 'unsettled', message };
+                const message = (errRes.error && errRes.error.message) || t('pay_error_fallback');
+                const refused = res.status >= 400 && res.status < 500;
+                return { outcome: refused ? PAY_OUTCOME.refused : PAY_OUTCOME.unsettled, message };
             } catch (err) {
                 console.error("Pay bill error", err);
-                return { outcome: 'unsettled', message: err.message };
+                return { outcome: PAY_OUTCOME.unsettled, message: err.message };
             } finally {
                 delete payInFlight[attempt.key];
                 refreshPayButton();
@@ -3162,15 +3172,15 @@
 
         // Reports the result; true when the attempt is settled (recorded or refused) and its entry is gone.
         function concludeAttempt(attempt, result) {
-            if (result.outcome === 'unsettled') {
+            if (result.outcome === PAY_OUTCOME.unsettled) {
                 showToast(`${t('pay_pending_kept')} (${result.message})`, 'error');
                 return false;
             }
             clearUnfinishedPayment(attempt.key);
-            if (result.outcome === 'done') {
+            if (result.outcome === PAY_OUTCOME.done) {
                 showToast(t('toast_payment_recorded').replace('{card}', attempt.card), 'success');
             } else {
-                showToast(`Erro ao pagar fatura: ${result.message}`, 'error');
+                showToast(tFill('pay_error_toast', { message: result.message }), 'error');
             }
             return true;
         }
@@ -3240,7 +3250,7 @@
         async function submitRevert(paymentId) {
             const b = currentBill.bill || {};
 
-            if (!confirm(`Deseja realmente reverter o pagamento da fatura de ${activeCard.name} (${b.month}/${b.year})?`)) {
+            if (!confirm(tFill('revert_confirm_text', { card: activeCard.name, month: b.month, year: b.year }))) {
                 return;
             }
 
@@ -3260,14 +3270,14 @@
 
                 if (!res.ok) {
                     const errRes = await res.json();
-                    throw new Error(errRes.error?.message || "Erro ao reverter");
+                    throw new Error(errRes.error?.message || t('revert_error_fallback'));
                 }
 
-                showToast(`Pagamento da fatura revertido com sucesso!`, 'success');
+                showToast(t('revert_success'), 'success');
                 await loadBillDetails();
             } catch (err) {
                 console.error("Revert payment error", err);
-                showToast(`Erro ao reverter: ${err.message}`, 'error');
+                showToast(tFill('revert_error_toast', { message: err.message }), 'error');
             } finally {
                 billLoading.classList.remove('active');
             }
@@ -3485,6 +3495,13 @@ var TRANSLATIONS = {
         revert_payment_label: "Payment to revert",
         revert_confirm: "Revert",
         toast_payment_recorded: "Payment on the {card} bill recorded!",
+        pay_cycle_label: "Bill cycle: {month} / {year}",
+        pay_error_fallback: "Payment error",
+        pay_error_toast: "Error paying the bill: {message}",
+        revert_confirm_text: "Do you really want to revert the payment on the {card} bill ({month}/{year})?",
+        revert_error_fallback: "Error reverting",
+        revert_error_toast: "Error reverting: {message}",
+        revert_success: "Bill payment reverted!",
         pay_concluding: "Concluding the pending payment…",
         pay_pending_kept: "The pending payment could not be confirmed and was kept — check the connection and open Pay again",
         pay_in_progress: "A payment on this bill is still being sent",
@@ -3698,6 +3715,13 @@ var TRANSLATIONS = {
         revert_payment_label: "Pagamento a reverter",
         revert_confirm: "Reverter",
         toast_payment_recorded: "Pagamento da fatura de {card} registrado!",
+        pay_cycle_label: "Ciclo de Fatura: {month} / {year}",
+        pay_error_fallback: "Erro no pagamento",
+        pay_error_toast: "Erro ao pagar fatura: {message}",
+        revert_confirm_text: "Deseja realmente reverter o pagamento da fatura de {card} ({month}/{year})?",
+        revert_error_fallback: "Erro ao reverter",
+        revert_error_toast: "Erro ao reverter: {message}",
+        revert_success: "Pagamento da fatura revertido com sucesso!",
         pay_concluding: "Concluindo o pagamento pendente…",
         pay_pending_kept: "O pagamento pendente não pôde ser confirmado e foi mantido — verifique a conexão e abra Pagar de novo",
         pay_in_progress: "Um pagamento desta fatura ainda está sendo enviado",
@@ -3911,6 +3935,13 @@ var TRANSLATIONS = {
         revert_payment_label: "Pago a revertir",
         revert_confirm: "Revertir",
         toast_payment_recorded: "Pago de la factura de {card} registrado.",
+        pay_cycle_label: "Ciclo de factura: {month} / {year}",
+        pay_error_fallback: "Error en el pago",
+        pay_error_toast: "Error al pagar la factura: {message}",
+        revert_confirm_text: "¿Realmente desea revertir el pago de la factura de {card} ({month}/{year})?",
+        revert_error_fallback: "Error al revertir",
+        revert_error_toast: "Error al revertir: {message}",
+        revert_success: "¡Pago de la factura revertido con éxito!",
         pay_concluding: "Concluyendo el pago pendiente…",
         pay_pending_kept: "El pago pendiente no pudo confirmarse y se conservó — revise la conexión y abra Pagar de nuevo",
         pay_in_progress: "Un pago de esta factura aún se está enviando",

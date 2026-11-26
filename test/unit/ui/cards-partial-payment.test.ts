@@ -338,4 +338,27 @@ describe('cards.html unfinished payments', () => {
 
     expect(sent[1]).toEqual(lost);
   });
+
+  it('takes the revert confirmation and the pay error toast from the i18n table, by locale', async () => {
+    const { sandbox, sent, show, pay } = open();
+    const texts: string[] = [];
+    sandbox.confirm = (text: string) => (texts.push(text), false);
+    const toasts: string[] = [];
+    sandbox.showToast = (text: string) => void toasts.push(text);
+    show(billA);
+
+    sandbox.currentLocale = 'en';
+    await sandbox.submitRevert('tx-1');
+    await pay(billA, 'refused');
+    sandbox.currentLocale = 'pt';
+    await sandbox.submitRevert('tx-1');
+    await pay(billA, 'refused');
+
+    expect(sent).toHaveLength(2);
+    expect(texts).toEqual([
+      'Do you really want to revert the payment on the Nubank bill (6/2026)?',
+      'Deseja realmente reverter o pagamento da fatura de Nubank (6/2026)?',
+    ]);
+    expect(toasts).toEqual(['Error paying the bill: boom', 'Erro ao pagar fatura: boom']);
+  });
 });
