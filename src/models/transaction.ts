@@ -405,7 +405,7 @@ const CONFIRM_EDIT_NOT_ALLOWED_MESSAGE =
   'amount/date by updating it, a bill payment by paying or reverting its bill, then confirm';
 const CONFIRM_BILLED_AMOUNT_MESSAGE =
   "cannot change the amount of a credit-card purchase at confirm — its bill's total and payments depend on it; " +
-  'update the purchase (amount and status together), then confirm';
+  'update the purchase amount first, then confirm it without an amount';
 const WRONG_OPERATION_MESSAGE =
   'this transaction is not owned by this operation; use the one for its other aggregate instead';
 

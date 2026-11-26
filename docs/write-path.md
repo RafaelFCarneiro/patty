@@ -349,7 +349,7 @@ the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
   unreachable from here. Immutability is enforced directly instead, via the core-visible `isTransfer`
   (`logic/transaction.ts`, `type === 'transfer'`, ADR-002): an edit is rejected when the transaction is a
   transfer or bill-payment (`transactionErrors.confirmEditNotAllowedForTransfer`) or when it changes the `amount` of a
-  transaction on a bill (`confirmBilledAmountNotAllowed`: the core cannot apply the bill rules, so the card update does),
+  transaction on a bill (`confirmBilledAmountNotAllowed`: the core cannot apply the bill rules, so the card update does; an amount equal to the stored one is accepted),
   but a plain status-only
   confirm of one still goes through — this is marginally stricter than `update_account_transaction` (which
   permits editing a *regular* transfer's amount), a deliberate trade documented in the design rather than a gap.

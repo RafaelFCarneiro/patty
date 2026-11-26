@@ -1532,7 +1532,7 @@
             <form id="form-revert-payment" onsubmit="handleRevertSubmit(event)">
                 <div class="form-group">
                     <label for="revert-payment" data-i18n="revert_payment_label">Pagamento a reverter</label>
-                    <select id="revert-payment" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;" required></select>
+                    <select id="revert-payment" class="form-control" required></select>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-action-secondary" onclick="closeModal('modal-revert-payment')" style="width:auto;" data-i18n="btn_cancel">Cancelar</button>
@@ -3020,6 +3020,7 @@
 
             const remaining = b.remaining === undefined ? currentBill.total || 0 : b.remaining;
             document.getElementById('pay-bill-total').textContent = window.formatMoney(remaining, activeCard.currency);
+            payToken = payToken || newPayToken();
             const amountInput = document.getElementById('pay-amount');
             const settlesWithoutPayment = remaining <= 0;
             amountInput.disabled = settlesWithoutPayment;
@@ -3064,11 +3065,11 @@
             openModal('modal-pay-bill');
         }
 
-        // A repeat of an identical payment (same bill, day and amount) is a retry to the API unless told apart:
-        // the n-th identical payment carries the discriminator n, and the first carries none.
-        function paymentDiscriminator(payments, date, amount) {
-            const identical = (payments || []).filter(p => p.date === date && p.amount === amount).length;
-            return identical > 0 ? String(identical) : undefined;
+        // Each deliberate payment carries its own token, kept until it succeeds, so a retry of it is a repeat
+        // to the API while a new payment, even an identical one, is not.
+        let payToken = null;
+        function newPayToken() {
+            return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
         }
 
         // A non-positive remainder is settled without an amount (the API records no transfer for it).
@@ -3082,8 +3083,7 @@
                 paymentDate: fields.date
             };
             if (fields.amount === undefined) return body;
-            const discriminator = paymentDiscriminator(b.payments, fields.date, fields.amount);
-            return { ...body, amount: fields.amount, ...(discriminator ? { discriminator } : {}) };
+            return { ...body, amount: fields.amount, discriminator: fields.token };
         }
 
         // Pay Bill Submit
@@ -3103,7 +3103,7 @@
                 const res = await fetch('/api/bills/pay', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payBillBody({ account: payAccName, date: payDate, amount: payAmount }))
+                    body: JSON.stringify(payBillBody({ account: payAccName, date: payDate, amount: payAmount, token: payToken }))
                 });
 
                 if (!res.ok) {
@@ -3111,6 +3111,7 @@
                     throw new Error(errRes.error?.message || "Erro no pagamento");
                 }
 
+                payToken = null;
                 showToast(t('toast_payment_recorded').replace('{card}', activeCard.name), 'success');
                 await loadBillDetails();
             } catch (err) {

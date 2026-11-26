@@ -90,7 +90,8 @@ export const confirmTransaction = (
     const hasEdit = input.amount !== undefined || input.date !== undefined;
     yield* guard(!(hasEdit && isTransfer(existing)), transactionErrors.confirmEditNotAllowedForTransfer);
 
-    yield* guard(!(input.amount !== undefined && existing.billId), transactionErrors.confirmBilledAmountNotAllowed);
+    const changesBilledAmount = input.amount !== undefined && input.amount !== existing.amount && !!existing.billId;
+    yield* guard(!changesBilledAmount, transactionErrors.confirmBilledAmountNotAllowed);
 
     const date = input.date ?? existing.date;
     yield* guard(date <= toIsoDate(deps.clock()), transactionErrors.cannotConfirmFutureDated(date));

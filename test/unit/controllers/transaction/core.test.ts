@@ -75,6 +75,12 @@ describe('confirmTransaction — a billed card purchase keeps its amount at conf
     expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation', remedy: 'update_card_transaction' });
   });
 
+  it('accepts the amount it already has, as the dashboard confirm form sends it', async () => {
+    const result = await confirmTransaction(depsFor(billed), { id: 'tx-1', amount: billed.amount, date: '2026-06-02' });
+
+    expect(result.isOk()).toBe(true);
+  });
+
   it('still confirms it plainly, or with a new date', async () => {
     expect((await confirmTransaction(depsFor(billed), { id: 'tx-1' })).isOk()).toBe(true);
     expect((await confirmTransaction(depsFor(billed), { id: 'tx-1', date: '2026-06-02' })).isOk()).toBe(true);

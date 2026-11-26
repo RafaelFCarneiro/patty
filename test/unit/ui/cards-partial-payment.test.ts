@@ -90,28 +90,17 @@ describe('cards.html pay form', () => {
 });
 
 describe('cards.html pay request', () => {
-  const requestBody = (billFields: Record<string, unknown>, fields: Record<string, unknown>) => {
-    const { sandbox } = render(billFields);
+  const requestBody = (fields: Record<string, unknown>) => {
+    const { sandbox } = render({});
     return JSON.parse(JSON.stringify(sandbox.payBillBody({ account: 'Checking', date: '2026-06-10', ...fields })));
   };
 
-  it('sends no discriminator for a first payment', () => {
-    const body = requestBody({ payments: [] }, { amount: 50 });
-
-    expect(body).toMatchObject({ amount: 50, account: 'Checking', paymentDate: '2026-06-10' });
-    expect(body.discriminator).toBeUndefined();
-  });
-
-  it('numbers an identical payment on the same day, so it is not taken for a retry', () => {
-    const paid = [{ id: 'tx-1', date: '2026-06-10', amount: 50, account: 'Checking' }];
-
-    expect(requestBody({ payments: paid }, { amount: 50 }).discriminator).toBe('1');
-    expect(requestBody({ payments: paid }, { amount: 30 }).discriminator).toBeUndefined();
-    expect(requestBody({ payments: paid }, { amount: 50, date: '2026-06-11' }).discriminator).toBeUndefined();
+  it('carries the payment token as the discriminator', () => {
+    expect(requestBody({ amount: 50, token: 'tok-1' })).toMatchObject({ amount: 50, discriminator: 'tok-1' });
   });
 
   it('sends no amount when the remainder is not positive', () => {
-    const body = requestBody({ remaining: 0 }, { amount: undefined });
+    const body = requestBody({ amount: undefined, token: 'tok-1' });
 
     expect('amount' in body).toBe(false);
     expect('discriminator' in body).toBe(false);
@@ -159,5 +148,33 @@ describe('cards.html payment revert', () => {
     await sandbox.submitRevert('tx-1');
 
     expect(sent).toEqual([{ card: 'Nubank', month: 6, year: 2026, paymentId: 'tx-1' }]);
+  });
+});
+
+describe('cards.html payment token', () => {
+  const submitPayment = async (sandbox: Record<string, any>, document: any, ok: boolean) => {
+    const sent: { discriminator?: string }[] = [];
+    sandbox.fetch = async (_url: string, init: { body: string }) => {
+      sent.push(JSON.parse(init.body));
+      return { ok, json: async () => ({ error: { message: 'boom' } }) };
+    };
+    sandbox.loadBillDetails = async () => undefined;
+    sandbox.accounts = [];
+    sandbox.openPayModal();
+    document.getElementById('pay-account').value = 'Checking';
+    await sandbox.handlePaySubmit({ preventDefault: () => undefined });
+    return sent[0]?.discriminator;
+  };
+
+  it('keeps the token after a failed payment, so the retry is a repeat, and renews it after a success', async () => {
+    const { sandbox, document } = render({ remaining: 60 });
+
+    const failed = await submitPayment(sandbox, document, false);
+    const retried = await submitPayment(sandbox, document, true);
+    const next = await submitPayment(sandbox, document, true);
+
+    expect(failed).toBeTruthy();
+    expect(retried).toBe(failed);
+    expect(next).not.toBe(failed);
   });
 });
