@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { purry } from 'remeda';
 import { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
@@ -45,7 +44,7 @@ import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
 import { pickClassification, userClassification } from './classify.js';
 import { localizeTransactionStatus, localizeTransactionType } from './localize.js';
-import { joinUnambiguously } from './idempotency.js';
+import { keyOf } from './idempotency.js';
 import { normalizeMerchant } from './merchant.js';
 
 export const defaultStatusFor = (date: IsoDate, today: IsoDate): TransactionStatus =>
@@ -231,7 +230,7 @@ export const deriveIdempotencyKey = (
   decimals: number,
   discriminator?: string,
 ): string => {
-  const canonical = joinUnambiguously([
+  return keyOf([
     identity.fundingSourceId ?? null,
     identity.counterpartyId ?? null,
     identity.billPeriodKey ?? null,
@@ -243,7 +242,6 @@ export const deriveIdempotencyKey = (
     roundToDecimals(identity.amount, decimals).toFixed(decimals),
     discriminator ?? null,
   ]);
-  return createHash('sha256').update(canonical).digest('hex');
 };
 
 export const defaultStatementLines = <Line extends StatementLine>(

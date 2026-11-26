@@ -45,7 +45,6 @@ export const SettlementSchema = z.object({
 });
 export type Settlement = z.infer<typeof SettlementSchema>;
 
-// A bill as a client sees it: the stored cycle plus what its payments (derived from the transfers) say.
 export const SettledBillSchema = BillSchema.extend({
   ...SettlementSchema.shape,
   payments: z.array(BillPaymentSchema).describe('The bill payments, oldest first'),
@@ -157,8 +156,6 @@ export type BillPaymentFacts = {
 };
 
 export type BillPaymentPlan = { transferEntity: TransactionEntity; idempotencyKey: string };
-
-export type BillPaymentDecision = { kind: 'repeat' } | { kind: 'pay'; plan: BillPaymentPlan; settles: boolean };
 
 export type PayBillInput = PayBill & { source: TransactionSource };
 

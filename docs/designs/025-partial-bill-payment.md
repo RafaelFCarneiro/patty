@@ -1,6 +1,6 @@
 # Feature Design 025: Partial bill payment
 
-**Type:** Feature design · **Design status:** Accepted · **Implementation status:** In progress ·
+**Type:** Feature design · **Design status:** Accepted · **Implementation status:** Done (merge) ·
 **Date:** 2026-11-25 · Revises Feature Design 011 (bill payment lifecycle) and 012 (a paid bill is
 composition-immutable); keeps ADR-010 (a bill payment is a canonical transfer into the card's account).
 
@@ -84,7 +84,7 @@ side: more than one payment per bill, knowing how much is paid and how much rema
 
 ## Plan
 
-1. [ ] `feat/partial-bill-payment`: Decisions 1–9, the migration dropping `bills.payment_transaction_id`, the
+1. [x] `feat/partial-bill-payment` (PR #298): Decisions 1–9, the migration dropping `bills.payment_transaction_id`, the
        REST mirrors (`POST /api/bills/pay` takes `amount` and `discriminator`; `POST /api/bills/revert` takes
        `paymentId`), the `cards` dashboard showing "pago X de Y" and the remaining amount on a partly paid bill,
        tests, docs.

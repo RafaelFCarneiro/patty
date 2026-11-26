@@ -128,11 +128,10 @@ const planPayment = (
   deps: Deps,
   input: PayBillInput,
   context: BillContext,
-  rawBill: RawBill,
   dates: { date: string; today: string },
 ): ResultAsync<FlowOutcome<SettledBill>, AppError> =>
   safeTry(async function* () {
-    const { card, existing, current, decimals, total } = context;
+    const { card, existing, current, decimals, total, rawBill } = context;
     const amount = roundToDecimals(input.amount ?? current.remaining, decimals);
     const facts = { bill: rawBill, date: dates.date, amount, decimals, discriminator: input.discriminator };
     if (hasPaymentKey(existing.transactions, billPaymentKey(facts))) return ok(unchanged(current));
@@ -170,7 +169,7 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
     yield* guard(date <= today, billErrors.futurePaymentDate(date));
 
     if (current.remaining <= 0) return ok(settleWithoutTransfer(rawBill, total, current.payments, decimals));
-    return ok(yield* planPayment(deps, input, context, rawBill, { date, today }));
+    return ok(yield* planPayment(deps, input, context, { date, today }));
   });
 
 const pickPayment = (payments: BillPayment[], paymentId: string | undefined): Result<BillPayment, AppError> =>

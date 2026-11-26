@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { purry } from 'remeda';
 import * as R from 'remeda';
 import { localizeBillStatus } from './localize.js';
@@ -17,7 +16,7 @@ import {
 } from '../models/bill.js';
 import type { Locale } from '../models/locale.js';
 import { TransactionType, UNCLASSIFIED, type TransactionView } from '../models/transaction.js';
-import { joinUnambiguously } from './idempotency.js';
+import { keyOf } from './idempotency.js';
 import { roundToDecimals } from './money.js';
 import { defaultStatusFor } from './transaction.js';
 
@@ -154,16 +153,7 @@ export const resolveBillPeriod = (
 export const billPaymentKey = (
   facts: Pick<BillPaymentFacts, 'bill' | 'date' | 'amount' | 'decimals' | 'discriminator'>,
 ): string =>
-  createHash('sha256')
-    .update(
-      joinUnambiguously([
-        facts.bill.id,
-        facts.date,
-        roundToDecimals(facts.amount, facts.decimals),
-        facts.discriminator ?? null,
-      ]),
-    )
-    .digest('hex');
+  keyOf([facts.bill.id, facts.date, roundToDecimals(facts.amount, facts.decimals), facts.discriminator ?? null]);
 
 export const billPaymentDescription = (cardName: string, month: number, year: number): string =>
   `Bill payment: ${cardName} ${pad(month)}/${year}`;
