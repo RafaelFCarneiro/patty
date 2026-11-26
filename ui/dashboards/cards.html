@@ -2048,6 +2048,7 @@
             billTotalVal.textContent = fmtAmount;
 
             renderBillPayments(b);
+            if (status === 'paid') clearUnfinishedPayment(payAttemptKey());
 
             // Handle actions visibility
             btnRevertPay.style.display = (b.payments || []).length > 0 || status === 'paid' ? 'flex' : 'none';
@@ -3069,16 +3070,43 @@
 
         // One token per deliberate payment, resent unchanged on retry — a retry repeats, a new payment does not.
         var payToken = null;
-        var payAttempt = null;
+        var PAY_ATTEMPTS_KEY = 'patty.cards.payAttempts';
+        var payAttemptsInMemory = {};
         function newPayToken() {
             return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
         }
 
-        function unfinishedPayment() {
+        function readPayAttempts() {
+            try {
+                return JSON.parse(sessionStorage.getItem(PAY_ATTEMPTS_KEY) || '{}') || {};
+            } catch (e) {
+                return payAttemptsInMemory;
+            }
+        }
+
+        function writePayAttempts(attempts) {
+            payAttemptsInMemory = attempts;
+            try {
+                sessionStorage.setItem(PAY_ATTEMPTS_KEY, JSON.stringify(attempts));
+            } catch (e) {}
+        }
+
+        function payAttemptKey() {
             const b = (currentBill && currentBill.bill) || {};
-            const same = payAttempt && payAttempt.card === activeCard.name
-                && payAttempt.month === b.month && payAttempt.year === b.year;
-            return same ? payAttempt : null;
+            return `${activeCard.id}:${b.year}-${b.month}`;
+        }
+
+        function unfinishedPayment() {
+            return readPayAttempts()[payAttemptKey()] || null;
+        }
+
+        function saveUnfinishedPayment(key, attempt) {
+            writePayAttempts({ ...readPayAttempts(), [key]: attempt });
+        }
+
+        function clearUnfinishedPayment(key) {
+            const { [key]: _settled, ...others } = readPayAttempts();
+            writePayAttempts(others);
         }
 
         // A non-positive remainder is settled without an amount (the API records no transfer for it).
@@ -3104,8 +3132,8 @@
             const payDate = document.getElementById('pay-date').value;
             const amountInput = document.getElementById('pay-amount');
             const payAmount = amountInput.disabled ? undefined : Number(amountInput.value);
-            const b = currentBill.bill || {};
-            payAttempt = { token: payToken, card: activeCard.name, month: b.month, year: b.year, account: payAccName, date: payDate, amount: payAmount };
+            const attemptKey = payAttemptKey();
+            saveUnfinishedPayment(attemptKey, { token: payToken, account: payAccName, date: payDate, amount: payAmount });
 
             closeModal('modal-pay-bill');
             billLoading.classList.add('active');
@@ -3123,7 +3151,7 @@
                 }
 
                 payToken = null;
-                payAttempt = null;
+                clearUnfinishedPayment(attemptKey);
                 showToast(t('toast_payment_recorded').replace('{card}', activeCard.name), 'success');
                 await loadBillDetails();
             } catch (err) {

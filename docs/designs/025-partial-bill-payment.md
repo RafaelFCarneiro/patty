@@ -130,7 +130,10 @@ payment), `docs/architecture.md` invariant 8, `docs/canonical/*`.
    remainder stays as card debt and that interest is recorded as a card charge.
 6. **UI**: `ui/dashboards/cards.html` always sends the `paymentId` it reverts (asking which when there are
    several) and gives each deliberate payment its own token as `discriminator`, resent unchanged when an
-   unfinished payment is retried (so a retry is a repeat and a new payment, even an identical one, is not);
+   unfinished payment is retried (so a retry is a repeat and a new payment, even an identical one, is not).
+   Unfinished attempts (token, account, date, amount) are kept per bill (card id, month, year) in
+   `sessionStorage`, falling back to memory, so they survive a reload in the same tab; a success or a settled
+   bill removes only that bill's entry;
    it shows "pago X de Y" and the remaining amount for a partly paid bill,
    through the shell's classes and `window.PATTY`.
 7. **Tests**: a payment below the total leaves the bill `closed` with `partiallyPaid`, then a second one makes

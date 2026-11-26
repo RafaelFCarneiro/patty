@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadFragment } from './fragment-sandbox.js';
+import { loadFragment, makeSessionStorage } from './fragment-sandbox.js';
 
 // A bill shows "pago X de Y" and what remains once any part is paid; the pay form offers the remaining
 // amount to change, and the revert button appears for a part-paid bill, not only a paid one.
@@ -151,39 +151,107 @@ describe('cards.html payment revert', () => {
   });
 });
 
-describe('cards.html payment token', () => {
-  const attempt = async (sandbox: Record<string, any>, document: any, ok: boolean, fill?: Record<string, string>) => {
-    const sent: Record<string, unknown>[] = [];
-    sandbox.fetch = async (_url: string, init: { body: string }) => {
-      sent.push(JSON.parse(init.body));
-      return { ok, json: async () => ({ error: { message: 'boom' } }) };
-    };
-    sandbox.loadBillDetails = async () => undefined;
+describe('cards.html unfinished payments', () => {
+  const billA = bill();
+  const billB = bill({ id: 'bill-2', month: 7, closeDate: '2026-07-05', dueDate: '2026-07-15' });
+
+  const open = (storage = makeSessionStorage()) => {
+    const { sandbox, document } = loadFragment('cards', { sessionStorage: storage });
+    sandbox.activeCard = card;
     sandbox.accounts = [];
-    sandbox.openPayModal();
-    Object.entries(fill ?? {}).forEach(([id, value]) => (document.getElementById(id).value = value));
-    document.getElementById('pay-account').value = document.getElementById('pay-account').value || 'Checking';
-    await sandbox.handlePaySubmit({ preventDefault: () => undefined });
-    return {
-      sent: sent[0],
-      amount: document.getElementById('pay-amount').value,
-      max: document.getElementById('pay-amount').max,
+    sandbox.loadBillDetails = async () => undefined;
+    const show = (shown: ReturnType<typeof bill>) => {
+      sandbox.currentBill = { bill: shown, cardName: card.name, transactions: [], total: 100 };
     };
+    const submit = async (shown: ReturnType<typeof bill>, ok: boolean, fill: Record<string, string> = {}) => {
+      const sent: Record<string, unknown>[] = [];
+      sandbox.fetch = async (_url: string, init: { body: string }) => {
+        sent.push(JSON.parse(init.body));
+        return { ok, json: async () => ({ error: { message: 'boom' } }) };
+      };
+      show(shown);
+      sandbox.openPayModal();
+      const account = document.getElementById('pay-account');
+      account.value = account.value || 'Checking';
+      Object.entries(fill).forEach(([id, value]) => (document.getElementById(id).value = value));
+      await sandbox.handlePaySubmit({ preventDefault: () => undefined });
+      return sent[0] as { discriminator: string; amount: number; paymentDate: string };
+    };
+    return { sandbox, document, submit, show, storage };
   };
+  const kept = (storage: ReturnType<typeof makeSessionStorage>) =>
+    Object.keys(JSON.parse(storage.getItem('patty.cards.payAttempts') ?? '{}'));
 
-  it('resends the same payment after a failure, and starts fresh after a success', async () => {
-    const { sandbox, document } = render({ remaining: 100 });
+  it('resends the same payment after a failure and starts fresh after a success', async () => {
+    const { submit, show, sandbox, document } = open();
 
-    const failed = await attempt(sandbox, document, false, { 'pay-amount': '70', 'pay-date': '2026-06-09' });
-    sandbox.currentBill = { ...sandbox.currentBill, bill: bill({ remaining: 30, paidAmount: 70 }) };
-    const retried = await attempt(sandbox, document, true);
-    const next = await attempt(sandbox, document, true, { 'pay-amount': '30', 'pay-date': '2026-06-10' });
+    const failed = await submit(billA, false, { 'pay-amount': '70', 'pay-date': '2026-06-09' });
+    show(bill({ remaining: 30, paidAmount: 70 }));
+    sandbox.openPayModal();
+    expect(document.getElementById('pay-amount').value).toBe('70');
+    expect(document.getElementById('pay-amount').max).toBe('');
+    const retried = await submit(bill({ remaining: 30, paidAmount: 70 }), true, {});
+    const next = await submit(billA, true, { 'pay-amount': '30' });
 
-    expect(retried.max).toBe('');
-    expect(retried.sent).toEqual(failed.sent);
-    expect(retried.sent).toMatchObject({ amount: 70, paymentDate: '2026-06-09' });
-    expect(next.sent?.discriminator).not.toBe(failed.sent?.discriminator);
-    expect(next.sent).toMatchObject({ amount: 30 });
-    expect(next.max).toBe('30');
+    expect(retried).toEqual(failed);
+    expect(next.discriminator).not.toBe(failed.discriminator);
+    expect(document.getElementById('pay-amount').max).toBe('100');
+  });
+
+  it('keeps each bill’s attempt: a lost response on A survives a payment on B, and B’s success leaves A', async () => {
+    const { submit, storage } = open();
+
+    const lostOnA = await submit(billA, false);
+    const onB = await submit(billB, true);
+    const reopenedA = await submit(billA, false);
+
+    expect(onB.discriminator).not.toBe(lostOnA.discriminator);
+    expect(reopenedA.discriminator).toBe(lostOnA.discriminator);
+    expect(kept(storage)).toEqual(['card-1:2026-6']);
+  });
+
+  it('survives a reload in the same tab, and a success clears the entry', async () => {
+    const storage = makeSessionStorage();
+    const lost = await open(storage).submit(billA, false);
+
+    const reloaded = open(storage);
+    const resent = await reloaded.submit(billA, true);
+
+    expect(resent.discriminator).toBe(lost.discriminator);
+    expect(kept(storage)).toEqual([]);
+    expect((await open(storage).submit(billA, true)).discriminator).not.toBe(lost.discriminator);
+  });
+
+  it('drops the entry of a bill that shows as settled', async () => {
+    const { submit, show, sandbox, storage } = open();
+    await submit(billA, false);
+
+    show(bill({ status: 'paid', paidAmount: 100, remaining: 0 }));
+    sandbox.renderBillSummary();
+
+    expect(kept(storage)).toEqual([]);
+  });
+
+  it('falls back to memory when the browser storage is unavailable', async () => {
+    const { sandbox, document } = loadFragment('cards');
+    sandbox.activeCard = card;
+    sandbox.accounts = [];
+    sandbox.loadBillDetails = async () => undefined;
+    const sent: { discriminator: string }[] = [];
+    const run = async (ok: boolean) => {
+      sandbox.fetch = async (_url: string, init: { body: string }) => {
+        sent.push(JSON.parse(init.body));
+        return { ok, json: async () => ({ error: { message: 'boom' } }) };
+      };
+      sandbox.currentBill = { bill: billA, cardName: card.name, transactions: [], total: 100 };
+      sandbox.openPayModal();
+      document.getElementById('pay-account').value = 'Checking';
+      await sandbox.handlePaySubmit({ preventDefault: () => undefined });
+    };
+
+    await run(false);
+    await run(true);
+
+    expect(sent[1]?.discriminator).toBe(sent[0]?.discriminator);
   });
 });

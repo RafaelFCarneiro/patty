@@ -92,7 +92,17 @@ export type FragmentSandbox = {
   charts: { type: string; data: { labels: string[]; datasets: { data: number[]; label?: string }[] } }[];
 };
 
-export const loadFragment = (name: string, { baseCurrency }: { baseCurrency?: string } = {}): FragmentSandbox => {
+export type SessionStorageStub = { getItem(key: string): string | null; setItem(key: string, value: string): void };
+
+export const makeSessionStorage = (): SessionStorageStub => {
+  const items = new Map<string, string>();
+  return { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => void items.set(key, value) };
+};
+
+export const loadFragment = (
+  name: string,
+  { baseCurrency, sessionStorage }: { baseCurrency?: string; sessionStorage?: SessionStorageStub } = {},
+): FragmentSandbox => {
   const document = makeStubDocument();
   const charts: FragmentSandbox['charts'] = [];
   const sandbox: Record<string, unknown> = {
@@ -129,6 +139,7 @@ export const loadFragment = (name: string, { baseCurrency }: { baseCurrency?: st
       destroy() {}
     },
   };
+  if (sessionStorage) sandbox.sessionStorage = sessionStorage;
   sandbox.window = sandbox;
   sandbox.location = { pathname: `/ui/${name}`, search: '' };
   sandbox.history = { pushState() {} };
