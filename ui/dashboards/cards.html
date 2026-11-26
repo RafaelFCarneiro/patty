@@ -1535,7 +1535,7 @@
                     <select id="revert-payment" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;" required></select>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-revert-payment')" style="width:auto;">Cancelar</button>
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-revert-payment')" style="width:auto;" data-i18n="btn_cancel">Cancelar</button>
                     <button type="submit" class="btn-action-primary" style="width:auto;" data-i18n="revert_confirm">Reverter</button>
                 </div>
             </form>
@@ -3132,7 +3132,7 @@
             [...payments].reverse().forEach(p => {
                 const opt = document.createElement('option');
                 opt.value = p.id;
-                opt.textContent = `${p.date} · ${window.formatMoney(p.amount, activeCard.currency)} · ${p.account}`;
+                opt.textContent = `${p.date} · ${window.formatMoney(p.amount, activeCard.currency)} · ${p.account || '—'}`;
                 select.appendChild(opt);
             });
             openModal('modal-revert-payment');
