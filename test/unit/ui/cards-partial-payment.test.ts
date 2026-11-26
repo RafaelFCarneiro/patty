@@ -254,4 +254,20 @@ describe('cards.html unfinished payments', () => {
 
     expect(sent[1]?.discriminator).toBe(sent[0]?.discriminator);
   });
+
+  it('keeps resending the same token when storage reads work but writes fail', async () => {
+    const storage = makeSessionStorage();
+    const readOnly = {
+      getItem: storage.getItem,
+      setItem: () => {
+        throw new Error('quota');
+      },
+    };
+    const { submit } = open(readOnly);
+
+    const lost = await submit(billA, false);
+    const retried = await submit(billA, true);
+
+    expect(retried.discriminator).toBe(lost.discriminator);
+  });
 });

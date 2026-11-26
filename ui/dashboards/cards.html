@@ -3072,14 +3072,17 @@
         var payToken = null;
         var PAY_ATTEMPTS_KEY = 'patty.cards.payAttempts';
         var payAttemptsInMemory = {};
+        var payAttemptsStorageFailed = false;
         function newPayToken() {
             return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
         }
 
         function readPayAttempts() {
+            if (payAttemptsStorageFailed) return payAttemptsInMemory;
             try {
                 return JSON.parse(sessionStorage.getItem(PAY_ATTEMPTS_KEY) || '{}') || {};
             } catch (e) {
+                payAttemptsStorageFailed = true;
                 return payAttemptsInMemory;
             }
         }
@@ -3088,7 +3091,9 @@
             payAttemptsInMemory = attempts;
             try {
                 sessionStorage.setItem(PAY_ATTEMPTS_KEY, JSON.stringify(attempts));
-            } catch (e) {}
+            } catch (e) {
+                payAttemptsStorageFailed = true;
+            }
         }
 
         function payAttemptKey() {
