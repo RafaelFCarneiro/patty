@@ -3027,7 +3027,7 @@
             amountInput.disabled = settlesWithoutPayment;
             amountInput.required = !settlesWithoutPayment;
             amountInput.value = settlesWithoutPayment ? '' : String(retry && retry.amount !== undefined ? retry.amount : remaining);
-            amountInput.max = settlesWithoutPayment ? '' : String(remaining);
+            amountInput.max = settlesWithoutPayment || retry ? '' : String(remaining);
 
             // Populate account select
             const accSelect = document.getElementById('pay-account');

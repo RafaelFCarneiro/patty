@@ -164,20 +164,26 @@ describe('cards.html payment token', () => {
     Object.entries(fill ?? {}).forEach(([id, value]) => (document.getElementById(id).value = value));
     document.getElementById('pay-account').value = document.getElementById('pay-account').value || 'Checking';
     await sandbox.handlePaySubmit({ preventDefault: () => undefined });
-    return { sent: sent[0], amount: document.getElementById('pay-amount').value };
+    return {
+      sent: sent[0],
+      amount: document.getElementById('pay-amount').value,
+      max: document.getElementById('pay-amount').max,
+    };
   };
 
   it('resends the same payment after a failure, and starts fresh after a success', async () => {
     const { sandbox, document } = render({ remaining: 100 });
 
-    const failed = await attempt(sandbox, document, false, { 'pay-amount': '30', 'pay-date': '2026-06-09' });
-    sandbox.currentBill = { ...sandbox.currentBill, bill: bill({ remaining: 70, paidAmount: 30 }) };
+    const failed = await attempt(sandbox, document, false, { 'pay-amount': '70', 'pay-date': '2026-06-09' });
+    sandbox.currentBill = { ...sandbox.currentBill, bill: bill({ remaining: 30, paidAmount: 70 }) };
     const retried = await attempt(sandbox, document, true);
-    const next = await attempt(sandbox, document, true, { 'pay-amount': '70', 'pay-date': '2026-06-10' });
+    const next = await attempt(sandbox, document, true, { 'pay-amount': '30', 'pay-date': '2026-06-10' });
 
+    expect(retried.max).toBe('');
     expect(retried.sent).toEqual(failed.sent);
-    expect(retried.sent).toMatchObject({ amount: 30, paymentDate: '2026-06-09' });
+    expect(retried.sent).toMatchObject({ amount: 70, paymentDate: '2026-06-09' });
     expect(next.sent?.discriminator).not.toBe(failed.sent?.discriminator);
-    expect(next.sent).toMatchObject({ amount: 70 });
+    expect(next.sent).toMatchObject({ amount: 30 });
+    expect(next.max).toBe('30');
   });
 });
