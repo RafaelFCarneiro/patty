@@ -92,7 +92,8 @@ describe('cards.html pay form', () => {
 describe('cards.html pay request', () => {
   const requestBody = (fields: Record<string, unknown>) => {
     const { sandbox } = render({});
-    return JSON.parse(JSON.stringify(sandbox.payBillBody({ account: 'Checking', date: '2026-06-10', ...fields })));
+    const bound = { card: 'Nubank', month: 6, year: 2026, account: 'Checking', date: '2026-06-10' };
+    return JSON.parse(JSON.stringify(sandbox.payBillBody({ ...bound, ...fields })));
   };
 
   it('carries the payment token as the discriminator', () => {
@@ -152,79 +153,170 @@ describe('cards.html payment revert', () => {
 });
 
 describe('cards.html unfinished payments', () => {
+  type Reply = 'ok' | 'refused' | 'network' | 'server';
+  type Sent = { card: string; month: number; year: number; discriminator: string; amount: number };
   const billA = bill();
   const billB = bill({ id: 'bill-2', month: 7, closeDate: '2026-07-05', dueDate: '2026-07-15' });
 
-  const open = (storage = makeSessionStorage()) => {
+  const open = (
+    storage: { getItem(k: string): string | null; setItem(k: string, v: string): void } = makeSessionStorage(),
+  ) => {
     const { sandbox, document } = loadFragment('cards', { sessionStorage: storage });
+    const sent: Sent[] = [];
     sandbox.activeCard = card;
     sandbox.accounts = [];
     sandbox.loadBillDetails = async () => undefined;
+    const answer = (reply: Reply) => async (_url: string, init: { body: string }) => {
+      sent.push(JSON.parse(init.body));
+      if (reply === 'network') throw new Error('offline');
+      if (reply === 'ok') return { ok: true, status: 200, json: async () => ({}) };
+      return { ok: false, status: reply === 'refused' ? 400 : 503, json: async () => ({ error: { message: 'boom' } }) };
+    };
     const show = (shown: ReturnType<typeof bill>) => {
       sandbox.currentBill = { bill: shown, cardName: card.name, transactions: [], total: 100 };
     };
-    const submit = async (shown: ReturnType<typeof bill>, ok: boolean, fill: Record<string, string> = {}) => {
-      const sent: Record<string, unknown>[] = [];
-      sandbox.fetch = async (_url: string, init: { body: string }) => {
-        sent.push(JSON.parse(init.body));
-        return { ok, json: async () => ({ error: { message: 'boom' } }) };
-      };
-      show(shown);
-      sandbox.openPayModal();
+    const submit = (fill: Record<string, string> = {}) => {
       const account = document.getElementById('pay-account');
       account.value = account.value || 'Checking';
       Object.entries(fill).forEach(([id, value]) => (document.getElementById(id).value = value));
-      await sandbox.handlePaySubmit({ preventDefault: () => undefined });
-      return sent[0] as { discriminator: string; amount: number; paymentDate: string };
+      return sandbox.handlePaySubmit({ preventDefault: () => undefined });
     };
-    return { sandbox, document, submit, show, storage };
+    const pay = async (shown: ReturnType<typeof bill>, reply: Reply, fill: Record<string, string> = {}) => {
+      sandbox.fetch = answer(reply);
+      show(shown);
+      await sandbox.openPayModal();
+      await submit(fill);
+      return sent[sent.length - 1] as Sent;
+    };
+    const reopen = async (shown: ReturnType<typeof bill>, reply: Reply) => {
+      sandbox.fetch = answer(reply);
+      show(shown);
+      await sandbox.openPayModal();
+    };
+    return { sandbox, document, sent, answer, show, submit, pay, reopen };
   };
   const kept = (storage: ReturnType<typeof makeSessionStorage>) =>
     Object.keys(JSON.parse(storage.getItem('patty.cards.payAttempts') ?? '{}'));
 
-  it('resends the same payment after a failure and starts fresh after a success', async () => {
-    const { submit, show, sandbox, document } = open();
+  it('reopening a bill with an unfinished payment resends it unchanged before a new payment is offered', async () => {
+    const storage = makeSessionStorage();
+    const { sandbox, sent, pay, reopen, submit } = open(storage);
+    const lost = await pay(billA, 'network', { 'pay-amount': '70' });
 
-    const failed = await submit(billA, false, { 'pay-amount': '70', 'pay-date': '2026-06-09' });
-    show(bill({ remaining: 30, paidAmount: 70 }));
-    sandbox.openPayModal();
-    expect(document.getElementById('pay-amount').value).toBe('70');
-    expect(document.getElementById('pay-amount').max).toBe('');
-    const retried = await submit(bill({ remaining: 30, paidAmount: 70 }), true, {});
-    const next = await submit(billA, true, { 'pay-amount': '30' });
+    await reopen(billA, 'ok');
 
-    expect(retried).toEqual(failed);
-    expect(next.discriminator).not.toBe(failed.discriminator);
-    expect(document.getElementById('pay-amount').max).toBe('100');
+    expect(sent[1]).toEqual(lost);
+    expect(kept(storage)).toEqual([]);
+    expect(sandbox.payTarget).not.toBeNull();
+    await submit({ 'pay-amount': '30' });
+    expect(sent[2]?.discriminator).not.toBe(lost.discriminator);
+    expect(sent[2]?.amount).toBe(30);
   });
 
-  it('keeps each bill’s attempt: a lost response on A survives a payment on B, and B’s success leaves A', async () => {
-    const { submit, storage } = open();
+  it('a 4xx on the resend clears the attempt (nothing was recorded) and offers a new payment', async () => {
+    const storage = makeSessionStorage();
+    const { sandbox, sent, pay, reopen } = open(storage);
+    await pay(billA, 'network');
 
-    const lostOnA = await submit(billA, false);
-    const onB = await submit(billB, true);
-    const reopenedA = await submit(billA, false);
+    await reopen(billA, 'refused');
+
+    expect(sent).toHaveLength(2);
+    expect(kept(storage)).toEqual([]);
+    expect((sandbox.payTarget as { token: string }).token).not.toBe(sent[0]?.discriminator);
+  });
+
+  it('a network error on the resend keeps the attempt and does not open the form', async () => {
+    const storage = makeSessionStorage();
+    const { sandbox, sent, pay, reopen } = open(storage);
+    const lost = await pay(billA, 'network');
+
+    await reopen(billA, 'network');
+    expect(kept(storage)).toEqual(['card-1:2026-6']);
+    expect(sandbox.payTarget).toBeNull();
+
+    await reopen(billA, 'server');
+    expect(kept(storage)).toEqual(['card-1:2026-6']);
+    expect(sent.map((s) => s.discriminator)).toEqual([lost.discriminator, lost.discriminator, lost.discriminator]);
+  });
+
+  it('keeps each bill’s attempt: a lost response on A survives a payment on B', async () => {
+    const storage = makeSessionStorage();
+    const { sent, pay, reopen } = open(storage);
+    const lostOnA = await pay(billA, 'network');
+
+    const onB = await pay(billB, 'ok');
+    await reopen(billA, 'ok');
 
     expect(onB.discriminator).not.toBe(lostOnA.discriminator);
-    expect(reopenedA.discriminator).toBe(lostOnA.discriminator);
-    expect(kept(storage)).toEqual(['card-1:2026-6']);
+    expect(sent[2]).toEqual(lostOnA);
   });
 
-  it('survives a reload in the same tab, and a success clears the entry', async () => {
+  it('with A in flight, opening B and submitting it sends B’s own token and does not disturb A', async () => {
+    const { sandbox, document, sent, answer, show, submit } = open();
+    let finishA: (value: unknown) => void = () => undefined;
+    sandbox.fetch = async (_url: string, init: { body: string }) => {
+      sent.push(JSON.parse(init.body));
+      return new Promise((resolve) => (finishA = resolve));
+    };
+    show(billA);
+    sandbox.openPayModal();
+    const inFlightA = submit();
+    expect(document.getElementById('btn-pay-bill').disabled).toBe(true);
+
+    show(billB);
+    sandbox.openPayModal();
+    finishA({ ok: true, status: 200, json: async () => ({}) });
+    await inFlightA;
+    sandbox.fetch = answer('ok');
+    await submit();
+
+    expect(sent.map((s) => s.month)).toEqual([6, 7]);
+    expect(sent[1]?.discriminator).not.toBe(sent[0]?.discriminator);
+    expect(document.getElementById('btn-pay-bill').disabled).toBe(false);
+  });
+
+  it('refuses a second submit of the same form while its request is in flight', async () => {
+    const { sandbox, sent, show, submit } = open();
+    sandbox.fetch = async (_url: string, init: { body: string }) => {
+      sent.push(JSON.parse(init.body));
+      return new Promise(() => undefined);
+    };
+    show(billA);
+    sandbox.openPayModal();
+
+    void submit();
+    void submit();
+
+    expect(sent).toHaveLength(1);
+  });
+
+  it('submits the bill the form was opened for, even when the bill on screen reloads meanwhile', async () => {
+    const { sandbox, sent, answer, show, submit } = open();
+    sandbox.fetch = answer('ok');
+    show(billA);
+    sandbox.openPayModal();
+
+    show(billB);
+    await submit();
+
+    expect(sent[0]).toMatchObject({ card: 'Nubank', month: 6, year: 2026 });
+  });
+
+  it('survives a reload in the same tab: the new page resends the lost payment', async () => {
     const storage = makeSessionStorage();
-    const lost = await open(storage).submit(billA, false);
+    const lost = await open(storage).pay(billA, 'network');
 
     const reloaded = open(storage);
-    const resent = await reloaded.submit(billA, true);
+    await reloaded.reopen(billA, 'ok');
 
-    expect(resent.discriminator).toBe(lost.discriminator);
+    expect(reloaded.sent[0]).toEqual(lost);
     expect(kept(storage)).toEqual([]);
-    expect((await open(storage).submit(billA, true)).discriminator).not.toBe(lost.discriminator);
   });
 
   it('drops the entry of a bill that shows as settled', async () => {
-    const { submit, show, sandbox, storage } = open();
-    await submit(billA, false);
+    const storage = makeSessionStorage();
+    const { sandbox, show, pay } = open(storage);
+    await pay(billA, 'network');
 
     show(bill({ status: 'paid', paidAmount: 100, remaining: 0 }));
     sandbox.renderBillSummary();
@@ -232,42 +324,18 @@ describe('cards.html unfinished payments', () => {
     expect(kept(storage)).toEqual([]);
   });
 
-  it('falls back to memory when the browser storage is unavailable', async () => {
-    const { sandbox, document } = loadFragment('cards');
-    sandbox.activeCard = card;
-    sandbox.accounts = [];
-    sandbox.loadBillDetails = async () => undefined;
-    const sent: { discriminator: string }[] = [];
-    const run = async (ok: boolean) => {
-      sandbox.fetch = async (_url: string, init: { body: string }) => {
-        sent.push(JSON.parse(init.body));
-        return { ok, json: async () => ({ error: { message: 'boom' } }) };
-      };
-      sandbox.currentBill = { bill: billA, cardName: card.name, transactions: [], total: 100 };
-      sandbox.openPayModal();
-      document.getElementById('pay-account').value = 'Checking';
-      await sandbox.handlePaySubmit({ preventDefault: () => undefined });
-    };
-
-    await run(false);
-    await run(true);
-
-    expect(sent[1]?.discriminator).toBe(sent[0]?.discriminator);
-  });
-
-  it('keeps resending the same token when storage reads work but writes fail', async () => {
-    const storage = makeSessionStorage();
-    const readOnly = {
-      getItem: storage.getItem,
+  it('keeps resending the same token when storage is unavailable or its writes fail', async () => {
+    const failing = {
+      getItem: makeSessionStorage().getItem,
       setItem: () => {
         throw new Error('quota');
       },
     };
-    const { submit } = open(readOnly);
+    const { sent, pay, reopen } = open(failing);
+    const lost = await pay(billA, 'network');
 
-    const lost = await submit(billA, false);
-    const retried = await submit(billA, true);
+    await reopen(billA, 'ok');
 
-    expect(retried.discriminator).toBe(lost.discriminator);
+    expect(sent[1]).toEqual(lost);
   });
 });
