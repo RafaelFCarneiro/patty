@@ -5,7 +5,7 @@
 **Date:** 2026-07-03 · Builds on Feature Design 003 (credit-card bill payment) and Feature Design 011
 (bill payment lifecycle — `revert_bill_payment`, the paid-bill ⇄ payment-transfer invariant). Governed by
 ADR-010 (credit cards as liability accounts) and ADR-012 (per-model errors). **Revised by Feature Design 025
-(partial bill payment):** only a fully `paid` bill stays composition-immutable; a part-paid bill takes purchases
+(partial bill payment):** only a fully `paid` bill stays composition-immutable (and, closing a gap, an edit that changes its total is refused too); a part-paid bill takes purchases
 and edits as long as its total stays at or above what is paid, and a bill's payment transfers are found through
 the transfers' `bill_id`, not `bills.payment_transaction_id` (dropped).
 

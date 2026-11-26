@@ -99,6 +99,8 @@ const guardEditCoversPaid = (
   entity: TransactionEntity,
 ): ResultAsync<void, AppError> =>
   safeTry(async function* () {
+    const currentBill = existing.billId ? await deps.bills.findById(existing.billId) : null;
+    yield* guard(!currentBill || !isBillPaid(currentBill), cardErrors.paidBillImmutable);
     const sameBill = entity.refs.billId === existing.billId;
     yield* guardBillChange(deps, existing.billId, {
       removedId: existing.id,

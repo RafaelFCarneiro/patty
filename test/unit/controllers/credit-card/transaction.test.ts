@@ -1001,6 +1001,49 @@ describe('deleteCardTransaction — guards + is returned as data (ADR-021 phase 
   });
 });
 
+describe('an edit that changes the total of a paid bill is refused (Feature Design 025 §7)', () => {
+  const purchase: RawTransactionView = { ...cardOwnedTx, id: 'purchase', amount: 100, type: 'expense' };
+  const depsOn = (status: BillStatus): Deps =>
+    makeDeps({
+      transactions: { getById: async () => purchase } as unknown as Deps['transactions'],
+      accounts: {
+        findById: async () => account({ id: 'acc-card-internal', type: AccountType.enum.credit }),
+      } as unknown as Deps['accounts'],
+      bills: {
+        findById: async () => rawBill({ status }),
+        findByCycle: async () => rawBill({ status }),
+        get: async () => ({ bill: rawBill({ status }), cardName: 'Test Card', transactions: [purchase] }),
+      } as unknown as Deps['bills'],
+    });
+
+  it('raising or lowering the amount, or changing the type, is refused with the paid-bill error', async () => {
+    const deps = depsOn(BillStatus.enum.paid);
+
+    const results = await Promise.all([
+      updateCardTransaction(deps, { id: 'purchase', amount: 150 }),
+      updateCardTransaction(deps, { id: 'purchase', amount: 50 }),
+      updateCardTransaction(deps, { id: 'purchase', type: 'income' }),
+    ]);
+
+    results.forEach((result) =>
+      expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation', remedy: Remedy.enum.revert_bill_payment }),
+    );
+  });
+
+  it('changing the description or the category is allowed', async () => {
+    const deps = depsOn(BillStatus.enum.paid);
+
+    expect((await updateCardTransaction(deps, { id: 'purchase', description: 'Renamed' })).isOk()).toBe(true);
+    expect((await updateCardTransaction(deps, { id: 'purchase', note: 'memo' })).isOk()).toBe(true);
+  });
+
+  it('the same amount edit on a bill that is not paid is allowed', async () => {
+    const result = await updateCardTransaction(depsOn(BillStatus.enum.closed), { id: 'purchase', amount: 150 });
+
+    expect(result.isOk()).toBe(true);
+  });
+});
+
 describe('a bill whose payments exceed its new total is refused (Feature Design 025 §7)', () => {
   const purchase: RawTransactionView = { ...cardOwnedTx, id: 'purchase', amount: 100, type: 'expense' };
   const payment: RawTransactionView = {

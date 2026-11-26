@@ -22,8 +22,9 @@ side: more than one payment per bill, knowing how much is paid and how much rema
 
 1. **`pay_bill` takes an optional `amount`** (positive, rounded to the card currency's decimals). Omitted, it
    pays what remains, so a call without `amount` on an unpaid bill behaves exactly as today. An `amount` above
-   what remains is refused (`validation`, naming the remaining amount). A bill whose remaining is 0 or less is
-   answered unchanged, as a `paid` bill is today.
+   what remains is refused (`validation`, naming the remaining amount). A `paid` bill is answered unchanged. An
+   unpaid bill whose remaining is 0 or less (a non-positive total, or refunds that brought the total down to
+   what is paid) is marked `paid` without a new transfer, as a non-positive total is today.
 
 2. **Each call is one payment, and payments are derived, never counted on the bill.** A bill's payments are
    its transfers into the card's account (`type = transfer`, `bill_id` = the bill, `to_account_id` = the
@@ -55,8 +56,12 @@ side: more than one payment per bill, knowing how much is paid and how much rema
    Repeating a call is safe. Existing `billpay-<billId>` keys stay on their rows; they never collide with the
    new form.
 
-7. **Only a fully paid bill is locked.** Design 012's rule ("a `paid` bill is composition-immutable") is
-   unchanged. A partly paid bill still takes purchases and edits, and its `remaining` follows. A change that
+7. **Only a fully paid bill is locked, and fully.** Design 012's rule ("a `paid` bill is composition-immutable")
+   is kept and closes a gap it had: besides adding, removing or reassigning a transaction, an edit that changes
+   a `paid` bill's total (a purchase's amount or type) is refused too, since a `paid` bill reports
+   `remaining: 0` and the extra debt would be hidden. Edits that leave the total alone (description, category,
+   tags, date within the cycle) stay allowed. A partly paid bill still takes purchases and edits, and its
+   `remaining` follows. A change that
    would make the total smaller than what is already paid is refused (`validation`, pointing at
    `revert_bill_payment`), so `paidAmount ≤ total` always holds.
 
