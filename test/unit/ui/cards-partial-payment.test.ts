@@ -167,7 +167,7 @@ describe('cards.html payment token', () => {
     return { sent: sent[0], amount: document.getElementById('pay-amount').value };
   };
 
-  it('resends the same payment after a failure, even when the bill has since changed, and starts fresh after a success', async () => {
+  it('resends the same payment after a failure, and starts fresh after a success', async () => {
     const { sandbox, document } = render({ remaining: 100 });
 
     const failed = await attempt(sandbox, document, false, { 'pay-amount': '30', 'pay-date': '2026-06-09' });
