@@ -61,14 +61,19 @@ side: more than one payment per bill, knowing how much is paid and how much rema
    a `paid` bill's total (a purchase's amount or type) is refused too, since a `paid` bill reports
    `remaining: 0` and the extra debt would be hidden. Edits that leave the total alone (description, category,
    tags, date within the cycle) stay allowed. A partly paid bill still takes purchases and edits, and its
-   `remaining` follows. A change that
-   would make the total smaller than what is already paid is refused (`validation`, pointing at
-   `revert_bill_payment`), so `paidAmount ≤ total` always holds.
+   `remaining` follows. A change that would make the total smaller than what is already paid is refused
+   (`validation`, pointing at `revert_bill_payment`), so `paidAmount ≤ total` always holds. Every flow that
+   changes a bill's total, or pays it, writes the bill under the version it read before reading its payments,
+   so two such flows at once conflict and the later one re-runs on fresh data. `confirm_transaction` cannot
+   apply these rules, so it refuses an `amount` that changes a card purchase (the purchase is updated first,
+   then confirmed); confirming at the stored amount stays allowed.
 
-8. **`revert_bill_payment` undoes one payment.** It takes an optional `paymentId`; without it, it undoes the
-   latest payment by date. When two payments share the latest date and no `paymentId` is given, it refuses
-   (`validation`, listing both ids). Undoing a payment of a `paid` bill flips it back to `closed`, as today.
-   A bill with no payment is answered unchanged.
+8. **`revert_bill_payment` undoes one payment, and a retry never undoes a second.** It takes an optional
+   `paymentId`. Without it, it undoes the bill's only payment, as today; when the bill has more than one, it
+   refuses (`validation`, listing the ids), because a retried "undo the latest" would otherwise remove two.
+   With a `paymentId` that is not, or no longer, a payment of the bill, it answers the bill unchanged, so
+   repeating an undo is safe (like the idempotent deletes). Undoing a payment of a `paid` bill flips it back to
+   `closed`, as today. A bill with no payment is answered unchanged.
 
 9. **Payment transfers stay protected.** As today, a bill's payment transfer cannot be edited or deleted
    through the transaction tools; `revert_bill_payment` is the only way to remove one. `delete_credit_card`
@@ -121,7 +126,10 @@ payment), `docs/architecture.md` invariant 8, `docs/canonical/*`.
    first); `delete_credit_card` finds payments through the transfers.
 5. **Edges**: the MCP tools and REST mirrors take the new inputs; descriptions say what remains, that a
    remainder stays as card debt and that interest is recorded as a card charge.
-6. **UI**: `ui/dashboards/cards.html` shows "pago X de Y" and the remaining amount for a partly paid bill,
+6. **UI**: `ui/dashboards/cards.html` always sends the `paymentId` it reverts (asking which when there are
+   several) and gives each deliberate payment its own token as `discriminator`, resent unchanged when an
+   unfinished payment is retried (so a retry is a repeat and a new payment, even an identical one, is not);
+   it shows "pago X de Y" and the remaining amount for a partly paid bill,
    through the shell's classes and `window.PATTY`.
 7. **Tests**: a payment below the total leaves the bill `closed` with `partiallyPaid`, then a second one makes
    it `paid`; no `amount` pays the remaining; an amount above remaining is refused; a repeat with the same

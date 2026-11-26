@@ -122,11 +122,6 @@ export const toSettledBill = (bill: Bill, payments: BillPayment[], settled: Sett
 export const coversPaid = (total: number, paidAmount: number, decimals: number): boolean =>
   paidAmount <= 0 || roundToDecimals(total - paidAmount, decimals) >= 0;
 
-export const paymentsOnLatestDate = (payments: BillPayment[]): BillPayment[] =>
-  R.pipe(payments, R.firstBy([(p) => p.date, 'desc']), (latest) =>
-    latest ? R.filter(payments, (p) => p.date === latest.date) : [],
-  );
-
 export const hasIdempotencyKey = (transactions: TransactionView[], idempotencyKey: string): boolean =>
   R.isNonNullish(R.find(transactions, (tx) => tx.idempotencyKey === idempotencyKey));
 

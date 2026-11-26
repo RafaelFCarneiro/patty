@@ -138,42 +138,44 @@ describe('MCP integration > partial bill payment (Feature Design 025)', () => {
     });
   });
 
-  it('revert_bill_payment undoes the latest payment by date, or the one named; from paid the bill closes', async () => {
+  it('revert_bill_payment undoes the only payment, or the one named; from paid the bill closes', async () => {
     await withBill(async ({ client, card, bank }) => {
       const early = await pay(client, card, { amount: 40, paymentDate: dayBefore });
-      await pay(client, card, { amount: 60 });
-      const earlyId = early.payments[0]?.id;
-      ensure(earlyId, 'expected the early payment id');
+      const both = await pay(client, card, { amount: 60 });
+      const [earlyId, lateId] = both.payments.map((p) => p.id);
+      ensure(earlyId && lateId && early.payments[0]?.id === earlyId, 'expected both payment ids');
 
-      const latestUndone = await revert(client, card);
-      expect(latestUndone).toMatchObject({ status: 'closed', paidAmount: 40, remaining: 60, partiallyPaid: true });
-      expect(latestUndone.payments.map((p) => p.id)).toEqual([earlyId]);
+      const lateUndone = await revert(client, card, { paymentId: lateId });
+      expect(lateUndone).toMatchObject({ status: 'closed', paidAmount: 40, remaining: 60, partiallyPaid: true });
       expect(await balanceOf(client, bank)).toBe(960);
 
-      const nothingLeft = await revert(client, card, { paymentId: earlyId });
+      const nothingLeft = await revert(client, card);
       expect(nothingLeft).toMatchObject({ status: 'closed', paidAmount: 0, remaining: 100, payments: [] });
       expect(await balanceOf(client, bank)).toBe(1000);
       expect(await revert(client, card)).toMatchObject({ paidAmount: 0, payments: [] });
     });
   });
 
-  it('revert_bill_payment refuses a same-date tie without a paymentId, and an id that is not a payment', async () => {
-    await withBill(async ({ client, card }) => {
-      const first = await pay(client, card, { amount: 30 });
+  it('revert_bill_payment needs the payment named among several; a repeated or foreign id is a no-op', async () => {
+    await withBill(async ({ client, card, bank }) => {
+      await pay(client, card, { amount: 30 });
       const both = await pay(client, card, { amount: 20 });
       const ids = both.payments.map((p) => p.id);
       expect(ids).toHaveLength(2);
 
-      const tie = await failure(client, 'revert_bill_payment', { card, month, year });
-      expect(tie.error?.code).toBe('validation');
-      for (const id of ids) expect(tie.error?.issues?.join(' ')).toContain(id);
+      const ambiguous = await failure(client, 'revert_bill_payment', { card, month, year });
+      expect(ambiguous.error?.code).toBe('validation');
+      for (const id of ids) expect(ambiguous.error?.issues?.join(' ')).toContain(id);
 
-      const unknown = await failure(client, 'revert_bill_payment', { card, month, year, paymentId: 'nope' });
-      expect(unknown.error?.code).toBe('validation');
-
-      const firstId = first.payments[0]?.id;
+      const [firstId] = ids;
       ensure(firstId, 'expected the first payment id');
       expect((await revert(client, card, { paymentId: firstId })).payments).toHaveLength(1);
+      expect(await balanceOf(client, bank)).toBe(980);
+
+      const repeated = await revert(client, card, { paymentId: firstId });
+      expect(repeated).toMatchObject({ paidAmount: 20, payments: [expect.anything()] });
+      expect(await revert(client, card, { paymentId: 'not-a-payment' })).toMatchObject({ paidAmount: 20 });
+      expect(await balanceOf(client, bank)).toBe(980);
     });
   });
 

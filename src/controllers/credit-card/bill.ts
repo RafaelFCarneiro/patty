@@ -12,7 +12,6 @@ import {
   hasIdempotencyKey,
   isBillPaid,
   paymentsOf,
-  paymentsOnLatestDate,
   planBillPayment,
   settlement,
   toBillView,
@@ -178,11 +177,14 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
     return ok(yield* planPayment(deps, input, context, { date, today }));
   });
 
-const pickPayment = (payments: BillPayment[], paymentId: string | undefined): Result<BillPayment, AppError> =>
+const pickPayment = (
+  payments: BillPayment[],
+  paymentId: string | undefined,
+): Result<BillPayment | undefined, AppError> =>
   safeTry(function* () {
-    const candidates = paymentId ? R.filter(payments, (p) => p.id === paymentId) : paymentsOnLatestDate(payments);
-    yield* guard(candidates.length <= 1, billErrors.ambiguousLatestPayment(R.map(candidates, (p) => p.id)));
-    return okOr(R.first(candidates), billErrors.paymentNotFound(paymentId));
+    if (paymentId) return ok(R.find(payments, (p) => p.id === paymentId));
+    yield* guard(payments.length <= 1, billErrors.paymentIdRequired(R.map(payments, (p) => p.id)));
+    return ok(R.first(payments));
   });
 
 const buildRevert = (
@@ -208,11 +210,11 @@ export const revertBillPayment = (
 ): ResultAsync<FlowOutcome<SettledBill>, AppError> =>
   safeTry(async function* () {
     const { existing, current, total, decimals, rawBill } = yield* loadBillContext(deps, input);
-    if (R.isEmpty(current.payments) && !isBillPaid(existing.bill)) return ok(unchanged(current));
-
-    if (R.isEmpty(current.payments)) return ok(buildRevert(rawBill, undefined, total, [], decimals));
+    const settledWithoutPayment = !input.paymentId && R.isEmpty(current.payments) && isBillPaid(existing.bill);
+    if (settledWithoutPayment) return ok(buildRevert(rawBill, undefined, total, [], decimals));
 
     const payment = yield* pickPayment(current.payments, input.paymentId);
+    if (!payment) return ok(unchanged(current));
     const transfer = yield* okOr(
       R.find(existing.transactions, (tx) => tx.id === payment.id),
       transactionErrors.notFound(payment.id),

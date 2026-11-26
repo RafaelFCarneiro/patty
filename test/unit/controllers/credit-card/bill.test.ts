@@ -380,11 +380,11 @@ describe('revertBillPayment — the write is returned as data, not performed (AD
     expect((response as { paymentTransactionId?: string }).paymentTransactionId).toBeUndefined();
   });
 
-  it('without a paymentId it undoes the latest payment by date and keeps a part-paid bill status', async () => {
+  it('with a paymentId it undoes that payment and keeps a part-paid bill status', async () => {
     const bill = rawBill({ status: BillStatus.enum.closed });
 
     const { persist, response } = (
-      await revertBillPayment(billsDeps([billItem(), older, newer], bill), revert)
+      await revertBillPayment(billsDeps([billItem(), older, newer], bill), { ...revert, paymentId: 'tx-new' })
     )._unsafeUnwrap();
 
     expect(persist[1]).toEqual({ op: PersistOp.enum.delete, entity: 'transaction', id: 'tx-new', version: 9 });
@@ -397,6 +397,12 @@ describe('revertBillPayment — the write is returned as data, not performed (AD
     });
   });
 
+  it('without a paymentId it undoes the bill’s only payment', async () => {
+    const result = await revertBillPayment(billsDeps([billItem(), older]), revert);
+
+    expect(result._unsafeUnwrap().persist[1]).toMatchObject({ op: PersistOp.enum.delete, id: 'tx-old' });
+  });
+
   it('with a paymentId it undoes that payment', async () => {
     const result = await revertBillPayment(billsDeps([billItem(), older, newer]), { ...revert, paymentId: 'tx-old' });
 
@@ -407,28 +413,37 @@ describe('revertBillPayment — the write is returned as data, not performed (AD
     const paidBill = rawBill({ status: BillStatus.enum.paid });
 
     const { persist, response } = (
-      await revertBillPayment(billsDeps([billItem(), older, newer], paidBill), revert)
+      await revertBillPayment(billsDeps([billItem(), older, newer], paidBill), { ...revert, paymentId: 'tx-new' })
     )._unsafeUnwrap();
 
     expect((persist[0] as { model: BillModel }).model.status).toBe(BillStatus.enum.closed);
     expect(response).toMatchObject({ status: BillStatus.enum.closed, remaining: 40 });
   });
 
-  it('refuses without a paymentId when two payments share the latest date, listing both ids', async () => {
-    const tied = paymentItem({ id: 'tx-tied', date: '2026-06-12', amount: 10 });
-
-    const result = await revertBillPayment(billsDeps([billItem(), older, newer, tied]), revert);
+  it('refuses without a paymentId when the bill has several payments, listing their ids', async () => {
+    const result = await revertBillPayment(billsDeps([billItem(), older, newer]), revert);
 
     expect(result._unsafeUnwrapErr()).toEqual({
       code: 'validation',
-      issues: ['several payments share the latest date: pass `paymentId` — one of tx-new, tx-tied'],
+      issues: ['the bill has several payments: pass `paymentId` — one of tx-old, tx-new'],
     });
   });
 
-  it('refuses a paymentId that is not a payment of the bill', async () => {
-    const result = await revertBillPayment(billsDeps([billItem(), older]), { ...revert, paymentId: 'nope' });
+  it('a paymentId that is not a payment of the bill answers the bill unchanged, removing nothing', async () => {
+    const { persist, response } = (
+      await revertBillPayment(billsDeps([billItem(), older]), { ...revert, paymentId: 'tx-elsewhere' })
+    )._unsafeUnwrap();
 
-    expect(result._unsafeUnwrapErr().code).toBe('validation');
+    expect(persist).toEqual([]);
+    expect(response).toMatchObject({ paidAmount: 60, remaining: 40 });
+  });
+
+  it('repeating an undo with the same id is unchanged once the payment is gone', async () => {
+    const { persist } = (
+      await revertBillPayment(billsDeps([billItem()]), { ...revert, paymentId: 'tx-old' })
+    )._unsafeUnwrap();
+
+    expect(persist).toEqual([]);
   });
 
   it('a paid bill with no payment transfer emits only the bill update to closed', async () => {

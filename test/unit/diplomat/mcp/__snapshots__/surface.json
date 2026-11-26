@@ -1123,7 +1123,7 @@
     {
       "name": "revert_bill_payment",
       "title": "Revert credit card bill payment",
-      "description": "Undo one bill payment: deletes its transfer (`paymentId`, from the bill's `payments`; default the latest by date, refused when two share that date) and, from paid, flips the bill back to closed. Idempotent — calling on a bill with no payment is a no-op that returns it unchanged.",
+      "description": "Undo one bill payment: deletes its transfer (`paymentId`, from the bill's `payments`; omit it only when the bill has a single payment — with several it is refused, listing their ids) and, from paid, flips the bill back to closed. Safe to repeat: a bill with no payment, or a `paymentId` that is no longer a payment of the bill, is a no-op that returns the bill unchanged.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1145,7 +1145,7 @@
             "description": "Billing cycle year"
           },
           "paymentId": {
-            "description": "The payment to undo (see `payments` on the bill); defaults to the latest one",
+            "description": "The payment to undo (see `payments` on the bill); required when the bill has several. One that is not, or no longer, a payment of the bill changes nothing",
             "type": "string",
             "minLength": 1
           }

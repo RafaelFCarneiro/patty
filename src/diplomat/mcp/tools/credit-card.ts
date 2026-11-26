@@ -222,9 +222,10 @@ const payBillTool = defineTool({
 });
 
 const revertBillPaymentDescription =
-  "Undo one bill payment: deletes its transfer (`paymentId`, from the bill's `payments`; default the latest by " +
-  'date, refused when two share that date) and, from paid, flips the bill back to closed. ' +
-  'Idempotent — calling on a bill with no payment is a no-op that returns it unchanged.';
+  "Undo one bill payment: deletes its transfer (`paymentId`, from the bill's `payments`; omit it only when the " +
+  'bill has a single payment — with several it is refused, listing their ids) and, from paid, flips the bill ' +
+  'back to closed. Safe to repeat: a bill with no payment, or a `paymentId` that is no longer a payment of the ' +
+  'bill, is a no-op that returns the bill unchanged.';
 
 const revertBillPaymentTool = defineTool({
   name: ToolName.enum.revert_bill_payment,

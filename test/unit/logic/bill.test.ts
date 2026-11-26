@@ -20,7 +20,6 @@ import {
   coversPaid,
   hasIdempotencyKey,
   paymentsOf,
-  paymentsOnLatestDate,
   settlement,
   toSettledBill,
   totalAfterChange,
@@ -379,18 +378,6 @@ describe('bill settlement', () => {
       remaining: 0,
       partiallyPaid: false,
       paidAmount: payments.length ? 10 : 0,
-    });
-  });
-
-  describe('paymentsOnLatestDate', () => {
-    it('returns the payments sharing the latest date, none for no payment', () => {
-      const payments = [
-        { id: 'a', date: '2026-04-01', amount: 1 },
-        { id: 'b', date: '2026-04-09', amount: 1 },
-        { id: 'c', date: '2026-04-09', amount: 1 },
-      ];
-      expect(paymentsOnLatestDate(payments).map((p) => p.id)).toEqual(['b', 'c']);
-      expect(paymentsOnLatestDate([])).toEqual([]);
     });
   });
 

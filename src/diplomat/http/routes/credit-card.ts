@@ -240,7 +240,10 @@ const revertBillPaymentRoute: RouteDefinition = {
   summary: 'Undo one credit card bill payment',
   request: { body: jsonBody(RevertBillPayment) },
   responses: {
-    200: okResponse('Payment reverted (or no-op without a payment)', SettledBillSchema),
+    200: okResponse(
+      'Payment reverted (or no-op when there is no such payment, so a repeat is safe)',
+      SettledBillSchema,
+    ),
     404: notFound404,
     409: conflict409,
     422: validation422,

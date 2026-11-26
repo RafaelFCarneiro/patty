@@ -84,7 +84,9 @@ export const BillQuerySchema = z.object({
 export type BillQuery = z.infer<typeof BillQuerySchema>;
 
 export const RevertBillPaymentSchema = BillQuerySchema.extend({
-  paymentId: Id.optional().describe('The payment to undo (see `payments` on the bill); defaults to the latest one'),
+  paymentId: Id.optional().describe(
+    'The payment to undo (see `payments` on the bill); required when the bill has several. One that is not, or no longer, a payment of the bill changes nothing',
+  ),
 });
 export type RevertBillPayment = z.infer<typeof RevertBillPaymentSchema>;
 
@@ -125,13 +127,9 @@ export const billErrors = {
     code: 'validation',
     issues: [`amount exceeds what remains on the bill (${remaining})`],
   }),
-  ambiguousLatestPayment: (ids: readonly string[]): BillError => ({
+  paymentIdRequired: (ids: readonly string[]): BillError => ({
     code: 'validation',
-    issues: [`several payments share the latest date: pass \`paymentId\` — one of ${ids.join(', ')}`],
-  }),
-  paymentNotFound: (paymentId?: string): BillError => ({
-    code: 'validation',
-    issues: [paymentId ? `payment ${paymentId} is not a payment of this bill` : 'the bill has no payment to undo'],
+    issues: [`the bill has several payments: pass \`paymentId\` — one of ${ids.join(', ')}`],
   }),
   totalBelowPaid: (paidAmount: number): BillError =>
     validationWithRemedy(

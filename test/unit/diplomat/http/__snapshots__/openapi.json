@@ -10572,7 +10572,7 @@
                   "paymentId": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "The payment to undo (see `payments` on the bill); defaults to the latest one"
+                    "description": "The payment to undo (see `payments` on the bill); required when the bill has several. One that is not, or no longer, a payment of the bill changes nothing"
                   }
                 },
                 "required": [
@@ -10586,7 +10586,7 @@
         },
         "responses": {
           "200": {
-            "description": "Payment reverted (or no-op without a payment)",
+            "description": "Payment reverted (or no-op when there is no such payment, so a repeat is safe)",
             "content": {
               "application/json": {
                 "schema": {

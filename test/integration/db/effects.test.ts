@@ -1787,13 +1787,14 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     const context = { runner, isTransientContention, conflictError };
 
     let reads = 0;
-    // On the loser's first read of the bill, a competing payment commits — after the loser captured
-    // the version it will write against, so its own bill update must conflict and the flow re-run.
+    // The loser has already read the bill's version and its payments when a competing payment commits (the
+    // hook fires on the loser's first `get`, after it read), so its first attempt passes every guard on stale
+    // data and only its version-guarded bill write can stop it: the flow must conflict, re-run and decide again.
     const racingBills: Deps['bills'] = {
       ...deps.bills,
-      findByCycle: async (cardId, billMonth, billYear) => {
+      get: async (cardId, billMonth, billYear) => {
         reads += 1;
-        const stale = await deps.bills.findByCycle(cardId, billMonth, billYear);
+        const stale = await deps.bills.get(cardId, billMonth, billYear);
         if (reads === 1) await runEffects(context, fullRegistry, payBillFlow(deps, cardName, competitorAmount));
         return stale;
       },
@@ -1808,12 +1809,13 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
       await db.all<{ amount: number }>(sql`SELECT amount FROM transactions WHERE type = 'transfer' ORDER BY amount`)
     ).map((row) => row.amount);
     const status = (await db.all<{ status: string }>(sql`SELECT status FROM bills`))[0]?.status;
-    return { loser, paidAmounts, status };
+    return { loser, paidAmounts, status, reads: () => reads };
   };
 
   it('two concurrent partial payments cannot together exceed the total: the loser is refused', async () => {
-    const { loser, paidAmounts, status } = await racedPayment(60, 50);
+    const { loser, paidAmounts, status, reads } = await racedPayment(60, 50);
 
+    expect(reads()).toBe(2); // the first attempt's bill write conflicted; the re-run saw the competitor's payment
     expect(loser.isErr()).toBe(true);
     expect(loser._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
     expect(paidAmounts).toEqual([60]);
@@ -1828,9 +1830,9 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     let reads = 0;
     const racingBills: Deps['bills'] = {
       ...deps.bills,
-      findById: async (id) => {
+      get: async (cardId, billMonth, billYear) => {
         reads += 1;
-        const stale = await deps.bills.findById(id);
+        const stale = await deps.bills.get(cardId, billMonth, billYear);
         if (reads === 1) await runEffects(context, fullRegistry, payBillFlow(deps, cardName, 60));
         return stale;
       },
@@ -1840,14 +1842,16 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
       updateCardTransaction({ ...deps, bills: racingBills }, { id: purchase.id, amount: 50 }),
     );
 
+    expect(reads).toBe(2); // the first attempt passed on stale payments and its bill write conflicted
     expect(edit.isErr()).toBe(true);
     expect(edit._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
     expect(await db.all(sql`SELECT amount FROM transactions WHERE id = ${purchase.id}`)).toEqual([{ amount: 100 }]);
   });
 
   it('two concurrent identical payments record one: the loser finds its own key there', async () => {
-    const { loser, paidAmounts } = await racedPayment(60, 60);
+    const { loser, paidAmounts, reads } = await racedPayment(60, 60);
 
+    expect(reads()).toBe(2);
     expect(loser.isOk()).toBe(true);
     expect(paidAmounts).toEqual([60]);
   });
