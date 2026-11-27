@@ -1748,6 +1748,7 @@
                 renderBillSummary();
                 renderTransactionsTable();
             }
+            initCustomSelects();
         }
 
         function updateTabLabels() {
@@ -1865,18 +1866,7 @@
                 if (accsRes.ok) accounts = await accsRes.json();
                 if (catsRes.ok) categories = await catsRes.json();
 
-                // Sort categories
-                categories.sort((a,b) => a.name.localeCompare(b.name));
-                
-                // Populate Add Transaction category dropdown
-                const catSelect = document.getElementById('add-category');
-                catSelect.innerHTML = '';
-                categories.forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c.name;
-                    opt.textContent = c.name;
-                    catSelect.appendChild(opt);
-                });
+                fillCategorySelect();
 
                 renderCardsCarousel();
                 updateTabLabels();
@@ -1889,6 +1879,39 @@
                 console.error("Error loading initial data", err);
                 showToast(t('toast_load_error'), 'error');
             }
+        }
+
+        // Sorts the loaded categories and fills the Add Transaction dropdown, keeping the category with the given id selected.
+        function fillCategorySelect(selectedId) {
+            categories.sort((a, b) => a.name.localeCompare(b.name));
+            const catSelect = document.getElementById('add-category');
+            catSelect.innerHTML = '';
+            categories.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.name;
+                opt.textContent = c.name;
+                catSelect.appendChild(opt);
+            });
+            const kept = categories.find(c => selectedId !== undefined && c.id === selectedId);
+            if (kept) catSelect.value = kept.name;
+        }
+
+        // Category and bill text arrive from the API in the PATTY language: refetch them on a language change,
+        // leaving the selected card, bill and form values as they are.
+        async function refreshLocaleData(isCurrent) {
+            const selected = categories.find(c => c.name === document.getElementById('add-category').value);
+            try {
+                const res = await fetch('/api/categories');
+                if (!isCurrent()) return;
+                if (res.ok) {
+                    categories = await res.json();
+                    fillCategorySelect(selected && selected.id);
+                    initCustomSelects();
+                }
+            } catch (err) {
+                console.error("Error refreshing categories", err);
+            }
+            if (isCurrent()) await loadBillDetails();
         }
 
         // Hash function for stable card characteristics
@@ -4220,20 +4243,29 @@ function t(key) {
     return tDict[key] || key;
 }
 
+var localeRequest = 0;
+
 async function checkLocale() {
+    // A late answer is dropped when a newer request started or the fragment was navigated away from.
+    const request = ++localeRequest;
+    const marker = document.getElementById('month-select');
+    const isCurrent = () => request === localeRequest && document.getElementById('month-select') === marker;
+    const previous = currentLocale;
     try {
         const res = await fetch('/api/status');
         if (res.ok) {
             const data = await res.json();
-            if (data.locale && TRANSLATIONS[data.locale]) {
+            if (isCurrent() && data.locale && TRANSLATIONS[data.locale]) {
                 currentLocale = data.locale;
             }
         }
     } catch (err) {
         console.error("Failed to read locale preferences:", err);
     }
+    if (!isCurrent()) return;
     translatePage();
     refreshLocaleText();
+    if (currentLocale !== previous) await refreshLocaleData(isCurrent);
 }
 
 function fillValues(text, valuesJson) {
@@ -4322,8 +4354,12 @@ function translatePage() {
 function initCustomSelects() {
     document.querySelectorAll('select.select-custom').forEach(select => {
         if (select.nextElementSibling && select.nextElementSibling.classList.contains('select-container-custom')) {
-            // Already initialized, just sync selected value
+            // Already initialized, just sync selected value and the labels of its option list
             const container = select.nextElementSibling;
+            Array.from(container.querySelectorAll('.select-option-custom')).forEach(optDiv => {
+                const match = Array.from(select.options).find(opt => opt.value === optDiv.getAttribute('data-value'));
+                if (match) optDiv.textContent = match.textContent;
+            });
             const triggerSpan = container.querySelector('.select-trigger-custom span');
             const selectedOpt = select.options[select.selectedIndex];
             if (selectedOpt && triggerSpan) {

@@ -307,3 +307,48 @@ describe('cards.html text built from data', () => {
     expect(sandbox.currentLocale).toBe('es');
   });
 });
+
+describe('cards.html locale refresh', () => {
+  const answer = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+  const later = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it('keeps the newest language when an older status answer arrives last', async () => {
+    const { sandbox } = loadFragment('cards');
+    const replies = [later(20).then(() => ({ locale: 'es' })), Promise.resolve({ locale: 'en' })];
+    sandbox.fetch = (url: string) =>
+      url === '/api/status'
+        ? replies.shift()!.then((body) => ({ ok: true, json: () => Promise.resolve(body) }))
+        : answer([]);
+    await Promise.all([sandbox.checkLocale(), sandbox.checkLocale()]);
+    await later(40);
+    expect(sandbox.currentLocale).toBe('en');
+  });
+
+  it('does nothing when the fragment was navigated away from before the status answer', async () => {
+    const { sandbox, document } = loadFragment('cards');
+    sandbox.fetch = () => answer({ locale: 'es' });
+    const pending = sandbox.checkLocale();
+    document.getElementById = () => ({}) as never;
+    await pending;
+    expect(sandbox.currentLocale).toBe('en');
+  });
+
+  it('refetches categories and the bill on a language change, keeping the card and the chosen category', async () => {
+    const { sandbox, document } = loadFragment('cards');
+    const card = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
+    sandbox.activeCard = card;
+    sandbox.categories = [{ id: 'cat-1', name: 'Food' }];
+    document.getElementById('add-category').value = 'Food';
+    const requested: string[] = [];
+    sandbox.fetch = (url: string) => {
+      requested.push(url);
+      if (url === '/api/status') return answer({ locale: 'es' });
+      if (url === '/api/categories') return answer([{ id: 'cat-1', name: 'Comida' }]);
+      return answer({ bill: { status: 'open', payments: [] }, transactions: [], total: 0 });
+    };
+    await sandbox.checkLocale();
+    expect(requested.some((url) => url.startsWith('/api/bills?'))).toBe(true);
+    expect(document.getElementById('add-category').value).toBe('Comida');
+    expect(sandbox.activeCard).toBe(card);
+  });
+});
