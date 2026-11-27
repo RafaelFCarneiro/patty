@@ -370,6 +370,27 @@ describe('cards.html follows the PATTY language', () => {
       expect(sandbox.creditCards).toEqual([]);
     });
 
+    it('reports a write that completes after a reload without touching the replacement dashboard', async () => {
+      const { sandbox, document, supersede } = loadFragment('cards', { locale: 'en-US' });
+      const requested: string[] = [];
+      const cleared: string[] = [];
+      sandbox.billLoading.classList.remove = () => cleared.push('bill');
+      sandbox.confirm = () => true;
+      sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
+      sandbox.fetch = (url: string) => {
+        requested.push(url);
+        return later(20).then(() => ({ ok: true, json: () => Promise.resolve({}) }));
+      };
+
+      const pending = sandbox.deleteTx('tx-1', 'Coffee');
+      supersede();
+      await pending;
+
+      expect(document.getElementById('toast-box').innerHTML).toContain('Transaction &quot;Coffee&quot; deleted');
+      expect(requested).toEqual(['/api/credit-cards/transactions/tx-1?confirm=true']);
+      expect(cleared).toEqual([]);
+    });
+
     it('drops a bill answer that arrives after the month changed', async () => {
       const { sandbox, document } = loadFragment('cards', { locale: 'en-US' });
       sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };

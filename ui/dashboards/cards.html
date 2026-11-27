@@ -2461,6 +2461,7 @@
             txLoading.classList.add('active');
             billLoading.classList.add('active');
 
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch('/api/credit-cards/purchases', {
                     method: 'POST',
@@ -2474,13 +2475,15 @@
                 }
 
                 showToast(tFill('toast_purchase_added', { description: desc }), 'success');
-                await loadBillDetails();
+                if (isActiveFragment()) await loadBillDetails();
             } catch (err) {
                 console.error("Add transaction error", err);
                 showToast(tFill('toast_purchase_error', { message: err.message }), 'error');
             } finally {
-                txLoading.classList.remove('active');
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    txLoading.classList.remove('active');
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
@@ -2652,6 +2655,7 @@
             closeModal('modal-add-card');
             billLoading.classList.add('active');
             
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch('/api/credit-cards', {
                     method: 'POST',
@@ -2668,8 +2672,9 @@
                 
                 // Reload cards and select the new one!
                 const freshCardsRes = await fetch('/api/credit-cards');
-                if (freshCardsRes.ok) {
-                    creditCards = await freshCardsRes.json();
+                const freshCards = freshCardsRes.ok ? await freshCardsRes.json() : null;
+                if (freshCards && isActiveFragment()) {
+                    creditCards = freshCards;
                     renderCardsCarousel();
                     // Find the newly created card and select it
                     const newCardObj = creditCards.find(c => c.name === name);
@@ -2681,7 +2686,9 @@
                 console.error("Create credit card error", err);
                 showToast(tFill('toast_card_create_error', { message: err.message }), 'error');
             } finally {
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
@@ -2830,6 +2837,7 @@
             closeModal('modal-edit-card');
             billLoading.classList.add('active');
 
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch(`/api/credit-cards/${encodeURIComponent(activeCard.name)}`, {
                     method: 'PATCH',
@@ -2846,18 +2854,20 @@
 
                 // Reload cards and reselect the updated one
                 await loadCreditCards();
-                
-                const updatedCard = creditCards.find(c => c.name === name) || creditCards[0];
+
+                const updatedCard = isActiveFragment() && (creditCards.find(c => c.name === name) || creditCards[0]);
                 if (updatedCard) {
                     await selectCard(updatedCard.id);
-                } else {
-                    await loadBillDetails();
+                } else if (isActiveFragment()) {
+                    if (isActiveFragment()) await loadBillDetails();
                 }
             } catch (err) {
                 console.error("Failed to edit card:", err);
                 showToast(tFill('toast_card_update_error', { message: err.message }), 'error');
             } finally {
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
@@ -2921,6 +2931,7 @@
             txLoading.classList.add('active');
             billLoading.classList.add('active');
 
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch(`/api/credit-cards/transactions/${txId}`, {
                     method: 'PATCH',
@@ -2937,13 +2948,15 @@
                 }
 
                 showToast(t('toast_reassigned'), 'success');
-                await loadBillDetails();
+                if (isActiveFragment()) await loadBillDetails();
             } catch (err) {
                 console.error("Reassignment error", err);
                 showToast(tFill('toast_reassign_error', { message: err.message }), 'error');
             } finally {
-                txLoading.classList.remove('active');
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    txLoading.classList.remove('active');
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
@@ -2980,6 +2993,7 @@
             txLoading.classList.add('active');
             billLoading.classList.add('active');
 
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch(`/api/transactions/${id}/confirm`, {
                     method: 'POST',
@@ -2993,13 +3007,15 @@
                 }
 
                 showToast(tFill('toast_charge_confirmed', { description }), 'success');
-                await loadBillDetails();
+                if (isActiveFragment()) await loadBillDetails();
             } catch (err) {
                 console.error("Confirmation error:", err);
                 showToast(tFill('toast_confirm_error', { message: err.message }), 'error');
             } finally {
-                txLoading.classList.remove('active');
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    txLoading.classList.remove('active');
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
@@ -3012,6 +3028,7 @@
             txLoading.classList.add('active');
             billLoading.classList.add('active');
 
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch(`/api/credit-cards/transactions/${id}?confirm=true`, {
                     method: 'DELETE'
@@ -3020,13 +3037,15 @@
                 if (!res.ok) throw new Error(t('delete_fallback'));
 
                 showToast(tFill('toast_charge_deleted', { description }), 'success');
-                await loadBillDetails();
+                if (isActiveFragment()) await loadBillDetails();
             } catch (err) {
                 console.error("Deletion error:", err);
                 showToast(tFill('toast_delete_error', { message: err.message }), 'error');
             } finally {
-                txLoading.classList.remove('active');
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    txLoading.classList.remove('active');
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
