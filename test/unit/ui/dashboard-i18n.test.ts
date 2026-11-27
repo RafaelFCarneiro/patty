@@ -359,6 +359,17 @@ describe('cards.html follows the PATTY language', () => {
       expect(cleared).toEqual([]);
     });
 
+    it('keeps the replacement cards when a card reload answers after the dashboard was reloaded', async () => {
+      const { sandbox, supersede } = loadFragment('cards', { locale: 'en-US' });
+      sandbox.creditCards = [];
+      sandbox.fetch = () =>
+        later(20).then(() => ({ ok: true, json: () => Promise.resolve([{ id: 'card-1', name: 'Nubank' }]) }));
+      const pending = sandbox.loadCreditCards();
+      supersede();
+      await pending;
+      expect(sandbox.creditCards).toEqual([]);
+    });
+
     it('drops a bill answer that arrives after the month changed', async () => {
       const { sandbox, document } = loadFragment('cards', { locale: 'en-US' });
       sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };

@@ -2863,11 +2863,12 @@
 
         // Load credit cards list
         async function loadCreditCards() {
+            const isActiveFragment = window.PATTY.current();
             const res = await fetch('/api/credit-cards');
-            if (res.ok) {
-                creditCards = await res.json();
-                renderCardsCarousel();
-            }
+            const loaded = res.ok ? await res.json() : null;
+            if (!loaded || !isActiveFragment()) return;
+            creditCards = loaded;
+            renderCardsCarousel();
         }
 
         // Reassign Bill Modal
