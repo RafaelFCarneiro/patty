@@ -516,13 +516,11 @@ describe('budget.html follows the PATTY language', () => {
     expect(list.innerHTML).toBe('replacement');
   });
 
-  it('keeps the display currency when a preferences request fails after a reload', async () => {
-    const { sandbox, supersede } = loadFragment('budget', { locale: 'en-US' });
-    sandbox.currentDisplayCurrency = 'USD';
-    sandbox.fetch = () => later(20).then(() => Promise.reject(new Error('offline')));
-    const pending = sandbox.initCurrencySelector();
-    supersede();
-    await pending;
+  it('starts the currency selector on the base currency the shell gives', () => {
+    const { sandbox, document } = loadFragment('budget', { locale: 'en-US' });
+    sandbox.PATTY.baseCurrency = 'USD';
+    sandbox.initCurrencySelector();
+    expect(document.getElementById('currency-select').value).toBe('USD');
     expect(sandbox.currentDisplayCurrency).toBe('USD');
   });
 });

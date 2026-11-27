@@ -784,12 +784,11 @@ function translatePage() {
     });
 }
 
-// window.__appCurrencies is populated by the shell (ui/app.js) before this script runs.
+// window.__appCurrencies and window.PATTY.baseCurrency are set by the shell (ui/app.js) before this script runs.
 // Defaults the selection to the base currency so the converted total shows without an extra click.
-async function initCurrencySelector() {
+function initCurrencySelector() {
     const select = document.getElementById('currency-select');
     if (!select) return;
-    const isActiveFragment = window.PATTY.current();
 
     const codes = Object.keys(window.__appCurrencies || {}).sort();
     codes.forEach(code => {
@@ -799,21 +798,10 @@ async function initCurrencySelector() {
         select.appendChild(opt);
     });
 
-    try {
-        const res = await fetch('/api/preferences');
-        if (!isActiveFragment()) return;
-        if (res.ok) {
-            const prefs = await res.json();
-            if (!isActiveFragment()) return;
-            if (prefs.baseCurrency && codes.indexOf(prefs.baseCurrency) !== -1) {
-                select.value = prefs.baseCurrency;
-            }
-        }
-    } catch (e) {
-        console.error('Failed to load preferences:', e);
+    const baseCurrency = window.PATTY.baseCurrency;
+    if (baseCurrency && codes.indexOf(baseCurrency) !== -1) {
+        select.value = baseCurrency;
     }
-    if (!isActiveFragment()) return;
-
     currentDisplayCurrency = select.value;
 }
 
@@ -1659,11 +1647,9 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
-(async function init() {
-    const isActiveFragment = window.PATTY.current();
+(function init() {
     translatePage();
-    await initCurrencySelector();
-    if (!isActiveFragment()) return;
+    initCurrencySelector();
     loadDashboardData();
 })();
 
