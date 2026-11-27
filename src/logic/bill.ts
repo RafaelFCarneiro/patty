@@ -74,11 +74,17 @@ const signedBillAmount = (t: Pick<TransactionView, 'type' | 'amount'>): number =
   return 0;
 };
 
-export const computeBillTotal = (transactions: TransactionView[]): number => R.sumBy(transactions, signedBillAmount);
+export const computeBillTotal = (transactions: TransactionView[], decimals: number): number =>
+  roundToDecimals(R.sumBy(transactions, signedBillAmount), decimals);
 
-export const totalAfterChange = (transactions: TransactionView[], change: BillTotalChange): number =>
-  computeBillTotal(R.filter(transactions, (t) => t.id !== change.removedId)) +
-  (change.added ? signedBillAmount(change.added) : 0);
+export const totalAfterChange = (transactions: TransactionView[], change: BillTotalChange, decimals: number): number =>
+  roundToDecimals(
+    computeBillTotal(
+      R.filter(transactions, (t) => t.id !== change.removedId),
+      decimals,
+    ) + (change.added ? signedBillAmount(change.added) : 0),
+    decimals,
+  );
 
 export const changesBillTotal = (
   existing: Pick<TransactionView, 'type' | 'amount' | 'billId'>,
@@ -91,12 +97,17 @@ const isPaymentTo =
   (tx: Pick<TransactionView, 'type' | 'toAccountId'>): boolean =>
     tx.type === TransactionType.enum.transfer && tx.toAccountId === cardAccountId;
 
-export const paymentsOf = (transactions: TransactionView[], cardAccountId: string): BillPayment[] =>
+export const paymentsOf = (transactions: TransactionView[], cardAccountId: string, decimals: number): BillPayment[] =>
   R.pipe(
     transactions,
     R.filter(isPaymentTo(cardAccountId)),
     R.sortBy((tx) => tx.date),
-    R.map((tx) => ({ id: tx.id, date: tx.date, amount: tx.amount, account: tx.accountName })),
+    R.map((tx) => ({
+      id: tx.id,
+      date: tx.date,
+      amount: roundToDecimals(tx.amount, decimals),
+      account: tx.accountName,
+    })),
   );
 
 export const settlement = (total: number, payments: BillPayment[], decimals: number): Settlement => {
