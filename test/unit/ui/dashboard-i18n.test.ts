@@ -351,4 +351,47 @@ describe('cards.html locale refresh', () => {
     expect(document.getElementById('add-category').value).toBe('Comida');
     expect(sandbox.activeCard).toBe(card);
   });
+
+  it('drops a bill answer that arrives after another card was selected', async () => {
+    const { sandbox } = loadFragment('cards');
+    const first = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
+    const second = { id: 'card-2', name: 'Visa', currency: 'BRL' };
+    const bills = [later(20).then(() => 'old'), Promise.resolve('new')];
+    sandbox.fetch = () =>
+      bills
+        .shift()!
+        .then((total) => ({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              bill: { status: 'open', payments: [] },
+              transactions: [],
+              total: total === 'old' ? 1 : 2,
+            }),
+        }));
+    sandbox.activeCard = first;
+    const stale = sandbox.loadBillDetails();
+    sandbox.activeCard = second;
+    await sandbox.loadBillDetails();
+    await stale;
+    expect(sandbox.currentBill.total).toBe(2);
+  });
+
+  it('keeps the category chosen while the refresh was pending', async () => {
+    const { sandbox, document } = loadFragment('cards');
+    sandbox.categories = [
+      { id: 'cat-1', name: 'Food' },
+      { id: 'cat-2', name: 'Rent' },
+    ];
+    document.getElementById('add-category').value = 'Food';
+    sandbox.fetch = () => {
+      document.getElementById('add-category').value = 'Rent';
+      return answer([
+        { id: 'cat-1', name: 'Comida' },
+        { id: 'cat-2', name: 'Aluguel' },
+      ]);
+    };
+    await sandbox.refreshLocaleData(() => true);
+    expect(document.getElementById('add-category').value).toBe('Aluguel');
+  });
 });

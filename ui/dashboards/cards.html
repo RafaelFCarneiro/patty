@@ -1899,19 +1899,20 @@
         // Category and bill text arrive from the API in the PATTY language: refetch them on a language change,
         // leaving the selected card, bill and form values as they are.
         async function refreshLocaleData(isCurrent) {
-            const selected = categories.find(c => c.name === document.getElementById('add-category').value);
             try {
                 const res = await fetch('/api/categories');
+                const loaded = res.ok ? await res.json() : null;
                 if (!isCurrent()) return;
-                if (res.ok) {
-                    categories = await res.json();
+                if (loaded) {
+                    const selected = categories.find(c => c.name === document.getElementById('add-category').value);
+                    categories = loaded;
                     fillCategorySelect(selected && selected.id);
                     initCustomSelects();
                 }
             } catch (err) {
                 console.error("Error refreshing categories", err);
             }
-            if (isCurrent()) await loadBillDetails();
+            if (isCurrent()) await loadBillDetails(isCurrent);
         }
 
         // Hash function for stable card characteristics
@@ -2017,8 +2018,14 @@
         }
 
         // Load specific bill details
-        async function loadBillDetails() {
+        var billRequest = 0;
+        async function loadBillDetails(isCurrent = () => true) {
             if (!activeCard) return;
+
+            // An answer applies only while it is the latest request for the card still on screen.
+            const request = ++billRequest;
+            const card = activeCard;
+            const isLatest = () => request === billRequest && card === activeCard && isCurrent();
 
             billLoading.classList.add('active');
             txLoading.classList.add('active');
@@ -2037,15 +2044,16 @@
             try {
                 const res = await fetch(`/api/bills?${params.toString()}`);
                 
+                let loaded;
                 if (res.ok) {
-                    currentBill = await res.json();
+                    loaded = await res.json();
                 } else if (res.status === 404) {
                     // Fallback for not yet created/empty bill
                     const closeDay = activeCard.closingDay || 1;
                     const dueDay = activeCard.dueDay || 8;
                     const padMonth = String(targetCycle.month).padStart(2, '0');
                     
-                    currentBill = {
+                    loaded = {
                         bill: {
                             id: null,
                             month: targetCycle.month,
@@ -2062,14 +2070,18 @@
                     throw new Error(t('bill_connection_error'));
                 }
 
+                if (!isLatest()) return;
+                currentBill = loaded;
                 renderBillSummary();
                 renderTransactionsTable();
             } catch (err) {
                 console.error("Error loading bill details", err);
-                showToast(t('toast_bill_error'), 'error');
+                if (isLatest()) showToast(t('toast_bill_error'), 'error');
             } finally {
-                billLoading.classList.remove('active');
-                txLoading.classList.remove('active');
+                if (request === billRequest) {
+                    billLoading.classList.remove('active');
+                    txLoading.classList.remove('active');
+                }
             }
         }
 
@@ -4354,12 +4366,8 @@ function translatePage() {
 function initCustomSelects() {
     document.querySelectorAll('select.select-custom').forEach(select => {
         if (select.nextElementSibling && select.nextElementSibling.classList.contains('select-container-custom')) {
-            // Already initialized, just sync selected value and the labels of its option list
+            // Already initialized, just sync selected value
             const container = select.nextElementSibling;
-            Array.from(container.querySelectorAll('.select-option-custom')).forEach(optDiv => {
-                const match = Array.from(select.options).find(opt => opt.value === optDiv.getAttribute('data-value'));
-                if (match) optDiv.textContent = match.textContent;
-            });
             const triggerSpan = container.querySelector('.select-trigger-custom span');
             const selectedOpt = select.options[select.selectedIndex];
             if (selectedOpt && triggerSpan) {
@@ -4449,6 +4457,7 @@ function initCustomSelects() {
         
         // Watch for dynamic options updates
         const observer = new MutationObserver(() => {
+            populateOptions();
             syncSelected();
         });
         observer.observe(select, { childList: true, subtree: true });
