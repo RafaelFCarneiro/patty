@@ -261,6 +261,10 @@ every guide class against `ui/app.css`):
     needs no refresh logic. A base-currency-only change is forwarded to `window.onAppDataChanged` as before. History
     navigation before the shell is ready is ignored: boot loads whatever the URL names by then, and only the latest
     dashboard load renders.
+  - `window.PATTY.current()` returns a function that stays true only while the dashboard load that took it is still
+    the one on screen (the shell bumps a load counter in `loadDashboard`). A dashboard's top-level variables are
+    shared with the next load of the page, so after an `await` a fragment checks that function before touching the
+    page or its variables (`cards.html` does in its initial load, default-bill check and bill load).
 - **Chart.js**: `Chart.defaults.color`, `borderColor` (grid), `font.family` and `plugins.legend.labels.color` are
   read from `:root` (`--text-muted`, `--chart-grid`, `--font-family`), so a fragment's charts read on the dark
   background. A chart sits in a `.chart-box` with `maintainAspectRatio: false`.

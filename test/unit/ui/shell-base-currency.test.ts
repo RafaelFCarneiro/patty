@@ -142,6 +142,24 @@ describe('shell boot (ui/app.js)', () => {
     expect(seen).toEqual(['MXN']);
   });
 
+  describe('PATTY.current()', () => {
+    const overview = { '/api/dashboards/overview': () => ({ name: 'Overview', html: '<p>ok</p>' }) };
+
+    it('turns false once another dashboard load starts, and one taken after it stays true', async () => {
+      const { sandbox, windowHandlers } = await bootShell(overview);
+      const patty = sandbox.PATTY as { current: () => () => boolean };
+      const before = patty.current();
+      expect(before()).toBe(true);
+
+      windowHandlers.popstate?.();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const after = patty.current();
+
+      expect(before()).toBe(false);
+      expect(after()).toBe(true);
+    });
+  });
+
   describe('a userSettings event', () => {
     const settingsEvent = { data: JSON.stringify({ entities: ['userSettings'] }) };
     const bootWith = (state: { locale: string; base: string }) =>

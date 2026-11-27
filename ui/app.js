@@ -220,6 +220,15 @@
       get locale() {
         return htmlLang();
       },
+      // A function that stays true only while the dashboard load that took it is still the one on screen: a
+      // fragment's top-level variables are shared with the next load of the page, so after an await it checks
+      // this before touching the page or those variables.
+      current: function () {
+        var ticket = loadTicket;
+        return function () {
+          return ticket === loadTicket;
+        };
+      },
       get baseCurrency() {
         return window.BASE_CURRENCY || window.DEFAULT_CURRENCY;
       },

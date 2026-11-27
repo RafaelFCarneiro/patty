@@ -1781,7 +1781,7 @@
 
         async function determineDefaultBillType() {
             if (!activeCard) return;
-            const isActiveFragment = fragmentGuard();
+            const isActiveFragment = window.PATTY.current();
 
             let defaultBillType = 'current';
             
@@ -1820,16 +1820,9 @@
             await loadBillDetails();
         }
 
-        // A request that outlives its fragment (the dashboard was reloaded or left) must not touch the replacement's
-        // elements: each request takes the page's month selector when it starts and checks it is still the one on screen.
-        var fragmentGuard = function () {
-            const marker = document.getElementById('month-select');
-            return () => document.getElementById('month-select') === marker;
-        };
-
         // Fetch cards, accounts and categories
         async function fetchInitialData() {
-            const isActiveFragment = fragmentGuard();
+            const isActiveFragment = window.PATTY.current();
             try {
                 const [cardsRes, accsRes, catsRes] = await Promise.all([
                     fetch('/api/credit-cards'),
@@ -1982,7 +1975,7 @@
 
             // An answer applies only while it is the latest request for the card, month, year and bill type on screen.
             const request = ++billRequest;
-            const isActiveFragment = fragmentGuard();
+            const isActiveFragment = window.PATTY.current();
             const card = activeCard;
             const cycleKey = () => `${monthSelect.value}-${yearSelect.value}-${selectedBillType}`;
             const requested = cycleKey();

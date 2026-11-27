@@ -91,6 +91,8 @@ export type FragmentSandbox = {
   document: ReturnType<typeof makeStubDocument>;
   // Runs the fragment's script again in the same window, as the shell does when the page is navigated back to.
   reload(): void;
+  // Starts another load of the dashboard, as the shell does: functions from PATTY.current() taken before turn false.
+  supersede(): void;
   charts: { type: string; data: { labels: string[]; datasets: { data: number[]; label?: string }[] } }[];
 };
 
@@ -150,8 +152,16 @@ export const loadFragment = (
   sandbox.location = { pathname: `/ui/${name}`, search: '' };
   sandbox.history = { pushState() {} };
   sandbox.__appCurrencies = currencyMetadata;
-  // The shell's window.PATTY, which a fragment reads its language from once at render (a BCP-47 tag).
-  if (locale) sandbox.PATTY = { locale };
+  // The shell's window.PATTY: the language a fragment reads once at render (a BCP-47 tag) and current(), a function
+  // that stays true while the load that took it is the one on screen.
+  let loadTicket = 0;
+  sandbox.PATTY = {
+    locale,
+    current: () => {
+      const ticket = loadTicket;
+      return () => ticket === loadTicket;
+    },
+  };
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
@@ -161,5 +171,14 @@ export const loadFragment = (
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
   const reload = () => void vm.runInContext(script, sandbox, { filename: dashboardPath(name) });
   reload();
-  return { sandbox, document, charts, reload };
+  return {
+    sandbox,
+    document,
+    charts,
+    reload: () => {
+      loadTicket += 1;
+      reload();
+    },
+    supersede: () => void (loadTicket += 1),
+  };
 };

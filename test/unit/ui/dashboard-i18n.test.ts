@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { loadFragment, makeStubElement } from './fragment-sandbox.js';
+import { loadFragment } from './fragment-sandbox.js';
 
 const DASHBOARDS_DIR = fileURLToPath(new URL('../../../ui/dashboards/', import.meta.url));
 const dashboardSource = (name: string) => readFileSync(`${DASHBOARDS_DIR}${name}.html`, 'utf-8');
@@ -329,7 +329,7 @@ describe('cards.html follows the PATTY language', () => {
     });
 
     it('leaves a replacement fragment alone when an old request answers after the dashboard was reloaded', async () => {
-      const { sandbox, document } = loadFragment('cards', { locale: 'pt-BR' });
+      const { sandbox, supersede } = loadFragment('cards', { locale: 'pt-BR' });
       sandbox.categories = [];
       sandbox.fetch = (url: string) =>
         later(20).then(() => ({
@@ -337,7 +337,7 @@ describe('cards.html follows the PATTY language', () => {
           json: () => Promise.resolve(url === '/api/categories' ? [{ id: 'cat-1', name: 'Comida' }] : []),
         }));
       const pending = sandbox.fetchInitialData();
-      document.getElementById = () => makeStubElement();
+      supersede();
       await pending;
       expect(sandbox.categories).toEqual([]);
     });
