@@ -52,8 +52,8 @@ import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCardRef, resolveDecimals } from '../resolve.js';
 
 const settledBillOf = (bill: Bill, items: RawTransactionView[], card: CreditCard, decimals: number): SettledBill => {
-  const payments = paymentsOf(items, card.accountId);
-  return toSettledBill(bill, payments, settlement(computeBillTotal(items), payments, decimals));
+  const payments = paymentsOf(items, card.accountId, decimals);
+  return toSettledBill(bill, payments, settlement(computeBillTotal(items, decimals), payments, decimals));
 };
 
 export const getBill = (deps: Deps, input: BillQuery): ResultAsync<BillView, AppError> =>
@@ -69,7 +69,7 @@ export const getBill = (deps: Deps, input: BillQuery): ResultAsync<BillView, App
       ...bill,
       bill: settledBillOf(withStatusLabel(bill.bill, locale), bill.transactions, card, decimals),
       transactions: bill.transactions.map(addLocalizedLabels(locale)),
-      total: computeBillTotal(bill.transactions),
+      total: computeBillTotal(bill.transactions, decimals),
     });
   });
 
@@ -126,7 +126,7 @@ const loadBillContext = (deps: Deps, input: BillQuery): ResultAsync<BillContext,
     const existing = yield* okOr(await deps.bills.get(card.id, input.month, input.year), billNotFound);
     const decimals = await resolveDecimals(deps, card.currency);
     const current = settledBillOf(existing.bill, existing.transactions, card, decimals);
-    return ok({ card, existing, decimals, current, total: computeBillTotal(existing.transactions), rawBill });
+    return ok({ card, existing, decimals, current, total: computeBillTotal(existing.transactions, decimals), rawBill });
   });
 
 const planPayment = (
@@ -236,9 +236,13 @@ export const guardTotalCoversPaid = (
     const items = (await deps.bills.get(card.id, bill.month, bill.year))?.transactions ?? [];
     if (change.addedKey && hasIdempotencyKey(items, change.addedKey)) return ok();
     const decimals = await resolveDecimals(deps, card.currency);
-    const { paidAmount } = settlement(computeBillTotal(items), paymentsOf(items, card.accountId), decimals);
+    const { paidAmount } = settlement(
+      computeBillTotal(items, decimals),
+      paymentsOf(items, card.accountId, decimals),
+      decimals,
+    );
     yield* guard(
-      coversPaid(totalAfterChange(items, change), paidAmount, decimals),
+      coversPaid(totalAfterChange(items, change, decimals), paidAmount, decimals),
       billErrors.totalBelowPaid(paidAmount),
     );
     return ok();

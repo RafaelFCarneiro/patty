@@ -49,19 +49,19 @@ describe('computeBillTotal', () => {
   const { expense, income, transfer } = TransactionType.enum;
 
   it('sums expenses as positive', () => {
-    expect(computeBillTotal([tx(expense, 100), tx(expense, 50)])).toBe(150);
+    expect(computeBillTotal([tx(expense, 100), tx(expense, 50)], 2)).toBe(150);
   });
 
   it('subtracts income (refunds/credits) from the total', () => {
-    expect(computeBillTotal([tx(expense, 100), tx(income, 30)])).toBe(70);
+    expect(computeBillTotal([tx(expense, 100), tx(income, 30)], 2)).toBe(70);
   });
 
   it('excludes transfers from the total', () => {
-    expect(computeBillTotal([tx(expense, 100), tx(transfer, 200)])).toBe(100);
+    expect(computeBillTotal([tx(expense, 100), tx(transfer, 200)], 2)).toBe(100);
   });
 
   it('returns 0 for an empty bill', () => {
-    expect(computeBillTotal([])).toBe(0);
+    expect(computeBillTotal([], 2)).toBe(0);
   });
 });
 
@@ -308,6 +308,33 @@ describe('bill settlement', () => {
     ...overrides,
   });
 
+  describe('rounding to the currency decimals', () => {
+    it('a noisy float sum of purchases totals exactly', () => {
+      const items = [
+        tx(TransactionType.enum.expense, 0.1),
+        tx(TransactionType.enum.expense, 0.2),
+        tx(TransactionType.enum.expense, 9982.19),
+      ];
+      expect(computeBillTotal(items, 2)).toBe(9982.49);
+    });
+
+    it('a stored payment with float noise is listed rounded and leaves paid and remaining unchanged', () => {
+      const items = [transfer({ id: 'noisy', amount: 9982.489999999998 })];
+      const payments = paymentsOf(items, 'liab-1', 2);
+      expect(payments[0]?.amount).toBe(9982.49);
+      expect(settlement(9982.49, payments, 2)).toEqual({ paidAmount: 9982.49, remaining: 0, partiallyPaid: false });
+    });
+  });
+
+  describe('totalAfterChange rounds once', () => {
+    it('matches the total computed after the change is persisted', () => {
+      const items = [tx(TransactionType.enum.expense, 101.006)];
+      const added = { type: TransactionType.enum.income, amount: 1.004 };
+      expect(totalAfterChange(items, { added }, 2)).toBe(100);
+      expect(computeBillTotal([...items, { ...tx(added.type, added.amount) }], 2)).toBe(100);
+    });
+  });
+
   describe('paymentsOf', () => {
     it('lists the transfers into the card account, oldest first, ignoring purchases and other transfers', () => {
       const items = [
@@ -316,7 +343,7 @@ describe('bill settlement', () => {
         transfer({ id: 'elsewhere', toAccountId: 'other' }),
         transfer({ id: 'early', date: '2026-04-01', amount: 60 }),
       ];
-      expect(paymentsOf(items, 'liab-1')).toEqual([
+      expect(paymentsOf(items, 'liab-1', 2)).toEqual([
         { id: 'early', date: '2026-04-01', amount: 60, account: 'Checking' },
         { id: 'late', date: '2026-04-09', amount: 30, account: 'Checking' },
       ]);
@@ -394,10 +421,10 @@ describe('bill settlement', () => {
     ];
 
     it('applies a removal and an addition to the total', () => {
-      expect(totalAfterChange(items, { removedId: 'e1' })).toBe(50);
-      expect(totalAfterChange(items, { added: { type: TransactionType.enum.income, amount: 20 } })).toBe(130);
+      expect(totalAfterChange(items, { removedId: 'e1' }, 2)).toBe(50);
+      expect(totalAfterChange(items, { added: { type: TransactionType.enum.income, amount: 20 } }, 2)).toBe(130);
       expect(
-        totalAfterChange(items, { removedId: 'e2', added: { type: TransactionType.enum.expense, amount: 10 } }),
+        totalAfterChange(items, { removedId: 'e2', added: { type: TransactionType.enum.expense, amount: 10 } }, 2),
       ).toBe(110);
     });
 
