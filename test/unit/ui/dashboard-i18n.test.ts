@@ -328,6 +328,22 @@ describe('cards.html follows the PATTY language', () => {
       expect(sandbox.currentBill.total).toBe(2);
     });
 
+    it('drops a bill answer that arrives after the month changed', async () => {
+      const { sandbox, document } = loadFragment('cards', { locale: 'en-US' });
+      sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
+      const answers = [later(20).then(() => 1), Promise.resolve(2)];
+      sandbox.fetch = () =>
+        (answers.shift() as Promise<number>).then((total) => ({
+          ok: true,
+          json: () => Promise.resolve({ bill: { status: 'open', payments: [] }, transactions: [], total }),
+        }));
+      const stale = sandbox.loadBillDetails();
+      document.getElementById('month-select').value = '8';
+      await sandbox.loadBillDetails();
+      await stale;
+      expect(sandbox.currentBill.total).toBe(2);
+    });
+
     it('reads anything but an integer month 1-12 as empty text', () => {
       const { sandbox } = loadFragment('cards', { locale: 'en-US' });
       expect([undefined, 0, 13, -1, 6.5, '6'].map((month) => sandbox.monthLabel(month))).toEqual([

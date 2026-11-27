@@ -19,6 +19,7 @@ const bootShell = async (
   const loaded: string[] = [];
   const windowHandlers: Record<string, () => void> = {};
   const activeLinks: string[] = [];
+  const titles: string[] = [];
   const stream: { onmessage?: (event: { data: string }) => void } = {};
   const respond = (url: string) => {
     const path = url.split('?')[0] ?? '';
@@ -45,6 +46,7 @@ const bootShell = async (
       return Object.assign(el, {
         setAttribute(key: string, value: string) {
           if (key === 'href') href = value;
+          if (key === 'title') titles.push(value);
         },
         classList: { ...el.classList, add: () => activeLinks.push(href) },
       });
@@ -91,7 +93,7 @@ const bootShell = async (
   vm.runInContext(read('app.js'), sandbox);
   onReady?.();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  return { sandbox, loaded, stream, document, windowHandlers, activeLinks };
+  return { sandbox, loaded, stream, document, windowHandlers, activeLinks, titles };
 };
 
 const currencies = Object.values(currencyMetadata);
@@ -144,6 +146,7 @@ describe('shell boot (ui/app.js)', () => {
     const settingsEvent = { data: JSON.stringify({ entities: ['userSettings'] }) };
     const bootWith = (state: { locale: string; base: string }) =>
       bootShell({
+        '/api/dashboards': () => [{ name: 'overview', source: 'file' }],
         '/api/currencies': () => currencies,
         '/api/status': () => ({ locale: state.locale }),
         '/api/preferences': () => ({ baseCurrency: state.base }),
@@ -163,6 +166,20 @@ describe('shell boot (ui/app.js)', () => {
 
       expect(loaded.length - loadsBefore).toBe(1);
       expect(forwarded).toEqual([]);
+    });
+
+    it('redraws the sidebar in the new language and keeps the active dashboard', async () => {
+      const state = { locale: 'en', base: 'USD' };
+      const { stream, titles, activeLinks } = await bootWith(state);
+      expect(titles).toEqual(['Overview']);
+
+      state.locale = 'pt';
+      stream.onmessage?.(settingsEvent);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(titles).toHaveLength(2);
+      expect(titles[1]).not.toBe('Overview');
+      expect(activeLinks).toEqual(['/ui/overview', '/ui/overview']);
     });
 
     it('forwards a base-currency change without reloading the dashboard', async () => {

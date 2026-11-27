@@ -155,6 +155,8 @@
   var settingsRefresh = Promise.resolve();
   var shellIsReady = false;
   var loadTicket = 0;
+  // The dashboards the sidebar was last drawn from, so a language change can redraw its tooltips and labels.
+  var menuDashboards = null;
 
   function htmlLang() {
     return HTML_LANG_BY_LOCALE[currentLocale] || DEFAULT_HTML_LANG;
@@ -544,7 +546,9 @@
       var languageBefore = currentLocale;
       return refreshSettings()
         .then(function () {
-          return currentLocale === languageBefore ? forward() : loadDashboard(currentDashboardName());
+          if (currentLocale === languageBefore) return forward();
+          if (menuDashboards) renderMenu(menuDashboards, currentDashboardName());
+          return loadDashboard(currentDashboardName());
         })
         .catch(function (err) {
           console.error('A settings update handler failed:', err); // never break the queue for later events
@@ -701,6 +705,7 @@
         return fetchJson(Api.dashboards);
       })
       .then(function (dashboards) {
+        menuDashboards = dashboards;
         renderMenu(dashboards, currentDashboardName());
       })
       .catch(function (err) {

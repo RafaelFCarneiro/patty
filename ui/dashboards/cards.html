@@ -1966,10 +1966,12 @@
         async function loadBillDetails() {
             if (!activeCard) return true;
 
-            // An answer applies only while it is the latest request for the card still on screen.
+            // An answer applies only while it is the latest request for the card, month, year and bill type on screen.
             const request = ++billRequest;
             const card = activeCard;
-            const isLatest = () => request === billRequest && card === activeCard;
+            const cycleKey = () => `${monthSelect.value}-${yearSelect.value}-${selectedBillType}`;
+            const requested = cycleKey();
+            const isLatest = () => request === billRequest && card === activeCard && requested === cycleKey();
 
             billLoading.classList.add('active');
             txLoading.classList.add('active');
