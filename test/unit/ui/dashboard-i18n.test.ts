@@ -13,7 +13,6 @@ const DASHBOARDS = readdirSync(DASHBOARDS_DIR)
 // removed from it (the test below fails until it is), and a new dashboard never joins it.
 const NOT_YET_TRANSLATED = [
   'accounts',
-  'budget',
   'categories',
   'comparative',
   'dashboards',
@@ -443,5 +442,77 @@ describe('cards.html follows the PATTY language', () => {
       expect(sandbox.monthLabel(6)).toBe('June');
       expect(loadFragment('cards', { locale: 'es' }).sandbox.monthLabel(6)).toBe('Junio');
     });
+  });
+});
+
+describe('budget.html follows the PATTY language', () => {
+  const LANGUAGES = [
+    ['en-US', 'en'],
+    ['pt-BR', 'pt'],
+    ['es', 'es'],
+  ] as const;
+  const later = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const errorStateIn = async (tag: string) => {
+    const { sandbox, document } = loadFragment('budget', { locale: tag });
+    sandbox.fetch = () => Promise.resolve({ ok: false });
+    sandbox.formatMultiCurrency = () => {
+      throw new Error('boom');
+    };
+    await sandbox.loadDashboardData();
+    return document.getElementById('income-categories-list').innerHTML as string;
+  };
+
+  it('ships en, pt and es entries for every key the page asks for', () => {
+    const { sandbox } = loadFragment('budget');
+    const source = dashboardSource('budget');
+    const keys = new Set([
+      ...[...source.matchAll(/data-i18n="(\w+)"/g)].map((match) => match[1]),
+      ...[...source.matchAll(/\bt(?:Fill)?\('(\w+)'/g)].map((match) => match[1]),
+    ]);
+    const missing = ['en', 'pt', 'es'].flatMap((locale) =>
+      [...keys]
+        .filter((key): key is string => key !== undefined && !(key in sandbox.TRANSLATIONS[locale]))
+        .map((key) => `${locale}.${key}`),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it('has no in-place refresh logic: the shell reloads the dashboard on a language change', () => {
+    expect(withoutComments(dashboardSource('budget'))).not.toMatch(/checkLocale|\/api\/status/);
+  });
+
+  it('falls back to English when the shell gives no language', () => {
+    expect(loadFragment('budget').sandbox.currentLocale).toBe('en');
+  });
+
+  it.each(LANGUAGES)('renders in the language of window.PATTY.locale %s', async (tag, key) => {
+    const { sandbox } = loadFragment('budget', { locale: tag });
+    const table = sandbox.TRANSLATIONS[key];
+    expect(sandbox.currentLocale).toBe(key);
+    expect(sandbox.t('header_title')).toBe(table.header_title);
+    expect(sandbox.t('reference_label')).toBe(table.reference_label);
+    expect(sandbox.tFill('kpi_converted_excluded', { n: 2 })).toBe(table.kpi_converted_excluded.replace('{n}', '2'));
+    expect(await errorStateIn(tag)).toContain(table.error_loading_income);
+  });
+
+  it('words the header, a label and the error state differently in each language', async () => {
+    const tags = LANGUAGES.map(([tag]) => tag);
+    const distinct = async (read: (tag: string) => Promise<string> | string) =>
+      new Set(await Promise.all(tags.map((tag) => read(tag)))).size;
+    expect(await distinct((tag) => loadFragment('budget', { locale: tag }).sandbox.t('header_title'))).toBe(3);
+    expect(await distinct((tag) => loadFragment('budget', { locale: tag }).sandbox.t('reference_label'))).toBe(3);
+    expect(await distinct(errorStateIn)).toBe(3);
+  });
+
+  it('leaves a replacement fragment alone when a load answers after the dashboard was reloaded', async () => {
+    const { sandbox, document, supersede } = loadFragment('budget', { locale: 'en-US' });
+    sandbox.fetch = () => later(20).then(() => ({ ok: true, json: () => Promise.resolve([]) }));
+    const list = document.getElementById('income-categories-list');
+    const pending = sandbox.loadDashboardData();
+    list.innerHTML = 'replacement';
+    supersede();
+    await pending;
+    expect(list.innerHTML).toBe('replacement');
   });
 });

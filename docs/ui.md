@@ -141,7 +141,7 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   floor regardless of its own relative size, so each currency's cells are only ever compared against that
   same currency's own max. Because `formatCurrency` now reads `currentLocale`, `comparative.html`'s and
   `projections.html`'s bootstrap sequencing was fixed to `await checkLocale()` before `initDashboard()`
-  runs (their `runInit()` — matching `budget.html`'s/`overview.html`'s existing pattern) — `checkLocale()`
+  runs (their `runInit()` — matching `overview.html`'s existing pattern) — `checkLocale()`
   only re-translates static `data-i18n` text afterward, it never re-renders the dynamic money values
   `initDashboard()` already painted, so a locale fetch that lost the race would otherwise leave every KPI/
   category/heat-map number stuck in the default `en` formatting for a pt/es user. That `await` needed its
@@ -450,5 +450,5 @@ Every visible string of a bundled dashboard comes from its i18n table (`data-i18
 change reloads the dashboard, so there is no in-place refresh and no locale fetch of its own.
 `test/unit/ui/dashboard-i18n.test.ts` fails on hard-coded element text, labels, option text, placeholders and
 titles, on literals passed to `showToast`/`confirm`/`alert` or assigned to `textContent`/`innerHTML`, and on
-Portuguese-only words or accents outside the table. `cards.html` passes; the dashboards in the test's
+Portuguese-only words or accents outside the table. `cards.html` and `budget.html` pass; the dashboards in the test's
 `NOT_YET_TRANSLATED` list do not yet, and that list only shrinks.
