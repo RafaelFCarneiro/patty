@@ -1856,7 +1856,11 @@
         }
 
         // Fetch cards, accounts and categories
+        // The language the categories and the bill were last loaded in; checkLocale refreshes them while it differs from currentLocale.
+        var dataLocale = 'en';
+
         async function fetchInitialData() {
+            const locale = currentLocale;
             try {
                 const [cardsRes, accsRes, catsRes] = await Promise.all([
                     fetch('/api/credit-cards'),
@@ -1867,6 +1871,7 @@
                 if (cardsRes.ok) creditCards = await cardsRes.json();
                 if (accsRes.ok) accounts = await accsRes.json();
                 if (catsRes.ok) categories = await catsRes.json();
+                if (catsRes.ok) dataLocale = locale;
 
                 fillCategorySelect();
 
@@ -1900,21 +1905,30 @@
 
         // Category and bill text arrive from the API in the PATTY language: refetch them on a language change,
         // leaving the selected card, bill and form values as they are.
-        async function refreshLocaleData(isCurrent) {
+        async function reloadCategories(isCurrent) {
             try {
                 const res = await fetch('/api/categories');
                 const loaded = res.ok ? await res.json() : null;
-                if (!isCurrent()) return;
-                if (loaded) {
-                    const selected = categories.find(c => c.name === document.getElementById('add-category').value);
-                    categories = loaded;
-                    fillCategorySelect(selected && selected.id);
-                    initCustomSelects();
-                }
+                if (!loaded || !isCurrent()) return false;
+                const selected = categories.find(c => c.name === document.getElementById('add-category').value);
+                categories = loaded;
+                fillCategorySelect(selected && selected.id);
+                initCustomSelects();
+                return true;
             } catch (err) {
                 console.error("Error refreshing categories", err);
+                return false;
             }
-            if (isCurrent()) await loadBillDetails(isCurrent);
+        }
+
+        // dataLocale moves only when both the categories and the bill loaded for this request; a superseded or failed
+        // refresh leaves it behind, so the next check finishes the job.
+        async function refreshLocaleData(isCurrent) {
+            const locale = currentLocale;
+            const categoriesLoaded = await reloadCategories(isCurrent);
+            if (!isCurrent()) return;
+            const billLoaded = await loadBillDetails(isCurrent);
+            if (categoriesLoaded && billLoaded && isCurrent()) dataLocale = locale;
         }
 
         // Hash function for stable card characteristics
@@ -2022,7 +2036,7 @@
         // Load specific bill details
         var billRequest = 0;
         async function loadBillDetails(isCurrent = () => true) {
-            if (!activeCard) return;
+            if (!activeCard) return true;
 
             // An answer applies only while it is the latest request for the card still on screen.
             const request = ++billRequest;
@@ -2072,13 +2086,15 @@
                     throw new Error(t('bill_connection_error'));
                 }
 
-                if (!isLatest()) return;
+                if (!isLatest()) return false;
                 currentBill = loaded;
                 renderBillSummary();
                 renderTransactionsTable();
+                return true;
             } catch (err) {
                 console.error("Error loading bill details", err);
                 if (isLatest()) showToast(t('toast_bill_error'), 'error');
+                return false;
             } finally {
                 if (request === billRequest) {
                     billLoading.classList.remove('active');
@@ -3152,11 +3168,10 @@
             return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, () => String(value)), t(key));
         }
 
-        // The month's name in the page language; an invalid month reads as empty text, never an exception.
+        // The month's name in the page language; anything but an integer 1-12 reads as empty text, never an exception or another year's month.
         function monthName(month, style) {
-            const date = new Date(2000, month - 1, 1);
-            if (Number.isNaN(date.getTime())) return '';
-            const name = new Intl.DateTimeFormat(currentLocale, { month: style }).format(date);
+            if (!Number.isInteger(month) || month < 1 || month > 12) return '';
+            const name = new Intl.DateTimeFormat(currentLocale, { month: style }).format(new Date(2000, month - 1, 1));
             return name.charAt(0).toUpperCase() + name.slice(1);
         }
 
@@ -4271,7 +4286,6 @@ async function checkLocale() {
     const request = ++localeRequest;
     const marker = document.getElementById('month-select');
     const isCurrent = () => request === localeRequest && document.getElementById('month-select') === marker;
-    const previous = currentLocale;
     try {
         const res = await fetch('/api/status');
         if (res.ok) {
@@ -4286,7 +4300,7 @@ async function checkLocale() {
     if (!isCurrent()) return;
     translatePage();
     refreshLocaleText();
-    if (currentLocale !== previous) await refreshLocaleData(isCurrent);
+    if (currentLocale !== dataLocale) await refreshLocaleData(isCurrent);
 }
 
 function fillValues(text, valuesJson) {

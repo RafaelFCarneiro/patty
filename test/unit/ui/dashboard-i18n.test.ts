@@ -403,9 +403,49 @@ describe('cards.html locale refresh', () => {
     expect(cleared).toEqual([]);
   });
 
-  it('reads an invalid month as empty text instead of throwing', () => {
+  it('reads anything but an integer month 1-12 as empty text', () => {
     const { sandbox } = loadFragment('cards');
-    expect(sandbox.monthLabel(undefined)).toBe('');
+    expect([undefined, 0, 13, -1, 6.5, '6'].map((month) => sandbox.monthLabel(month))).toEqual([
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+    ]);
     expect(sandbox.monthLabel(6)).toBe('June');
+    sandbox.currentLocale = 'es';
+    expect(sandbox.monthLabel(6)).toBe('Junio');
+  });
+
+  it('finishes a superseded refresh on the next check, so the data ends up in the page language', async () => {
+    const { sandbox, document } = loadFragment('cards');
+    const card = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
+    sandbox.currentLocale = 'pt';
+    sandbox.dataLocale = 'pt';
+    sandbox.activeCard = card;
+    sandbox.categories = [{ id: 'cat-1', name: 'Comida' }];
+    document.getElementById('add-category').value = 'Comida';
+    let categoryCalls = 0;
+    sandbox.fetch = (url: string) => {
+      if (url === '/api/status') return answer({ locale: 'en' });
+      if (url === '/api/categories') {
+        categoryCalls += 1;
+        return later(categoryCalls === 1 ? 30 : 0).then(() => ({
+          ok: true,
+          json: () => Promise.resolve([{ id: 'cat-1', name: 'Food' }]),
+        }));
+      }
+      return answer({ cardName: 'Nubank', bill: { status: 'open', payments: [] }, transactions: [], total: 5 });
+    };
+
+    const first = sandbox.checkLocale();
+    await later(5);
+    const second = sandbox.checkLocale();
+    await Promise.all([first, second]);
+
+    expect(sandbox.dataLocale).toBe('en');
+    expect(document.getElementById('add-category').value).toBe('Food');
+    expect(sandbox.currentBill.total).toBe(5);
   });
 });
