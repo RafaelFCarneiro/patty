@@ -304,3 +304,74 @@ describe('POST /api/bills/revert', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('partial bill payment over REST (Feature Design 025)', () => {
+  const seedBill = async (name: string) => {
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: `${name}Acc`, type: 'checking', currency: 'USD', initialBalance: 1000 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: `${name}Card`, closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: `${name}Acc` },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: { description: 'Charge', amount: 100, type: 'expense', date: '2026-06-05', card: `${name}Card` },
+    });
+    return { bill: { card: `${name}Card`, month: 6, year: 2026 }, account: `${name}Acc` };
+  };
+
+  it('POST /api/bills/pay takes an amount and a discriminator and answers what is paid and what remains', async () => {
+    const { bill } = await seedBill('PartialRest');
+
+    const first = await inject({ method: 'POST', url: '/api/bills/pay', payload: { ...bill, amount: 40 } });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({ status: 'open', paidAmount: 40, remaining: 60, partiallyPaid: true });
+    expect(first.json().payments).toHaveLength(1);
+
+    const repeat = await inject({ method: 'POST', url: '/api/bills/pay', payload: { ...bill, amount: 40 } });
+    expect(repeat.json().payments).toHaveLength(1);
+
+    const distinct = await inject({
+      method: 'POST',
+      url: '/api/bills/pay',
+      payload: { ...bill, amount: 40, discriminator: 'second' },
+    });
+    expect(distinct.json()).toMatchObject({ paidAmount: 80, remaining: 20 });
+
+    const read = await inject({ method: 'GET', url: '/api/bills?card=PartialRestCard&month=6&year=2026' });
+    expect(read.json().bill).toMatchObject({ paidAmount: 80, remaining: 20, partiallyPaid: true });
+  });
+
+  it('POST /api/bills/pay refuses an amount above what remains with 422', async () => {
+    const { bill } = await seedBill('OverpayRest');
+
+    const res = await inject({ method: 'POST', url: '/api/bills/pay', payload: { ...bill, amount: 101 } });
+
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('POST /api/bills/revert takes a paymentId and undoes only that payment', async () => {
+    const { bill, account } = await seedBill('RevertOneRest');
+    const first = await inject({ method: 'POST', url: '/api/bills/pay', payload: { ...bill, amount: 30 } });
+    await inject({ method: 'POST', url: '/api/bills/pay', payload: { ...bill, amount: 20 } });
+    const [firstPayment] = first.json().payments;
+
+    const tie = await inject({ method: 'POST', url: '/api/bills/revert', payload: bill });
+    expect(tie.statusCode).toBe(422);
+
+    const res = await inject({
+      method: 'POST',
+      url: '/api/bills/revert',
+      payload: { ...bill, paymentId: firstPayment.id },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ paidAmount: 20, remaining: 80 });
+    const balances = await inject({ method: 'GET', url: `/api/accounts/balances?account=${account}` });
+    expect(balances.json().balances[0].balance).toBe(980);
+  });
+});

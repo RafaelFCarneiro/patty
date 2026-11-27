@@ -8,8 +8,9 @@ import type { CreditCard } from '../../../../src/models/credit-card.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
 import { toIsoDate } from '../../../../src/logic/period.js';
+import { billPaymentKey } from '../../../../src/logic/bill.js';
 import { PersistOp } from '@rfc0/effect-runner';
-import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
+import { TransactionSource, TransactionType, type RawTransactionView } from '../../../../src/models/transaction.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-checking',
@@ -59,6 +60,20 @@ const billItem = (overrides: Partial<RawTransactionView> = {}): RawTransactionVi
   ...overrides,
 });
 
+const paymentItem = (overrides: Partial<RawTransactionView> = {}): RawTransactionView =>
+  billItem({
+    id: 'tx-payment',
+    description: 'Bill payment',
+    type: TransactionType.enum.transfer,
+    amount: 60,
+    date: '2026-06-10',
+    accountName: 'Checking',
+    toAccountId: 'acc-card-internal',
+    billId: 'bill-1',
+    version: 7,
+    ...overrides,
+  });
+
 const billWithItems = (overrides: Partial<BillWithItems> = {}): BillWithItems => ({
   bill: {
     id: 'bill-1',
@@ -81,7 +96,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   subCategories: {} as Deps['subCategories'],
   correlations: {} as Deps['correlations'],
   creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
-  currencies: {} as Deps['currencies'],
+  currencies: { list: async () => [] } as unknown as Deps['currencies'],
   currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
@@ -102,56 +117,127 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   ...overrides,
 });
 
+const defaultToday = toIsoDate(new Date('2026-06-15')); // the clock `makeDeps` injects
+
+const pay = { card: 'Test Card', month: 6, year: 2026, source: TransactionSource.enum.mcp } as const;
+
+const billsDeps = (items: RawTransactionView[], bill: RawBill = rawBill(), status: BillStatus = bill.status) =>
+  makeDeps({
+    bills: {
+      get: async () => billWithItems({ bill: { ...billWithItems().bill, status }, transactions: items }),
+      findByCycle: async () => bill,
+    } as unknown as Deps['bills'],
+  });
+
+type BillModel = { id: string; version: number; status: BillStatus };
+type TransferModel = { amount: number; refs: { accountId?: string; toAccountId?: string; billId?: string } };
+
 describe('payBill — the write is returned as data, not performed (ADR-021 phase 2c)', () => {
-  it('a positive total emits [payment-transfer insert, version-guarded bill update]', async () => {
+  it('without an amount it pays what remains: [transfer insert, version-guarded bill update to paid]', async () => {
     const bill = rawBill();
-    const deps = makeDeps({
-      bills: { get: async () => billWithItems(), findById: async () => bill } as unknown as Deps['bills'],
-    });
+    const result = await payBill(billsDeps([billItem()], bill), pay);
 
-    const result = await payBill(deps, { card: 'Test Card', month: 6, year: 2026, source: TransactionSource.enum.mcp });
-
-    expect(result.isOk()).toBe(true);
     const { persist, response } = result._unsafeUnwrap();
     expect(persist).toHaveLength(2);
-    expect(persist[0]).toMatchObject({
-      op: PersistOp.enum.insert,
-      entity: 'transaction',
-      idempotencyKey: 'billpay-bill-1',
-    });
-    const txModel = (
-      persist[0] as {
-        model: { amount: number; refs: { accountId?: string; toAccountId?: string; billId?: string } };
-      }
-    ).model;
-    expect(txModel.amount).toBe(100);
-    expect(txModel.refs).toMatchObject({
+    expect(persist[0]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
+    const insert = persist[0] as { idempotencyKey: string; model: TransferModel };
+    expect(insert.idempotencyKey).toBe(
+      billPaymentKey({ bill, date: defaultToday, amount: 100, decimals: 2, discriminator: undefined }),
+    );
+    expect(insert.model.amount).toBe(100);
+    expect(insert.model.refs).toEqual({
       accountId: 'acc-checking',
       toAccountId: 'acc-card-internal',
       billId: 'bill-1',
     });
-
     expect(persist[1]).toMatchObject({
       op: PersistOp.enum.update,
       entity: 'bill',
-      model: { id: 'bill-1', version: bill.version, status: BillStatus.enum.paid, paymentTransactionId: 'new-tx-id' },
+      model: { id: 'bill-1', version: bill.version, status: BillStatus.enum.paid },
     });
-
-    expect(response).toMatchObject({ status: BillStatus.enum.paid, paymentTransactionId: 'new-tx-id' });
+    expect(response).toMatchObject({
+      status: BillStatus.enum.paid,
+      paidAmount: 100,
+      remaining: 0,
+      partiallyPaid: false,
+      paymentTransactionId: 'new-tx-id',
+      payments: [{ id: 'new-tx-id', date: defaultToday, amount: 100, account: 'Checking' }],
+    });
   });
 
-  it('a non-positive total emits only a version-guarded bill update, no transfer', async () => {
-    const bill = rawBill();
-    const deps = makeDeps({
-      bills: {
-        get: async () => billWithItems({ transactions: [billItem({ type: 'income', amount: 30 })] }),
-        findById: async () => bill,
-      } as unknown as Deps['bills'],
+  it('a payment below the remaining keeps the bill status and still version-guards the bill', async () => {
+    const bill = rawBill({ status: BillStatus.enum.closed });
+    const result = await payBill(billsDeps([billItem()], bill), { ...pay, amount: 40 });
+
+    const { persist, response } = result._unsafeUnwrap();
+    expect((persist[0] as { model: TransferModel }).model.amount).toBe(40);
+    expect(persist[1]).toMatchObject({
+      op: PersistOp.enum.update,
+      entity: 'bill',
+      model: { id: 'bill-1', version: bill.version, status: BillStatus.enum.closed },
     });
+    expect(response).toMatchObject({
+      status: BillStatus.enum.closed,
+      paidAmount: 40,
+      remaining: 60,
+      partiallyPaid: true,
+    });
+  });
 
-    const result = await payBill(deps, { card: 'Test Card', month: 6, year: 2026, source: TransactionSource.enum.mcp });
+  it('a second payment that brings the remaining to 0 settles the bill', async () => {
+    const result = await payBill(billsDeps([billItem(), paymentItem({ amount: 60 })]), pay);
 
-    expect(result.isOk()).toBe(true);
+    const { persist, response } = result._unsafeUnwrap();
+    expect((persist[0] as { model: TransferModel }).model.amount).toBe(40);
+    expect((persist[1] as { model: BillModel }).model.status).toBe(BillStatus.enum.paid);
+    expect(response).toMatchObject({ status: BillStatus.enum.paid, paidAmount: 100, remaining: 0 });
+    expect((response as { payments: unknown[] }).payments).toHaveLength(2);
+  });
+
+  it('an amount above what remains is refused, naming the remaining amount', async () => {
+    const result = await payBill(billsDeps([billItem(), paymentItem({ amount: 60 })]), { ...pay, amount: 41 });
+
+    expect(result._unsafeUnwrapErr()).toEqual({
+      code: 'validation',
+      issues: ['amount exceeds what remains on the bill (40)'],
+    });
+  });
+
+  it('an amount that rounds to nothing in the card currency is refused', async () => {
+    const result = await payBill(billsDeps([billItem()]), { ...pay, amount: 0.001 });
+
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('repeating the same bill, date and amount is a no-op, even when it would now exceed the remaining', async () => {
+    const bill = rawBill();
+    const key = billPaymentKey({ bill, date: defaultToday, amount: 70, decimals: 2, discriminator: undefined });
+    const items = [billItem(), paymentItem({ amount: 70, date: defaultToday, idempotencyKey: key })];
+
+    const result = await payBill(billsDeps(items, bill), { ...pay, amount: 70 });
+
+    const { persist, response } = result._unsafeUnwrap();
+    expect(persist).toEqual([]);
+    expect(response).toMatchObject({ paidAmount: 70, remaining: 30, partiallyPaid: true });
+  });
+
+  it('a discriminator makes the same bill, date and amount a second payment', async () => {
+    const bill = rawBill();
+    const key = billPaymentKey({ bill, date: defaultToday, amount: 30, decimals: 2, discriminator: undefined });
+    const items = [billItem(), paymentItem({ amount: 30, date: defaultToday, idempotencyKey: key })];
+
+    const result = await payBill(billsDeps(items, bill), { ...pay, amount: 30, discriminator: 'second' });
+
+    const { persist, response } = result._unsafeUnwrap();
+    expect(persist).toHaveLength(2);
+    expect((persist[0] as { idempotencyKey: string }).idempotencyKey).not.toBe(key);
+    expect(response).toMatchObject({ paidAmount: 60, remaining: 40 });
+  });
+
+  it('a non-positive remaining emits only a version-guarded bill update to paid, no transfer', async () => {
+    const bill = rawBill();
+    const result = await payBill(billsDeps([billItem({ type: 'income', amount: 30 })], bill), pay);
+
     const { persist, response } = result._unsafeUnwrap();
     expect(persist).toHaveLength(1);
     expect(persist[0]).toMatchObject({
@@ -159,33 +245,35 @@ describe('payBill — the write is returned as data, not performed (ADR-021 phas
       entity: 'bill',
       model: { id: 'bill-1', version: bill.version, status: BillStatus.enum.paid },
     });
-    const billModel = (persist[0] as { model: { paymentTransactionId?: string } }).model;
-    expect(billModel.paymentTransactionId).toBeUndefined();
-    expect(response).toMatchObject({ status: BillStatus.enum.paid });
+    expect(response).toMatchObject({ status: BillStatus.enum.paid, payments: [] });
     expect((response as { paymentTransactionId?: string }).paymentTransactionId).toBeUndefined();
   });
 
-  it('an already-paid bill is idempotent: empty persist, the existing bill as response', async () => {
+  it('an already-paid bill is idempotent: empty persist, the settled bill as response', async () => {
     const deps = makeDeps({
       bills: {
-        get: async () => billWithItems({ bill: { ...billWithItems().bill, status: BillStatus.enum.paid } }),
-        findById: async () => {
-          throw new Error('must not read version for an already-paid bill — no write to build');
-        },
+        get: async () =>
+          billWithItems({
+            bill: { ...billWithItems().bill, status: BillStatus.enum.paid },
+            transactions: [billItem(), paymentItem({ amount: 100 })],
+          }),
+        findByCycle: async () => rawBill(),
       } as unknown as Deps['bills'],
     });
 
-    const result = await payBill(deps, { card: 'Test Card', month: 6, year: 2026, source: TransactionSource.enum.mcp });
+    const { persist, response } = (await payBill(deps, pay))._unsafeUnwrap();
 
-    expect(result.isOk()).toBe(true);
-    const { persist, response } = result._unsafeUnwrap();
     expect(persist).toEqual([]);
-    expect(response).toMatchObject({ status: BillStatus.enum.paid });
+    expect(response).toMatchObject({
+      status: BillStatus.enum.paid,
+      paidAmount: 100,
+      paymentTransactionId: 'tx-payment',
+    });
   });
 
   it('rejects a credit-type payer before building any write', async () => {
     const deps = makeDeps({
-      bills: { get: async () => billWithItems(), findById: async () => rawBill() } as unknown as Deps['bills'],
+      bills: { get: async () => billWithItems(), findByCycle: async () => rawBill() } as unknown as Deps['bills'],
       accounts: {
         list: async () => [account()],
         findById: async () => account({ id: 'acc-card-internal', type: AccountType.enum.credit }),
@@ -195,27 +283,19 @@ describe('payBill — the write is returned as data, not performed (ADR-021 phas
       } as unknown as Deps['creditCards'],
     });
 
-    const result = await payBill(deps, { card: 'Test Card', month: 6, year: 2026, source: TransactionSource.enum.mcp });
+    const result = await payBill(deps, pay);
 
-    expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('validation');
   });
 
   it('rejects a currency-mismatched payer before building any write', async () => {
     const deps = makeDeps({
-      bills: { get: async () => billWithItems(), findById: async () => rawBill() } as unknown as Deps['bills'],
+      bills: { get: async () => billWithItems(), findByCycle: async () => rawBill() } as unknown as Deps['bills'],
       accounts: { list: async () => [account({ currency: CurrencyCode.enum.BRL })] } as unknown as Deps['accounts'],
     });
 
-    const result = await payBill(deps, {
-      card: 'Test Card',
-      month: 6,
-      year: 2026,
-      account: 'Checking',
-      source: TransactionSource.enum.mcp,
-    });
+    const result = await payBill(deps, { ...pay, account: 'Checking' });
 
-    expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('validation');
   });
 
@@ -223,200 +303,172 @@ describe('payBill — the write is returned as data, not performed (ADR-021 phas
   const today = toIsoDate(clockDate);
   const pastDate = toIsoDate(new Date(2026, 5, 10));
   const futureDate = toIsoDate(new Date(2026, 5, 16));
-  const rejectedPaymentDateReadsVersion = () => {
-    throw new Error('must not read version for a rejected paymentDate — no write to build');
-  };
 
   it('an explicit past paymentDate dates the transfer then, effective', async () => {
-    const bill = rawBill();
     const deps = makeDeps({
-      bills: { get: async () => billWithItems(), findById: async () => bill } as unknown as Deps['bills'],
+      bills: { get: async () => billWithItems(), findByCycle: async () => rawBill() } as unknown as Deps['bills'],
       clock: () => clockDate,
     });
 
-    const result = await payBill(deps, {
-      card: 'Test Card',
-      month: 6,
-      year: 2026,
-      paymentDate: pastDate,
-      source: TransactionSource.enum.mcp,
-    });
+    const { persist } = (await payBill(deps, { ...pay, paymentDate: pastDate }))._unsafeUnwrap();
 
-    expect(result.isOk()).toBe(true);
-    const { persist } = result._unsafeUnwrap();
     const txModel = (persist[0] as { model: { date: string; status: string } }).model;
     expect(txModel.date).toBe(pastDate);
     expect(txModel.status).toBe('effective');
   });
 
   it('an omitted paymentDate defaults to today (the clock date)', async () => {
-    const bill = rawBill();
     const deps = makeDeps({
-      bills: { get: async () => billWithItems(), findById: async () => bill } as unknown as Deps['bills'],
+      bills: { get: async () => billWithItems(), findByCycle: async () => rawBill() } as unknown as Deps['bills'],
       clock: () => clockDate,
     });
 
-    const result = await payBill(deps, { card: 'Test Card', month: 6, year: 2026, source: TransactionSource.enum.mcp });
+    const { persist } = (await payBill(deps, pay))._unsafeUnwrap();
 
-    expect(result.isOk()).toBe(true);
-    const { persist } = result._unsafeUnwrap();
-    const txModel = (persist[0] as { model: { date: string } }).model;
-    expect(txModel.date).toBe(today);
+    expect((persist[0] as { model: { date: string } }).model.date).toBe(today);
   });
 
-  it('rejects a future paymentDate before reading the bill version to build any write', async () => {
+  it.each([
+    ['a positive remaining', [billItem()]],
+    ['a non-positive remaining', [billItem({ type: 'income', amount: 30 })]],
+  ])('rejects a future paymentDate, with %s', async (_label, items) => {
     const deps = makeDeps({
       bills: {
-        get: async () => billWithItems(),
-        findById: rejectedPaymentDateReadsVersion,
+        get: async () => billWithItems({ transactions: items }),
+        findByCycle: async () => rawBill(),
       } as unknown as Deps['bills'],
       clock: () => clockDate,
     });
 
-    const result = await payBill(deps, {
-      card: 'Test Card',
-      month: 6,
-      year: 2026,
-      paymentDate: futureDate,
-      source: TransactionSource.enum.mcp,
-    });
+    const result = await payBill(deps, { ...pay, paymentDate: futureDate });
 
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().code).toBe('validation');
-  });
-
-  it('rejects a future paymentDate even when the bill total is non-positive (no transfer branch)', async () => {
-    const deps = makeDeps({
-      bills: {
-        get: async () => billWithItems({ transactions: [billItem({ type: 'income', amount: 30 })] }),
-        findById: rejectedPaymentDateReadsVersion,
-      } as unknown as Deps['bills'],
-      clock: () => clockDate,
-    });
-
-    const result = await payBill(deps, {
-      card: 'Test Card',
-      month: 6,
-      year: 2026,
-      paymentDate: futureDate,
-      source: TransactionSource.enum.mcp,
-    });
-
-    expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('validation');
   });
 
   it('rejects when neither an explicit account nor a card default payer is available', async () => {
     const deps = makeDeps({
-      bills: { get: async () => billWithItems(), findById: async () => rawBill() } as unknown as Deps['bills'],
+      bills: { get: async () => billWithItems(), findByCycle: async () => rawBill() } as unknown as Deps['bills'],
       creditCards: { list: async () => [card({ paymentAccountId: undefined })] } as unknown as Deps['creditCards'],
     });
 
-    const result = await payBill(deps, { card: 'Test Card', month: 6, year: 2026, source: TransactionSource.enum.mcp });
+    const result = await payBill(deps, pay);
 
-    expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('validation');
   });
 });
 
 describe('revertBillPayment — the write is returned as data, not performed (ADR-021 phase 2c)', () => {
-  it('a paid bill with a transfer emits [version-guarded bill update, version-guarded transfer remove]', async () => {
-    const paidBill = rawBill({ status: BillStatus.enum.paid, paymentTransactionId: 'tx-payment' });
-    const paymentTx: RawTransactionView = { ...billItem({ id: 'tx-payment', type: 'transfer' }), version: 7 };
-    const deps = makeDeps({
-      bills: {
-        get: async () =>
-          billWithItems({
-            bill: { ...billWithItems().bill, status: BillStatus.enum.paid, paymentTransactionId: 'tx-payment' },
-          }),
-        findById: async () => paidBill,
-      } as unknown as Deps['bills'],
-      transactions: { getById: async () => paymentTx } as unknown as Deps['transactions'],
-    });
+  const revert = { card: 'Test Card', month: 6, year: 2026 };
+  const older = paymentItem({ id: 'tx-old', date: '2026-06-05', amount: 60, version: 3 });
+  const newer = paymentItem({ id: 'tx-new', date: '2026-06-12', amount: 40, version: 9 });
 
-    const result = await revertBillPayment(deps, { card: 'Test Card', month: 6, year: 2026 });
+  it('a paid bill with one payment emits [version-guarded bill update to closed, transfer remove]', async () => {
+    const paidBill = rawBill({ status: BillStatus.enum.paid });
+    const items = [billItem(), paymentItem({ amount: 100 })];
 
-    expect(result.isOk()).toBe(true);
-    const { persist, response } = result._unsafeUnwrap();
-    expect(persist).toHaveLength(2);
-    expect(persist[0]).toMatchObject({
-      op: PersistOp.enum.update,
-      entity: 'bill',
-      model: { id: 'bill-1', version: paidBill.version, status: BillStatus.enum.closed, paymentTransactionId: null },
-    });
-    expect(persist[1]).toEqual({ op: PersistOp.enum.delete, entity: 'transaction', id: 'tx-payment', version: 7 });
-    expect(response).toMatchObject({ status: BillStatus.enum.closed });
+    const { persist, response } = (await revertBillPayment(billsDeps(items, paidBill), revert))._unsafeUnwrap();
+
+    expect(persist).toEqual([
+      {
+        op: PersistOp.enum.update,
+        entity: 'bill',
+        model: expect.objectContaining({ id: 'bill-1', version: paidBill.version, status: BillStatus.enum.closed }),
+      },
+      { op: PersistOp.enum.delete, entity: 'transaction', id: 'tx-payment', version: 7 },
+    ]);
+    expect(response).toMatchObject({ status: BillStatus.enum.closed, paidAmount: 0, remaining: 100, payments: [] });
     expect((response as { paymentTransactionId?: string }).paymentTransactionId).toBeUndefined();
   });
 
-  it('a paymentTransactionId that no longer resolves is treated as nothing to delete', async () => {
-    const paidBill = rawBill({ status: BillStatus.enum.paid, paymentTransactionId: 'tx-payment' });
-    const deps = makeDeps({
-      bills: {
-        get: async () =>
-          billWithItems({
-            bill: { ...billWithItems().bill, status: BillStatus.enum.paid, paymentTransactionId: 'tx-payment' },
-          }),
-        findById: async () => paidBill,
-      } as unknown as Deps['bills'],
-      transactions: { getById: async () => null } as unknown as Deps['transactions'],
+  it('with a paymentId it undoes that payment and keeps a part-paid bill status', async () => {
+    const bill = rawBill({ status: BillStatus.enum.closed });
+
+    const { persist, response } = (
+      await revertBillPayment(billsDeps([billItem(), older, newer], bill), { ...revert, paymentId: 'tx-new' })
+    )._unsafeUnwrap();
+
+    expect(persist[1]).toEqual({ op: PersistOp.enum.delete, entity: 'transaction', id: 'tx-new', version: 9 });
+    expect((persist[0] as { model: BillModel }).model.status).toBe(BillStatus.enum.closed);
+    expect(response).toMatchObject({
+      paidAmount: 60,
+      remaining: 40,
+      partiallyPaid: true,
+      paymentTransactionId: 'tx-old',
     });
+  });
 
-    const result = await revertBillPayment(deps, { card: 'Test Card', month: 6, year: 2026 });
+  it('without a paymentId it undoes the bill’s only payment', async () => {
+    const result = await revertBillPayment(billsDeps([billItem(), older]), revert);
 
-    expect(result.isOk()).toBe(true);
-    const { persist, response } = result._unsafeUnwrap();
+    expect(result._unsafeUnwrap().persist[1]).toMatchObject({ op: PersistOp.enum.delete, id: 'tx-old' });
+  });
+
+  it('with a paymentId it undoes that payment', async () => {
+    const result = await revertBillPayment(billsDeps([billItem(), older, newer]), { ...revert, paymentId: 'tx-old' });
+
+    expect(result._unsafeUnwrap().persist[1]).toMatchObject({ op: PersistOp.enum.delete, id: 'tx-old' });
+  });
+
+  it('undoing one of two payments of a paid bill flips it back to closed', async () => {
+    const paidBill = rawBill({ status: BillStatus.enum.paid });
+
+    const { persist, response } = (
+      await revertBillPayment(billsDeps([billItem(), older, newer], paidBill), { ...revert, paymentId: 'tx-new' })
+    )._unsafeUnwrap();
+
+    expect((persist[0] as { model: BillModel }).model.status).toBe(BillStatus.enum.closed);
+    expect(response).toMatchObject({ status: BillStatus.enum.closed, remaining: 40 });
+  });
+
+  it('refuses without a paymentId when the bill has several payments, listing their ids', async () => {
+    const result = await revertBillPayment(billsDeps([billItem(), older, newer]), revert);
+
+    expect(result._unsafeUnwrapErr()).toEqual({
+      code: 'validation',
+      issues: ['the bill has several payments: pass `paymentId` — one of tx-old, tx-new'],
+    });
+  });
+
+  it('a paymentId that is not a payment of the bill answers the bill unchanged, removing nothing', async () => {
+    const { persist, response } = (
+      await revertBillPayment(billsDeps([billItem(), older]), { ...revert, paymentId: 'tx-elsewhere' })
+    )._unsafeUnwrap();
+
+    expect(persist).toEqual([]);
+    expect(response).toMatchObject({ paidAmount: 60, remaining: 40 });
+  });
+
+  it('repeating an undo with the same id is unchanged once the payment is gone', async () => {
+    const { persist } = (
+      await revertBillPayment(billsDeps([billItem()]), { ...revert, paymentId: 'tx-old' })
+    )._unsafeUnwrap();
+
+    expect(persist).toEqual([]);
+  });
+
+  it('a paid bill with no payment transfer emits only the bill update to closed', async () => {
+    const paidBill = rawBill({ status: BillStatus.enum.paid });
+
+    const { persist, response } = (
+      await revertBillPayment(billsDeps([billItem({ type: 'income', amount: 30 })], paidBill), revert)
+    )._unsafeUnwrap();
+
     expect(persist).toHaveLength(1);
-    expect(persist[0]).toMatchObject({
-      op: PersistOp.enum.update,
-      entity: 'bill',
-      model: { id: 'bill-1', status: BillStatus.enum.closed },
-    });
+    expect(persist[0]).toMatchObject({ op: PersistOp.enum.update, entity: 'bill', model: { status: 'closed' } });
     expect(response).toMatchObject({ status: BillStatus.enum.closed });
   });
 
-  it('a paid bill with no payment transfer (non-positive-total pay) emits only the bill update', async () => {
-    const paidBill = rawBill({ status: BillStatus.enum.paid, paymentTransactionId: undefined });
-    const deps = makeDeps({
-      bills: {
-        get: async () => billWithItems({ bill: { ...billWithItems().bill, status: BillStatus.enum.paid } }),
-        findById: async () => paidBill,
-      } as unknown as Deps['bills'],
-      transactions: {
-        getById: async () => {
-          throw new Error('must not read a payment transaction that was never created');
-        },
-      } as unknown as Deps['transactions'],
-    });
-
-    const result = await revertBillPayment(deps, { card: 'Test Card', month: 6, year: 2026 });
-
-    expect(result.isOk()).toBe(true);
-    const { persist, response } = result._unsafeUnwrap();
-    expect(persist).toHaveLength(1);
-    expect(persist[0]).toMatchObject({
-      op: PersistOp.enum.update,
-      entity: 'bill',
-      model: { id: 'bill-1', status: BillStatus.enum.closed },
-    });
-    expect(response).toMatchObject({ status: BillStatus.enum.closed });
-  });
-
-  it('a bill that is not paid is idempotent: empty persist, the existing bill as response', async () => {
+  it('a bill with no payment is idempotent: empty persist, the settled bill as response', async () => {
     const deps = makeDeps({
       bills: {
         get: async () => billWithItems(),
-        findById: async () => {
-          throw new Error('must not read version for a not-paid bill — no write to build');
-        },
+        findByCycle: async () => rawBill(),
       } as unknown as Deps['bills'],
     });
 
-    const result = await revertBillPayment(deps, { card: 'Test Card', month: 6, year: 2026 });
+    const { persist, response } = (await revertBillPayment(deps, revert))._unsafeUnwrap();
 
-    expect(result.isOk()).toBe(true);
-    const { persist, response } = result._unsafeUnwrap();
     expect(persist).toEqual([]);
-    expect(response).toMatchObject({ status: BillStatus.enum.open });
+    expect(response).toMatchObject({ status: BillStatus.enum.open, paidAmount: 0, remaining: 100, payments: [] });
   });
 });

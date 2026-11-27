@@ -23,19 +23,13 @@ describe('persistableToDb (bills)', () => {
     });
   });
 
-  // paymentTransactionId: undefined leaves the column unchanged (drizzle's .set() drops
-  // undefined-valued keys); null explicitly clears it (models/bill.ts). update passes the model
-  // through untouched specifically so this distinction survives — a row-shaping modelToDb applied
-  // uniformly to every update would collapse "leave unchanged" into "clear".
-  it('update: passes the model through untouched, preserving undefined vs. null on paymentTransactionId', () => {
-    const unchangedModel = { ...bill, status: BillStatus.enum.paid, paymentTransactionId: undefined, version: 3 };
-    const leaveUnchanged: Persistable = { op: PersistOp.enum.update, entity: BILL_ENTITY_TAG, model: unchangedModel };
-    expect(billAdapters.persistableToDb(leaveUnchanged)).toBe(leaveUnchanged);
-    expect(billAdapters.persistableToDb(leaveUnchanged)).toEqual(leaveUnchanged);
-
-    const clearedModel = { ...bill, status: BillStatus.enum.closed, paymentTransactionId: null, version: 3 };
-    const explicitClear: Persistable = { op: PersistOp.enum.update, entity: BILL_ENTITY_TAG, model: clearedModel };
-    expect(billAdapters.persistableToDb(explicitClear)).toBe(explicitClear);
+  it('update: carries the entity (with its expected version) as the row', () => {
+    const update: Persistable = {
+      op: PersistOp.enum.update,
+      entity: BILL_ENTITY_TAG,
+      model: { ...bill, status: BillStatus.enum.paid, version: 3 } as BillEntity & { version: number },
+    };
+    expect(billAdapters.persistableToDb(update)).toEqual(update);
   });
 
   it('delete: passes through unchanged — there is no model to adapt', () => {

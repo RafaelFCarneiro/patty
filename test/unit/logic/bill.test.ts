@@ -17,6 +17,12 @@ import {
   computeBillTotal,
   billPaymentDescription,
   billPaymentKey,
+  coversPaid,
+  hasIdempotencyKey,
+  paymentsOf,
+  settlement,
+  toSettledBill,
+  totalAfterChange,
   billPeriodKey,
   isBillPaid,
   planBillPayment,
@@ -231,8 +237,17 @@ describe('billPeriodKey', () => {
 });
 
 describe('bill payment', () => {
-  it('keys the payment by its bill, so re-paying the same bill derives the same key', () => {
-    expect(billPaymentKey('bill-1')).toBe('billpay-bill-1');
+  const facts = (overrides: Partial<Parameters<typeof planBillPayment>[0]> = {}) => ({
+    id: 'tx-pay',
+    card: { name: 'Nubank', currency: CurrencyCode.enum.BRL, accountId: 'liab-1' },
+    payer: { id: 'acc-1' },
+    bill: { id: 'bill-1', month: 3, year: 2026 },
+    amount: 250.5,
+    decimals: 2,
+    date: '2026-04-05',
+    today: '2026-04-05',
+    source: TransactionSource.enum.mcp,
+    ...overrides,
   });
 
   it('describes the payment with the card and a zero-padded MM/YYYY', () => {
@@ -240,20 +255,8 @@ describe('bill payment', () => {
     expect(billPaymentDescription('Nubank', 11, 2026)).toBe('Bill payment: Nubank 11/2026');
   });
 
-  const facts = (overrides: Partial<Parameters<typeof planBillPayment>[0]> = {}) => ({
-    id: 'tx-pay',
-    card: { name: 'Nubank', currency: CurrencyCode.enum.BRL, accountId: 'liab-1' },
-    payer: { id: 'acc-1' },
-    bill: { id: 'bill-1', month: 3, year: 2026 },
-    total: 250.5,
-    date: '2026-04-05',
-    today: '2026-04-05',
-    source: TransactionSource.enum.mcp,
-    ...overrides,
-  });
-
-  it('plans a transfer from the payer to the card account, linked to the bill, never classified', () => {
-    const { transferEntity, idempotencyKey } = planBillPayment(facts());
+  it('plans a transfer of the chosen amount from the payer to the card account, linked to the bill', () => {
+    const { transferEntity } = planBillPayment(facts());
     expect(transferEntity).toEqual({
       id: 'tx-pay',
       description: 'Bill payment: Nubank 03/2026',
@@ -266,7 +269,6 @@ describe('bill payment', () => {
       classification: { method: ClassificationMethod.enum.none, confidence: 0 },
       refs: { accountId: 'acc-1', toAccountId: 'liab-1', billId: 'bill-1' },
     });
-    expect(idempotencyKey).toBe('billpay-bill-1');
   });
 
   it('a payment dated before today is effective; the plan takes its currency from the card', () => {
@@ -274,5 +276,138 @@ describe('bill payment', () => {
       facts({ date: '2026-04-01', card: { name: 'Visa', currency: CurrencyCode.enum.USD, accountId: 'liab-2' } }),
     );
     expect(plan.transferEntity).toMatchObject({ status: 'effective', currency: 'USD', date: '2026-04-01' });
+  });
+
+  describe('billPaymentKey', () => {
+    it('is a sha256 over bill, date, amount and discriminator, not the old billpay-<id> form', () => {
+      expect(planBillPayment(facts()).idempotencyKey).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('is stable for the same payment and amount rounded to the currency decimals', () => {
+      expect(billPaymentKey(facts({ amount: 10.004 }))).toBe(billPaymentKey(facts({ amount: 10 })));
+    });
+
+    it.each([
+      ['another bill', { bill: { id: 'bill-2', month: 3, year: 2026 } }],
+      ['another date', { date: '2026-04-04' }],
+      ['another amount', { amount: 250.51 }],
+      ['a discriminator', { discriminator: 'again' }],
+    ])('differs with %s', (_label, overrides) => {
+      expect(billPaymentKey(facts(overrides))).not.toBe(billPaymentKey(facts()));
+    });
+  });
+});
+
+describe('bill settlement', () => {
+  const transfer = (overrides: Partial<TransactionView>): TransactionView => ({
+    ...tx(TransactionType.enum.transfer, 60),
+    toAccountId: 'liab-1',
+    accountName: 'Checking',
+    billId: 'bill-1',
+    date: '2026-04-05',
+    ...overrides,
+  });
+
+  describe('paymentsOf', () => {
+    it('lists the transfers into the card account, oldest first, ignoring purchases and other transfers', () => {
+      const items = [
+        tx(TransactionType.enum.expense, 100),
+        transfer({ id: 'late', date: '2026-04-09', amount: 30 }),
+        transfer({ id: 'elsewhere', toAccountId: 'other' }),
+        transfer({ id: 'early', date: '2026-04-01', amount: 60 }),
+      ];
+      expect(paymentsOf(items, 'liab-1')).toEqual([
+        { id: 'early', date: '2026-04-01', amount: 60, account: 'Checking' },
+        { id: 'late', date: '2026-04-09', amount: 30, account: 'Checking' },
+      ]);
+    });
+  });
+
+  describe('settlement', () => {
+    const payments = [{ id: 'p1', date: '2026-04-01', amount: 60 }];
+
+    it('derives paid, remaining and partiallyPaid from the total and the payments', () => {
+      expect(settlement(100, payments, 2)).toEqual({ paidAmount: 60, remaining: 40, partiallyPaid: true });
+    });
+
+    it('is not partially paid without a payment, nor once nothing remains', () => {
+      expect(settlement(100, [], 2)).toEqual({ paidAmount: 0, remaining: 100, partiallyPaid: false });
+      expect(settlement(60, payments, 2)).toEqual({ paidAmount: 60, remaining: 0, partiallyPaid: false });
+    });
+
+    it("rounds to the currency's own decimals, never a flat 2", () => {
+      expect(settlement(0.3, [{ id: 'p', date: '2026-04-01', amount: 0.1 }], 8).remaining).toBe(0.2);
+      expect(settlement(10.005, [], 2).remaining).toBe(10.01);
+    });
+  });
+
+  it('toSettledBill reports the latest payment as paymentTransactionId, absent without one', () => {
+    const bill = {
+      id: 'b',
+      month: 4,
+      year: 2026,
+      closeDate: '2026-04-28',
+      dueDate: '2026-05-05',
+      status: BillStatus.enum.closed,
+    };
+    const two = [
+      { id: 'p1', date: '2026-04-01', amount: 60 },
+      { id: 'p2', date: '2026-04-09', amount: 30 },
+    ];
+    expect(toSettledBill(bill, two, settlement(100, two, 2))).toMatchObject({
+      paymentTransactionId: 'p2',
+      payments: two,
+    });
+    expect(toSettledBill(bill, [], settlement(100, [], 2)).paymentTransactionId).toBeUndefined();
+  });
+
+  it.each([
+    ['settled with no payment at all', []],
+    ['whose transfers add up to less than its total', [{ id: 'p1', date: '2026-04-01', amount: 10 }]],
+  ])('a paid bill %s reports remaining 0 and is not partially paid', (_label, payments) => {
+    const paid = {
+      id: 'b',
+      month: 4,
+      year: 2026,
+      closeDate: '2026-04-28',
+      dueDate: '2026-05-05',
+      status: BillStatus.enum.paid,
+    };
+
+    expect(toSettledBill(paid, payments, settlement(100, payments, 2))).toMatchObject({
+      remaining: 0,
+      partiallyPaid: false,
+      paidAmount: payments.length ? 10 : 0,
+    });
+  });
+
+  it('hasIdempotencyKey recognizes an already recorded payment', () => {
+    const items = [{ ...tx(TransactionType.enum.transfer, 5), idempotencyKey: 'k1' }];
+    expect(hasIdempotencyKey(items, 'k1')).toBe(true);
+    expect(hasIdempotencyKey(items, 'k2')).toBe(false);
+  });
+
+  describe('totalAfterChange and coversPaid', () => {
+    const items = [
+      { ...tx(TransactionType.enum.expense, 100), id: 'e1' },
+      { ...tx(TransactionType.enum.expense, 50), id: 'e2' },
+    ];
+
+    it('applies a removal and an addition to the total', () => {
+      expect(totalAfterChange(items, { removedId: 'e1' })).toBe(50);
+      expect(totalAfterChange(items, { added: { type: TransactionType.enum.income, amount: 20 } })).toBe(130);
+      expect(
+        totalAfterChange(items, { removedId: 'e2', added: { type: TransactionType.enum.expense, amount: 10 } }),
+      ).toBe(110);
+    });
+
+    it('a total covers what is paid down to the last unit of the currency', () => {
+      expect(coversPaid(100, 100, 2)).toBe(true);
+      expect(coversPaid(99.99, 100, 2)).toBe(false);
+    });
+
+    it('a bill with nothing paid is never short, even with a credit balance', () => {
+      expect(coversPaid(-30, 0, 2)).toBe(true);
+    });
   });
 });

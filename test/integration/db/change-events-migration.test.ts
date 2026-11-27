@@ -38,7 +38,8 @@ describe('migration 0029 — change_events (ADR-036 §1)', () => {
 
     await bootstrap(db);
 
-    expect(readdirSync(tmpDir).filter((name) => name.endsWith('.bak'))).toEqual([]);
+    // Later data-rewriting migrations take their own copy on the way to the latest schema; 0029 takes none.
+    expect(readdirSync(tmpDir).filter((name) => name.endsWith(`.pre-${MIGRATION_TAG}.bak`))).toEqual([]);
     expect(existsSync(`${dbPath}.pre-${MIGRATION_TAG}.bak`)).toBe(false);
   });
 

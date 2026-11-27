@@ -1023,7 +1023,7 @@
     {
       "name": "get_bill",
       "title": "Get credit card bill (fatura)",
-      "description": "Get a card bill for a month: status (open/closed/paid), close/due dates, total, and its transactions.",
+      "description": "Get a card bill for a month: status (open/closed/paid), close/due dates, total, what is paid and what remains (`paidAmount`, `remaining`, `partiallyPaid`), its payments (oldest first) and its transactions.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1063,7 +1063,7 @@
     {
       "name": "pay_bill",
       "title": "Pay credit card bill",
-      "description": "Pay a credit card bill. Creates a canonical transfer (payer account → card internal account) for the full bill total, then marks the bill paid. Idempotent — re-calling on a paid bill is a no-op. Paying account resolution: explicit `account` → card default `paymentAccount` → error. Optional `paymentDate` (defaults to today) records when the payment occurred; it must not be in the future — the payment transfer is always effective and dated on/before today.",
+      "description": "Pay a credit card bill, whole or in part. Each call creates one canonical transfer (payer account → card internal account) for `amount` — omitted, it pays what remains on the bill — and marks the bill paid only when nothing remains; until then the bill keeps its status and reports `partiallyPaid`, `paidAmount` and `remaining`. An `amount` above what remains is refused. Repeating a call with the same bill, date and amount is a no-op; pass `discriminator` to record a second identical payment. Re-calling on a paid bill is a no-op. What stays unpaid remains as debt on the card; interest the bank charges on it is recorded as a card charge (add_card_purchase) on the next bill. Paying account resolution: explicit `account` → card default `paymentAccount` → error. Optional `paymentDate` (defaults to today) records when the payment occurred; it must not be in the future — the payment transfer is always effective and dated on/before today.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1084,6 +1084,11 @@
             "maximum": 2100,
             "description": "Billing cycle year"
           },
+          "amount": {
+            "description": "Amount to pay now (defaults to what remains on the bill)",
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
           "account": {
             "description": "Paying account name (overrides card default)",
             "type": "string",
@@ -1093,6 +1098,11 @@
             "description": "Date the payment occurred (defaults to today); must not be in the future",
             "type": "string",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "discriminator": {
+            "description": "Tells two genuinely distinct payments apart when bill, date and amount are the same",
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -1113,7 +1123,7 @@
     {
       "name": "revert_bill_payment",
       "title": "Revert credit card bill payment",
-      "description": "Undo a bill payment: deletes the payment transfer and flips the bill back from paid to closed. Idempotent — calling on a bill that is not paid is a no-op that returns it unchanged.",
+      "description": "Undo one bill payment: deletes its transfer (`paymentId`, from the bill's `payments`; omit it only when the bill has a single payment — with several it is refused, listing their ids) and, from paid, flips the bill back to closed. Safe to repeat: a bill with no payment, or a `paymentId` that is no longer a payment of the bill, is a no-op that returns the bill unchanged.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1133,6 +1143,11 @@
             "minimum": 2000,
             "maximum": 2100,
             "description": "Billing cycle year"
+          },
+          "paymentId": {
+            "description": "The payment to undo (see `payments` on the bill); required when the bill has several. One that is not, or no longer, a payment of the bill changes nothing",
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [

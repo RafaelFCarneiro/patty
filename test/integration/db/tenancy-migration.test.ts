@@ -227,7 +227,8 @@ describe('migration 0021 — tenancy data', () => {
     expect(after['transaction_tags']).toEqual(beforeWithoutOwner['transaction_tags']);
     expect(after['accounts']).toEqual(beforeWithoutOwner['accounts']);
     expect(after['credit_cards']).toEqual(beforeWithoutOwner['credit_cards']);
-    expect(after['bills']).toEqual(beforeWithoutOwner['bills']);
+    // 0032 later drops the payment pointer: the bill rows are otherwise unchanged.
+    expect(after['bills']).toEqual(beforeWithoutOwner['bills']?.map(({ payment_transaction_id: _p, ...rest }) => rest));
     expect(after['tags']).toEqual(beforeWithoutOwner['tags']);
     expect(after['budgets']).toEqual(beforeWithoutOwner['budgets']);
     expect(after['recurring_rules']).toEqual(beforeWithoutOwner['recurring_rules']);

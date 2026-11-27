@@ -13,6 +13,7 @@ import * as creditCardAdapters from '../../../src/adapters/credit-cards.js';
 import * as transactionAdapters from '../../../src/adapters/transactions.js';
 import { payBill, revertBillPayment } from '../../../src/controllers/credit-card/bill.js';
 import { deleteCreditCard } from '../../../src/controllers/credit-card/credit-card.js';
+import { updateCardTransaction } from '../../../src/controllers/credit-card/transaction.js';
 import { renameDashboard, saveDashboard } from '../../../src/controllers/dashboards.js';
 import { setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
@@ -962,45 +963,6 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
     expect(result.isOk()).toBe(true);
     expect(await db.all(sql`SELECT id FROM transactions WHERE id = ${row.id}`)).toHaveLength(0);
   });
-
-  it('a delete blocked by a bill-payment FK retries bounded, then surfaces the generic conflict', async () => {
-    const row = newTransactionRow();
-    await runEffects({ runner, isTransientContention, conflictError }, transactionRegistry, insertRow(row));
-    const { cardId } = await insertCreditCardWithAccount();
-    await db.insert(bills).values(
-      own({
-        id: randomUUID(),
-        creditCardId: cardId,
-        month: 6,
-        year: 2026,
-        closeDate: '2026-06-28',
-        dueDate: '2026-07-05',
-        status: BillStatus.enum.paid,
-        paymentTransactionId: row.id,
-        version: 0,
-      }),
-    );
-
-    let calls = 0;
-    const flow = () => {
-      calls += 1;
-      return okAsync({
-        persist: [
-          { op: PersistOp.enum.delete, entity: TRANSACTION_ENTITY_TAG, id: row.id, version: row.version },
-        ] as Persistable[],
-        response: null,
-      });
-    };
-    const result = await runEffects({ runner, isTransientContention, conflictError }, transactionRegistry, flow);
-
-    // Before the collapse the bespoke delete had no error handling and this FK violation surfaced
-    // as a raw throw; the generic applier treats it as the same "world changed" condition a stale
-    // version reports (bounded retry → generic conflict) — the intended behavior change.
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
-    expect(calls).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
-    expect(await db.all(sql`SELECT id FROM transactions WHERE id = ${row.id}`)).toHaveLength(1);
-  });
 });
 
 describe('transactionTagApplier — set-replace addressed by the transaction id (ADR-023 steps 2–3)', () => {
@@ -1703,7 +1665,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
       subCategories: {} as Deps['subCategories'],
       correlations: {} as Deps['correlations'],
       creditCards: creditCardsR,
-      currencies: {} as Deps['currencies'],
+      currencies: { list: async () => [] } as unknown as Deps['currencies'],
       currencyRates: {} as Deps['currencyRates'],
       dashboards: {} as Deps['dashboards'],
       health: {} as Deps['health'],
@@ -1726,13 +1688,15 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
   // Mirrors the diplomat handler's own composition (diplomat/mcp/server.ts's pay_bill tool) — a
   // test calling runEffects directly must adapt payBill's mixed transaction+bill batch itself,
   // the same way the real handler does before the batch ever reaches the shell.
-  const payBillFlow = (deps: Deps, cardName: string) => () =>
-    payBill(deps, { card: cardName, month: 6, year: 2026, source: TransactionSource.enum.mcp })
+  const payBillFlow = (deps: Deps, cardName: string, amount?: number) => () =>
+    payBill(deps, { card: cardName, month: 6, year: 2026, amount, source: TransactionSource.enum.mcp })
       .map(billAdapters.outcomeToDb)
       .map(transactionAdapters.outcomeToDb);
 
   const countPaymentTransfers = async (): Promise<number> => {
-    const rows = await db.all<{ id: string }>(sql`SELECT id FROM transactions WHERE idempotency_key LIKE 'billpay-%'`);
+    const rows = await db.all<{ id: string }>(
+      sql`SELECT id FROM transactions WHERE type = 'transfer' AND bill_id IS NOT NULL`,
+    );
     return rows.length;
   };
 
@@ -1759,18 +1723,14 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     expect(await countPaymentTransfers()).toBe(1);
   });
 
-  it('reverting a payment NULLs bills.payment_transaction_id on the row, not only in the response', async () => {
+  it('reverting a payment removes its transfer and closes the bill on the row, not only in the response', async () => {
     const { deps, cardName } = await seedCardWithOpenBill();
     const context = { runner, isTransientContention, conflictError };
-    const billRow = async () =>
-      (
-        await db.all<{ status: string; paymentTransactionId: string | null }>(
-          sql`SELECT status, payment_transaction_id AS paymentTransactionId FROM bills`,
-        )
-      )[0];
+    const billRow = async () => (await db.all<{ status: string }>(sql`SELECT status FROM bills`))[0];
 
     await runEffects(context, fullRegistry, payBillFlow(deps, cardName));
-    expect((await billRow())?.paymentTransactionId).not.toBeNull();
+    expect(await billRow()).toEqual({ status: BillStatus.enum.paid });
+    expect(await countPaymentTransfers()).toBe(1);
 
     const reverted = await runEffects(context, fullRegistry, () =>
       revertBillPayment(deps, { card: cardName, month: 6, year: 2026 })
@@ -1779,7 +1739,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     );
 
     expect(reverted.isOk()).toBe(true);
-    expect(await billRow()).toEqual({ status: BillStatus.enum.closed, paymentTransactionId: null });
+    expect(await billRow()).toEqual({ status: BillStatus.enum.closed });
     expect(await countPaymentTransfers()).toBe(0);
   });
 
@@ -1794,14 +1754,14 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     // fails, rolling the whole batch (including the transfer insert) back for a retry.
     const racingBills: Deps['bills'] = {
       ...deps.bills,
-      findById: async (billId) => {
+      findByCycle: async (cardId, billMonth, billYear) => {
         reads += 1;
-        const rawBill = await deps.bills.findById(billId);
+        const rawBill = await deps.bills.findByCycle(cardId, billMonth, billYear);
         if (reads === 1 && rawBill) {
           await db
             .update(bills)
             .set({ version: rawBill.version + 1 })
-            .where(sql`${bills.id} = ${billId}`);
+            .where(sql`${bills.id} = ${rawBill.id}`);
         }
         return rawBill;
       },
@@ -1820,6 +1780,92 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
 
     // No partial write survived the rolled-back first attempt — exactly one payment transfer exists.
     expect(await countPaymentTransfers()).toBe(1);
+  });
+
+  const racedPayment = async (competitorAmount: number, loserAmount: number) => {
+    const { deps, cardName } = await seedCardWithOpenBill();
+    const context = { runner, isTransientContention, conflictError };
+
+    let reads = 0;
+    // The loser has already read the bill's version and its payments when a competing payment commits (the
+    // hook fires on the loser's first `get`, after it read), so its first attempt passes every guard on stale
+    // data and only its version-guarded bill write can stop it: the flow must conflict, re-run and decide again.
+    const racingBills: Deps['bills'] = {
+      ...deps.bills,
+      get: async (cardId, billMonth, billYear) => {
+        reads += 1;
+        const stale = await deps.bills.get(cardId, billMonth, billYear);
+        if (reads === 1) await runEffects(context, fullRegistry, payBillFlow(deps, cardName, competitorAmount));
+        return stale;
+      },
+    };
+
+    const loser = await runEffects(
+      context,
+      fullRegistry,
+      payBillFlow({ ...deps, bills: racingBills }, cardName, loserAmount),
+    );
+    const paidAmounts = (
+      await db.all<{ amount: number }>(sql`SELECT amount FROM transactions WHERE type = 'transfer' ORDER BY amount`)
+    ).map((row) => row.amount);
+    const status = (await db.all<{ status: string }>(sql`SELECT status FROM bills`))[0]?.status;
+    return { loser, paidAmounts, status, reads: () => reads };
+  };
+
+  it('two concurrent partial payments cannot together exceed the total: the loser is refused', async () => {
+    const { loser, paidAmounts, status, reads } = await racedPayment(60, 50);
+
+    expect(reads()).toBe(2); // the first attempt's bill write conflicted; the re-run saw the competitor's payment
+    expect(loser.isErr()).toBe(true);
+    expect(loser._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
+    expect(paidAmounts).toEqual([60]);
+    expect(status).toBe(BillStatus.enum.open);
+  });
+
+  it('an edit lowering the total cannot commit beside a payment that lands after it read the bill', async () => {
+    const { deps, cardName } = await seedCardWithOpenBill();
+    const context = { runner, isTransientContention, conflictError };
+    const purchase = (await db.all<{ id: string }>(sql`SELECT id FROM transactions WHERE type = 'expense'`))[0]!;
+
+    let reads = 0;
+    const racingBills: Deps['bills'] = {
+      ...deps.bills,
+      get: async (cardId, billMonth, billYear) => {
+        reads += 1;
+        const stale = await deps.bills.get(cardId, billMonth, billYear);
+        if (reads === 1) await runEffects(context, fullRegistry, payBillFlow(deps, cardName, 60));
+        return stale;
+      },
+    };
+
+    const edit = await runEffects(context, fullRegistry, () =>
+      updateCardTransaction({ ...deps, bills: racingBills }, { id: purchase.id, amount: 50 }),
+    );
+
+    expect(reads).toBe(2); // the first attempt passed on stale payments and its bill write conflicted
+    expect(edit.isErr()).toBe(true);
+    expect(edit._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
+    expect(await db.all(sql`SELECT amount FROM transactions WHERE id = ${purchase.id}`)).toEqual([{ amount: 100 }]);
+  });
+
+  it('two concurrent identical payments record one: the loser finds its own key there', async () => {
+    const { loser, paidAmounts, reads } = await racedPayment(60, 60);
+
+    expect(reads()).toBe(2);
+    expect(loser.isOk()).toBe(true);
+    expect(paidAmounts).toEqual([60]);
+  });
+
+  it('a partial payment and its remainder settle the bill across two shell runs', async () => {
+    const { deps, cardName } = await seedCardWithOpenBill();
+    const context = { runner, isTransientContention, conflictError };
+
+    const first = await runEffects(context, fullRegistry, payBillFlow(deps, cardName, 40));
+    expect(first._unsafeUnwrap()).toMatchObject({ status: BillStatus.enum.open, paidAmount: 40, remaining: 60 });
+
+    const second = await runEffects(context, fullRegistry, payBillFlow(deps, cardName));
+    expect(second._unsafeUnwrap()).toMatchObject({ status: BillStatus.enum.paid, paidAmount: 100, remaining: 0 });
+    expect(await countPaymentTransfers()).toBe(2);
   });
 });
 
@@ -2437,8 +2483,7 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
     await db.insert(tags).values(own({ id: tagId, name: `Tag ${tagId}`, version: 0 }));
     await db.insert(transactionTags).values({ transactionId: purchaseId, tagId });
 
-    // A paid bill: its own purchase plus the payment transfer, wired both ways
-    // (bill.payment_transaction_id <-> transfer.bill_id) exactly as payBill would leave it.
+    // A paid bill: its own purchase plus the payment transfer (transfer.bill_id), exactly as payBill would leave it.
     const paidBillId = randomUUID();
     await db.insert(bills).values(
       own({
@@ -2484,10 +2529,6 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       },
       `idem-${randomUUID()}`,
     );
-    await db
-      .update(bills)
-      .set({ paymentTransactionId: transferId })
-      .where(sql`${bills.id} = ${paidBillId}`);
 
     const deps: Deps = {
       accounts: accountsR,
@@ -2500,7 +2541,7 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       subCategories: {} as Deps['subCategories'],
       correlations: {} as Deps['correlations'],
       creditCards: creditCardsR,
-      currencies: {} as Deps['currencies'],
+      currencies: { list: async () => [] } as unknown as Deps['currencies'],
       currencyRates: {} as Deps['currencyRates'],
       dashboards: {} as Deps['dashboards'],
       health: {} as Deps['health'],
@@ -2527,7 +2568,7 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       .map(billAdapters.outcomeToDb)
       .map(transactionAdapters.outcomeToDb);
 
-  it('removes every correlated bill/transaction, breaks the paid bill<->transfer circular FK', async () => {
+  it('removes every correlated bill/transaction, the payment transfers of a paid bill included', async () => {
     const { deps, cardName, payerId } = await seedCardWithBillsAndTransactions();
 
     const result = await runEffects(

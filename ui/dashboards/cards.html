@@ -787,7 +787,7 @@
         }
 
         .compact-bill-row {
-            display: flex !important;
+            display: flex;
             flex-direction: column !important;
             align-items: flex-start !important;
             justify-content: center !important;
@@ -1237,6 +1237,14 @@
                         <span class="compact-bill-label" id="bill-total-label">Total da Fatura</span>
                         <span class="compact-bill-total-amount" id="bill-total-val">—</span>
                     </div>
+                    <div class="compact-bill-row" id="bill-paid-row" style="display: none;">
+                        <span class="compact-bill-label" data-i18n="bill_paid_label">Pagamento</span>
+                        <span class="compact-bill-value" id="bill-paid-val">—</span>
+                    </div>
+                    <div class="compact-bill-row" id="bill-remaining-row" style="display: none;">
+                        <span class="compact-bill-label" data-i18n="bill_remaining_label">Restante</span>
+                        <span class="compact-bill-value" id="bill-remaining-val">—</span>
+                    </div>
                 </div>
 
                 <!-- Bill Actions -->
@@ -1513,6 +1521,27 @@
         </div>
     </div>
 
+    <!-- MODAL: REVERT BILL PAYMENT -->
+    <div class="modal-overlay" id="modal-revert-payment">
+        <div class="modal-box">
+            <button class="modal-close-btn" onclick="closeModal('modal-revert-payment')"><i class="fa-solid fa-xmark"></i></button>
+            <div class="modal-title">
+                <i class="fa-solid fa-undo"></i>
+                <span data-i18n="revert_modal_title">Reverter Pagamento</span>
+            </div>
+            <form id="form-revert-payment" onsubmit="handleRevertSubmit(event)">
+                <div class="form-group">
+                    <label for="revert-payment" data-i18n="revert_payment_label">Pagamento a reverter</label>
+                    <select id="revert-payment" class="form-control" required></select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-revert-payment')" style="width:auto;" data-i18n="btn_cancel">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" style="width:auto;" data-i18n="revert_confirm">Reverter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL: PAY BILL -->
     <div class="modal-overlay" id="modal-pay-bill">
         <div class="modal-box">
@@ -1528,8 +1557,12 @@
                     <div id="pay-bill-cycle" style="font-size:0.85rem; color:var(--text-muted);">-</div>
                 </div>
                 <div class="form-group" style="text-align:center; padding: 1rem 0; background:rgba(0,0,0,0.2); border-radius:10px; border:1px dashed var(--panel-border);">
-                    <label style="margin-bottom:0;">Valor Total a Pagar</label>
+                    <label style="margin-bottom:0;" data-i18n="pay_remaining_label">Restante a Pagar</label>
                     <div id="pay-bill-total" style="font-size:1.8rem; font-weight:800; color:var(--income-color);">—</div>
+                </div>
+                <div class="form-group">
+                    <label for="pay-amount" data-i18n="pay_amount_label">Valor a Pagar Agora</label>
+                    <input type="number" id="pay-amount" step="any" min="0" class="form-control" required>
                 </div>
                 <div class="form-group">
                     <label for="pay-account">Débito na Conta Corrente</label>
@@ -1543,7 +1576,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-action-secondary" onclick="closeModal('modal-pay-bill')" style="width:auto;">Cancelar</button>
-                    <button type="submit" class="btn-action-primary" style="width:auto;">Confirmar Pagamento</button>
+                    <button type="submit" class="btn-action-primary" id="btn-pay-submit" style="width:auto;">Confirmar Pagamento</button>
                 </div>
             </form>
         </div>
@@ -2014,15 +2047,25 @@
 
             billTotalVal.textContent = fmtAmount;
 
+            renderBillPayments(b);
+            if (status === 'paid') clearUnfinishedPayment(payAttemptKey());
+
             // Handle actions visibility
-            if (status === 'paid') {
-                btnPayBill.style.display = 'none';
-                btnRevertPay.style.display = 'flex';
-            } else {
-                btnPayBill.style.display = 'flex';
-                btnRevertPay.style.display = 'none';
-                btnPayBill.disabled = (currentBill.total === 0);
-            }
+            btnRevertPay.style.display = (b.payments || []).length > 0 || status === 'paid' ? 'flex' : 'none';
+            btnPayBill.style.display = status === 'paid' ? 'none' : 'flex';
+            refreshPayButton();
+        }
+
+        function renderBillPayments(b) {
+            const paidAmount = b.paidAmount || 0;
+            const hasPayment = paidAmount > 0;
+            const format = (value) => window.formatMoney(value, activeCard.currency);
+            document.getElementById('bill-paid-row').style.display = hasPayment ? 'flex' : 'none';
+            document.getElementById('bill-remaining-row').style.display = hasPayment ? 'flex' : 'none';
+            document.getElementById('bill-paid-val').textContent = hasPayment
+                ? t('bill_paid_of').replace('{paid}', format(paidAmount)).replace('{total}', format(currentBill.total || 0))
+                : '';
+            document.getElementById('bill-remaining-val').textContent = hasPayment ? format(b.remaining || 0) : '';
         }
 
         // Toggle Table sorting
@@ -2964,19 +3007,29 @@
             }
         }
 
-        // Pay Bill Modal
+        // Pay Bill Modal: a bill with an unfinished payment concludes it before a new one is offered.
         function openPayModal() {
             if (!currentBill || !activeCard) return;
+            const pending = unfinishedPayment();
+            return pending ? concludePending(pending) : openPayForm();
+        }
 
+        function openPayForm() {
             document.getElementById('pay-card-name').textContent = activeCard.name;
             
-            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
             const b = currentBill.bill || {};
-            document.getElementById('pay-bill-cycle').textContent = `Ciclo de Fatura: ${monthNames[b.month - 1]} / ${b.year}`;
+            document.getElementById('pay-bill-cycle').textContent = tFill('pay_cycle_label', { month: monthLabel(b.month), year: b.year });
 
-            const fmtAmount = window.formatMoney(currentBill.total || 0, activeCard.currency);
-
-            document.getElementById('pay-bill-total').textContent = fmtAmount;
+            const remaining = b.remaining === undefined ? currentBill.total || 0 : b.remaining;
+            document.getElementById('pay-bill-total').textContent = window.formatMoney(remaining, activeCard.currency);
+            payTarget = { key: payAttemptKey(), token: newPayToken(), card: activeCard.name, month: b.month, year: b.year };
+            document.getElementById('btn-pay-submit').disabled = false;
+            const amountInput = document.getElementById('pay-amount');
+            const settlesWithoutPayment = remaining <= 0;
+            amountInput.disabled = settlesWithoutPayment;
+            amountInput.required = !settlesWithoutPayment;
+            amountInput.value = settlesWithoutPayment ? '' : String(remaining);
+            amountInput.max = settlesWithoutPayment ? '' : String(remaining);
 
             // Populate account select
             const accSelect = document.getElementById('pay-account');
@@ -2997,70 +3050,209 @@
                 accSelect.appendChild(opt);
             });
 
-            // Pre-fill payment date to today and set max to today
             const today = new Date();
             const yyyy = today.getFullYear();
             const mm = String(today.getMonth() + 1).padStart(2, '0');
             const dd = String(today.getDate()).padStart(2, '0');
             const todayStr = `${yyyy}-${mm}-${dd}`;
             const dateInput = document.getElementById('pay-date');
+            const fillDate = todayStr;
             if (dateInput._flatpickr) {
-                dateInput._flatpickr.setDate(todayStr, true);
+                dateInput._flatpickr.setDate(fillDate, true);
                 dateInput._flatpickr.set('maxDate', todayStr);
             } else {
-                dateInput.value = todayStr;
+                dateInput.value = fillDate;
                 dateInput.max = todayStr;
             }
 
             openModal('modal-pay-bill');
         }
 
-        // Pay Bill Submit
-        async function handlePaySubmit(e) {
-            e.preventDefault();
+        // Each deliberate payment is bound to its bill by a snapshot taken when the form opens (payTarget): key
+        // (card id, year, month), token, card name, month, year. Submit and resend use it, never the bill on screen.
+        var payTarget = null;
+        // Survives the fragment being run again when the page is navigated back to: the unsaved attempts held in
+        // memory (storage unavailable), whether storage failed, and which bills have a request in flight.
+        var paySession = (window.pattyCardsPay = window.pattyCardsPay || { attempts: {}, storageFailed: false, inFlight: {} });
+        var payInFlight = paySession.inFlight;
+        var PAY_OUTCOME = { done: 'done', refused: 'refused', unsettled: 'unsettled' };
+
+        function tFill(key, values) {
+            return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, value), t(key));
+        }
+
+        function monthLabel(month) {
+            const name = new Intl.DateTimeFormat(currentLocale, { month: 'long' }).format(new Date(2000, month - 1, 1));
+            return name.charAt(0).toUpperCase() + name.slice(1);
+        }
+        var PAY_ATTEMPTS_KEY = 'patty.cards.payAttempts';
+        function newPayToken() {
+            return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        }
+
+        function readPayAttempts() {
+            if (paySession.storageFailed) return paySession.attempts;
+            try {
+                return JSON.parse(sessionStorage.getItem(PAY_ATTEMPTS_KEY) || '{}') || {};
+            } catch (e) {
+                paySession.storageFailed = true;
+                return paySession.attempts;
+            }
+        }
+
+        function writePayAttempts(attempts) {
+            paySession.attempts = attempts;
+            try {
+                sessionStorage.setItem(PAY_ATTEMPTS_KEY, JSON.stringify(attempts));
+            } catch (e) {
+                paySession.storageFailed = true;
+            }
+        }
+
+        function payAttemptKey() {
+            const b = (currentBill && currentBill.bill) || {};
+            return `${activeCard.id}:${b.year}-${b.month}`;
+        }
+
+        function unfinishedPayment() {
+            return readPayAttempts()[payAttemptKey()] || null;
+        }
+
+        function saveUnfinishedPayment(key, attempt) {
+            writePayAttempts({ ...readPayAttempts(), [key]: attempt });
+        }
+
+        // With a token, only that attempt's entry goes: a late answer never clears a newer attempt of the bill.
+        function clearUnfinishedPayment(key, token) {
+            const { [key]: settled, ...others } = readPayAttempts();
+            if (token !== undefined && settled && settled.token !== token) return;
+            writePayAttempts(others);
+        }
+
+        function refreshPayButton() {
             if (!currentBill || !activeCard) return;
+            btnPayBill.disabled = currentBill.total === 0 || !!payInFlight[payAttemptKey()];
+        }
 
-            const payAccName = document.getElementById('pay-account').value;
-            const payDate = document.getElementById('pay-date').value;
-            const b = currentBill.bill || {};
+        // A non-positive remainder is settled without an amount (the API records no transfer for it).
+        function payBillBody(fields) {
+            const body = {
+                card: fields.card,
+                month: fields.month,
+                year: fields.year,
+                account: fields.account,
+                paymentDate: fields.date
+            };
+            if (fields.amount === undefined) return body;
+            return { ...body, amount: fields.amount, discriminator: fields.token };
+        }
 
-            closeModal('modal-pay-bill');
-            billLoading.classList.add('active');
-
+        // done: recorded. refused (4xx): the server rejected it, nothing was recorded.
+        // unsettled (network error, 5xx): unknown, the attempt stays so it is resent as it is.
+        async function sendPayment(attempt) {
+            payInFlight[attempt.key] = true;
+            refreshPayButton();
             try {
                 const res = await fetch('/api/bills/pay', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        card: activeCard.name,
-                        month: b.month,
-                        year: b.year,
-                        account: payAccName,
-                        paymentDate: payDate
-                    })
+                    body: JSON.stringify(payBillBody(attempt))
                 });
-
-                if (!res.ok) {
-                    const errRes = await res.json();
-                    throw new Error(errRes.error?.message || "Erro no pagamento");
-                }
-
-                showToast(`Fatura de ${activeCard.name} paga com sucesso!`, 'success');
-                await loadBillDetails();
+                if (res.ok) return { outcome: PAY_OUTCOME.done };
+                const errRes = await res.json().catch(() => ({}));
+                const message = (errRes.error && errRes.error.message) || t('pay_error_fallback');
+                const refused = res.status >= 400 && res.status < 500;
+                return { outcome: refused ? PAY_OUTCOME.refused : PAY_OUTCOME.unsettled, message };
             } catch (err) {
                 console.error("Pay bill error", err);
-                showToast(`Erro ao pagar fatura: ${err.message}`, 'error');
+                return { outcome: PAY_OUTCOME.unsettled, message: err.message };
+            } finally {
+                delete payInFlight[attempt.key];
+                refreshPayButton();
+            }
+        }
+
+        // Reports the result; true when the attempt is settled (recorded or refused) and its entry is gone.
+        function concludeAttempt(attempt, result) {
+            if (result.outcome === PAY_OUTCOME.unsettled) {
+                showToast(`${t('pay_pending_kept')} (${result.message})`, 'error');
+                return false;
+            }
+            clearUnfinishedPayment(attempt.key, attempt.token);
+            if (result.outcome === PAY_OUTCOME.done) {
+                showToast(t('toast_payment_recorded').replace('{card}', attempt.card), 'success');
+            } else {
+                showToast(tFill('pay_error_toast', { message: result.message }), 'error');
+            }
+            return true;
+        }
+
+        async function concludePending(attempt) {
+            if (payInFlight[attempt.key]) return showToast(t('pay_in_progress'), 'info');
+            showToast(t('pay_concluding'), 'info');
+            billLoading.classList.add('active');
+            try {
+                if (!concludeAttempt(attempt, await sendPayment(attempt))) return;
+                await loadBillDetails();
+            } finally {
+                billLoading.classList.remove('active');
+            }
+            const shown = currentBill && activeCard && currentBill.bill;
+            if (shown && payAttemptKey() === attempt.key && shown.status !== 'paid') openPayForm();
+        }
+
+        // Pay Bill Submit
+        async function handlePaySubmit(e) {
+            e.preventDefault();
+            const target = payTarget;
+            if (!target || payInFlight[target.key]) return;
+            payTarget = null;
+            document.getElementById('btn-pay-submit').disabled = true;
+
+            const amountInput = document.getElementById('pay-amount');
+            const attempt = {
+                ...target,
+                account: document.getElementById('pay-account').value,
+                date: document.getElementById('pay-date').value,
+                amount: amountInput.disabled ? undefined : Number(amountInput.value)
+            };
+            saveUnfinishedPayment(attempt.key, attempt);
+
+            closeModal('modal-pay-bill');
+            billLoading.classList.add('active');
+            try {
+                if (concludeAttempt(attempt, await sendPayment(attempt))) await loadBillDetails();
             } finally {
                 billLoading.classList.remove('active');
             }
         }
 
-        // Revert Bill Payment
-        async function revertBillPayment() {
+        function revertBillPayment() {
             if (!currentBill || !activeCard) return;
+            const payments = (currentBill.bill || {}).payments || [];
+            if (payments.length <= 1) return submitRevert(payments[0] && payments[0].id);
+
+            const select = document.getElementById('revert-payment');
+            select.innerHTML = '';
+            [...payments].reverse().forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = `${p.date} · ${window.formatMoney(p.amount, activeCard.currency)} · ${p.account || '—'}`;
+                select.appendChild(opt);
+            });
+            openModal('modal-revert-payment');
+        }
+
+        function handleRevertSubmit(e) {
+            e.preventDefault();
+            closeModal('modal-revert-payment');
+            return submitRevert(document.getElementById('revert-payment').value);
+        }
+
+        async function submitRevert(paymentId) {
             const b = currentBill.bill || {};
 
-            if (!confirm(`Deseja realmente reverter o pagamento da fatura de ${activeCard.name} (${b.month}/${b.year})?`)) {
+            if (!confirm(tFill('revert_confirm_text', { card: activeCard.name, month: b.month, year: b.year }))) {
                 return;
             }
 
@@ -3073,20 +3265,21 @@
                     body: JSON.stringify({
                         card: activeCard.name,
                         month: b.month,
-                        year: b.year
+                        year: b.year,
+                        ...(paymentId ? { paymentId } : {})
                     })
                 });
 
                 if (!res.ok) {
                     const errRes = await res.json();
-                    throw new Error(errRes.error?.message || "Erro ao reverter");
+                    throw new Error(errRes.error?.message || t('revert_error_fallback'));
                 }
 
-                showToast(`Pagamento da fatura revertido com sucesso!`, 'success');
+                showToast(t('revert_success'), 'success');
                 await loadBillDetails();
             } catch (err) {
                 console.error("Revert payment error", err);
-                showToast(`Erro ao reverter: ${err.message}`, 'error');
+                showToast(tFill('revert_error_toast', { message: err.message }), 'error');
             } finally {
                 billLoading.classList.remove('active');
             }
@@ -3295,6 +3488,25 @@ var TRANSLATIONS = {
         card_bill_details: "Card Bill Details",
         btn_pay_bill: "Pay Bill",
         btn_revert_payment: "Revert Payment",
+        bill_paid_label: "Payment",
+        bill_paid_of: "Paid {paid} of {total}",
+        bill_remaining_label: "Remaining",
+        pay_remaining_label: "Remaining to Pay",
+        pay_amount_label: "Amount to Pay Now",
+        revert_modal_title: "Revert Payment",
+        revert_payment_label: "Payment to revert",
+        revert_confirm: "Revert",
+        toast_payment_recorded: "Payment on the {card} bill recorded!",
+        pay_cycle_label: "Bill cycle: {month} / {year}",
+        pay_error_fallback: "Payment error",
+        pay_error_toast: "Error paying the bill: {message}",
+        revert_confirm_text: "Do you really want to revert the payment on the {card} bill ({month}/{year})?",
+        revert_error_fallback: "Error reverting",
+        revert_error_toast: "Error reverting: {message}",
+        revert_success: "Bill payment reverted!",
+        pay_concluding: "Concluding the pending payment…",
+        pay_pending_kept: "The pending payment could not be confirmed and was kept — check the connection and open Pay again",
+        pay_in_progress: "A payment on this bill is still being sent",
         bill_status: "Bill Status:",
         status_open: "Open",
         status_closed: "Closed",
@@ -3496,6 +3708,25 @@ var TRANSLATIONS = {
         card_bill_details: "Detalhamento de Fatura",
         btn_pay_bill: "Pagar Fatura",
         btn_revert_payment: "Estornar Pagamento",
+        bill_paid_label: "Pagamento",
+        bill_paid_of: "Pago {paid} de {total}",
+        bill_remaining_label: "Restante",
+        pay_remaining_label: "Restante a Pagar",
+        pay_amount_label: "Valor a Pagar Agora",
+        revert_modal_title: "Reverter Pagamento",
+        revert_payment_label: "Pagamento a reverter",
+        revert_confirm: "Reverter",
+        toast_payment_recorded: "Pagamento da fatura de {card} registrado!",
+        pay_cycle_label: "Ciclo de Fatura: {month} / {year}",
+        pay_error_fallback: "Erro no pagamento",
+        pay_error_toast: "Erro ao pagar fatura: {message}",
+        revert_confirm_text: "Deseja realmente reverter o pagamento da fatura de {card} ({month}/{year})?",
+        revert_error_fallback: "Erro ao reverter",
+        revert_error_toast: "Erro ao reverter: {message}",
+        revert_success: "Pagamento da fatura revertido com sucesso!",
+        pay_concluding: "Concluindo o pagamento pendente…",
+        pay_pending_kept: "O pagamento pendente não pôde ser confirmado e foi mantido — verifique a conexão e abra Pagar de novo",
+        pay_in_progress: "Um pagamento desta fatura ainda está sendo enviado",
         bill_status: "Status da Fatura:",
         status_open: "Aberta",
         status_closed: "Fechada",
@@ -3697,6 +3928,25 @@ var TRANSLATIONS = {
         card_bill_details: "Detalle de Factura",
         btn_pay_bill: "Pagar Factura",
         btn_revert_payment: "Revertir Pago",
+        bill_paid_label: "Pago",
+        bill_paid_of: "Pagado {paid} de {total}",
+        bill_remaining_label: "Restante",
+        pay_remaining_label: "Restante por Pagar",
+        pay_amount_label: "Monto a Pagar Ahora",
+        revert_modal_title: "Revertir Pago",
+        revert_payment_label: "Pago a revertir",
+        revert_confirm: "Revertir",
+        toast_payment_recorded: "Pago de la factura de {card} registrado.",
+        pay_cycle_label: "Ciclo de factura: {month} / {year}",
+        pay_error_fallback: "Error en el pago",
+        pay_error_toast: "Error al pagar la factura: {message}",
+        revert_confirm_text: "¿Realmente desea revertir el pago de la factura de {card} ({month}/{year})?",
+        revert_error_fallback: "Error al revertir",
+        revert_error_toast: "Error al revertir: {message}",
+        revert_success: "¡Pago de la factura revertido con éxito!",
+        pay_concluding: "Concluyendo el pago pendiente…",
+        pay_pending_kept: "El pago pendiente no pudo confirmarse y se conservó — revise la conexión y abra Pagar de nuevo",
+        pay_in_progress: "Un pago de esta factura aún se está enviando",
         bill_status: "Estado de la Factura:",
         status_open: "Abierta",
         status_closed: "Cerrada",

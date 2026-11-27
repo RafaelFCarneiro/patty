@@ -89,10 +89,22 @@ export type FragmentSandbox = {
   // A browser-global script's top-level names, read and driven by the tests.
   sandbox: Record<string, any>;
   document: ReturnType<typeof makeStubDocument>;
+  // Runs the fragment's script again in the same window, as the shell does when the page is navigated back to.
+  reload(): void;
   charts: { type: string; data: { labels: string[]; datasets: { data: number[]; label?: string }[] } }[];
 };
 
-export const loadFragment = (name: string, { baseCurrency }: { baseCurrency?: string } = {}): FragmentSandbox => {
+export type SessionStorageStub = { getItem(key: string): string | null; setItem(key: string, value: string): void };
+
+export const makeSessionStorage = (): SessionStorageStub => {
+  const items = new Map<string, string>();
+  return { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => void items.set(key, value) };
+};
+
+export const loadFragment = (
+  name: string,
+  { baseCurrency, sessionStorage }: { baseCurrency?: string; sessionStorage?: SessionStorageStub } = {},
+): FragmentSandbox => {
   const document = makeStubDocument();
   const charts: FragmentSandbox['charts'] = [];
   const sandbox: Record<string, unknown> = {
@@ -129,6 +141,7 @@ export const loadFragment = (name: string, { baseCurrency }: { baseCurrency?: st
       destroy() {}
     },
   };
+  if (sessionStorage) sandbox.sessionStorage = sessionStorage;
   sandbox.window = sandbox;
   sandbox.location = { pathname: `/ui/${name}`, search: '' };
   sandbox.history = { pushState() {} };
@@ -140,6 +153,7 @@ export const loadFragment = (name: string, { baseCurrency }: { baseCurrency?: st
 
   const html = readFileSync(dashboardPath(name), 'utf-8');
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
-  vm.runInContext(script, sandbox, { filename: dashboardPath(name) });
-  return { sandbox, document, charts };
+  const reload = () => void vm.runInContext(script, sandbox, { filename: dashboardPath(name) });
+  reload();
+  return { sandbox, document, charts, reload };
 };

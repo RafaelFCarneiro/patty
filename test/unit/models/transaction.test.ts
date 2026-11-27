@@ -80,6 +80,10 @@ describe('transactionErrors — confirm-with-edit (Design 014 phase B)', () => {
     }
   });
 
+  it('confirmBilledAmountNotAllowed names the card-transaction update as its remedy', () => {
+    expect(transactionErrors.confirmBilledAmountNotAllowed.remedy).toBe(Remedy.enum.update_card_transaction);
+  });
+
   it('confirmEditNotAllowedForTransfer names the account-transaction update as its remedy, in no edge’s words', () => {
     expect(transactionErrors.confirmEditNotAllowedForTransfer.code).toBe('validation');
     expect(transactionErrors.confirmEditNotAllowedForTransfer.remedy).toBe(Remedy.enum.update_account_transaction);

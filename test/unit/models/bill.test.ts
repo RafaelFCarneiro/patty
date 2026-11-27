@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { BillQuerySchema, BillSchema, PayBillSchema } from '../../../src/models/bill.js';
-import { BillQuery as WireBillQuery, PayBill as WirePayBill } from '../../../src/wire/in/bills.js';
+import {
+  BillQuerySchema,
+  BillSchema,
+  PayBillSchema,
+  RevertBillPaymentSchema,
+  SettledBillSchema,
+} from '../../../src/models/bill.js';
+import {
+  BillQuery as WireBillQuery,
+  PayBill as WirePayBill,
+  RevertBillPayment as WireRevertBillPayment,
+} from '../../../src/wire/in/bills.js';
 
 describe('BillSchema', () => {
   it('parses a valid bill', () => {
@@ -109,6 +119,61 @@ describe('PayBillSchema (model — extends BillQuerySchema)', () => {
     expect(PayBillSchema.safeParse({ card: 'Nubank', month: 6, year: 2025, paymentDate: '06/15/2025' }).success).toBe(
       false,
     );
+  });
+});
+
+describe('PayBillSchema — partial payment inputs', () => {
+  const base = { card: 'Nubank', month: 6, year: 2025 };
+
+  it('accepts a positive amount and a discriminator', () => {
+    expect(PayBillSchema.safeParse({ ...base, amount: 40.5, discriminator: 'second' }).success).toBe(true);
+  });
+
+  it.each([0, -5])('rejects an amount of %s', (amount) => {
+    expect(PayBillSchema.safeParse({ ...base, amount }).success).toBe(false);
+  });
+
+  it('rejects an empty discriminator', () => {
+    expect(PayBillSchema.safeParse({ ...base, discriminator: '' }).success).toBe(false);
+  });
+
+  it('is carried through the wire schema unchanged', () => {
+    const result = WirePayBill.safeParse({ ...base, month: '6', year: '2025', amount: 40, discriminator: 'x' });
+    expect(result.success && result.data).toMatchObject({ amount: 40, discriminator: 'x' });
+  });
+});
+
+describe('RevertBillPaymentSchema', () => {
+  const base = { card: 'Nubank', month: 6, year: 2025 };
+
+  it('takes an optional paymentId, in the model and on the wire', () => {
+    expect(RevertBillPaymentSchema.safeParse(base).success).toBe(true);
+    expect(RevertBillPaymentSchema.safeParse({ ...base, paymentId: 'tx-1' }).success).toBe(true);
+    expect(WireRevertBillPayment.safeParse({ ...base, paymentId: 'tx-1' }).success).toBe(true);
+  });
+
+  it('rejects an empty paymentId', () => {
+    expect(RevertBillPaymentSchema.safeParse({ ...base, paymentId: '' }).success).toBe(false);
+  });
+});
+
+describe('SettledBillSchema', () => {
+  const bill = { id: 'b1', month: 6, year: 2025, closeDate: '2025-06-28', dueDate: '2025-07-05', status: 'closed' };
+
+  it('adds what is paid, what remains and the payments to the stored bill', () => {
+    const result = SettledBillSchema.safeParse({
+      ...bill,
+      paidAmount: 60,
+      remaining: 40,
+      partiallyPaid: true,
+      payments: [{ id: 'tx-1', date: '2025-06-10', amount: 60, account: 'Checking' }],
+      paymentTransactionId: 'tx-1',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('requires the settlement fields', () => {
+    expect(SettledBillSchema.safeParse(bill).success).toBe(false);
   });
 });
 

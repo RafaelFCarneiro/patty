@@ -17,14 +17,16 @@ import {
   updateCardTransaction,
 } from '../../../controllers/credit-card/transaction.js';
 import { buildBulkResult } from '../../../controllers/transaction/bulk.js';
-import { BillSchema } from '../../../models/bill.js';
+import { SettledBillSchema } from '../../../models/bill.js';
 import { CreditCardSchema } from '../../../models/credit-card.js';
 import { TransactionSource, TransactionViewSchema } from '../../../models/transaction.js';
 import {
   BillQuery,
   PayBill,
+  RevertBillPayment,
   type BillQuery as BillQueryType,
   type PayBill as PayBillType,
+  type RevertBillPayment as RevertBillPaymentType,
 } from '../../../wire/in/bills.js';
 import * as wireInCreditCards from '../../../wire/in/credit-cards.js';
 import { BillViewOut } from '../../../wire/out/bills.js';
@@ -211,9 +213,14 @@ const payBillRoute: RouteDefinition = {
   ...REMEDY_ROUTE.pay_bill,
   scope: WRITE_SCOPE,
   tags: [BILLS_TAG],
-  summary: 'Pay a credit card bill',
+  summary: 'Pay a credit card bill, whole or in part',
   request: { body: jsonBody(PayBill) },
-  responses: { 200: okResponse('Bill paid', BillSchema), 404: notFound404, 409: conflict409, 422: validation422 },
+  responses: {
+    200: okResponse('Payment recorded', SettledBillSchema),
+    404: notFound404,
+    409: conflict409,
+    422: validation422,
+  },
   handler: async (req, reply, scope) => {
     const { deps, runEffects } = scope();
     const input = parse(PayBill, req.body, reply) as PayBillType;
@@ -230,17 +237,20 @@ const revertBillPaymentRoute: RouteDefinition = {
   ...REMEDY_ROUTE.revert_bill_payment,
   scope: WRITE_SCOPE,
   tags: [BILLS_TAG],
-  summary: 'Revert a credit card bill payment',
-  request: { body: jsonBody(BillQuery) },
+  summary: 'Undo one credit card bill payment',
+  request: { body: jsonBody(RevertBillPayment) },
   responses: {
-    200: okResponse('Bill payment reverted (or no-op if not paid)', BillSchema),
+    200: okResponse(
+      'Payment reverted (or no-op when there is no such payment, so a repeat is safe)',
+      SettledBillSchema,
+    ),
     404: notFound404,
     409: conflict409,
     422: validation422,
   },
   handler: async (req, reply, scope) => {
     const { deps, runEffects } = scope();
-    const input = parse(BillQuery, req.body, reply) as BillQueryType;
+    const input = parse(RevertBillPayment, req.body, reply) as RevertBillPaymentType;
     if (!input) return reply;
     const flow = () =>
       revertBillPayment(deps, input).map(billAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb);

@@ -25,7 +25,6 @@ const toRawBill = (record: Record<string, unknown>): RawBill => {
     closeDate: row.close_date,
     dueDate: row.due_date,
     status: row.status,
-    paymentTransactionId: row.payment_transaction_id ?? undefined,
     version: row.version,
   });
 };
@@ -50,8 +49,7 @@ export type BillsRepo = {
   /** Lightweight cycle lookup (no card-name join, no transaction items). */
   findByCycle: (cardId: string, month: number, year: number) => Promise<RawBill | null>;
   findById: (billId: string) => Promise<RawBill | null>;
-  /** Every bill ever opened for a card, version-carrying — `deleteCreditCard` decides which of
-   *  these to remove (and which need `paymentTransactionId` cleared first) as its own
+  /** Every bill ever opened for a card, version-carrying — `deleteCreditCard` removes them as its own
    *  `Persistable`s. */
   findAllByCard: (cardId: string) => Promise<RawBill[]>;
 };

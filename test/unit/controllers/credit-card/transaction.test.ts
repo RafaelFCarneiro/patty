@@ -39,7 +39,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   categories: {} as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
   correlations: {} as Deps['correlations'],
-  creditCards: {} as Deps['creditCards'],
+  creditCards: { findById: async () => card() } as unknown as Deps['creditCards'],
   currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
   currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
@@ -608,6 +608,7 @@ describe('updateCardTransaction / deleteCardTransaction — bill-payment transfe
       transactions: { getById: async () => paymentTransfer } as unknown as Deps['transactions'],
       accounts: { findById } as unknown as Deps['accounts'],
       bills: {
+        get: async () => null,
         findById: async () => ({ id: 'bill-1', status: BillStatus.enum.paid }),
       } as unknown as Deps['bills'],
     });
@@ -639,6 +640,7 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
       // Throwing stand-ins prove these are never called for a non-reassignment update — matches
       // the pre-conversion behavior, where only billMonth/billYear reassignment ever reads a bill.
       bills: {
+        get: async () => null,
         findById: () => {
           throw new Error('must not read a bill for a non-reassignment update');
         },
@@ -648,7 +650,7 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
       } as unknown as Deps['bills'],
     });
 
-    const result = await updateCardTransaction(deps, { id: 'tx-1', amount: 99 });
+    const result = await updateCardTransaction(deps, { id: 'tx-1', description: 'Renamed' });
 
     expect(result.isOk()).toBe(true);
     const { persist } = result._unsafeUnwrap();
@@ -664,6 +666,7 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
       accounts: creditAccountsById as unknown as Deps['accounts'],
       creditCards: { findById: async () => card() } as unknown as Deps['creditCards'],
       bills: {
+        get: async () => null,
         findById: async () => currentBill,
         findByCycle: async () => targetBill,
       } as unknown as Deps['bills'],
@@ -696,6 +699,7 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
       accounts: creditAccountsById as unknown as Deps['accounts'],
       creditCards: { findById: async () => card() } as unknown as Deps['creditCards'],
       bills: {
+        get: async () => null,
         findById: async () => currentBill,
         findByCycle: async () => null,
       } as unknown as Deps['bills'],
@@ -717,6 +721,7 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
       accounts: creditAccountsById as unknown as Deps['accounts'],
       creditCards: { findById: async () => card() } as unknown as Deps['creditCards'],
       bills: {
+        get: async () => null,
         findById: async () => currentBill,
         findByCycle: async () => currentBill,
       } as unknown as Deps['bills'],
@@ -735,7 +740,10 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
     const deps = makeDeps({
       transactions: { getById: async () => cardOwnedTx } as unknown as Deps['transactions'],
       accounts: creditAccountsById as unknown as Deps['accounts'],
-      bills: { findById: async () => rawBill({ status: BillStatus.enum.paid }) } as unknown as Deps['bills'],
+      bills: {
+        get: async () => null,
+        findById: async () => rawBill({ status: BillStatus.enum.paid }),
+      } as unknown as Deps['bills'],
     });
 
     const result = await updateCardTransaction(deps, { id: 'tx-1', billMonth: 7, billYear: 2026 });
@@ -752,6 +760,7 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
       accounts: creditAccountsById as unknown as Deps['accounts'],
       creditCards: { findById: async () => card() } as unknown as Deps['creditCards'],
       bills: {
+        get: async () => null,
         findById: async () => rawBill({ id: 'bill-1' }),
         findByCycle: async () => rawBill({ id: 'bill-2', status: BillStatus.enum.paid }),
       } as unknown as Deps['bills'],
@@ -772,7 +781,11 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
       transactions: { getById: async () => cardOwnedTx } as unknown as Deps['transactions'],
       accounts: creditAccountsById as unknown as Deps['accounts'],
       creditCards: { findById: async () => card() } as unknown as Deps['creditCards'],
-      bills: { findById: async () => currentBill, findByCycle: async () => targetBill } as unknown as Deps['bills'],
+      bills: {
+        get: async () => null,
+        findById: async () => currentBill,
+        findByCycle: async () => targetBill,
+      } as unknown as Deps['bills'],
     });
 
     const result = await updateCardTransaction(deps, { id: 'tx-1', billMonth: 7, billYear: 2026 });
@@ -864,6 +877,7 @@ describe('updateCardTransaction — merchant learning (ADR-021 rule 5)', () => {
       categories: { list: async () => [newCategory] } as unknown as Deps['categories'],
       creditCards: { findById: async () => card() } as unknown as Deps['creditCards'],
       bills: {
+        get: async () => null,
         findById: async () => currentBill,
         findByCycle: async () => currentBill,
       } as unknown as Deps['bills'],
@@ -902,7 +916,7 @@ describe('updateCardTransaction — tag-set resolution (ADR-023 step 2)', () => 
       } as unknown as Deps['tags'],
     });
 
-    const result = await updateCardTransaction(deps, { id: 'tx-1', amount: 42 });
+    const result = await updateCardTransaction(deps, { id: 'tx-1', description: 'Renamed' });
 
     const { persist } = result._unsafeUnwrap();
     expect(persist.some((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toBe(false);
@@ -931,7 +945,7 @@ describe('deleteCardTransaction — guards + is returned as data (ADR-021 phase 
     const deps = makeDeps({
       transactions: { getById: async () => cardOwnedTx } as unknown as Deps['transactions'],
       accounts: creditAccountsById as unknown as Deps['accounts'],
-      bills: { findById: async () => rawBill() } as unknown as Deps['bills'],
+      bills: { get: async () => null, findById: async () => rawBill() } as unknown as Deps['bills'],
     });
 
     const result = await deleteCardTransaction(deps, { id: 'tx-1', confirm: false });
@@ -947,7 +961,7 @@ describe('deleteCardTransaction — guards + is returned as data (ADR-021 phase 
     const deps = makeDeps({
       transactions: { getById: async () => cardOwnedTx } as unknown as Deps['transactions'],
       accounts: creditAccountsById as unknown as Deps['accounts'],
-      bills: { findById: async () => bill } as unknown as Deps['bills'],
+      bills: { get: async () => null, findById: async () => bill } as unknown as Deps['bills'],
     });
 
     const result = await deleteCardTransaction(deps, { id: 'tx-1', confirm: true });
@@ -972,7 +986,10 @@ describe('deleteCardTransaction — guards + is returned as data (ADR-021 phase 
     const deps = makeDeps({
       transactions: { getById: async () => cardOwnedTx } as unknown as Deps['transactions'],
       accounts: creditAccountsById as unknown as Deps['accounts'],
-      bills: { findById: async () => rawBill({ status: BillStatus.enum.paid }) } as unknown as Deps['bills'],
+      bills: {
+        get: async () => null,
+        findById: async () => rawBill({ status: BillStatus.enum.paid }),
+      } as unknown as Deps['bills'],
     });
 
     const result = await deleteCardTransaction(deps, { id: 'tx-1', confirm: true });
@@ -981,5 +998,177 @@ describe('deleteCardTransaction — guards + is returned as data (ADR-021 phase 
     const error757 = result._unsafeUnwrapErr();
     expect(error757.code).toBe('validation');
     expect((error757 as ValidationError).remedy).toBe(Remedy.enum.revert_bill_payment);
+  });
+});
+
+describe('an edit that changes the total of a paid bill is refused (Feature Design 025 §7)', () => {
+  const purchase: RawTransactionView = { ...cardOwnedTx, id: 'purchase', amount: 100, type: 'expense' };
+  const depsOn = (status: BillStatus, target: RawTransactionView = purchase): Deps =>
+    makeDeps({
+      clock: () => new Date('2026-06-15'),
+      transactions: { getById: async () => target } as unknown as Deps['transactions'],
+      accounts: {
+        findById: async () => account({ id: 'acc-card-internal', type: AccountType.enum.credit }),
+      } as unknown as Deps['accounts'],
+      bills: {
+        findById: async () => rawBill({ status }),
+        findByCycle: async () => rawBill({ status }),
+        get: async () => ({ bill: rawBill({ status }), cardName: 'Test Card', transactions: [purchase] }),
+      } as unknown as Deps['bills'],
+    });
+
+  it('raising or lowering the amount, or changing the type, is refused with the paid-bill error', async () => {
+    const deps = depsOn(BillStatus.enum.paid);
+
+    const results = await Promise.all([
+      updateCardTransaction(deps, { id: 'purchase', amount: 150 }),
+      updateCardTransaction(deps, { id: 'purchase', amount: 50 }),
+      updateCardTransaction(deps, { id: 'purchase', type: 'income' }),
+    ]);
+
+    results.forEach((result) =>
+      expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation', remedy: Remedy.enum.revert_bill_payment }),
+    );
+  });
+
+  it('changing the description or the category is allowed', async () => {
+    const deps = depsOn(BillStatus.enum.paid);
+
+    expect((await updateCardTransaction(deps, { id: 'purchase', description: 'Renamed' })).isOk()).toBe(true);
+    expect((await updateCardTransaction(deps, { id: 'purchase', note: 'memo' })).isOk()).toBe(true);
+  });
+
+  it('the same amount edit on a bill that is not paid is allowed', async () => {
+    const result = await updateCardTransaction(depsOn(BillStatus.enum.closed), { id: 'purchase', amount: 150 });
+
+    expect(result.isOk()).toBe(true);
+  });
+});
+
+describe('a bill whose payments exceed its new total is refused (Feature Design 025 §7)', () => {
+  const purchase: RawTransactionView = { ...cardOwnedTx, id: 'purchase', amount: 100, type: 'expense' };
+  const payment: RawTransactionView = {
+    ...baseTx,
+    id: 'payment',
+    type: 'transfer',
+    amount: 60,
+    cardId: undefined,
+    billId: 'bill-1',
+    accountId: 'acc-payer',
+    toAccountId: 'acc-card-internal',
+  };
+  const partlyPaidDeps = (targetTransaction: RawTransactionView, extra: Partial<Deps> = {}): Deps =>
+    makeDeps({
+      transactions: { getById: async () => targetTransaction } as unknown as Deps['transactions'],
+      accounts: {
+        findById: async () => account({ id: 'acc-card-internal', type: AccountType.enum.credit }),
+      } as unknown as Deps['accounts'],
+      bills: {
+        findById: async () => rawBill(),
+        findByCycle: async () => rawBill(),
+        get: async () => ({ bill: rawBill(), cardName: 'Test Card', transactions: [purchase, payment] }),
+      } as unknown as Deps['bills'],
+      ...extra,
+    });
+  const refused = (error: unknown) => {
+    expect(error).toMatchObject({ code: 'validation', remedy: Remedy.enum.revert_bill_payment });
+    expect((error as ValidationError).issues[0]).toContain('below what is already paid (60)');
+  };
+
+  it('deleting the purchase that the payment covers is refused', async () => {
+    const result = await deleteCardTransaction(partlyPaidDeps(purchase), { id: 'purchase', confirm: true });
+
+    refused(result._unsafeUnwrapErr());
+  });
+
+  it('lowering a purchase below what is paid is refused; raising it or staying above is allowed', async () => {
+    const deps = partlyPaidDeps(purchase);
+
+    refused((await updateCardTransaction(deps, { id: 'purchase', amount: 50 }))._unsafeUnwrapErr());
+    expect((await updateCardTransaction(deps, { id: 'purchase', amount: 60 })).isOk()).toBe(true);
+    expect((await updateCardTransaction(deps, { id: 'purchase', amount: 500 })).isOk()).toBe(true);
+  });
+
+  it('an amount edit that stays on the bill writes the bill back under its version', async () => {
+    const result = await updateCardTransaction(partlyPaidDeps(purchase), { id: 'purchase', amount: 500 });
+
+    const { persist } = result._unsafeUnwrap();
+    expect(persist.filter((p) => p.entity === 'bill')).toEqual([
+      expect.objectContaining({ op: PersistOp.enum.update, entity: 'bill' }),
+    ]);
+  });
+
+  it('turning the purchase into a refund is refused', async () => {
+    const result = await updateCardTransaction(partlyPaidDeps(purchase), { id: 'purchase', type: 'income' });
+
+    refused(result._unsafeUnwrapErr());
+  });
+
+  it('moving the purchase to another bill is refused when it leaves the payments uncovered', async () => {
+    const deps = partlyPaidDeps(purchase);
+    const otherBill = rawBill({ id: 'bill-2', month: 7 });
+    const moving = {
+      ...deps,
+      bills: { ...deps.bills, findByCycle: async () => otherBill } as unknown as Deps['bills'],
+    };
+
+    const result = await updateCardTransaction(moving, { id: 'purchase', billMonth: 7, billYear: 2026 });
+
+    refused(result._unsafeUnwrapErr());
+  });
+
+  it('repeating a refund already on the bill is a no-op, not a second refund', async () => {
+    const input = { description: 'Refund', amount: 30, date: '2026-06-15', card: 'Test Card', type: 'income' as const };
+    const withCard = {
+      creditCards: { list: async () => [card()], findById: async () => card() } as unknown as Deps['creditCards'],
+    };
+    const base = partlyPaidDeps(purchase, { clock: () => new Date('2026-06-15'), ...withCard });
+    const first = (await addCardPurchase(base, input, TransactionSource.enum.mcp))._unsafeUnwrap();
+    const refund: RawTransactionView = {
+      ...purchase,
+      id: 'refund',
+      type: 'income',
+      amount: 30,
+      idempotencyKey: idempotencyKeyOfPurchase(first.persist),
+    };
+    const replayDeps = {
+      ...base,
+      bills: {
+        ...base.bills,
+        get: async () => ({ bill: rawBill(), cardName: 'Test Card', transactions: [purchase, refund, payment] }),
+      } as unknown as Deps['bills'],
+    };
+
+    const replay = await addCardPurchase(replayDeps, input, TransactionSource.enum.mcp);
+    const another = await addCardPurchase(
+      replayDeps,
+      { ...input, description: 'Other refund' },
+      TransactionSource.enum.mcp,
+    );
+
+    expect(replay.isOk()).toBe(true);
+    refused(another._unsafeUnwrapErr());
+  });
+
+  it('a refund that brings the total below what is paid is refused; a purchase is not', async () => {
+    const deps = partlyPaidDeps(purchase, { clock: () => new Date('2026-06-15') });
+    const input = { description: 'Refund', amount: 50, date: '2026-06-15', card: 'Test Card' };
+    const withCard = {
+      creditCards: { list: async () => [card()], findById: async () => card() } as unknown as Deps['creditCards'],
+    };
+    const refundDeps = { ...deps, ...withCard };
+
+    refused(
+      (await addCardPurchase(refundDeps, { ...input, type: 'income' }, TransactionSource.enum.mcp))._unsafeUnwrapErr(),
+    );
+    expect((await addCardPurchase(refundDeps, { ...input, type: 'expense' }, TransactionSource.enum.mcp)).isOk()).toBe(
+      true,
+    );
+  });
+
+  it('the payment transfer itself cannot be deleted here, even while the bill is not paid', async () => {
+    const result = await deleteCardTransaction(partlyPaidDeps(payment), { id: 'payment', confirm: true });
+
+    expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation', remedy: Remedy.enum.revert_bill_payment });
   });
 });

@@ -4,7 +4,9 @@
 **Implementation status:** In progress · **Branch:** `feat/bill-payment-lifecycle` ·
 **Date:** 2026-07-03 · Builds on Feature Design 003 (credit-card bill payment) and **ADR-010**
 (credit cards as liability accounts; bill payment = canonical transfer). Preserves ADR-002 (transfers) and
-follows ADR-012 (per-model errors).
+follows ADR-012 (per-model errors). **Revised by Feature Design 025 (partial bill payment):** a bill has any
+number of payments, read from its transfers; `bills.payment_transaction_id` no longer exists, and
+`revert_bill_payment` undoes one payment. This document describes the all-or-nothing design it replaced.
 
 > **Implementation status** tracks delivery, distinct from the design's acceptance. Values:
 > `Not started` · `In progress` · `Done` · `Blocked`. The implementing PR updates this line (→ `In progress`

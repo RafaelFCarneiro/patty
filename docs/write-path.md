@@ -74,8 +74,10 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   that call's promise onto the batch's `cachedDeps` the same way it already does for `deps.locale()`, so an
   N-line import performs one currency-list read, not N, while each line still independently resolves its own
   real account/card and currency (no batch-level account/decimals pre-resolution the way it used to). `recurringIdempotencyKey` (`rec-<ruleId>-<date>`, `controllers/recurring.ts`) and the
-  bill-payment transfer's `billpay-<billId>` (`logic/bill.ts`'s `billPaymentKey`, planned by `planBillPayment`) are unrelated, hand-built keys
-  for internally-generated writes that never go through `CreateTransactionSchema` — outside this derivation.
+  legacy bill-payment `billpay-<billId>` keys (rows written before Feature Design 025) are unrelated, hand-built keys
+  for internally-generated writes that never go through `CreateTransactionSchema` — outside this derivation. A bill payment's key
+  is derived too (`logic/bill.ts`'s `billPaymentKey`, planned by `planBillPayment`): sha256 over `joinUnambiguously([bill id, date,
+  amount rounded to the currency's decimals, discriminator?])`, so repeating a payment dedups and a `discriminator` separates two identical ones.
   **One-time key-format discontinuity**: a statement re-imported after this landed won't dedup against
   pre-existing readable-format keys (possible duplicates of previously-imported rows) — accepted at personal
   scale, no backfill (old single-add keys were arbitrary caller strings with no canonical mapping to a hash).
@@ -88,9 +90,7 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   `runEffects(flow)` still takes one argument.
 - **`entityDbAdapter(entityTag, modelToDb)`** (`logic/persistence.ts`) builds an entity's `persistableToDb`/
   `outcomeToDb` pair from just its `modelToDb`, so each adapter module is one line; an entity whose model matches
-  its row 1:1 (`tags`) supplies the identity `modelToDb`. Exception: `adapters/bills.ts` hand-writes its own,
-  because a bill `update` needs `paymentTransactionId: undefined` (leave the column unchanged) to differ from
-  `null` (clear it) — an asymmetry the uniform factory can't express.
+  its row 1:1 (`tags`, `bills`) supplies the identity `modelToDb`.
 - **Exception — the demo seeder is adapted once at the composition root too.** `composition/demo/seed.ts` runs one flow after
   another through one runner, so `adapters/demo.ts`'s `outcomeToDb` (every entity's `entityDbAdapter` pair applied in turn —
   each rewrites only its own tag) is applied to each flow's outcome there, exactly as for the auth flows below; the
@@ -313,9 +313,9 @@ the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
   (`controllers/credit-card/credit-card.ts`) reads every correlated bill and transaction (`billsRepo.findAllByCard`,
   `transactionsRepo.findAllCorrelatedToCard` — the `correlatedToCard` predicate lives in the transactions repo,
   reused by `creditCardsRepo.countCorrelated`) and emits their `Persistable`s in FK-safe order:
-  `[...bill payment-clears, ...transaction removals, ...bill removals, remove creditCard, remove account]`. A bill
-  this batch already cleared is removed at `bill.version + 1` (the version the shell will have bumped it to by the
-  time that delete applies). `createCreditCard` is the mirror two-entity insert `[account, creditCard]`.
+  `[...transaction removals, ...bill removals, remove creditCard, remove account]`. Every payment transfer of every bill
+  is among the correlated transactions (it pays into the card's account), so nothing needs clearing first: a bill row
+  no longer points at its payment. `createCreditCard` is the mirror two-entity insert `[account, creditCard]`.
   (History — why the applier no longer cascades: ADR-021 / ADR-023.)
 - **`updateCreditCard`** (`controllers/credit-card/credit-card.ts`, Feature Design 014 phase C, mirrors
   `updateAccount`) — a rename (`newName`) is a two-entity `update` batch, `[account, creditCard]` (same order as
@@ -327,12 +327,20 @@ the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
   `isCardRename` type-predicate decides this the same way `updateAccount` already does for the card's own name —
   because a case-only rename's target internal-account name always case-insensitively matches the account's
   *own* current name, and would otherwise self-collide against itself in `findByName`.
-- **`payBill`/`revertBillPayment`** (`controllers/credit-card/bill.ts`) — plain `response` (both mint and read
-  everything the response needs before building the batch). FK direction reverses the batch order between them:
-  `payBill`'s positive-total batch = `[transfer insert, bill update]` (the bill points `payment_transaction_id`
-  at the transfer; a non-positive total has no transfer, so the batch is just `[bill update]`);
-  `revertBillPayment` = `[bill update clearing the pointer, transfer remove]`. `BillEntity.paymentTransactionId`
-  distinguishes `undefined` (leave unchanged) from `null` (clear). `BillsRepo` is read-only like every repo.
+- **`payBill`/`revertBillPayment`** (`controllers/credit-card/bill.ts`, Feature Design 025) — plain `response` (both mint and read
+  everything the response needs before building the batch). `loadBillContext` reads the bill's version first (`findByCycle`), then the bill with its transactions (`get`), so a payment landing in between conflicts instead of passing the amount guard on stale data;
+  the pure `logic/bill.ts` derives the payments and the settlement from them. `payBill` = `[transfer insert, bill update]`:
+  the transfer carries the chosen `amount` and its derived key, and the bill is **always written** — `status: paid` when the
+  payment brings `remaining` to 0, otherwise unchanged — because the bill's derived state (`paidAmount`) changes with every
+  payment and the update's version guard is what makes two concurrent payments conflict, so the loser re-reads and
+  cannot overpay (a `persistence.check` would not: it bumps nothing, so two payments checking one version both pass,
+  the same reason a card purchase touches its bill). A call whose derived key is already among the bill's payments
+  answers the settled bill with an empty batch (checked before the amount guard, so a repeat is a no-op even when
+  it would now exceed `remaining`); a non-positive `remaining` on an unpaid bill is just `[bill update to paid]`.
+  `revertBillPayment` = `[bill update, transfer remove]` for the chosen payment (version read off the bill's own
+  transactions), the update flipping `paid → closed`. `guardTotalCoversPaid` is the same read for the card-transaction
+  flows: a purchase refund, an edit or a delete is refused when the bill's new total would fall below `paidAmount`.
+  `BillsRepo` is read-only like every repo.
 - **`confirmTransaction`** (`controllers/transaction/core.ts`, Feature Design 014 phase B) now routes an edit
   (`amount`/`date`) plus the status flip through a single version-guarded `update`, instead of hand-rebuilding the
   entity with only `status` overridden. It stays a thin core flow, not a delegation to
@@ -340,7 +348,9 @@ the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
   table), so their guards (`assertAccountOwnedLegs`, `guardTransferMutability`, the bill-payment block) are
   unreachable from here. Immutability is enforced directly instead, via the core-visible `isTransfer`
   (`logic/transaction.ts`, `type === 'transfer'`, ADR-002): an edit is rejected when the transaction is a
-  transfer or bill-payment (`transactionErrors.confirmEditNotAllowedForTransfer`), but a plain status-only
+  transfer or bill-payment (`transactionErrors.confirmEditNotAllowedForTransfer`) or when it changes the `amount` of a
+  transaction on a bill (`confirmBilledAmountNotAllowed`: the core cannot apply the bill rules, so the card update does; an amount equal to the stored one is accepted),
+  but a plain status-only
   confirm of one still goes through — this is marginally stricter than `update_account_transaction` (which
   permits editing a *regular* transfer's amount), a deliberate trade documented in the design rather than a gap.
   The future-date guard (`transactionErrors.cannotConfirmFutureDated`, invariant 20 in `docs/architecture.md`)
@@ -388,6 +398,6 @@ the second line. `test/integration/tenancy/scoped-writes.test.ts` pins it.
   by date, classification, entity, idempotency key) and `mergePatch` (`updateAccountTransaction`/
   `updateCardTransaction`: the patch laid over `existing`, with the account or bill the aggregate decided on);
   `logic/account.ts`'s `planTransfer` (`createTransfer`) and `mergeAccountPatch`/`guardPinnedFields`
-  (`updateAccount`); `logic/bill.ts`'s `planBillPayment` (`payBill`: the transfer entity and its `billpay-` key).
+  (`updateAccount`); `logic/bill.ts`'s `planBillPayment` (`payBill`: the transfer entity and its derived key).
   Persist order is the controllers' and is unchanged: `payBill` is `[transfer insert, bill update]`, a card add leads
   with its bill, and merchant learning rides the same batch via `withMerchantLearning`.
