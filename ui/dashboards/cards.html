@@ -3239,12 +3239,16 @@
             if (payInFlight[attempt.key]) return showToast(t('pay_in_progress'), 'info');
             showToast(t('pay_concluding'), 'info');
             billLoading.classList.add('active');
+            // The outcome is always recorded and reported; only the page and its state are left alone once the
+            // dashboard was reloaded under the request.
+            const isActiveFragment = window.PATTY.current();
             try {
                 if (!concludeAttempt(attempt, await sendPayment(attempt))) return;
-                await loadBillDetails();
+                if (isActiveFragment()) await loadBillDetails();
             } finally {
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) billLoading.classList.remove('active');
             }
+            if (!isActiveFragment()) return;
             const shown = currentBill && activeCard && currentBill.bill;
             if (shown && payAttemptKey() === attempt.key && shown.status !== 'paid') openPayForm();
         }
@@ -3268,10 +3272,11 @@
 
             closeModal('modal-pay-bill');
             billLoading.classList.add('active');
+            const isActiveFragment = window.PATTY.current();
             try {
-                if (concludeAttempt(attempt, await sendPayment(attempt))) await loadBillDetails();
+                if (concludeAttempt(attempt, await sendPayment(attempt)) && isActiveFragment()) await loadBillDetails();
             } finally {
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) billLoading.classList.remove('active');
             }
         }
 
@@ -3305,6 +3310,7 @@
             }
 
             billLoading.classList.add('active');
+            const isActiveFragment = window.PATTY.current();
 
             try {
                 const res = await fetch('/api/bills/revert', {
@@ -3324,12 +3330,12 @@
                 }
 
                 showToast(t('revert_success'), 'success');
-                await loadBillDetails();
+                if (isActiveFragment()) await loadBillDetails();
             } catch (err) {
                 console.error("Revert payment error", err);
                 showToast(tFill('revert_error_toast', { message: err.message }), 'error');
             } finally {
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) billLoading.classList.remove('active');
             }
         }
 

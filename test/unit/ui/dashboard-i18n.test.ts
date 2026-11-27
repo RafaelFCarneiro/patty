@@ -391,6 +391,29 @@ describe('cards.html follows the PATTY language', () => {
       expect(cleared).toEqual([]);
     });
 
+    it('records and reports a payment that completes after a reload, leaving the replacement alone', async () => {
+      const { sandbox, document, supersede } = loadFragment('cards', { locale: 'en-US' });
+      const requested: string[] = [];
+      const cleared: string[] = [];
+      sandbox.billLoading.classList.remove = () => cleared.push('bill');
+      sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
+      sandbox.payTarget = { key: 'card-1:2026-6', token: 'token', card: 'Nubank', month: 6, year: 2026 };
+      document.getElementById('pay-amount').value = '10';
+      sandbox.fetch = (url: string) => {
+        requested.push(url);
+        return later(20).then(() => ({ ok: true, json: () => Promise.resolve({}) }));
+      };
+
+      const pending = sandbox.handlePaySubmit({ preventDefault() {} });
+      supersede();
+      await pending;
+
+      expect(document.getElementById('toast-box').innerHTML).toContain('Nubank');
+      expect(sandbox.pattyCardsPay.attempts['card-1:2026-6']).toBeUndefined();
+      expect(requested).toEqual(['/api/bills/pay']);
+      expect(cleared).toEqual([]);
+    });
+
     it('drops a bill answer that arrives after the month changed', async () => {
       const { sandbox, document } = loadFragment('cards', { locale: 'en-US' });
       sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
