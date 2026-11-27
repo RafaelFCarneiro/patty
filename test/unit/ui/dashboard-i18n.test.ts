@@ -402,4 +402,10 @@ describe('cards.html locale refresh', () => {
     sandbox.refreshLocaleText();
     expect(cleared).toEqual([]);
   });
+
+  it('reads an invalid month as empty text instead of throwing', () => {
+    const { sandbox } = loadFragment('cards');
+    expect(sandbox.monthLabel(undefined)).toBe('');
+    expect(sandbox.monthLabel(6)).toBe('June');
+  });
 });

@@ -1760,7 +1760,7 @@
             const pastCycle = getBillCycleInfo('past', m, y);
             const futureCycle = getBillCycleInfo('future', m, y);
 
-            const shortMonth = (month) => new Intl.DateTimeFormat(currentLocale, { month: 'short' }).format(new Date(2000, month - 1, 1));
+            const shortMonth = (month) => monthName(month, 'short');
             const tabLabel = (key, month) => tFill(key, { month: shortMonth(month) });
 
             [['tab-past', 'bill_tab_past_month', pastCycle.month], ['tab-current', 'bill_tab_current_month', m], ['tab-future', 'bill_tab_future_month', futureCycle.month]]
@@ -3152,9 +3152,16 @@
             return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, () => String(value)), t(key));
         }
 
-        function monthLabel(month) {
-            const name = new Intl.DateTimeFormat(currentLocale, { month: 'long' }).format(new Date(2000, month - 1, 1));
+        // The month's name in the page language; an invalid month reads as empty text, never an exception.
+        function monthName(month, style) {
+            const date = new Date(2000, month - 1, 1);
+            if (Number.isNaN(date.getTime())) return '';
+            const name = new Intl.DateTimeFormat(currentLocale, { month: style }).format(date);
             return name.charAt(0).toUpperCase() + name.slice(1);
+        }
+
+        function monthLabel(month) {
+            return monthName(month, 'long');
         }
         var PAY_ATTEMPTS_KEY = 'patty.cards.payAttempts';
         function newPayToken() {
