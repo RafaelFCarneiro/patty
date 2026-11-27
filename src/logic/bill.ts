@@ -74,15 +74,15 @@ const signedBillAmount = (t: Pick<TransactionView, 'type' | 'amount'>): number =
   return 0;
 };
 
+const rawBillTotal = (transactions: TransactionView[]): number => R.sumBy(transactions, signedBillAmount);
+
 export const computeBillTotal = (transactions: TransactionView[], decimals: number): number =>
-  roundToDecimals(R.sumBy(transactions, signedBillAmount), decimals);
+  roundToDecimals(rawBillTotal(transactions), decimals);
 
 export const totalAfterChange = (transactions: TransactionView[], change: BillTotalChange, decimals: number): number =>
   roundToDecimals(
-    computeBillTotal(
-      R.filter(transactions, (t) => t.id !== change.removedId),
-      decimals,
-    ) + (change.added ? signedBillAmount(change.added) : 0),
+    rawBillTotal(R.filter(transactions, (t) => t.id !== change.removedId)) +
+      (change.added ? signedBillAmount(change.added) : 0),
     decimals,
   );
 

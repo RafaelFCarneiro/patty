@@ -326,6 +326,15 @@ describe('bill settlement', () => {
     });
   });
 
+  describe('totalAfterChange rounds once', () => {
+    it('matches the total computed after the change is persisted', () => {
+      const items = [tx(TransactionType.enum.expense, 101.006)];
+      const added = { type: TransactionType.enum.income, amount: 1.004 };
+      expect(totalAfterChange(items, { added }, 2)).toBe(100);
+      expect(computeBillTotal([...items, { ...tx(added.type, added.amount) }], 2)).toBe(100);
+    });
+  });
+
   describe('paymentsOf', () => {
     it('lists the transfers into the card account, oldest first, ignoring purchases and other transfers', () => {
       const items = [
