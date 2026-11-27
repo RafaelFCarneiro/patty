@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { loadFragment } from './fragment-sandbox.js';
+import { loadFragment, makeStubElement } from './fragment-sandbox.js';
 
 const DASHBOARDS_DIR = fileURLToPath(new URL('../../../ui/dashboards/', import.meta.url));
 const dashboardSource = (name: string) => readFileSync(`${DASHBOARDS_DIR}${name}.html`, 'utf-8');
@@ -326,6 +326,20 @@ describe('cards.html follows the PATTY language', () => {
       await sandbox.loadBillDetails();
       await stale;
       expect(sandbox.currentBill.total).toBe(2);
+    });
+
+    it('leaves a replacement fragment alone when an old request answers after the dashboard was reloaded', async () => {
+      const { sandbox, document } = loadFragment('cards', { locale: 'pt-BR' });
+      sandbox.categories = [];
+      sandbox.fetch = (url: string) =>
+        later(20).then(() => ({
+          ok: true,
+          json: () => Promise.resolve(url === '/api/categories' ? [{ id: 'cat-1', name: 'Comida' }] : []),
+        }));
+      const pending = sandbox.fetchInitialData();
+      document.getElementById = () => makeStubElement();
+      await pending;
+      expect(sandbox.categories).toEqual([]);
     });
 
     it('drops a bill answer that arrives after the month changed', async () => {

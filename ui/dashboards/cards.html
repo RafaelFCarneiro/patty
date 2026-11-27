@@ -1781,6 +1781,7 @@
 
         async function determineDefaultBillType() {
             if (!activeCard) return;
+            const isActiveFragment = fragmentGuard();
 
             let defaultBillType = 'current';
             
@@ -1808,6 +1809,7 @@
             } catch (err) {
                 console.error("Error checking default bill status", err);
             }
+            if (!isActiveFragment()) return;
 
             document.querySelectorAll('.bill-tab').forEach(tab => tab.classList.remove('active'));
             if (defaultBillType === 'past') document.getElementById('tab-past').classList.add('active');
@@ -1818,8 +1820,16 @@
             await loadBillDetails();
         }
 
+        // A request that outlives its fragment (the dashboard was reloaded or left) must not touch the replacement's
+        // elements: each request takes the page's month selector when it starts and checks it is still the one on screen.
+        var fragmentGuard = function () {
+            const marker = document.getElementById('month-select');
+            return () => document.getElementById('month-select') === marker;
+        };
+
         // Fetch cards, accounts and categories
         async function fetchInitialData() {
+            const isActiveFragment = fragmentGuard();
             try {
                 const [cardsRes, accsRes, catsRes] = await Promise.all([
                     fetch('/api/credit-cards'),
@@ -1827,9 +1837,13 @@
                     fetch('/api/categories')
                 ]);
 
-                if (cardsRes.ok) creditCards = await cardsRes.json();
-                if (accsRes.ok) accounts = await accsRes.json();
-                if (catsRes.ok) categories = await catsRes.json();
+                const loaded = [
+                    cardsRes.ok ? await cardsRes.json() : creditCards,
+                    accsRes.ok ? await accsRes.json() : accounts,
+                    catsRes.ok ? await catsRes.json() : categories
+                ];
+                if (!isActiveFragment()) return;
+                [creditCards, accounts, categories] = loaded;
 
                 fillCategorySelect();
 
@@ -1968,10 +1982,11 @@
 
             // An answer applies only while it is the latest request for the card, month, year and bill type on screen.
             const request = ++billRequest;
+            const isActiveFragment = fragmentGuard();
             const card = activeCard;
             const cycleKey = () => `${monthSelect.value}-${yearSelect.value}-${selectedBillType}`;
             const requested = cycleKey();
-            const isLatest = () => request === billRequest && card === activeCard && requested === cycleKey();
+            const isLatest = () => isActiveFragment() && request === billRequest && card === activeCard && requested === cycleKey();
 
             billLoading.classList.add('active');
             txLoading.classList.add('active');
