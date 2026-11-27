@@ -140,6 +140,47 @@ describe('shell boot (ui/app.js)', () => {
     expect(seen).toEqual(['MXN']);
   });
 
+  describe('a userSettings event', () => {
+    const settingsEvent = { data: JSON.stringify({ entities: ['userSettings'] }) };
+    const bootWith = (state: { locale: string; base: string }) =>
+      bootShell({
+        '/api/currencies': () => currencies,
+        '/api/status': () => ({ locale: state.locale }),
+        '/api/preferences': () => ({ baseCurrency: state.base }),
+        '/api/dashboards/overview': () => ({ name: 'Overview', html: '<p>ok</p>' }),
+      });
+
+    it('reloads the dashboard once, without forwarding the event, when the language changed', async () => {
+      const state = { locale: 'en', base: 'USD' };
+      const { sandbox, stream, loaded } = await bootWith(state);
+      const forwarded: string[][] = [];
+      sandbox.onAppDataChanged = (entities: string[]) => forwarded.push(entities);
+      const loadsBefore = loaded.length;
+
+      state.locale = 'pt';
+      stream.onmessage?.(settingsEvent);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(loaded.length - loadsBefore).toBe(1);
+      expect(forwarded).toEqual([]);
+    });
+
+    it('forwards a base-currency change without reloading the dashboard', async () => {
+      const state = { locale: 'en', base: 'USD' };
+      const { sandbox, stream, loaded } = await bootWith(state);
+      const forwarded: string[][] = [];
+      sandbox.onAppDataChanged = (entities: string[]) => forwarded.push(entities);
+      const loadsBefore = loaded.length;
+
+      state.base = 'MXN';
+      stream.onmessage?.(settingsEvent);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(loaded.length).toBe(loadsBefore);
+      expect(forwarded).toEqual([['userSettings']]);
+    });
+  });
+
   describe('document title', () => {
     const overview = { '/api/dashboards/overview': () => ({ name: 'Overview', html: '<p>ok</p>' }) };
 
@@ -269,9 +310,11 @@ describe('shell boot (ui/app.js)', () => {
       expect(formatNumber(1234.5)).toBe('1.234,5');
     });
 
-    it('applies overlapping userSettings refreshes in event order, forwarding each after its own', async () => {
+    it('applies overlapping userSettings refreshes in event order, reloading after each language change', async () => {
       const replies: Array<(value: { locale: string }) => void> = [];
+      const languageAtLoad: string[] = [];
       let calls = 0;
+      const page: { documentElement?: { lang: string } } = {};
       const { sandbox, stream, document } = await bootShell({
         '/api/status': () =>
           ++calls === 1
@@ -279,9 +322,15 @@ describe('shell boot (ui/app.js)', () => {
             : new Promise<{ locale: string }>((resolve) => {
                 replies.push(resolve);
               }),
+        '/api/dashboards/overview': () => {
+          languageAtLoad.push(page.documentElement?.lang ?? '');
+          return { name: 'Overview', html: '<p>ok</p>' };
+        },
       });
-      const seen: string[] = [];
-      sandbox.onAppDataChanged = () => seen.push(document.documentElement.lang);
+      page.documentElement = document.documentElement;
+      const forwarded: string[][] = [];
+      sandbox.onAppDataChanged = (entities: string[]) => forwarded.push(entities);
+      languageAtLoad.length = 0;
       const event = { data: JSON.stringify({ entities: ['userSettings'] }) };
       stream.onmessage?.(event);
       stream.onmessage?.(event);
@@ -292,7 +341,8 @@ describe('shell boot (ui/app.js)', () => {
       expect(replies).toHaveLength(2);
       replies[1]?.({ locale: 'es' });
       await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(seen).toEqual(['pt-BR', 'es']);
+      expect(languageAtLoad).toEqual(['pt-BR', 'es']);
+      expect(forwarded).toEqual([]);
       expect(document.documentElement.lang).toBe('es');
     });
 

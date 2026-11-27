@@ -537,10 +537,15 @@
       if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(entities);
     };
     if (entities.indexOf('userSettings') === -1) return forward();
-    // A locale or base-currency change updates the shell before the fragment re-renders with it.
+    // A locale or base-currency change updates the shell before the fragment sees it. A language change reloads
+    // the dashboard, so a fragment reads its language once at render and never refreshes in place; a base-currency
+    // change is forwarded as an ordinary event.
     settingsRefresh = settingsRefresh.then(function () {
+      var languageBefore = currentLocale;
       return refreshSettings()
-        .then(forward)
+        .then(function () {
+          return currentLocale === languageBefore ? forward() : loadDashboard(currentDashboardName());
+        })
         .catch(function (err) {
           console.error('A settings update handler failed:', err); // never break the queue for later events
         });

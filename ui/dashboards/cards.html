@@ -1234,7 +1234,7 @@
                         <span class="compact-bill-value" id="bill-due-date">-</span>
                     </div>
                     <div class="compact-bill-row total-area">
-                        <span class="compact-bill-label" id="bill-total-label" data-i18n="bill_total_label" data-i18n-values='{"currency":""}'>Total da Fatura</span>
+                        <span class="compact-bill-label" id="bill-total-label" data-i18n="bill_total_title">Total da Fatura</span>
                         <span class="compact-bill-total-amount" id="bill-total-val">—</span>
                     </div>
                     <div class="compact-bill-row" id="bill-paid-row" style="display: none;">
@@ -1720,39 +1720,6 @@
             return { month: m, year: y };
         }
 
-        function relabelCycleOptions(selectId) {
-            Array.from(document.getElementById(selectId).options).forEach(opt => {
-                const [month, year] = String(opt.value).split('_');
-                if (year) opt.textContent = `${monthLabel(Number(month))} ${year}`;
-            });
-        }
-
-        function isModalOpen(id) {
-            return document.getElementById(id).classList.contains('open');
-        }
-
-        function refreshOpenForms() {
-            relabelCycleOptions('add-bill-cycle');
-            relabelCycleOptions('reassign-cycle');
-            if (payTarget && isModalOpen('modal-pay-bill')) {
-                document.getElementById('pay-bill-cycle').textContent = tFill('pay_cycle_label', { month: monthLabel(payTarget.month), year: payTarget.year });
-            }
-            if (isModalOpen('modal-add-card')) updateCardPreview();
-            if (isModalOpen('modal-edit-card')) updateCardEditPreview();
-        }
-
-        function refreshLocaleText() {
-            refreshOpenForms();
-            updateTabLabels();
-            // Only a bill that belongs to the card on screen is re-rendered: a card switch still waiting for its bill
-            // must not pair the new card with the old bill (that pair keys, and could clear, a pending payment).
-            if (currentBill && activeCard && currentBill.cardName === activeCard.name) {
-                renderBillSummary();
-                renderTransactionsTable();
-            }
-            initCustomSelects();
-        }
-
         function updateTabLabels() {
             const m = parseInt(monthSelect.value);
             const y = parseInt(yearSelect.value);
@@ -1763,13 +1730,9 @@
             const shortMonth = (month) => monthName(month, 'short');
             const tabLabel = (key, month) => tFill(key, { month: shortMonth(month) });
 
-            [['tab-past', 'bill_tab_past_month', pastCycle.month], ['tab-current', 'bill_tab_current_month', m], ['tab-future', 'bill_tab_future_month', futureCycle.month]]
-                .forEach(([id, key, month]) => {
-                    const tab = document.getElementById(id);
-                    tab.dataset.i18n = key;
-                    tab.dataset.i18nValues = JSON.stringify({ month: shortMonth(month) });
-                    tab.textContent = tabLabel(key, month);
-                });
+            document.getElementById('tab-past').textContent = tabLabel('bill_tab_past_month', pastCycle.month);
+            document.getElementById('tab-current').textContent = tabLabel('bill_tab_current_month', m);
+            document.getElementById('tab-future').textContent = tabLabel('bill_tab_future_month', futureCycle.month);
         }
 
         function selectBillType(type) {
@@ -1856,21 +1819,7 @@
         }
 
         // Fetch cards, accounts and categories
-        // The language the categories and the bill were last loaded in; checkLocale refreshes them while it differs from currentLocale.
-        var dataLocale = 'en';
-
-        // Only the newest categories request may replace the loaded categories, so a slower older answer never overwrites
-        // a refreshed one; the chosen category stays selected (by id) whichever request applies.
-        var categoriesRequest = 0;
-        function applyCategories(loaded) {
-            const selected = categories.find(c => c.name === document.getElementById('add-category').value);
-            categories = loaded;
-            fillCategorySelect(selected && selected.id);
-        }
-
         async function fetchInitialData() {
-            const locale = currentLocale;
-            const categoryRequest = ++categoriesRequest;
             try {
                 const [cardsRes, accsRes, catsRes] = await Promise.all([
                     fetch('/api/credit-cards'),
@@ -1880,11 +1829,9 @@
 
                 if (cardsRes.ok) creditCards = await cardsRes.json();
                 if (accsRes.ok) accounts = await accsRes.json();
-                const loadedCategories = catsRes.ok ? await catsRes.json() : null;
-                if (loadedCategories && categoryRequest === categoriesRequest) {
-                    applyCategories(loadedCategories);
-                    dataLocale = locale;
-                }
+                if (catsRes.ok) categories = await catsRes.json();
+
+                fillCategorySelect();
 
                 renderCardsCarousel();
                 updateTabLabels();
@@ -1899,8 +1846,8 @@
             }
         }
 
-        // Sorts the loaded categories and fills the Add Transaction dropdown, keeping the category with the given id selected.
-        function fillCategorySelect(selectedId) {
+        // Sorts the loaded categories and fills the Add Transaction dropdown
+        function fillCategorySelect() {
             categories.sort((a, b) => a.name.localeCompare(b.name));
             const catSelect = document.getElementById('add-category');
             catSelect.innerHTML = '';
@@ -1910,35 +1857,6 @@
                 opt.textContent = c.name;
                 catSelect.appendChild(opt);
             });
-            const kept = categories.find(c => selectedId !== undefined && c.id === selectedId);
-            if (kept) catSelect.value = kept.name;
-        }
-
-        // Category and bill text arrive from the API in the PATTY language: refetch them on a language change,
-        // leaving the selected card, bill and form values as they are.
-        async function reloadCategories(isCurrent) {
-            const request = ++categoriesRequest;
-            try {
-                const res = await fetch('/api/categories');
-                const loaded = res.ok ? await res.json() : null;
-                if (!loaded || !isCurrent() || request !== categoriesRequest) return false;
-                applyCategories(loaded);
-                initCustomSelects();
-                return true;
-            } catch (err) {
-                console.error("Error refreshing categories", err);
-                return false;
-            }
-        }
-
-        // dataLocale moves only when both the categories and the bill loaded for this request; a superseded or failed
-        // refresh leaves it behind, so the next check finishes the job.
-        async function refreshLocaleData(isCurrent) {
-            const locale = currentLocale;
-            const categoriesLoaded = await reloadCategories(isCurrent);
-            if (!isCurrent()) return;
-            const billLoaded = await loadBillDetails(isCurrent);
-            if (categoriesLoaded && billLoaded && isCurrent()) dataLocale = locale;
         }
 
         // Hash function for stable card characteristics
@@ -2045,13 +1963,13 @@
 
         // Load specific bill details
         var billRequest = 0;
-        async function loadBillDetails(isCurrent = () => true) {
+        async function loadBillDetails() {
             if (!activeCard) return true;
 
             // An answer applies only while it is the latest request for the card still on screen.
             const request = ++billRequest;
             const card = activeCard;
-            const isLatest = () => request === billRequest && card === activeCard && isCurrent();
+            const isLatest = () => request === billRequest && card === activeCard;
 
             billLoading.classList.add('active');
             txLoading.classList.add('active');
@@ -2123,7 +2041,6 @@
 
             // Set badge status text & class
             billStatusBadge.className = `bill-status-badge ${status}`;
-            billStatusBadge.dataset.i18n = `status_${status}`;
             billStatusBadge.innerHTML = `
                 <i class="fa-solid ${status === 'paid' ? 'fa-circle-check' : (status === 'closed' ? 'fa-lock' : 'fa-lock-open')}"></i>
                 <span>${statusLabel}</span>
@@ -2139,9 +2056,7 @@
             billDueDate.textContent = fmtDate(b.dueDate);
 
             // Total Amount
-            const totalLabel = document.getElementById('bill-total-label');
-            totalLabel.dataset.i18nValues = JSON.stringify({ currency: activeCard.currency });
-            totalLabel.textContent = tFill('bill_total_label', { currency: activeCard.currency });
+            document.getElementById('bill-total-label').textContent = tFill('bill_total_label', { currency: activeCard.currency });
 
             const fmtAmount = window.formatMoney(currentBill.total || 0, activeCard.currency);
 
@@ -2251,14 +2166,14 @@
                 : `
                     <div class="tx-item-actions">
                         ${tx.status === 'pending' ? `
-                        <button class="action-btn btn-confirm-icon" data-i18n-title="action_confirm" title="${t('action_confirm')}" onclick="confirmTx('${tx.id}', '${escapeJsAttr(tx.description)}', '${tx.date}', ${tx.amount})">
+                        <button class="action-btn btn-confirm-icon" title="${t('action_confirm')}" onclick="confirmTx('${tx.id}', '${escapeJsAttr(tx.description)}', '${tx.date}', ${tx.amount})">
                             <i class="fa-solid fa-check"></i>
                         </button>
                         ` : ''}
-                        <button class="action-btn btn-change-icon" data-i18n-title="tx_move_bill" title="${t('tx_move_bill')}" onclick="openReassignModal('${tx.id}', '${escapeJsAttr(tx.description)}', '${tx.date}', ${tx.amount})">
+                        <button class="action-btn btn-change-icon" title="${t('tx_move_bill')}" onclick="openReassignModal('${tx.id}', '${escapeJsAttr(tx.description)}', '${tx.date}', ${tx.amount})">
                             <i class="fa-solid fa-calendar-days"></i>
                         </button>
-                        <button class="action-btn btn-delete-icon" data-i18n-title="action_delete" title="${t('action_delete')}" onclick="deleteTx('${tx.id}', '${escapeJsAttr(tx.description)}')">
+                        <button class="action-btn btn-delete-icon" title="${t('action_delete')}" onclick="deleteTx('${tx.id}', '${escapeJsAttr(tx.description)}')">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </div>
@@ -3680,6 +3595,7 @@ var TRANSLATIONS = {
         toast_charge_deleted: "Transaction \"{description}\" deleted successfully!",
         toast_delete_error: "Error deleting: {message}",
         delete_fallback: "Error deleting transaction",
+        bill_total_title: "Bill Total",
         
         // Dashboards Manager Dashboard
         dashboards_title: "Dashboards Monitor",
@@ -3965,6 +3881,7 @@ var TRANSLATIONS = {
         toast_charge_deleted: "Lançamento \"{description}\" excluído com sucesso!",
         toast_delete_error: "Erro ao excluir: {message}",
         delete_fallback: "Erro ao excluir transação",
+        bill_total_title: "Total da Fatura",
         
         // Dashboards Manager Dashboard
         dashboards_title: "Monitor de Dashboards",
@@ -4250,6 +4167,7 @@ var TRANSLATIONS = {
         toast_charge_deleted: "¡Lanzamiento \"{description}\" eliminado con éxito!",
         toast_delete_error: "Error al eliminar: {message}",
         delete_fallback: "Error al eliminar la transacción",
+        bill_total_title: "Total de la Factura",
         
         // Dashboards Manager Dashboard
         dashboards_title: "Gestor de Dashboards",
@@ -4281,41 +4199,15 @@ var TRANSLATIONS = {
     }
 };
 
-var currentLocale = 'en'; // English as default
+// The page language comes from the shell (window.PATTY.locale, a BCP-47 tag) once, at render; a language change
+// reloads the dashboard, so nothing here refreshes it in place.
+var LOCALE_BY_TAG = { 'pt-BR': 'pt', es: 'es', 'en-US': 'en' };
+var currentLocale = LOCALE_BY_TAG[window.PATTY && window.PATTY.locale] || 'en';
 
 // Helper to translate in JS
 function t(key) {
     const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
     return tDict[key] || key;
-}
-
-var localeRequest = 0;
-
-async function checkLocale() {
-    // A late answer is dropped when a newer request started or the fragment was navigated away from.
-    const request = ++localeRequest;
-    const marker = document.getElementById('month-select');
-    const isCurrent = () => request === localeRequest && document.getElementById('month-select') === marker;
-    try {
-        const res = await fetch('/api/status');
-        if (res.ok) {
-            const data = await res.json();
-            if (isCurrent() && data.locale && TRANSLATIONS[data.locale]) {
-                currentLocale = data.locale;
-            }
-        }
-    } catch (err) {
-        console.error("Failed to read locale preferences:", err);
-    }
-    if (!isCurrent()) return;
-    translatePage();
-    refreshLocaleText();
-    if (currentLocale !== dataLocale) await refreshLocaleData(isCurrent);
-}
-
-function fillValues(text, valuesJson) {
-    const values = valuesJson ? JSON.parse(valuesJson) : {};
-    return Object.entries(values).reduce((filled, [name, value]) => filled.replace(`{${name}}`, () => String(value)), text);
 }
 
 function translatePage() {
@@ -4325,13 +4217,12 @@ function translatePage() {
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         if (tDict[key]) {
-            const text = fillValues(tDict[key], el.dataset.i18nValues);
             const icon = el.querySelector('i');
             if (icon) {
                 const iconOuter = icon.outerHTML;
-                el.innerHTML = iconOuter + ' ' + text;
+                el.innerHTML = iconOuter + ' ' + tDict[key];
             } else {
-                el.textContent = text;
+                el.textContent = tDict[key];
             }
         }
     });
@@ -4341,14 +4232,6 @@ function translatePage() {
         const key = el.getAttribute('data-i18n-placeholder');
         if (tDict[key]) {
             el.placeholder = tDict[key];
-        }
-    });
-
-    // 2b. Titles
-    document.querySelectorAll('[data-i18n-title]').forEach(el => {
-        const key = el.getAttribute('data-i18n-title');
-        if (tDict[key]) {
-            el.title = tDict[key];
         }
     });
 
@@ -4490,7 +4373,6 @@ function initCustomSelects() {
         
         // Watch for dynamic options updates
         const observer = new MutationObserver(() => {
-            populateOptions();
             syncSelected();
         });
         observer.observe(select, { childList: true, subtree: true });
@@ -4521,11 +4403,10 @@ function initCustomSelects() {
             disableMobile: true
         });
         
-        checkLocale();
+        translatePage();
 
 // ADR-027 Live-update listener
 window.onAppDataChanged = function(entities) {
-    if (entities.indexOf('userSettings') !== -1) checkLocale();
     var affected = entities.some(function(tag) {
         return ['creditCard', 'transaction', 'account', 'bill', 'category', 'tag'].indexOf(tag) !== -1;
     });

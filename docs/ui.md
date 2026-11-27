@@ -256,8 +256,11 @@ every guide class against `ui/app.css`):
     `month`, `hour`, …) replaces the default `dateStyle`/`timeStyle`; any other option (`timeZone`, `hour12`, …)
     merges over them.
   - Every member reads the current locale and base currency when called. A `userSettings` event re-reads
-    `/api/status` and `<html lang>` before the fragment is told. History navigation before the shell is ready
-    is ignored: boot loads whatever the URL names by then, and only the latest dashboard load renders.
+    `/api/status` and `<html lang>`; if the language changed, the shell **reloads the current dashboard**
+    (`loadDashboard`) instead of forwarding the event, so a fragment reads `window.PATTY.locale` once at render and
+    needs no refresh logic. A base-currency-only change is forwarded to `window.onAppDataChanged` as before. History
+    navigation before the shell is ready is ignored: boot loads whatever the URL names by then, and only the latest
+    dashboard load renders.
 - **Chart.js**: `Chart.defaults.color`, `borderColor` (grid), `font.family` and `plugins.legend.labels.color` are
   read from `:root` (`--text-muted`, `--chart-grid`, `--font-family`), so a fragment's charts read on the dark
   background. A chart sits in a `.chart-box` with `maintainAspectRatio: false`.
@@ -437,9 +440,11 @@ edit form (read-only) shows the card's own currency, and every fallback is `DEFA
 
 ## Dashboard text and the PATTY language
 
-Every visible string of a bundled dashboard comes from its i18n table (`data-i18n`, `data-i18n-placeholder`,
-`data-i18n-title`, or `t(...)`/`tFill(...)` in script, with `{placeholders}` filled by `tFill`; static text that
-carries values declares them in `data-i18n-values`). `test/unit/ui/dashboard-i18n.test.ts` fails on hard-coded
-element text, labels, option text, placeholders and titles, on literals passed to `showToast`/`confirm`/`alert` or
-assigned to `textContent`/`innerHTML`, and on Portuguese-only words or accents outside the table. `cards.html`
-passes; the dashboards in the test's `NOT_YET_TRANSLATED` list do not yet, and that list only shrinks.
+Every visible string of a bundled dashboard comes from its i18n table (`data-i18n`, `data-i18n-placeholder`, or
+`t(...)`/`tFill(...)` in script, with `{placeholders}` filled by `tFill`). A fragment takes its language from
+`window.PATTY.locale` once, when it renders (`pt-BR` → `pt`, `es` → `es`, `en-US` → `en` in its table); a language
+change reloads the dashboard, so there is no in-place refresh and no locale fetch of its own.
+`test/unit/ui/dashboard-i18n.test.ts` fails on hard-coded element text, labels, option text, placeholders and
+titles, on literals passed to `showToast`/`confirm`/`alert` or assigned to `textContent`/`innerHTML`, and on
+Portuguese-only words or accents outside the table. `cards.html` passes; the dashboards in the test's
+`NOT_YET_TRANSLATED` list do not yet, and that list only shrinks.

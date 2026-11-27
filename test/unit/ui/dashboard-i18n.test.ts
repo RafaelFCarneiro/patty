@@ -186,38 +186,36 @@ describe('the guard catches hard-coded text', () => {
 });
 
 describe('cards.html follows the PATTY language', () => {
-  const LOCALES = ['en', 'es'] as const;
+  // The shell's window.PATTY.locale tag and the table key the fragment maps it to.
+  const LANGUAGES = [
+    ['en-US', 'en'],
+    ['pt-BR', 'pt'],
+    ['es', 'es'],
+  ] as const;
   const keyOf = (pattern: RegExp) => pattern.exec(dashboardSource('cards'))?.[1] as string;
   const HEADER_KEY = keyOf(/<h1>[\s\S]*?data-i18n="([\w]+)"/);
   const FORM_LABEL_KEY = keyOf(/<label for="add-desc" data-i18n="([\w]+)"/);
+  const later = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const translate = (locale: string, key: string) => {
-    const { sandbox } = loadFragment('cards');
-    sandbox.currentLocale = locale;
-    return sandbox.t(key) as string;
-  };
-
-  const toastIn = async (locale: string) => {
-    const { sandbox, document } = loadFragment('cards');
-    sandbox.currentLocale = locale;
+  const toastIn = async (tag: string) => {
+    const { sandbox, document } = loadFragment('cards', { locale: tag });
     sandbox.fetch = () => Promise.reject(new Error('offline'));
     await sandbox.fetchInitialData();
     return document.getElementById('toast-box').innerHTML as string;
   };
 
-  const deleteConfirmationIn = async (locale: string) => {
-    const { sandbox } = loadFragment('cards');
+  const deleteConfirmationIn = async (tag: string) => {
+    const { sandbox } = loadFragment('cards', { locale: tag });
     const asked: string[] = [];
-    sandbox.currentLocale = locale;
     sandbox.confirm = (message: string) => (asked.push(message), false);
     await sandbox.deleteTx('tx-1', 'Coffee');
-    return asked[0];
+    return asked[0] as string;
   };
 
   it('ships en, pt and es entries for every key the page asks for', () => {
     const { sandbox } = loadFragment('cards');
     const keys = new Set([
-      ...[...dashboardSource('cards').matchAll(/data-i18n(?:-placeholder|-title)?="(\w+)"/g)].map((match) => match[1]),
+      ...[...dashboardSource('cards').matchAll(/data-i18n(?:-placeholder)?="(\w+)"/g)].map((match) => match[1]),
       ...[...dashboardSource('cards').matchAll(/\bt(?:Fill)?\('(\w+)'/g)].map((match) => match[1]),
     ]);
     const missing = ['en', 'pt', 'es'].flatMap((locale) =>
@@ -228,251 +226,120 @@ describe('cards.html follows the PATTY language', () => {
     expect(missing).toEqual([]);
   });
 
-  it.each(LOCALES)('translates the header, a form label, a toast and the delete confirmation to %s', async (locale) => {
-    expect(translate(locale, HEADER_KEY)).not.toBe(translate('pt', HEADER_KEY));
-    expect(translate(locale, FORM_LABEL_KEY)).not.toBe(translate('pt', FORM_LABEL_KEY));
-    expect(await toastIn(locale)).not.toBe(await toastIn('pt'));
-    const confirmation = await deleteConfirmationIn(locale);
-    expect(confirmation).toContain('Coffee');
-    expect(confirmation).not.toBe(await deleteConfirmationIn('pt'));
+  it('has no in-place refresh logic: the shell reloads the dashboard on a language change', () => {
+    const source = withoutComments(dashboardSource('cards'));
+    expect(source).not.toMatch(/checkLocale|refreshLocale|dataLocale|localeRequest|\/api\/status/);
   });
 
-  it('keeps the Portuguese wording for pt', async () => {
-    expect(await toastIn('pt')).toContain('Erro ao carregar');
-    expect(await deleteConfirmationIn('pt')).toContain('Deseja excluir');
+  it('falls back to English when the shell gives no language', () => {
+    expect(loadFragment('cards').sandbox.currentLocale).toBe('en');
   });
-});
 
-describe('cards.html text built from data', () => {
-  const populated = () => {
-    const { sandbox, document } = loadFragment('cards');
-    sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
-    sandbox.currentBill = {
-      bill: { status: 'open', payments: [] },
-      total: 30,
-      transactions: [
-        {
-          id: 'tx-1',
-          description: 'Coffee',
-          amount: 10,
-          currency: 'BRL',
-          type: 'expense',
-          date: '2026-06-01',
-          status: 'effective',
-        },
-        {
-          id: 'tx-2',
-          description: 'Payment',
-          amount: 20,
-          currency: 'BRL',
-          type: 'income',
-          date: '2026-06-02',
-          status: 'effective',
-        },
-      ],
+  it.each(LANGUAGES)('renders in the language of window.PATTY.locale %s', async (tag, key) => {
+    const { sandbox } = loadFragment('cards', { locale: tag });
+    const table = sandbox.TRANSLATIONS[key];
+    expect(sandbox.currentLocale).toBe(key);
+    expect(sandbox.t(HEADER_KEY)).toBe(table[HEADER_KEY]);
+    expect(sandbox.t(FORM_LABEL_KEY)).toBe(table[FORM_LABEL_KEY]);
+    expect(await toastIn(tag)).toContain(table.toast_load_error);
+    expect(await deleteConfirmationIn(tag)).toBe(table.confirm_delete_charge.replace('{description}', 'Coffee'));
+  });
+
+  it('words the header, a form label, a toast and the delete confirmation differently in each language', async () => {
+    const [en, pt, es] = LANGUAGES.map(([tag]) => tag);
+    const distinct = async (read: (tag: string) => Promise<string> | string) =>
+      new Set(await Promise.all([en, pt, es].map((tag) => read(tag as string)))).size;
+    expect(await distinct((tag) => loadFragment('cards', { locale: tag }).sandbox.t(HEADER_KEY))).toBe(3);
+    expect(await distinct((tag) => loadFragment('cards', { locale: tag }).sandbox.t(FORM_LABEL_KEY))).toBe(3);
+    expect(await distinct(toastIn)).toBe(3);
+    expect(await distinct(deleteConfirmationIn)).toBe(3);
+  });
+
+  describe('text built from data', () => {
+    const populated = () => {
+      const { sandbox, document } = loadFragment('cards', { locale: 'en-US' });
+      sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
+      sandbox.currentBill = {
+        bill: { status: 'open', payments: [] },
+        total: 30,
+        transactions: [
+          {
+            id: 'tx-1',
+            description: 'Coffee',
+            amount: 10,
+            currency: 'BRL',
+            type: 'expense',
+            date: '2026-06-01',
+            status: 'effective',
+          },
+          {
+            id: 'tx-2',
+            description: 'Payment',
+            amount: 20,
+            currency: 'BRL',
+            type: 'income',
+            date: '2026-06-02',
+            status: 'effective',
+          },
+        ],
+      };
+      return { sandbox, document };
     };
-    return { sandbox, document };
-  };
 
-  it('renders a populated bill and finds a payment by its translated category name', () => {
-    const { sandbox, document } = populated();
-    sandbox.currentLocale = 'en';
-    sandbox.renderTransactionsTable();
-    expect(document.getElementById('items-2026-06-01').innerHTML).toContain('Uncategorized');
-    expect(document.getElementById('items-2026-06-02').innerHTML).toContain('Payment');
-    expect(document.getElementById('bill-txs-list').innerHTML).toContain('Tuesday');
+    it('renders a populated bill and finds a payment by its translated category name', () => {
+      const { sandbox, document } = populated();
+      sandbox.renderTransactionsTable();
+      expect(document.getElementById('items-2026-06-01').innerHTML).toContain('Uncategorized');
+      expect(document.getElementById('items-2026-06-02').innerHTML).toContain('Payment');
+      expect(document.getElementById('bill-txs-list').innerHTML).toContain('Tuesday');
 
-    sandbox.searchTerm = 'payment';
-    sandbox.renderTransactionsTable();
-    expect(document.getElementById('no-tx-msg').style.display).toBe('none');
+      sandbox.searchTerm = 'payment';
+      sandbox.renderTransactionsTable();
+      expect(document.getElementById('no-tx-msg').style.display).toBe('none');
 
-    sandbox.searchTerm = 'zzz';
-    sandbox.renderTransactionsTable();
-    expect(document.getElementById('no-tx-msg').innerHTML).toContain('No results found for &quot;zzz&quot;.');
-  });
+      sandbox.searchTerm = 'zzz';
+      sandbox.renderTransactionsTable();
+      expect(document.getElementById('no-tx-msg').innerHTML).toContain('No results found for &quot;zzz&quot;.');
+    });
 
-  it('keeps dollar-sign tokens of a description verbatim in the confirmation', async () => {
-    const { sandbox } = loadFragment('cards');
-    const asked: string[] = [];
-    sandbox.confirm = (message: string) => (asked.push(message), false);
-    await sandbox.deleteTx('tx-1', 'Coffee $& $$');
-    expect(asked[0]).toContain('"Coffee $& $$"');
-  });
+    it('keeps dollar-sign tokens of a description verbatim in the confirmation', async () => {
+      const { sandbox } = loadFragment('cards', { locale: 'en-US' });
+      const asked: string[] = [];
+      sandbox.confirm = (message: string) => (asked.push(message), false);
+      await sandbox.deleteTx('tx-1', 'Coffee $& $$');
+      expect(asked[0]).toContain('"Coffee $& $$"');
+    });
 
-  it('re-reads the locale when the user settings change', async () => {
-    const { sandbox } = loadFragment('cards');
-    sandbox.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ locale: 'es' }) });
-    sandbox.onAppDataChanged(['userSettings']);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(sandbox.currentLocale).toBe('es');
-  });
-});
-
-describe('cards.html locale refresh', () => {
-  const answer = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
-  const later = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  it('keeps the newest language when an older status answer arrives last', async () => {
-    const { sandbox } = loadFragment('cards');
-    const replies = [later(20).then(() => ({ locale: 'es' })), Promise.resolve({ locale: 'en' })];
-    sandbox.fetch = (url: string) =>
-      url === '/api/status'
-        ? replies.shift()!.then((body) => ({ ok: true, json: () => Promise.resolve(body) }))
-        : answer([]);
-    await Promise.all([sandbox.checkLocale(), sandbox.checkLocale()]);
-    await later(40);
-    expect(sandbox.currentLocale).toBe('en');
-  });
-
-  it('does nothing when the fragment was navigated away from before the status answer', async () => {
-    const { sandbox, document } = loadFragment('cards');
-    sandbox.fetch = () => answer({ locale: 'es' });
-    const pending = sandbox.checkLocale();
-    document.getElementById = () => ({}) as never;
-    await pending;
-    expect(sandbox.currentLocale).toBe('en');
-  });
-
-  it('refetches categories and the bill on a language change, keeping the card and the chosen category', async () => {
-    const { sandbox, document } = loadFragment('cards');
-    const card = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
-    sandbox.activeCard = card;
-    sandbox.categories = [{ id: 'cat-1', name: 'Food' }];
-    document.getElementById('add-category').value = 'Food';
-    const requested: string[] = [];
-    sandbox.fetch = (url: string) => {
-      requested.push(url);
-      if (url === '/api/status') return answer({ locale: 'es' });
-      if (url === '/api/categories') return answer([{ id: 'cat-1', name: 'Comida' }]);
-      return answer({ bill: { status: 'open', payments: [] }, transactions: [], total: 0 });
-    };
-    await sandbox.checkLocale();
-    expect(requested.some((url) => url.startsWith('/api/bills?'))).toBe(true);
-    expect(document.getElementById('add-category').value).toBe('Comida');
-    expect(sandbox.activeCard).toBe(card);
-  });
-
-  it('drops a bill answer that arrives after another card was selected', async () => {
-    const { sandbox } = loadFragment('cards');
-    const first = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
-    const second = { id: 'card-2', name: 'Visa', currency: 'BRL' };
-    const bills = [later(20).then(() => 'old'), Promise.resolve('new')];
-    sandbox.fetch = () =>
-      bills.shift()!.then((total) => ({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            bill: { status: 'open', payments: [] },
-            transactions: [],
-            total: total === 'old' ? 1 : 2,
-          }),
-      }));
-    sandbox.activeCard = first;
-    const stale = sandbox.loadBillDetails();
-    sandbox.activeCard = second;
-    await sandbox.loadBillDetails();
-    await stale;
-    expect(sandbox.currentBill.total).toBe(2);
-  });
-
-  it('keeps the category chosen while the refresh was pending', async () => {
-    const { sandbox, document } = loadFragment('cards');
-    sandbox.categories = [
-      { id: 'cat-1', name: 'Food' },
-      { id: 'cat-2', name: 'Rent' },
-    ];
-    document.getElementById('add-category').value = 'Food';
-    sandbox.fetch = () => {
-      document.getElementById('add-category').value = 'Rent';
-      return answer([
-        { id: 'cat-1', name: 'Comida' },
-        { id: 'cat-2', name: 'Aluguel' },
-      ]);
-    };
-    await sandbox.refreshLocaleData(() => true);
-    expect(document.getElementById('add-category').value).toBe('Aluguel');
-  });
-
-  it('does not render the previous card bill against a card whose bill is still loading', () => {
-    const { sandbox } = loadFragment('cards');
-    sandbox.activeCard = { id: 'card-2', name: 'Visa', currency: 'BRL' };
-    sandbox.currentBill = { cardName: 'Nubank', bill: { status: 'paid', payments: [] }, transactions: [], total: 0 };
-    const cleared: string[] = [];
-    sandbox.clearUnfinishedPayment = (key: string) => cleared.push(key);
-    sandbox.refreshLocaleText();
-    expect(cleared).toEqual([]);
-  });
-
-  it('reads anything but an integer month 1-12 as empty text', () => {
-    const { sandbox } = loadFragment('cards');
-    expect([undefined, 0, 13, -1, 6.5, '6'].map((month) => sandbox.monthLabel(month))).toEqual([
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-    ]);
-    expect(sandbox.monthLabel(6)).toBe('June');
-    sandbox.currentLocale = 'es';
-    expect(sandbox.monthLabel(6)).toBe('Junio');
-  });
-
-  it('finishes a superseded refresh on the next check, so the data ends up in the page language', async () => {
-    const { sandbox, document } = loadFragment('cards');
-    const card = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
-    sandbox.currentLocale = 'pt';
-    sandbox.dataLocale = 'pt';
-    sandbox.activeCard = card;
-    sandbox.categories = [{ id: 'cat-1', name: 'Comida' }];
-    document.getElementById('add-category').value = 'Comida';
-    let categoryCalls = 0;
-    sandbox.fetch = (url: string) => {
-      if (url === '/api/status') return answer({ locale: 'en' });
-      if (url === '/api/categories') {
-        categoryCalls += 1;
-        return later(categoryCalls === 1 ? 30 : 0).then(() => ({
+    it('drops a bill answer that arrives after another card was selected', async () => {
+      const { sandbox } = loadFragment('cards', { locale: 'en-US' });
+      const first = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
+      const second = { id: 'card-2', name: 'Visa', currency: 'BRL' };
+      const totals = [later(20).then(() => 1), Promise.resolve(2)];
+      sandbox.fetch = () =>
+        (totals.shift() as Promise<number>).then((total) => ({
           ok: true,
-          json: () => Promise.resolve([{ id: 'cat-1', name: 'Food' }]),
+          json: () => Promise.resolve({ bill: { status: 'open', payments: [] }, transactions: [], total }),
         }));
-      }
-      return answer({ cardName: 'Nubank', bill: { status: 'open', payments: [] }, transactions: [], total: 5 });
-    };
+      sandbox.activeCard = first;
+      const stale = sandbox.loadBillDetails();
+      sandbox.activeCard = second;
+      await sandbox.loadBillDetails();
+      await stale;
+      expect(sandbox.currentBill.total).toBe(2);
+    });
 
-    const first = sandbox.checkLocale();
-    await later(5);
-    const second = sandbox.checkLocale();
-    await Promise.all([first, second]);
-
-    expect(sandbox.dataLocale).toBe('en');
-    expect(document.getElementById('add-category').value).toBe('Food');
-    expect(sandbox.currentBill.total).toBe(5);
-  });
-
-  it('keeps refreshed categories when the slower initial load answers last, and the chosen category with them', async () => {
-    const { sandbox, document } = loadFragment('cards');
-    sandbox.categories = [
-      { id: 'cat-1', name: 'Food' },
-      { id: 'cat-2', name: 'Rent' },
-    ];
-    document.getElementById('add-category').value = 'Rent';
-    let categoryCalls = 0;
-    sandbox.fetch = (url: string) => {
-      if (url !== '/api/categories') return answer([]);
-      categoryCalls += 1;
-      const stale = categoryCalls === 1;
-      const names = stale ? ['Old food', 'Old rent'] : ['Comida', 'Aluguel'];
-      return later(stale ? 30 : 0).then(() => ({
-        ok: true,
-        json: () => Promise.resolve(names.map((name, index) => ({ id: `cat-${index + 1}`, name }))),
-      }));
-    };
-
-    const initial = sandbox.fetchInitialData();
-    await sandbox.reloadCategories(() => true);
-    await initial;
-
-    expect(sandbox.categories.map((category: { name: string }) => category.name)).toEqual(['Aluguel', 'Comida']);
-    expect(document.getElementById('add-category').value).toBe('Aluguel');
+    it('reads anything but an integer month 1-12 as empty text', () => {
+      const { sandbox } = loadFragment('cards', { locale: 'en-US' });
+      expect([undefined, 0, 13, -1, 6.5, '6'].map((month) => sandbox.monthLabel(month))).toEqual([
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ]);
+      expect(sandbox.monthLabel(6)).toBe('June');
+      expect(loadFragment('cards', { locale: 'es' }).sandbox.monthLabel(6)).toBe('Junio');
+    });
   });
 });

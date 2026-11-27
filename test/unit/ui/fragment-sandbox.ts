@@ -103,7 +103,11 @@ export const makeSessionStorage = (): SessionStorageStub => {
 
 export const loadFragment = (
   name: string,
-  { baseCurrency, sessionStorage }: { baseCurrency?: string; sessionStorage?: SessionStorageStub } = {},
+  {
+    baseCurrency,
+    sessionStorage,
+    locale,
+  }: { baseCurrency?: string; sessionStorage?: SessionStorageStub; locale?: string } = {},
 ): FragmentSandbox => {
   const document = makeStubDocument();
   const charts: FragmentSandbox['charts'] = [];
@@ -146,6 +150,8 @@ export const loadFragment = (
   sandbox.location = { pathname: `/ui/${name}`, search: '' };
   sandbox.history = { pushState() {} };
   sandbox.__appCurrencies = currencyMetadata;
+  // The shell's window.PATTY, which a fragment reads its language from once at render (a BCP-47 tag).
+  if (locale) sandbox.PATTY = { locale };
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
