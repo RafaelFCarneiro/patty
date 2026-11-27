@@ -19,6 +19,7 @@ const bootShell = async (
   const loaded: string[] = [];
   const windowHandlers: Record<string, () => void> = {};
   const activeLinks: string[] = [];
+  const titles: string[] = [];
   const stream: { onmessage?: (event: { data: string }) => void } = {};
   const respond = (url: string) => {
     const path = url.split('?')[0] ?? '';
@@ -45,6 +46,7 @@ const bootShell = async (
       return Object.assign(el, {
         setAttribute(key: string, value: string) {
           if (key === 'href') href = value;
+          if (key === 'title') titles.push(value);
         },
         classList: { ...el.classList, add: () => activeLinks.push(href) },
       });
@@ -91,7 +93,7 @@ const bootShell = async (
   vm.runInContext(read('app.js'), sandbox);
   onReady?.();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  return { sandbox, loaded, stream, document, windowHandlers, activeLinks };
+  return { sandbox, loaded, stream, document, windowHandlers, activeLinks, titles };
 };
 
 const currencies = Object.values(currencyMetadata);
@@ -138,6 +140,80 @@ describe('shell boot (ui/app.js)', () => {
     stream.onmessage?.({ data: JSON.stringify({ entities: ['userSettings'] }) });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(seen).toEqual(['MXN']);
+  });
+
+  describe('PATTY.current()', () => {
+    const overview = { '/api/dashboards/overview': () => ({ name: 'Overview', html: '<p>ok</p>' }) };
+
+    it('turns false once another dashboard load starts, and one taken after it stays true', async () => {
+      const { sandbox, windowHandlers } = await bootShell(overview);
+      const patty = sandbox.PATTY as { current: () => () => boolean };
+      const before = patty.current();
+      expect(before()).toBe(true);
+
+      windowHandlers.popstate?.();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const after = patty.current();
+
+      expect(before()).toBe(false);
+      expect(after()).toBe(true);
+    });
+  });
+
+  describe('a userSettings event', () => {
+    const settingsEvent = { data: JSON.stringify({ entities: ['userSettings'] }) };
+    const bootWith = (state: { locale: string; base: string }) =>
+      bootShell({
+        '/api/dashboards': () => [{ name: 'overview', source: 'file' }],
+        '/api/currencies': () => currencies,
+        '/api/status': () => ({ locale: state.locale }),
+        '/api/preferences': () => ({ baseCurrency: state.base }),
+        '/api/dashboards/overview': () => ({ name: 'Overview', html: '<p>ok</p>' }),
+      });
+
+    it('reloads the dashboard once, without forwarding the event, when the language changed', async () => {
+      const state = { locale: 'en', base: 'USD' };
+      const { sandbox, stream, loaded } = await bootWith(state);
+      const forwarded: string[][] = [];
+      sandbox.onAppDataChanged = (entities: string[]) => forwarded.push(entities);
+      const loadsBefore = loaded.length;
+
+      state.locale = 'pt';
+      stream.onmessage?.(settingsEvent);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(loaded.length - loadsBefore).toBe(1);
+      expect(forwarded).toEqual([]);
+    });
+
+    it('redraws the sidebar in the new language and keeps the active dashboard', async () => {
+      const state = { locale: 'en', base: 'USD' };
+      const { stream, titles, activeLinks } = await bootWith(state);
+      expect(titles).toEqual(['Overview']);
+
+      state.locale = 'pt';
+      stream.onmessage?.(settingsEvent);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(titles).toHaveLength(2);
+      expect(titles[1]).not.toBe('Overview');
+      expect(activeLinks).toEqual(['/ui/overview', '/ui/overview']);
+    });
+
+    it('forwards a base-currency change without reloading the dashboard', async () => {
+      const state = { locale: 'en', base: 'USD' };
+      const { sandbox, stream, loaded } = await bootWith(state);
+      const forwarded: string[][] = [];
+      sandbox.onAppDataChanged = (entities: string[]) => forwarded.push(entities);
+      const loadsBefore = loaded.length;
+
+      state.base = 'MXN';
+      stream.onmessage?.(settingsEvent);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(loaded.length).toBe(loadsBefore);
+      expect(forwarded).toEqual([['userSettings']]);
+    });
   });
 
   describe('document title', () => {
@@ -269,9 +345,11 @@ describe('shell boot (ui/app.js)', () => {
       expect(formatNumber(1234.5)).toBe('1.234,5');
     });
 
-    it('applies overlapping userSettings refreshes in event order, forwarding each after its own', async () => {
+    it('applies overlapping userSettings refreshes in event order, reloading after each language change', async () => {
       const replies: Array<(value: { locale: string }) => void> = [];
+      const languageAtLoad: string[] = [];
       let calls = 0;
+      const page: { documentElement?: { lang: string } } = {};
       const { sandbox, stream, document } = await bootShell({
         '/api/status': () =>
           ++calls === 1
@@ -279,9 +357,15 @@ describe('shell boot (ui/app.js)', () => {
             : new Promise<{ locale: string }>((resolve) => {
                 replies.push(resolve);
               }),
+        '/api/dashboards/overview': () => {
+          languageAtLoad.push(page.documentElement?.lang ?? '');
+          return { name: 'Overview', html: '<p>ok</p>' };
+        },
       });
-      const seen: string[] = [];
-      sandbox.onAppDataChanged = () => seen.push(document.documentElement.lang);
+      page.documentElement = document.documentElement;
+      const forwarded: string[][] = [];
+      sandbox.onAppDataChanged = (entities: string[]) => forwarded.push(entities);
+      languageAtLoad.length = 0;
       const event = { data: JSON.stringify({ entities: ['userSettings'] }) };
       stream.onmessage?.(event);
       stream.onmessage?.(event);
@@ -292,7 +376,8 @@ describe('shell boot (ui/app.js)', () => {
       expect(replies).toHaveLength(2);
       replies[1]?.({ locale: 'es' });
       await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(seen).toEqual(['pt-BR', 'es']);
+      expect(languageAtLoad).toEqual(['pt-BR', 'es']);
+      expect(forwarded).toEqual([]);
       expect(document.documentElement.lang).toBe('es');
     });
 

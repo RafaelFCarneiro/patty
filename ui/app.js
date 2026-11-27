@@ -155,6 +155,8 @@
   var settingsRefresh = Promise.resolve();
   var shellIsReady = false;
   var loadTicket = 0;
+  // The dashboards the sidebar was last drawn from, so a language change can redraw its tooltips and labels.
+  var menuDashboards = null;
 
   function htmlLang() {
     return HTML_LANG_BY_LOCALE[currentLocale] || DEFAULT_HTML_LANG;
@@ -217,6 +219,15 @@
     window.PATTY = {
       get locale() {
         return htmlLang();
+      },
+      // A function that stays true only while the dashboard load that took it is still the one on screen: a
+      // fragment's top-level variables are shared with the next load of the page, so after an await it checks
+      // this before touching the page or those variables.
+      current: function () {
+        var ticket = loadTicket;
+        return function () {
+          return ticket === loadTicket;
+        };
       },
       get baseCurrency() {
         return window.BASE_CURRENCY || window.DEFAULT_CURRENCY;
@@ -537,10 +548,17 @@
       if (typeof window.onAppDataChanged === 'function') window.onAppDataChanged(entities);
     };
     if (entities.indexOf('userSettings') === -1) return forward();
-    // A locale or base-currency change updates the shell before the fragment re-renders with it.
+    // A locale or base-currency change updates the shell before the fragment sees it. A language change reloads
+    // the dashboard, so a fragment reads its language once at render and never refreshes in place; a base-currency
+    // change is forwarded as an ordinary event.
     settingsRefresh = settingsRefresh.then(function () {
+      var languageBefore = currentLocale;
       return refreshSettings()
-        .then(forward)
+        .then(function () {
+          if (currentLocale === languageBefore) return forward();
+          if (menuDashboards) renderMenu(menuDashboards, currentDashboardName());
+          return loadDashboard(currentDashboardName());
+        })
         .catch(function (err) {
           console.error('A settings update handler failed:', err); // never break the queue for later events
         });
@@ -696,6 +714,7 @@
         return fetchJson(Api.dashboards);
       })
       .then(function (dashboards) {
+        menuDashboards = dashboards;
         renderMenu(dashboards, currentDashboardName());
       })
       .catch(function (err) {

@@ -189,6 +189,11 @@ dashboard data-less; the save endpoint won't catch a violation for you.
     the page's or the browser's language, never a hard-coded `'en-US'`. `formatMoney(value, currencyCode)`
     handles crypto precision; `formatDate` takes a `YYYY-MM-DD` day. A missing value (`null`, `undefined`,
     `NaN`, an invalid date) renders as `—`, never as `0`: pass it through unchanged instead of defaulting it.
+    A language change reloads the dashboard, so read `window.PATTY.locale` once at render (and map it to your own
+    text, if the dashboard translates any): the fragment needs no refresh logic and no `/api/status` call.
+    A dashboard's top-level variables are shared with the next load of the page, so a request that outlives its
+    load must not write into the page or those variables: take `const current = window.PATTY.current();` before the
+    `await` and return unless `current()` is still true afterwards.
 12. **Charts: a `.chart-box` and `maintainAspectRatio: false`.** Put each `<canvas>` alone inside a
     `.chart-box` (fixed height, `position: relative`) and pass `options: { maintainAspectRatio: false }`. The
     shell already sets `Chart.defaults` (text, grid and legend colors) for the dark theme — don't override them

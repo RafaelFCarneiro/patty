@@ -256,8 +256,15 @@ every guide class against `ui/app.css`):
     `month`, `hour`, …) replaces the default `dateStyle`/`timeStyle`; any other option (`timeZone`, `hour12`, …)
     merges over them.
   - Every member reads the current locale and base currency when called. A `userSettings` event re-reads
-    `/api/status` and `<html lang>` before the fragment is told. History navigation before the shell is ready
-    is ignored: boot loads whatever the URL names by then, and only the latest dashboard load renders.
+    `/api/status` and `<html lang>`; if the language changed, the shell **reloads the current dashboard**
+    (`loadDashboard`) instead of forwarding the event, so a fragment reads `window.PATTY.locale` once at render and
+    needs no refresh logic. A base-currency-only change is forwarded to `window.onAppDataChanged` as before. History
+    navigation before the shell is ready is ignored: boot loads whatever the URL names by then, and only the latest
+    dashboard load renders.
+  - `window.PATTY.current()` returns a function that stays true only while the dashboard load that took it is still
+    the one on screen (the shell bumps a load counter in `loadDashboard`). A dashboard's top-level variables are
+    shared with the next load of the page, so after an `await` a fragment checks that function before touching the
+    page or its variables (`cards.html` does in its initial load, default-bill check and bill load).
 - **Chart.js**: `Chart.defaults.color`, `borderColor` (grid), `font.family` and `plugins.legend.labels.color` are
   read from `:root` (`--text-muted`, `--chart-grid`, `--font-family`), so a fragment's charts read on the dark
   background. A chart sits in a `.chart-box` with `maintainAspectRatio: false`.
@@ -434,3 +441,14 @@ period has expenses in a single currency) to switch; the chart titles interpolat
 (`{currency}` in the `pending_chart_*` translations). `cards.html` builds its add/edit currency `<select>`s
 from `window.__appCurrencies` (sorted, code plus symbol): the add form preselects `DEFAULT_CURRENCY`, the
 edit form (read-only) shows the card's own currency, and every fallback is `DEFAULT_CURRENCY`.
+
+## Dashboard text and the PATTY language
+
+Every visible string of a bundled dashboard comes from its i18n table (`data-i18n`, `data-i18n-placeholder`, or
+`t(...)`/`tFill(...)` in script, with `{placeholders}` filled by `tFill`). A fragment takes its language from
+`window.PATTY.locale` once, when it renders (`pt-BR` → `pt`, `es` → `es`, `en-US` → `en` in its table); a language
+change reloads the dashboard, so there is no in-place refresh and no locale fetch of its own.
+`test/unit/ui/dashboard-i18n.test.ts` fails on hard-coded element text, labels, option text, placeholders and
+titles, on literals passed to `showToast`/`confirm`/`alert` or assigned to `textContent`/`innerHTML`, and on
+Portuguese-only words or accents outside the table. `cards.html` passes; the dashboards in the test's
+`NOT_YET_TRANSLATED` list do not yet, and that list only shrinks.

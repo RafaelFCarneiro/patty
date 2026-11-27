@@ -1148,24 +1148,24 @@
         <!-- Header -->
         <header>
             <div class="header-title-area">
-                <h1><i class="fa-solid fa-credit-card"></i> Cartões & Faturas</h1>
-                <p>Monitore limites, analise extratos e realize pagamentos de faturas</p>
+                <h1><i class="fa-solid fa-credit-card"></i> <span data-i18n="cards_title">Cartões & Faturas</span></h1>
+                <p data-i18n="cards_subtitle">Monitore limites, analise extratos e realize pagamentos de faturas</p>
             </div>
             <div class="controls-area">
                 <label for="month-select" data-i18n="reference_label">Reference:</label>
                 <select id="month-select" class="select-custom">
-                    <option value="1">Janeiro</option>
-                    <option value="2">Fevereiro</option>
-                    <option value="3">Março</option>
-                    <option value="4">Abril</option>
-                    <option value="5">Maio</option>
-                    <option value="6">Junho</option>
-                    <option value="7" selected>Julho</option>
-                    <option value="8">Agosto</option>
-                    <option value="9">Setembro</option>
-                    <option value="10">Outubro</option>
-                    <option value="11">Novembro</option>
-                    <option value="12">Dezembro</option>
+                    <option value="1" data-i18n="january">Janeiro</option>
+                    <option value="2" data-i18n="february">Fevereiro</option>
+                    <option value="3" data-i18n="march">Março</option>
+                    <option value="4" data-i18n="april">Abril</option>
+                    <option value="5" data-i18n="may">Maio</option>
+                    <option value="6" data-i18n="june">Junho</option>
+                    <option value="7" data-i18n="july" selected>Julho</option>
+                    <option value="8" data-i18n="august">Agosto</option>
+                    <option value="9" data-i18n="september">Setembro</option>
+                    <option value="10" data-i18n="october">Outubro</option>
+                    <option value="11" data-i18n="november">Novembro</option>
+                    <option value="12" data-i18n="december">Dezembro</option>
                 </select>
                 <select id="year-select" class="select-custom">
                     <option value="2025">2025</option>
@@ -1181,7 +1181,7 @@
         <div class="section-title" style="display:flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 0.5rem;">
             <div style="display:flex; align-items: center; gap: 0.5rem;">
                 <i class="fa-solid fa-wallet"></i>
-                <span>Selecione um Cartão de Crédito</span>
+                <span data-i18n="cards_select_prompt">Selecione um Cartão de Crédito</span>
             </div>
             <div style="display:flex; gap: 0.5rem;">
                 <button class="btn-mini-add" id="btn-edit-card" onclick="openEditCardModal()" style="background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); color: #fff; display: none;">
@@ -1209,32 +1209,32 @@
                 <div class="compact-bill-header" style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem; width: 100%;">
                     <div class="compact-bill-title" style="justify-content: center; font-size: 1.1rem; margin-bottom: 0.25rem;">
                         <i class="fa-solid fa-receipt"></i>
-                        <span>Ciclo & Fatura</span>
+                        <span data-i18n="cycle_and_bill">Ciclo & Fatura</span>
                     </div>
                     <!-- Past / Current / Future Tabs (Centered below title) -->
                     <div class="bill-cycle-tabs" id="bill-tabs" style="margin: 0 auto; width: 100%; max-width: 320px; padding: 2px; gap: 2px; display: flex; justify-content: center;">
-                        <button class="bill-tab" id="tab-past" onclick="selectBillType('past')" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; flex: 1;">Passada</button>
-                        <button class="bill-tab active" id="tab-current" onclick="selectBillType('current')" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; flex: 1;">Atual</button>
-                        <button class="bill-tab" id="tab-future" onclick="selectBillType('future')" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; flex: 1;">Futura</button>
+                        <button class="bill-tab" id="tab-past" onclick="selectBillType('past')" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; flex: 1;" data-i18n="bill_tab_past">Passada</button>
+                        <button class="bill-tab active" id="tab-current" onclick="selectBillType('current')" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; flex: 1;" data-i18n="bill_tab_current">Atual</button>
+                        <button class="bill-tab" id="tab-future" onclick="selectBillType('future')" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; flex: 1;" data-i18n="bill_tab_future">Futura</button>
                     </div>
                 </div>
 
                 <!-- Bill Details row (Flexed horizontally!) -->
                 <div class="compact-bill-info-box">
                     <div class="compact-bill-row">
-                        <span class="compact-bill-label">Status</span>
-                        <span class="bill-status-badge open" id="bill-status-badge" style="align-self: flex-start; font-size: 0.7rem; padding: 2px 6px;">Aberta</span>
+                        <span class="compact-bill-label" data-i18n="label_status">Status</span>
+                        <span class="bill-status-badge open" id="bill-status-badge" data-i18n="status_open" style="align-self: flex-start; font-size: 0.7rem; padding: 2px 6px;">Aberta</span>
                     </div>
                     <div class="compact-bill-row">
-                        <span class="compact-bill-label">Fechamento</span>
+                        <span class="compact-bill-label" data-i18n="label_closing_day">Fechamento</span>
                         <span class="compact-bill-value" id="bill-close-date">-</span>
                     </div>
                     <div class="compact-bill-row">
-                        <span class="compact-bill-label">Vencimento</span>
+                        <span class="compact-bill-label" data-i18n="label_due_day">Vencimento</span>
                         <span class="compact-bill-value" id="bill-due-date">-</span>
                     </div>
                     <div class="compact-bill-row total-area">
-                        <span class="compact-bill-label" id="bill-total-label">Total da Fatura</span>
+                        <span class="compact-bill-label" id="bill-total-label" data-i18n="bill_total_title">Total da Fatura</span>
                         <span class="compact-bill-total-amount" id="bill-total-val">—</span>
                     </div>
                     <div class="compact-bill-row" id="bill-paid-row" style="display: none;">
@@ -1250,10 +1250,10 @@
                 <!-- Bill Actions -->
                 <div class="compact-bill-actions">
                     <button class="btn-action-primary" id="btn-pay-bill" onclick="openPayModal()" style="padding: 0.45rem 1rem; font-size: 0.8rem; flex: 1;">
-                        <i class="fa-solid fa-money-bill-transfer"></i> Pagar Fatura
+                        <i class="fa-solid fa-money-bill-transfer"></i> <span data-i18n="btn_pay_bill">Pagar Fatura</span>
                     </button>
                     <button class="btn-action-secondary" id="btn-revert-pay" onclick="revertBillPayment()" style="display: none; padding: 0.45rem 1rem; font-size: 0.8rem; flex: 1;">
-                        <i class="fa-solid fa-undo"></i> Reverter
+                        <i class="fa-solid fa-undo"></i> <span data-i18n="revert_confirm">Reverter</span>
                     </button>
                 </div>
             </section>
@@ -1269,22 +1269,22 @@
             <div class="panel-header" style="justify-content: space-between; display: flex; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; border-bottom: none; padding-bottom: 0;">
                 <div class="panel-title" style="margin-bottom: 0;">
                     <i class="fa-solid fa-list-ul"></i>
-                    <span>Lançamentos Vinculados</span>
+                    <span data-i18n="linked_transactions">Lançamentos Vinculados</span>
                 </div>
                 <div class="panel-header-buttons" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     <!-- Sort controls inside header -->
                     <div class="sort-controls">
-                        <span>Ordenar:</span>
-                        <span class="sort-link active" onclick="toggleSort('date')" id="sort-link-date">Data</span>
+                        <span data-i18n="sort_by">Ordenar:</span>
+                        <span class="sort-link active" onclick="toggleSort('date')" id="sort-link-date" data-i18n="col_date">Data</span>
                         <span>•</span>
-                        <span class="sort-link" onclick="toggleSort('description')" id="sort-link-description">Descrição</span>
+                        <span class="sort-link" onclick="toggleSort('description')" id="sort-link-description" data-i18n="col_desc">Descrição</span>
                         <span>•</span>
-                        <span class="sort-link" onclick="toggleSort('category')" id="sort-link-category">Categoria</span>
+                        <span class="sort-link" onclick="toggleSort('category')" id="sort-link-category" data-i18n="col_category">Categoria</span>
                         <span>•</span>
-                        <span class="sort-link" onclick="toggleSort('amount')" id="sort-link-amount">Valor</span>
+                        <span class="sort-link" onclick="toggleSort('amount')" id="sort-link-amount" data-i18n="col_value">Valor</span>
                     </div>
                     <button class="btn-mini-add" onclick="openAddTxModal()">
-                        <i class="fa-solid fa-plus"></i> Novo Lançamento
+                        <i class="fa-solid fa-plus"></i> <span data-i18n="new_charge">Novo Lançamento</span>
                     </button>
                 </div>
             </div>
@@ -1293,7 +1293,7 @@
             <div class="tx-filter-row" style="margin-bottom: 1.25rem; width: 100%;">
                 <div class="search-box-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
                     <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; color: var(--text-muted); font-size: 0.9rem; pointer-events: none;"></i>
-                    <input type="text" id="tx-search-input" placeholder="Buscar por descrição, categoria, tags ou observações..." oninput="handleTxSearch(this.value)" style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 0.5rem 1rem 0.5rem 2.5rem; color: var(--text-main); font-size: 0.85rem; width: 100%; box-sizing: border-box; transition: all 0.25s ease; outline: none;" onfocus="this.style.borderColor='var(--accent-primary)'; this.style.background='rgba(255, 255, 255, 0.07)'; this.style.boxShadow='0 0 0 3px rgba(139, 92, 246, 0.15)';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.08)'; this.style.background='rgba(255, 255, 255, 0.04)'; this.style.boxShadow='none';">
+                    <input type="text" id="tx-search-input" data-i18n-placeholder="tx_search_placeholder" placeholder="Buscar por descrição, categoria, tags ou observações..." oninput="handleTxSearch(this.value)" style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 0.5rem 1rem 0.5rem 2.5rem; color: var(--text-main); font-size: 0.85rem; width: 100%; box-sizing: border-box; transition: all 0.25s ease; outline: none;" onfocus="this.style.borderColor='var(--accent-primary)'; this.style.background='rgba(255, 255, 255, 0.07)'; this.style.boxShadow='0 0 0 3px rgba(139, 92, 246, 0.15)';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.08)'; this.style.background='rgba(255, 255, 255, 0.04)'; this.style.boxShadow='none';">
                 </div>
             </div>
 
@@ -1303,7 +1303,7 @@
             </div>
             <div id="no-tx-msg" class="no-data-msg" style="display: none;">
                 <i class="fa-regular fa-folder-open"></i>
-                Nenhum lançamento encontrado para esta fatura.
+                <span data-i18n="no_bill_transactions">Nenhum lançamento encontrado para esta fatura.</span>
             </div>
         </section>
     </div>
@@ -1314,36 +1314,36 @@
             <button class="modal-close-btn" onclick="closeModal('modal-add-tx')"><i class="fa-solid fa-xmark"></i></button>
             <div class="modal-title">
                 <i class="fa-solid fa-circle-plus"></i>
-                <span>Novo Lançamento</span>
+                <span data-i18n="new_charge">Novo Lançamento</span>
             </div>
             <form id="form-add-tx" onsubmit="handleAddTxSubmit(event)">
                 <div class="modal-split-body">
                     <!-- Left Column: Fields -->
                     <div class="modal-column-left">
                         <div class="form-group">
-                            <label for="add-desc">Descrição</label>
-                            <input type="text" id="add-desc" class="form-control" placeholder="Ex: Supermercado" required>
+                            <label for="add-desc" data-i18n="label_description">Descrição</label>
+                            <input type="text" id="add-desc" class="form-control" data-i18n-placeholder="ph_charge_description" placeholder="Ex: Supermercado" required>
                         </div>
                         <div class="form-group" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
                             <div>
-                                <label for="add-amount">Valor</label>
+                                <label for="add-amount" data-i18n="label_value">Valor</label>
                                 <input type="number" step="0.01" min="0.01" id="add-amount" class="form-control" placeholder="0,00" required>
                             </div>
                             <div>
-                                <label for="add-date">Data</label>
+                                <label for="add-date" data-i18n="label_date">Data</label>
                                 <input type="date" id="add-date" class="form-control" required>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="add-category">Categoria</label>
+                            <label for="add-category" data-i18n="col_category">Categoria</label>
                             <select id="add-category" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;" required>
                                 <!-- Populated dynamically -->
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="add-bill-cycle">Fatura de Destino</label>
+                            <label for="add-bill-cycle" data-i18n="label_target_bill">Fatura de Destino</label>
                             <select id="add-bill-cycle" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;">
-                                <option value="auto">Automática (Baseada na data)</option>
+                                <option value="auto" data-i18n="bill_cycle_auto">Automática (Baseada na data)</option>
                                 <!-- Populated dynamically -->
                             </select>
                         </div>
@@ -1352,18 +1352,18 @@
                     <!-- Right Column: Observações & Tags -->
                     <div class="modal-column-right">
                         <div class="form-group" style="display:flex; flex-direction:column; margin-bottom: 0.75rem;">
-                            <label for="add-note">Observação / Notas da Transação</label>
-                            <textarea id="add-note" class="textarea-large" placeholder="Escreva observações sobre este lançamento..." style="min-height: 120px; flex: 1;"></textarea>
+                            <label for="add-note" data-i18n="label_charge_notes">Observação / Notas da Transação</label>
+                            <textarea id="add-note" class="textarea-large" data-i18n-placeholder="ph_charge_notes" placeholder="Escreva observações sobre este lançamento..." style="min-height: 120px; flex: 1;"></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="add-tags">Tags (separadas por vírgula)</label>
-                            <input type="text" id="add-tags" class="form-control" placeholder="ex: viagem, mercado, lazer">
+                            <label for="add-tags" data-i18n="label_tags_csv">Tags (separadas por vírgula)</label>
+                            <input type="text" id="add-tags" class="form-control" data-i18n-placeholder="ph_charge_tags" placeholder="ex: viagem, mercado, lazer">
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-add-tx')" style="width:auto;">Cancelar</button>
-                    <button type="submit" class="btn-action-primary" style="width:auto;">Adicionar</button>
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-add-tx')" style="width:auto;" data-i18n="btn_cancel">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" style="width:auto;" data-i18n="btn_add">Adicionar</button>
                 </div>
             </form>
         </div>
@@ -1382,7 +1382,7 @@
                     <div class="modal-column-left">
                         <div class="form-group">
                             <label for="card-add-name" data-i18n="label_card_name">Nome do Cartão</label>
-                            <input type="text" id="card-add-name" class="form-control" placeholder="Ex: Nu Ultravioleta" oninput="updateCardPreview()" required>
+                            <input type="text" id="card-add-name" class="form-control" data-i18n-placeholder="ph_card_name" placeholder="Ex: Nu Ultravioleta" oninput="updateCardPreview()" required>
                         </div>
                         <div class="form-group">
                             <label for="card-add-limit" data-i18n="label_limit">Limite</label>
@@ -1391,11 +1391,11 @@
                         <div style="display:grid; grid-template-columns: 1fr 1.8fr; gap:0.75rem; margin-bottom: 1.25rem;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label for="card-add-closing-day" data-i18n="label_closing_day">Fechamento</label>
-                                <input type="number" min="1" max="28" id="card-add-closing-day" class="form-control" placeholder="ex: 5" style="max-width: 90px;" required>
+                                <input type="number" min="1" max="28" id="card-add-closing-day" class="form-control" data-i18n-placeholder="ph_closing_day" placeholder="ex: 5" style="max-width: 90px;" required>
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label for="card-add-due-day" data-i18n="label_due_day">Vencimento</label>
-                                <input type="number" min="1" max="28" id="card-add-due-day" class="form-control" placeholder="ex: 15" style="max-width: 90px;" required>
+                                <input type="number" min="1" max="28" id="card-add-due-day" class="form-control" data-i18n-placeholder="ph_due_day" placeholder="ex: 15" style="max-width: 90px;" required>
                             </div>
                         </div>
                         <div style="display:grid; grid-template-columns: 1fr 1.8fr; gap:0.75rem; margin-bottom: 1.25rem;">
@@ -1444,7 +1444,7 @@
                     <div class="modal-column-left">
                         <div class="form-group">
                             <label for="card-edit-name" data-i18n="label_card_name">Nome do Cartão</label>
-                            <input type="text" id="card-edit-name" class="form-control" placeholder="Ex: Nu Ultravioleta" oninput="updateCardEditPreview()" required>
+                            <input type="text" id="card-edit-name" class="form-control" data-i18n-placeholder="ph_card_name" placeholder="Ex: Nu Ultravioleta" oninput="updateCardEditPreview()" required>
                         </div>
                         <div class="form-group">
                             <label for="card-edit-limit" data-i18n="label_limit">Limite</label>
@@ -1453,11 +1453,11 @@
                         <div style="display:grid; grid-template-columns: 1fr 1.8fr; gap:0.75rem; margin-bottom: 1.25rem;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label for="card-edit-closing-day" data-i18n="label_closing_day">Fechamento</label>
-                                <input type="number" min="1" max="28" id="card-edit-closing-day" class="form-control" placeholder="ex: 5" style="max-width: 90px;" required>
+                                <input type="number" min="1" max="28" id="card-edit-closing-day" class="form-control" data-i18n-placeholder="ph_closing_day" placeholder="ex: 5" style="max-width: 90px;" required>
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label for="card-edit-due-day" data-i18n="label_due_day">Vencimento</label>
-                                <input type="number" min="1" max="28" id="card-edit-due-day" class="form-control" placeholder="ex: 15" style="max-width: 90px;" required>
+                                <input type="number" min="1" max="28" id="card-edit-due-day" class="form-control" data-i18n-placeholder="ph_due_day" placeholder="ex: 15" style="max-width: 90px;" required>
                             </div>
                         </div>
                         <div style="display:grid; grid-template-columns: 1fr 1.8fr; gap:0.75rem; margin-bottom: 1.25rem;">
@@ -1498,24 +1498,24 @@
             <button class="modal-close-btn" onclick="closeModal('modal-reassign')"><i class="fa-solid fa-xmark"></i></button>
             <div class="modal-title">
                 <i class="fa-solid fa-calendar-days"></i>
-                <span>Mudar Fatura do Lançamento</span>
+                <span data-i18n="reassign_title">Mudar Fatura do Lançamento</span>
             </div>
             <form id="form-reassign" onsubmit="handleReassignSubmit(event)">
                 <input type="hidden" id="reassign-tx-id">
                 <div class="form-group">
-                    <label>Lançamento</label>
+                    <label data-i18n="label_description">Lançamento</label>
                     <div id="reassign-tx-desc" style="font-weight:600; font-size:1rem; margin-bottom:0.5rem;">-</div>
                     <div id="reassign-tx-details" style="font-size:0.85rem; color:var(--text-muted);">-</div>
                 </div>
                 <div class="form-group">
-                    <label for="reassign-cycle">Vincular a Fatura de</label>
+                    <label for="reassign-cycle" data-i18n="reassign_link_label">Vincular a Fatura de</label>
                     <select id="reassign-cycle" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;" required>
                         <!-- Populated dynamically -->
                     </select>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-reassign')" style="width:auto;">Cancelar</button>
-                    <button type="submit" class="btn-action-primary" style="width:auto;">Salvar Alteração</button>
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-reassign')" style="width:auto;" data-i18n="btn_cancel">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" style="width:auto;" data-i18n="btn_save_change">Salvar Alteração</button>
                 </div>
             </form>
         </div>
@@ -1548,11 +1548,11 @@
             <button class="modal-close-btn" onclick="closeModal('modal-pay-bill')"><i class="fa-solid fa-xmark"></i></button>
             <div class="modal-title">
                 <i class="fa-solid fa-money-bill-transfer"></i>
-                <span>Pagar Fatura</span>
+                <span data-i18n="btn_pay_bill">Pagar Fatura</span>
             </div>
             <form id="form-pay-bill" onsubmit="handlePaySubmit(event)">
                 <div class="form-group">
-                    <label>Cartão / Fatura</label>
+                    <label data-i18n="pay_card_bill_label">Cartão / Fatura</label>
                     <div id="pay-card-name" style="font-weight:600; font-size:1.1rem; color:#fff;">-</div>
                     <div id="pay-bill-cycle" style="font-size:0.85rem; color:var(--text-muted);">-</div>
                 </div>
@@ -1565,18 +1565,18 @@
                     <input type="number" id="pay-amount" step="any" min="0" class="form-control" required>
                 </div>
                 <div class="form-group">
-                    <label for="pay-account">Débito na Conta Corrente</label>
+                    <label for="pay-account" data-i18n="pay_account_label">Débito na Conta Corrente</label>
                     <select id="pay-account" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;" required>
                         <!-- Populated dynamically -->
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="pay-date">Data do Pagamento</label>
+                    <label for="pay-date" data-i18n="pay_date_label">Data do Pagamento</label>
                     <input type="date" id="pay-date" class="form-control" required>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-pay-bill')" style="width:auto;">Cancelar</button>
-                    <button type="submit" class="btn-action-primary" id="btn-pay-submit" style="width:auto;">Confirmar Pagamento</button>
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-pay-bill')" style="width:auto;" data-i18n="btn_cancel">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" id="btn-pay-submit" style="width:auto;" data-i18n="pay_confirm">Confirmar Pagamento</button>
                 </div>
             </form>
         </div>
@@ -1727,11 +1727,12 @@
             const pastCycle = getBillCycleInfo('past', m, y);
             const futureCycle = getBillCycleInfo('future', m, y);
 
-            const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-            
-            document.getElementById('tab-past').textContent = `Passada (${monthNames[pastCycle.month - 1]})`;
-            document.getElementById('tab-current').textContent = `Atual (${monthNames[m - 1]})`;
-            document.getElementById('tab-future').textContent = `Futura (${monthNames[futureCycle.month - 1]})`;
+            const shortMonth = (month) => monthName(month, 'short');
+            const tabLabel = (key, month) => tFill(key, { month: shortMonth(month) });
+
+            document.getElementById('tab-past').textContent = tabLabel('bill_tab_past_month', pastCycle.month);
+            document.getElementById('tab-current').textContent = tabLabel('bill_tab_current_month', m);
+            document.getElementById('tab-future').textContent = tabLabel('bill_tab_future_month', futureCycle.month);
         }
 
         function selectBillType(type) {
@@ -1780,6 +1781,7 @@
 
         async function determineDefaultBillType() {
             if (!activeCard) return;
+            const isActiveFragment = window.PATTY.current();
 
             let defaultBillType = 'current';
             
@@ -1807,6 +1809,7 @@
             } catch (err) {
                 console.error("Error checking default bill status", err);
             }
+            if (!isActiveFragment()) return;
 
             document.querySelectorAll('.bill-tab').forEach(tab => tab.classList.remove('active'));
             if (defaultBillType === 'past') document.getElementById('tab-past').classList.add('active');
@@ -1819,6 +1822,7 @@
 
         // Fetch cards, accounts and categories
         async function fetchInitialData() {
+            const isActiveFragment = window.PATTY.current();
             try {
                 const [cardsRes, accsRes, catsRes] = await Promise.all([
                     fetch('/api/credit-cards'),
@@ -1826,22 +1830,15 @@
                     fetch('/api/categories')
                 ]);
 
-                if (cardsRes.ok) creditCards = await cardsRes.json();
-                if (accsRes.ok) accounts = await accsRes.json();
-                if (catsRes.ok) categories = await catsRes.json();
+                const loaded = [
+                    cardsRes.ok ? await cardsRes.json() : creditCards,
+                    accsRes.ok ? await accsRes.json() : accounts,
+                    catsRes.ok ? await catsRes.json() : categories
+                ];
+                if (!isActiveFragment()) return;
+                [creditCards, accounts, categories] = loaded;
 
-                // Sort categories
-                categories.sort((a,b) => a.name.localeCompare(b.name));
-                
-                // Populate Add Transaction category dropdown
-                const catSelect = document.getElementById('add-category');
-                catSelect.innerHTML = '';
-                categories.forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c.name;
-                    opt.textContent = c.name;
-                    catSelect.appendChild(opt);
-                });
+                fillCategorySelect();
 
                 renderCardsCarousel();
                 updateTabLabels();
@@ -1852,8 +1849,21 @@
                 }
             } catch (err) {
                 console.error("Error loading initial data", err);
-                showToast("Erro ao carregar dados dos cartões e contas.", "error");
+                if (isActiveFragment()) showToast(t('toast_load_error'), 'error');
             }
+        }
+
+        // Sorts the loaded categories and fills the Add Transaction dropdown
+        function fillCategorySelect() {
+            categories.sort((a, b) => a.name.localeCompare(b.name));
+            const catSelect = document.getElementById('add-category');
+            catSelect.innerHTML = '';
+            categories.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.name;
+                opt.textContent = c.name;
+                catSelect.appendChild(opt);
+            });
         }
 
         // Hash function for stable card characteristics
@@ -1949,7 +1959,7 @@
                             <div class="card-holder-name">${escapeHtml(String(c.name).toUpperCase())}</div>
                         </div>
                         <div class="card-limit-mock">
-                            <div class="card-limit-label">Limite</div>
+                            <div class="card-limit-label" data-i18n="label_limit">${t('label_limit')}</div>
                             <div class="card-limit-value">${fmtLimit}</div>
                         </div>
                     </div>
@@ -1959,8 +1969,17 @@
         }
 
         // Load specific bill details
+        var billRequest = 0;
         async function loadBillDetails() {
-            if (!activeCard) return;
+            if (!activeCard) return true;
+
+            // An answer applies only while it is the latest request for the card, month, year and bill type on screen.
+            const request = ++billRequest;
+            const isActiveFragment = window.PATTY.current();
+            const card = activeCard;
+            const cycleKey = () => `${monthSelect.value}-${yearSelect.value}-${selectedBillType}`;
+            const requested = cycleKey();
+            const isLatest = () => isActiveFragment() && request === billRequest && card === activeCard && requested === cycleKey();
 
             billLoading.classList.add('active');
             txLoading.classList.add('active');
@@ -1979,40 +1998,46 @@
             try {
                 const res = await fetch(`/api/bills?${params.toString()}`);
                 
+                let loaded;
                 if (res.ok) {
-                    currentBill = await res.json();
+                    loaded = await res.json();
                 } else if (res.status === 404) {
                     // Fallback for not yet created/empty bill
                     const closeDay = activeCard.closingDay || 1;
                     const dueDay = activeCard.dueDay || 8;
                     const padMonth = String(targetCycle.month).padStart(2, '0');
                     
-                    currentBill = {
+                    loaded = {
                         bill: {
                             id: null,
                             month: targetCycle.month,
                             year: targetCycle.year,
                             closeDate: `${targetCycle.year}-${padMonth}-${String(closeDay).padStart(2, '0')}`,
                             dueDate: `${targetCycle.year}-${padMonth}-${String(dueDay).padStart(2, '0')}`,
-                            status: 'open',
-                            statusLabel: 'Aberta'
+                            status: 'open'
                         },
                         cardName: activeCard.name,
                         transactions: [],
                         total: 0
                     };
                 } else {
-                    throw new Error("Erro de conexão com o servidor");
+                    throw new Error(t('bill_connection_error'));
                 }
 
+                if (!isLatest()) return false;
+                currentBill = loaded;
                 renderBillSummary();
                 renderTransactionsTable();
+                return true;
             } catch (err) {
                 console.error("Error loading bill details", err);
-                showToast("Erro ao carregar os detalhes da fatura.", "error");
+                if (isLatest()) showToast(t('toast_bill_error'), 'error');
+                return false;
             } finally {
-                billLoading.classList.remove('active');
-                txLoading.classList.remove('active');
+                if (isActiveFragment() && request === billRequest) {
+                    billLoading.classList.remove('active');
+                    txLoading.classList.remove('active');
+                }
             }
         }
 
@@ -2022,7 +2047,7 @@
 
             const b = currentBill.bill || {};
             const status = b.status || 'open';
-            const statusLabel = b.statusLabel || 'Aberta';
+            const statusLabel = t(`status_${status}`);
 
             // Set badge status text & class
             billStatusBadge.className = `bill-status-badge ${status}`;
@@ -2041,7 +2066,7 @@
             billDueDate.textContent = fmtDate(b.dueDate);
 
             // Total Amount
-            document.getElementById('bill-total-label').textContent = `Total da Fatura (${activeCard.currency})`;
+            document.getElementById('bill-total-label').textContent = tFill('bill_total_label', { currency: activeCard.currency });
 
             const fmtAmount = window.formatMoney(currentBill.total || 0, activeCard.currency);
 
@@ -2083,6 +2108,7 @@
             searchTerm = value.trim().toLowerCase();
             renderTransactionsTable();
         }
+        var SORT_LABEL_KEYS = { date: 'col_date', description: 'col_desc', category: 'col_category', amount: 'col_value' };
         function updateSortHeaders() {
             const columns = ['date', 'description', 'category', 'amount'];
             columns.forEach(col => {
@@ -2091,11 +2117,11 @@
                 
                 if (sortColumn === col) {
                     link.className = 'sort-link active';
-                    const label = col === 'date' ? 'Data' : col === 'description' ? 'Descrição' : col === 'category' ? 'Categoria' : 'Valor';
+                    const label = t(SORT_LABEL_KEYS[col]);
                     link.innerHTML = `${label} ${sortDirection === 'asc' ? '▲' : '▼'}`;
                 } else {
                     link.className = 'sort-link';
-                    const label = col === 'date' ? 'Data' : col === 'description' ? 'Descrição' : col === 'category' ? 'Categoria' : 'Valor';
+                    const label = t(SORT_LABEL_KEYS[col]);
                     link.innerHTML = label;
                 }
             });
@@ -2112,10 +2138,10 @@
         }
 
         // Render a single transaction item in the list
-        function renderTxItem(t, container, showDateInline) {
-            const amtFormatted = window.formatMoney(t.amount, t.currency);
+        function renderTxItem(tx, container, showDateInline) {
+            const amtFormatted = window.formatMoney(tx.amount, tx.currency);
 
-            const isIncome = t.type === 'transfer' || t.type === 'income';
+            const isIncome = tx.type === 'transfer' || tx.type === 'income';
             const amountClass = isIncome ? 'income' : 'expense';
             const amountPrefix = isIncome ? '+' : '-';
 
@@ -2135,36 +2161,36 @@
                 'Empréstimos p/ Terc': { icon: 'fa-hand-holding-dollar', color: '#64748b', bg: 'rgba(100, 116, 139, 0.1)', text: '#cbd5e1' }
             };
 
-            let catName = t.categoryName || 'Sem Categoria';
+            let catName = tx.categoryName || t('cat_uncategorized');
             let colColors = categoryMap[catName] || { icon: 'fa-receipt', color: '#a855f7', bg: 'rgba(168, 85, 247, 0.1)', text: '#d8b4fe' };
 
             // Special overrides for payments
             if (isIncome) {
-                catName = 'Pagamento';
+                catName = t('cat_payment');
                 colColors = { icon: 'fa-credit-card', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', text: '#6ee7b7' };
             }
 
             const isPaid = currentBill.bill && currentBill.bill.status === 'paid';
             const actionButtons = isPaid 
-                ? `<span style="font-size:0.75rem; color:var(--text-dark); font-style:italic; min-width: 80px; text-align: center;">Fatura Paga</span>`
+                ? `<span style="font-size:0.75rem; color:var(--text-dark); font-style:italic; min-width: 80px; text-align: center;">${t('bill_paid_notice')}</span>`
                 : `
                     <div class="tx-item-actions">
-                        ${t.status === 'pending' ? `
-                        <button class="action-btn btn-confirm-icon" title="Confirmar" onclick="confirmTx('${t.id}', '${escapeJsAttr(t.description)}', '${t.date}', ${t.amount})">
+                        ${tx.status === 'pending' ? `
+                        <button class="action-btn btn-confirm-icon" title="${t('action_confirm')}" onclick="confirmTx('${tx.id}', '${escapeJsAttr(tx.description)}', '${tx.date}', ${tx.amount})">
                             <i class="fa-solid fa-check"></i>
                         </button>
                         ` : ''}
-                        <button class="action-btn btn-change-icon" title="Mover Fatura" onclick="openReassignModal('${t.id}', '${escapeJsAttr(t.description)}', '${t.date}', ${t.amount})">
+                        <button class="action-btn btn-change-icon" title="${t('tx_move_bill')}" onclick="openReassignModal('${tx.id}', '${escapeJsAttr(tx.description)}', '${tx.date}', ${tx.amount})">
                             <i class="fa-solid fa-calendar-days"></i>
                         </button>
-                        <button class="action-btn btn-delete-icon" title="Excluir" onclick="deleteTx('${t.id}', '${escapeJsAttr(t.description)}')">
+                        <button class="action-btn btn-delete-icon" title="${t('action_delete')}" onclick="deleteTx('${tx.id}', '${escapeJsAttr(tx.description)}')">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </div>
                 `;
 
             const txItem = document.createElement('div');
-            if (t.note) {
+            if (tx.note) {
                 txItem.className = 'tx-list-item has-note';
                 txItem.setAttribute('onclick', 'toggleTxExpand(event, this)');
             } else {
@@ -2172,16 +2198,16 @@
             }
 
             // Compile tags HTML
-            const tagsHtml = t.tags && t.tags.length > 0 
+            const tagsHtml = tx.tags && tx.tags.length > 0 
                 ? `<div style="display:flex; gap: 4px; flex-wrap:wrap; margin-top: 2px;">
-                    ${t.tags.map(tag => `<span class="badge-cat" style="font-size:0.65rem; padding:0.5px 3px; border-radius:3px; color:#c084fc; border-color:rgba(192, 132, 252, 0.2); background:rgba(192, 132, 252, 0.05);"><i class="fa-solid fa-tag" style="font-size:0.55rem;"></i> ${escapeHtml(tag)}</span>`).join('')}
+                    ${tx.tags.map(tag => `<span class="badge-cat" style="font-size:0.65rem; padding:0.5px 3px; border-radius:3px; color:#c084fc; border-color:rgba(192, 132, 252, 0.2); background:rgba(192, 132, 252, 0.05);"><i class="fa-solid fa-tag" style="font-size:0.55rem;"></i> ${escapeHtml(tag)}</span>`).join('')}
                    </div>` 
                 : '';
 
             // Formatting inline date if shown flat
             let inlineDateHtml = '';
             if (showDateInline) {
-                const dateObj = new Date(t.date + 'T12:00:00');
+                const dateObj = new Date(tx.date + 'T12:00:00');
                 const day = String(dateObj.getDate()).padStart(2, '0');
                 const month = String(dateObj.getMonth() + 1).padStart(2, '0');
                 inlineDateHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">• ${day}/${month}</span>`;
@@ -2194,7 +2220,7 @@
                             <i class="fa-solid ${colColors.icon}"></i>
                         </div>
                         <div class="tx-item-details">
-                            <span class="tx-item-desc">${escapeHtml(t.description)}</span>
+                            <span class="tx-item-desc">${escapeHtml(tx.description)}</span>
                             <div class="tx-item-meta">
                                 ${tagsHtml}
                             </div>
@@ -2210,14 +2236,14 @@
                     <div class="tx-item-right">
                         <span class="tx-item-amount ${amountClass}">${amountPrefix} ${amtFormatted}</span>
                         ${actionButtons}
-                        ${t.note ? `<i class="fa-solid fa-chevron-down tx-expand-chevron" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease; margin-left: 0.25rem;"></i>` : ''}
+                        ${tx.note ? `<i class="fa-solid fa-chevron-down tx-expand-chevron" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease; margin-left: 0.25rem;"></i>` : ''}
                     </div>
                 </div>
-                ${t.note ? `
+                ${tx.note ? `
                 <div class="tx-item-drawer">
                     <div class="tx-item-drawer-inner">
                         <i class="fa-solid fa-comment-dots" style="color: var(--accent-primary); margin-right: 8px; margin-top: 2px;"></i>
-                        <span>${escapeHtml(t.note)}</span>
+                        <span>${escapeHtml(tx.note)}</span>
                     </div>
                 </div>
                 ` : ''}
@@ -2234,14 +2260,14 @@
             // Apply search filter
             let filteredTxs = [...txs];
             if (searchTerm) {
-                filteredTxs = filteredTxs.filter(t => {
-                    const descMatch = t.description.toLowerCase().includes(searchTerm);
+                filteredTxs = filteredTxs.filter(tx => {
+                    const descMatch = tx.description.toLowerCase().includes(searchTerm);
                     // Special override for payment category name
-                    const isIncome = t.type === 'transfer' || t.type === 'income';
-                    const catName = isIncome ? 'pagamento' : (t.categoryName || 'Sem Categoria').toLowerCase();
+                    const isIncome = tx.type === 'transfer' || tx.type === 'income';
+                    const catName = (isIncome ? t('cat_payment') : (tx.categoryName || t('cat_uncategorized'))).toLowerCase();
                     const catMatch = catName.includes(searchTerm);
-                    const noteMatch = t.note ? t.note.toLowerCase().includes(searchTerm) : false;
-                    const tagsMatch = t.tags ? t.tags.some(tag => tag.toLowerCase().includes(searchTerm)) : false;
+                    const noteMatch = tx.note ? tx.note.toLowerCase().includes(searchTerm) : false;
+                    const tagsMatch = tx.tags ? tx.tags.some(tag => tag.toLowerCase().includes(searchTerm)) : false;
                     return descMatch || catMatch || noteMatch || tagsMatch;
                 });
             }
@@ -2249,8 +2275,8 @@
             if (filteredTxs.length === 0) {
                 noTxMsg.style.display = 'block';
                 noTxMsg.innerHTML = searchTerm 
-                    ? `<i class="fa-solid fa-magnifying-glass"></i> Nenhum resultado encontrado para "${escapeHtml(searchTerm)}".`
-                    : `<i class="fa-regular fa-folder-open"></i> Nenhum lançamento encontrado para esta fatura.`;
+                    ? `<i class="fa-solid fa-magnifying-glass"></i> ${escapeHtml(tFill('no_search_results', { term: searchTerm }))}`
+                    : `<i class="fa-regular fa-folder-open"></i> ${t('no_bill_transactions')}`;
                 document.getElementById('bill-txs-list').style.display = 'none';
                 return;
             }
@@ -2270,8 +2296,8 @@
                     valA = a.description.toLowerCase();
                     valB = b.description.toLowerCase();
                 } else if (sortColumn === 'category') {
-                    valA = (a.categoryName || 'Sem Categoria').toLowerCase();
-                    valB = (b.categoryName || 'Sem Categoria').toLowerCase();
+                    valA = (a.categoryName || t('cat_uncategorized')).toLowerCase();
+                    valB = (b.categoryName || t('cat_uncategorized')).toLowerCase();
                 } else if (sortColumn === 'amount') {
                     valA = a.amount;
                     valB = b.amount;
@@ -2318,7 +2344,7 @@
                     
                     // Formats for group header
                     const dateObj = new Date(dateKey + 'T12:00:00');
-                    const formattedDate = dateObj.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+                    const formattedDate = dateObj.toLocaleDateString(currentLocale, { weekday: 'long', day: 'numeric', month: 'long' });
                     const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
                     
                     const count = group.txs.length;
@@ -2331,7 +2357,7 @@
                     dayGroupDiv.innerHTML = `
                         <div class="day-group-header">
                             <span class="day-group-date"><i class="fa-solid fa-calendar-day"></i> ${capitalizedDate}</span>
-                            <span class="day-group-summary">${count} ${count === 1 ? 'lançamento' : 'lançamentos'} • <span class="day-group-sum-val">${groupTotalStr}</span></span>
+                            <span class="day-group-summary">${tFill(count === 1 ? 'tx_count_one' : 'tx_count_many', { count })} • <span class="day-group-sum-val">${groupTotalStr}</span></span>
                         </div>
                         <div class="day-group-items" id="items-${dateKey}"></div>
                     `;
@@ -2371,10 +2397,8 @@
 
             // Populate Bill cycle options (Past, Current, Future relative)
             const cycleSelect = document.getElementById('add-bill-cycle');
-            cycleSelect.innerHTML = '<option value="auto">Automática (Baseada na data)</option>';
+            cycleSelect.innerHTML = `<option value="auto" data-i18n="bill_cycle_auto">${t('bill_cycle_auto')}</option>`;
             
-            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
             const optionsCycles = [
                 getBillCycleInfo('past', refMonth, refYear),
                 { month: refMonth, year: refYear },
@@ -2384,7 +2408,7 @@
             optionsCycles.forEach(cy => {
                 const opt = document.createElement('option');
                 opt.value = `${cy.month}_${cy.year}`;
-                opt.textContent = `${monthNames[cy.month - 1]} ${cy.year}`;
+                opt.textContent = `${monthLabel(cy.month)} ${cy.year}`;
                 if (cy.month === refMonth && cy.year === refYear) {
                     opt.selected = true; // Default target
                 }
@@ -2437,6 +2461,7 @@
             txLoading.classList.add('active');
             billLoading.classList.add('active');
 
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch('/api/credit-cards/purchases', {
                     method: 'POST',
@@ -2446,17 +2471,19 @@
 
                 if (!res.ok) {
                     const errRes = await res.json();
-                    throw new Error(errRes.error?.hint || errRes.error?.message || "Falha ao criar transação");
+                    throw new Error(errRes.error?.hint || errRes.error?.message || t('purchase_create_fallback'));
                 }
 
-                showToast(`Compra "${desc}" adicionada com sucesso!`, 'success');
-                await loadBillDetails();
+                showToast(tFill('toast_purchase_added', { description: desc }), 'success');
+                if (isActiveFragment()) await loadBillDetails();
             } catch (err) {
                 console.error("Add transaction error", err);
-                showToast(`Erro ao adicionar: ${err.message}`, 'error');
+                showToast(tFill('toast_purchase_error', { message: err.message }), 'error');
             } finally {
-                txLoading.classList.remove('active');
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    txLoading.classList.remove('active');
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
@@ -2497,7 +2524,7 @@
             
             // Populate payment account select
             const payAccSelect = document.getElementById('card-add-payment-account');
-            payAccSelect.innerHTML = '<option value="">Selecionar...</option>';
+            payAccSelect.innerHTML = `<option value="" data-i18n="select_placeholder">${t('select_placeholder')}</option>`;
             payAccSelect.style.color = 'var(--text-muted)';
             const filteredAccounts = accounts.filter(acc => acc.type === 'checking' || acc.type === 'savings');
             filteredAccounts.forEach(acc => {
@@ -2533,7 +2560,7 @@
             const nameInput = document.getElementById('card-add-name');
             const limitInput = document.getElementById('card-add-limit');
             
-            const name = nameInput.value || 'Nome do Cartão';
+            const name = nameInput.value || t('label_card_name');
             const limitVal = parseFloat(limitInput.value) || 0;
             const currency = document.getElementById('card-add-currency').value || window.DEFAULT_CURRENCY;
             applyCurrencyPrecision(['card-add-limit'], currency);
@@ -2595,7 +2622,7 @@
                         <div class="card-holder-name">${escapeHtml(String(name).toUpperCase())}</div>
                     </div>
                     <div class="card-limit-mock">
-                        <div class="card-limit-label">Limite</div>
+                        <div class="card-limit-label" data-i18n="label_limit">${t('label_limit')}</div>
                         <div class="card-limit-value">${fmtLimit}</div>
                     </div>
                 </div>
@@ -2628,6 +2655,7 @@
             closeModal('modal-add-card');
             billLoading.classList.add('active');
             
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch('/api/credit-cards', {
                     method: 'POST',
@@ -2637,15 +2665,16 @@
                 
                 if (!res.ok) {
                     const errRes = await res.json();
-                    throw new Error(errRes.error?.message || "Falha ao criar cartão de crédito");
+                    throw new Error(errRes.error?.message || t('card_create_fallback'));
                 }
                 
-                showToast(`Cartão "${name}" criado com sucesso!`, 'success');
+                showToast(tFill('toast_card_created', { name }), 'success');
                 
                 // Reload cards and select the new one!
                 const freshCardsRes = await fetch('/api/credit-cards');
-                if (freshCardsRes.ok) {
-                    creditCards = await freshCardsRes.json();
+                const freshCards = freshCardsRes.ok ? await freshCardsRes.json() : null;
+                if (freshCards && isActiveFragment()) {
+                    creditCards = freshCards;
                     renderCardsCarousel();
                     // Find the newly created card and select it
                     const newCardObj = creditCards.find(c => c.name === name);
@@ -2655,9 +2684,11 @@
                 }
             } catch (err) {
                 console.error("Create credit card error", err);
-                showToast(`Erro ao criar cartão: ${err.message}`, 'error');
+                showToast(tFill('toast_card_create_error', { message: err.message }), 'error');
             } finally {
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
@@ -2674,7 +2705,7 @@
 
             // Populate payment account select
             const payAccSelect = document.getElementById('card-edit-payment-account');
-            payAccSelect.innerHTML = '<option value="">Selecionar...</option>';
+            payAccSelect.innerHTML = `<option value="" data-i18n="select_placeholder">${t('select_placeholder')}</option>`;
             payAccSelect.style.color = 'var(--text-muted)';
             
             // Filter accounts of same currency
@@ -2711,7 +2742,7 @@
             const nameInput = document.getElementById('card-edit-name');
             const limitInput = document.getElementById('card-edit-limit');
             
-            const name = nameInput.value || 'Nome do Cartão';
+            const name = nameInput.value || t('label_card_name');
             const limitVal = parseFloat(limitInput.value) || 0;
             const currency = document.getElementById('card-edit-currency').value || window.DEFAULT_CURRENCY;
             
@@ -2772,7 +2803,7 @@
                         <div class="card-holder-name">${escapeHtml(String(name).toUpperCase())}</div>
                     </div>
                     <div class="card-limit-mock">
-                        <div class="card-limit-label">Limite</div>
+                        <div class="card-limit-label" data-i18n="label_limit">${t('label_limit')}</div>
                         <div class="card-limit-value">${fmtLimit}</div>
                     </div>
                 </div>
@@ -2806,6 +2837,7 @@
             closeModal('modal-edit-card');
             billLoading.classList.add('active');
 
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch(`/api/credit-cards/${encodeURIComponent(activeCard.name)}`, {
                     method: 'PATCH',
@@ -2815,35 +2847,38 @@
 
                 if (!res.ok) {
                     const errRes = await res.json();
-                    throw new Error(errRes.error?.message || "Falha ao editar cartão de crédito");
+                    throw new Error(errRes.error?.message || t('card_update_fallback'));
                 }
 
-                showToast(`Cartão "${name}" atualizado com sucesso!`, 'success');
+                showToast(tFill('toast_card_updated', { name }), 'success');
 
                 // Reload cards and reselect the updated one
                 await loadCreditCards();
-                
-                const updatedCard = creditCards.find(c => c.name === name) || creditCards[0];
+
+                const updatedCard = isActiveFragment() && (creditCards.find(c => c.name === name) || creditCards[0]);
                 if (updatedCard) {
                     await selectCard(updatedCard.id);
-                } else {
-                    await loadBillDetails();
+                } else if (isActiveFragment()) {
+                    if (isActiveFragment()) await loadBillDetails();
                 }
             } catch (err) {
                 console.error("Failed to edit card:", err);
-                showToast(`Erro ao editar cartão: ${err.message}`, 'error');
+                showToast(tFill('toast_card_update_error', { message: err.message }), 'error');
             } finally {
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
         // Load credit cards list
         async function loadCreditCards() {
+            const isActiveFragment = window.PATTY.current();
             const res = await fetch('/api/credit-cards');
-            if (res.ok) {
-                creditCards = await res.json();
-                renderCardsCarousel();
-            }
+            const loaded = res.ok ? await res.json() : null;
+            if (!loaded || !isActiveFragment()) return;
+            creditCards = loaded;
+            renderCardsCarousel();
         }
 
         // Reassign Bill Modal
@@ -2862,8 +2897,6 @@
             const cycleSelect = document.getElementById('reassign-cycle');
             cycleSelect.innerHTML = '';
             
-            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
             const optionsCycles = [
                 getBillCycleInfo('past', refMonth, refYear),
                 { month: refMonth, year: refYear },
@@ -2873,7 +2906,7 @@
             optionsCycles.forEach(cy => {
                 const opt = document.createElement('option');
                 opt.value = `${cy.month}_${cy.year}`;
-                opt.textContent = `${monthNames[cy.month - 1]} ${cy.year}`;
+                opt.textContent = `${monthLabel(cy.month)} ${cy.year}`;
                 
                 // Pre-select current target bill of current transaction if known
                 if (currentBill.bill && cy.month === currentBill.bill.month && cy.year === currentBill.bill.year) {
@@ -2898,6 +2931,7 @@
             txLoading.classList.add('active');
             billLoading.classList.add('active');
 
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch(`/api/credit-cards/transactions/${txId}`, {
                     method: 'PATCH',
@@ -2910,17 +2944,19 @@
 
                 if (!res.ok) {
                     const errRes = await res.json();
-                    throw new Error(errRes.error?.message || "Falha ao mudar fatura");
+                    throw new Error(errRes.error?.message || t('reassign_fallback'));
                 }
 
-                showToast("Fatura do lançamento reatribuída com sucesso!", "success");
-                await loadBillDetails();
+                showToast(t('toast_reassigned'), 'success');
+                if (isActiveFragment()) await loadBillDetails();
             } catch (err) {
                 console.error("Reassignment error", err);
-                showToast(`Erro ao reatribuir: ${err.message}`, "error");
+                showToast(tFill('toast_reassign_error', { message: err.message }), 'error');
             } finally {
-                txLoading.classList.remove('active');
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    txLoading.classList.remove('active');
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
@@ -2957,6 +2993,7 @@
             txLoading.classList.add('active');
             billLoading.classList.add('active');
 
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch(`/api/transactions/${id}/confirm`, {
                     method: 'POST',
@@ -2966,44 +3003,49 @@
 
                 if (!res.ok) {
                     const errRes = await res.json();
-                    throw new Error(errRes.error?.message || "Erro ao confirmar transação");
+                    throw new Error(errRes.error?.message || t('confirm_fallback'));
                 }
 
-                showToast(`Transação "${description}" confirmada com sucesso!`, 'success');
-                await loadBillDetails();
+                showToast(tFill('toast_charge_confirmed', { description }), 'success');
+                if (isActiveFragment()) await loadBillDetails();
             } catch (err) {
                 console.error("Confirmation error:", err);
-                showToast(`Erro ao confirmar: ${err.message}`, 'error');
+                showToast(tFill('toast_confirm_error', { message: err.message }), 'error');
             } finally {
-                txLoading.classList.remove('active');
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    txLoading.classList.remove('active');
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
         // Delete Transaction
         async function deleteTx(id, description) {
-            if (!confirm(`Deseja excluir definitivamente o lançamento "${description}"?`)) {
+            if (!confirm(tFill('confirm_delete_charge', { description }))) {
                 return;
             }
 
             txLoading.classList.add('active');
             billLoading.classList.add('active');
 
+            const isActiveFragment = window.PATTY.current();
             try {
                 const res = await fetch(`/api/credit-cards/transactions/${id}?confirm=true`, {
                     method: 'DELETE'
                 });
 
-                if (!res.ok) throw new Error("Erro ao excluir transação");
+                if (!res.ok) throw new Error(t('delete_fallback'));
 
-                showToast(`Lançamento "${description}" excluído com sucesso!`, 'success');
-                await loadBillDetails();
+                showToast(tFill('toast_charge_deleted', { description }), 'success');
+                if (isActiveFragment()) await loadBillDetails();
             } catch (err) {
                 console.error("Deletion error:", err);
-                showToast(`Erro ao excluir: ${err.message}`, 'error');
+                showToast(tFill('toast_delete_error', { message: err.message }), 'error');
             } finally {
-                txLoading.classList.remove('active');
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) {
+                    txLoading.classList.remove('active');
+                    billLoading.classList.remove('active');
+                }
             }
         }
 
@@ -3078,12 +3120,18 @@
         var PAY_OUTCOME = { done: 'done', refused: 'refused', unsettled: 'unsettled' };
 
         function tFill(key, values) {
-            return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, value), t(key));
+            return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, () => String(value)), t(key));
+        }
+
+        // The month's name in the page language; anything but an integer 1-12 reads as empty text, never an exception or another year's month.
+        function monthName(month, style) {
+            if (!Number.isInteger(month) || month < 1 || month > 12) return '';
+            const name = new Intl.DateTimeFormat(currentLocale, { month: style }).format(new Date(2000, month - 1, 1));
+            return name.charAt(0).toUpperCase() + name.slice(1);
         }
 
         function monthLabel(month) {
-            const name = new Intl.DateTimeFormat(currentLocale, { month: 'long' }).format(new Date(2000, month - 1, 1));
-            return name.charAt(0).toUpperCase() + name.slice(1);
+            return monthName(month, 'long');
         }
         var PAY_ATTEMPTS_KEY = 'patty.cards.payAttempts';
         function newPayToken() {
@@ -3180,7 +3228,7 @@
             }
             clearUnfinishedPayment(attempt.key, attempt.token);
             if (result.outcome === PAY_OUTCOME.done) {
-                showToast(t('toast_payment_recorded').replace('{card}', attempt.card), 'success');
+                showToast(tFill('toast_payment_recorded', { card: attempt.card }), 'success');
             } else {
                 showToast(tFill('pay_error_toast', { message: result.message }), 'error');
             }
@@ -3191,12 +3239,16 @@
             if (payInFlight[attempt.key]) return showToast(t('pay_in_progress'), 'info');
             showToast(t('pay_concluding'), 'info');
             billLoading.classList.add('active');
+            // The outcome is always recorded and reported; only the page and its state are left alone once the
+            // dashboard was reloaded under the request.
+            const isActiveFragment = window.PATTY.current();
             try {
                 if (!concludeAttempt(attempt, await sendPayment(attempt))) return;
-                await loadBillDetails();
+                if (isActiveFragment()) await loadBillDetails();
             } finally {
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) billLoading.classList.remove('active');
             }
+            if (!isActiveFragment()) return;
             const shown = currentBill && activeCard && currentBill.bill;
             if (shown && payAttemptKey() === attempt.key && shown.status !== 'paid') openPayForm();
         }
@@ -3220,10 +3272,11 @@
 
             closeModal('modal-pay-bill');
             billLoading.classList.add('active');
+            const isActiveFragment = window.PATTY.current();
             try {
-                if (concludeAttempt(attempt, await sendPayment(attempt))) await loadBillDetails();
+                if (concludeAttempt(attempt, await sendPayment(attempt)) && isActiveFragment()) await loadBillDetails();
             } finally {
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) billLoading.classList.remove('active');
             }
         }
 
@@ -3257,6 +3310,7 @@
             }
 
             billLoading.classList.add('active');
+            const isActiveFragment = window.PATTY.current();
 
             try {
                 const res = await fetch('/api/bills/revert', {
@@ -3276,12 +3330,12 @@
                 }
 
                 showToast(t('revert_success'), 'success');
-                await loadBillDetails();
+                if (isActiveFragment()) await loadBillDetails();
             } catch (err) {
                 console.error("Revert payment error", err);
                 showToast(tFill('revert_error_toast', { message: err.message }), 'error');
             } finally {
-                billLoading.classList.remove('active');
+                if (isActiveFragment()) billLoading.classList.remove('active');
             }
         }
 
@@ -3513,6 +3567,72 @@ var TRANSLATIONS = {
         status_paid: "Paid",
         no_card_transactions: "No transactions recorded for this card bill in the selected cycle.",
         
+        // Cards Dashboard: bill, forms and messages
+        cards_select_prompt: "Select a Credit Card",
+        cycle_and_bill: "Cycle & Bill",
+        bill_tab_past: "Past",
+        bill_tab_current: "Current",
+        bill_tab_future: "Future",
+        bill_tab_past_month: "Past ({month})",
+        bill_tab_current_month: "Current ({month})",
+        bill_tab_future_month: "Future ({month})",
+        bill_total_label: "Bill Total ({currency})",
+        linked_transactions: "Linked Transactions",
+        sort_by: "Sort:",
+        new_charge: "New Transaction",
+        tx_search_placeholder: "Search by description, category, tags or notes...",
+        no_bill_transactions: "No transactions found for this bill.",
+        no_search_results: "No results found for \"{term}\".",
+        tx_count_one: "{count} transaction",
+        tx_count_many: "{count} transactions",
+        ph_charge_description: "E.g. Groceries",
+        label_target_bill: "Target Bill",
+        bill_cycle_auto: "Automatic (based on date)",
+        label_charge_notes: "Notes / Transaction Remarks",
+        ph_charge_notes: "Write notes about this transaction...",
+        label_tags_csv: "Tags (comma-separated)",
+        ph_charge_tags: "e.g. travel, market, leisure",
+        btn_add: "Add",
+        ph_card_name: "E.g. Nu Ultraviolet",
+        ph_closing_day: "e.g. 5",
+        ph_due_day: "e.g. 15",
+        label_limit: "Limit",
+        reassign_title: "Move Transaction to Another Bill",
+        reassign_link_label: "Link to the bill of",
+        btn_save_change: "Save Change",
+        tx_move_bill: "Move Bill",
+        bill_paid_notice: "Bill Paid",
+        cat_payment: "Payment",
+        cat_uncategorized: "Uncategorized",
+        select_placeholder: "Select...",
+        pay_card_bill_label: "Card / Bill",
+        pay_account_label: "Debit from Checking Account",
+        pay_date_label: "Payment Date",
+        pay_confirm: "Confirm Payment",
+        toast_load_error: "Error loading card and account data.",
+        toast_bill_error: "Error loading the bill details.",
+        bill_connection_error: "Server connection error",
+        toast_purchase_added: "Purchase \"{description}\" added successfully!",
+        toast_purchase_error: "Error adding: {message}",
+        purchase_create_fallback: "Failed to create transaction",
+        toast_card_created: "Card \"{name}\" created successfully!",
+        toast_card_create_error: "Error creating card: {message}",
+        card_create_fallback: "Failed to create credit card",
+        toast_card_updated: "Card \"{name}\" updated successfully!",
+        toast_card_update_error: "Error editing card: {message}",
+        card_update_fallback: "Failed to edit credit card",
+        toast_reassigned: "Transaction bill reassigned successfully!",
+        toast_reassign_error: "Error reassigning: {message}",
+        reassign_fallback: "Failed to change bill",
+        toast_charge_confirmed: "Transaction \"{description}\" confirmed successfully!",
+        toast_confirm_error: "Error confirming: {message}",
+        confirm_fallback: "Error confirming transaction",
+        confirm_delete_charge: "Do you want to permanently delete the transaction \"{description}\"?",
+        toast_charge_deleted: "Transaction \"{description}\" deleted successfully!",
+        toast_delete_error: "Error deleting: {message}",
+        delete_fallback: "Error deleting transaction",
+        bill_total_title: "Bill Total",
+        
         // Dashboards Manager Dashboard
         dashboards_title: "Dashboards Monitor",
         dashboards_subtitle: "List, view source, and upload patty dashboards",
@@ -3732,6 +3852,72 @@ var TRANSLATIONS = {
         status_closed: "Fechada",
         status_paid: "Paga",
         no_card_transactions: "Nenhuma transação registrada nesta fatura para o ciclo selecionado.",
+        
+        // Cards Dashboard: bill, forms and messages
+        cards_select_prompt: "Selecione um Cartão de Crédito",
+        cycle_and_bill: "Ciclo & Fatura",
+        bill_tab_past: "Passada",
+        bill_tab_current: "Atual",
+        bill_tab_future: "Futura",
+        bill_tab_past_month: "Passada ({month})",
+        bill_tab_current_month: "Atual ({month})",
+        bill_tab_future_month: "Futura ({month})",
+        bill_total_label: "Total da Fatura ({currency})",
+        linked_transactions: "Lançamentos Vinculados",
+        sort_by: "Ordenar:",
+        new_charge: "Novo Lançamento",
+        tx_search_placeholder: "Buscar por descrição, categoria, tags ou observações...",
+        no_bill_transactions: "Nenhum lançamento encontrado para esta fatura.",
+        no_search_results: "Nenhum resultado encontrado para \"{term}\".",
+        tx_count_one: "{count} lançamento",
+        tx_count_many: "{count} lançamentos",
+        ph_charge_description: "Ex: Supermercado",
+        label_target_bill: "Fatura de Destino",
+        bill_cycle_auto: "Automática (Baseada na data)",
+        label_charge_notes: "Observação / Notas da Transação",
+        ph_charge_notes: "Escreva observações sobre este lançamento...",
+        label_tags_csv: "Tags (separadas por vírgula)",
+        ph_charge_tags: "ex: viagem, mercado, lazer",
+        btn_add: "Adicionar",
+        ph_card_name: "Ex: Nu Ultravioleta",
+        ph_closing_day: "ex: 5",
+        ph_due_day: "ex: 15",
+        label_limit: "Limite",
+        reassign_title: "Mudar Fatura do Lançamento",
+        reassign_link_label: "Vincular a Fatura de",
+        btn_save_change: "Salvar Alteração",
+        tx_move_bill: "Mover Fatura",
+        bill_paid_notice: "Fatura Paga",
+        cat_payment: "Pagamento",
+        cat_uncategorized: "Sem Categoria",
+        select_placeholder: "Selecionar...",
+        pay_card_bill_label: "Cartão / Fatura",
+        pay_account_label: "Débito na Conta Corrente",
+        pay_date_label: "Data do Pagamento",
+        pay_confirm: "Confirmar Pagamento",
+        toast_load_error: "Erro ao carregar dados dos cartões e contas.",
+        toast_bill_error: "Erro ao carregar os detalhes da fatura.",
+        bill_connection_error: "Erro de conexão com o servidor",
+        toast_purchase_added: "Compra \"{description}\" adicionada com sucesso!",
+        toast_purchase_error: "Erro ao adicionar: {message}",
+        purchase_create_fallback: "Falha ao criar transação",
+        toast_card_created: "Cartão \"{name}\" criado com sucesso!",
+        toast_card_create_error: "Erro ao criar cartão: {message}",
+        card_create_fallback: "Falha ao criar cartão de crédito",
+        toast_card_updated: "Cartão \"{name}\" atualizado com sucesso!",
+        toast_card_update_error: "Erro ao editar cartão: {message}",
+        card_update_fallback: "Falha ao editar cartão de crédito",
+        toast_reassigned: "Fatura do lançamento reatribuída com sucesso!",
+        toast_reassign_error: "Erro ao reatribuir: {message}",
+        reassign_fallback: "Falha ao mudar fatura",
+        toast_charge_confirmed: "Transação \"{description}\" confirmada com sucesso!",
+        toast_confirm_error: "Erro ao confirmar: {message}",
+        confirm_fallback: "Erro ao confirmar transação",
+        confirm_delete_charge: "Deseja excluir definitivamente o lançamento \"{description}\"?",
+        toast_charge_deleted: "Lançamento \"{description}\" excluído com sucesso!",
+        toast_delete_error: "Erro ao excluir: {message}",
+        delete_fallback: "Erro ao excluir transação",
+        bill_total_title: "Total da Fatura",
         
         // Dashboards Manager Dashboard
         dashboards_title: "Monitor de Dashboards",
@@ -3953,6 +4139,72 @@ var TRANSLATIONS = {
         status_paid: "Pagada",
         no_card_transactions: "Ninguna transacción registrada en esta factura para el ciclo seleccionado.",
         
+        // Cards Dashboard: bill, forms and messages
+        cards_select_prompt: "Seleccione una Tarjeta de Crédito",
+        cycle_and_bill: "Ciclo y Factura",
+        bill_tab_past: "Pasada",
+        bill_tab_current: "Actual",
+        bill_tab_future: "Futura",
+        bill_tab_past_month: "Pasada ({month})",
+        bill_tab_current_month: "Actual ({month})",
+        bill_tab_future_month: "Futura ({month})",
+        bill_total_label: "Total de la Factura ({currency})",
+        linked_transactions: "Transacciones Vinculadas",
+        sort_by: "Ordenar:",
+        new_charge: "Nuevo Lanzamiento",
+        tx_search_placeholder: "Buscar por descripción, categoría, etiquetas u observaciones...",
+        no_bill_transactions: "Ninguna transacción encontrada para esta factura.",
+        no_search_results: "Ningún resultado encontrado para \"{term}\".",
+        tx_count_one: "{count} lanzamiento",
+        tx_count_many: "{count} lanzamientos",
+        ph_charge_description: "Ej: Supermercado",
+        label_target_bill: "Factura de Destino",
+        bill_cycle_auto: "Automática (Según la fecha)",
+        label_charge_notes: "Observación / Notas de la Transacción",
+        ph_charge_notes: "Escriba observaciones sobre este lanzamiento...",
+        label_tags_csv: "Etiquetas (separadas por coma)",
+        ph_charge_tags: "ej: viaje, mercado, ocio",
+        btn_add: "Agregar",
+        ph_card_name: "Ej: Nu Ultravioleta",
+        ph_closing_day: "ej: 5",
+        ph_due_day: "ej: 15",
+        label_limit: "Límite",
+        reassign_title: "Cambiar Factura del Lanzamiento",
+        reassign_link_label: "Vincular a la Factura de",
+        btn_save_change: "Guardar Cambio",
+        tx_move_bill: "Mover Factura",
+        bill_paid_notice: "Factura Pagada",
+        cat_payment: "Pago",
+        cat_uncategorized: "Sin Categoría",
+        select_placeholder: "Seleccionar...",
+        pay_card_bill_label: "Tarjeta / Factura",
+        pay_account_label: "Débito en la Cuenta Corriente",
+        pay_date_label: "Fecha del Pago",
+        pay_confirm: "Confirmar Pago",
+        toast_load_error: "Error al cargar los datos de tarjetas y cuentas.",
+        toast_bill_error: "Error al cargar los detalles de la factura.",
+        bill_connection_error: "Error de conexión con el servidor",
+        toast_purchase_added: "¡Compra \"{description}\" agregada con éxito!",
+        toast_purchase_error: "Error al agregar: {message}",
+        purchase_create_fallback: "Error al crear la transacción",
+        toast_card_created: "¡Tarjeta \"{name}\" creada con éxito!",
+        toast_card_create_error: "Error al crear la tarjeta: {message}",
+        card_create_fallback: "Error al crear la tarjeta de crédito",
+        toast_card_updated: "¡Tarjeta \"{name}\" actualizada con éxito!",
+        toast_card_update_error: "Error al editar la tarjeta: {message}",
+        card_update_fallback: "Error al editar la tarjeta de crédito",
+        toast_reassigned: "¡Factura del lanzamiento reasignada con éxito!",
+        toast_reassign_error: "Error al reasignar: {message}",
+        reassign_fallback: "Error al cambiar la factura",
+        toast_charge_confirmed: "¡Transacción \"{description}\" confirmada con éxito!",
+        toast_confirm_error: "Error al confirmar: {message}",
+        confirm_fallback: "Error al confirmar la transacción",
+        confirm_delete_charge: "¿Desea eliminar definitivamente el lanzamiento \"{description}\"?",
+        toast_charge_deleted: "¡Lanzamiento \"{description}\" eliminado con éxito!",
+        toast_delete_error: "Error al eliminar: {message}",
+        delete_fallback: "Error al eliminar la transacción",
+        bill_total_title: "Total de la Factura",
+        
         // Dashboards Manager Dashboard
         dashboards_title: "Gestor de Dashboards",
         dashboards_subtitle: "Liste, vea el código fuente y suba dashboards al servidor de patty",
@@ -3983,27 +4235,15 @@ var TRANSLATIONS = {
     }
 };
 
-var currentLocale = 'en'; // English as default
+// The page language comes from the shell (window.PATTY.locale, a BCP-47 tag) once, at render; a language change
+// reloads the dashboard, so nothing here refreshes it in place.
+var LOCALE_BY_TAG = { 'pt-BR': 'pt', es: 'es', 'en-US': 'en' };
+var currentLocale = LOCALE_BY_TAG[window.PATTY && window.PATTY.locale] || 'en';
 
 // Helper to translate in JS
 function t(key) {
     const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
     return tDict[key] || key;
-}
-
-async function checkLocale() {
-    try {
-        const res = await fetch('/api/status');
-        if (res.ok) {
-            const data = await res.json();
-            if (data.locale && TRANSLATIONS[data.locale]) {
-                currentLocale = data.locale;
-            }
-        }
-    } catch (err) {
-        console.error("Failed to read locale preferences:", err);
-    }
-    translatePage();
 }
 
 function translatePage() {
@@ -4039,12 +4279,7 @@ function translatePage() {
         }
     });
     
-    // 4. Document title translation
-    if (tDict['overview_title'] && document.title.includes("Overview") || document.title.includes("Visão")) {
-        // dynamic title update fallback if needed
-    }
-
-    // 5. Translate select months
+    // 4. Translate select months
     const monthSelects = [
         document.getElementById('month-select'),
         document.getElementById('start-month-select')
@@ -4061,7 +4296,7 @@ function translatePage() {
         }
     });
 
-    // 6. Translate projection months select options (3, 6, 9, 12 months)
+    // 5. Translate projection months select options (3, 6, 9, 12 months)
     const hmSelect = document.getElementById('heatmap-months-select');
     if (hmSelect) {
         Array.from(hmSelect.options).forEach(opt => {
@@ -4204,7 +4439,7 @@ function initCustomSelects() {
             disableMobile: true
         });
         
-        checkLocale();
+        translatePage();
 
 // ADR-027 Live-update listener
 window.onAppDataChanged = function(entities) {
