@@ -448,4 +448,31 @@ describe('cards.html locale refresh', () => {
     expect(document.getElementById('add-category').value).toBe('Food');
     expect(sandbox.currentBill.total).toBe(5);
   });
+
+  it('keeps refreshed categories when the slower initial load answers last, and the chosen category with them', async () => {
+    const { sandbox, document } = loadFragment('cards');
+    sandbox.categories = [
+      { id: 'cat-1', name: 'Food' },
+      { id: 'cat-2', name: 'Rent' },
+    ];
+    document.getElementById('add-category').value = 'Rent';
+    let categoryCalls = 0;
+    sandbox.fetch = (url: string) => {
+      if (url !== '/api/categories') return answer([]);
+      categoryCalls += 1;
+      const stale = categoryCalls === 1;
+      const names = stale ? ['Old food', 'Old rent'] : ['Comida', 'Aluguel'];
+      return later(stale ? 30 : 0).then(() => ({
+        ok: true,
+        json: () => Promise.resolve(names.map((name, index) => ({ id: `cat-${index + 1}`, name }))),
+      }));
+    };
+
+    const initial = sandbox.fetchInitialData();
+    await sandbox.reloadCategories(() => true);
+    await initial;
+
+    expect(sandbox.categories.map((category: { name: string }) => category.name)).toEqual(['Aluguel', 'Comida']);
+    expect(document.getElementById('add-category').value).toBe('Aluguel');
+  });
 });

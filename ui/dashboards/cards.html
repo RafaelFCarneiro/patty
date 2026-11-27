@@ -1859,8 +1859,18 @@
         // The language the categories and the bill were last loaded in; checkLocale refreshes them while it differs from currentLocale.
         var dataLocale = 'en';
 
+        // Only the newest categories request may replace the loaded categories, so a slower older answer never overwrites
+        // a refreshed one; the chosen category stays selected (by id) whichever request applies.
+        var categoriesRequest = 0;
+        function applyCategories(loaded) {
+            const selected = categories.find(c => c.name === document.getElementById('add-category').value);
+            categories = loaded;
+            fillCategorySelect(selected && selected.id);
+        }
+
         async function fetchInitialData() {
             const locale = currentLocale;
+            const categoryRequest = ++categoriesRequest;
             try {
                 const [cardsRes, accsRes, catsRes] = await Promise.all([
                     fetch('/api/credit-cards'),
@@ -1870,10 +1880,11 @@
 
                 if (cardsRes.ok) creditCards = await cardsRes.json();
                 if (accsRes.ok) accounts = await accsRes.json();
-                if (catsRes.ok) categories = await catsRes.json();
-                if (catsRes.ok) dataLocale = locale;
-
-                fillCategorySelect();
+                const loadedCategories = catsRes.ok ? await catsRes.json() : null;
+                if (loadedCategories && categoryRequest === categoriesRequest) {
+                    applyCategories(loadedCategories);
+                    dataLocale = locale;
+                }
 
                 renderCardsCarousel();
                 updateTabLabels();
@@ -1906,13 +1917,12 @@
         // Category and bill text arrive from the API in the PATTY language: refetch them on a language change,
         // leaving the selected card, bill and form values as they are.
         async function reloadCategories(isCurrent) {
+            const request = ++categoriesRequest;
             try {
                 const res = await fetch('/api/categories');
                 const loaded = res.ok ? await res.json() : null;
-                if (!loaded || !isCurrent()) return false;
-                const selected = categories.find(c => c.name === document.getElementById('add-category').value);
-                categories = loaded;
-                fillCategorySelect(selected && selected.id);
+                if (!loaded || !isCurrent() || request !== categoriesRequest) return false;
+                applyCategories(loaded);
                 initCustomSelects();
                 return true;
             } catch (err) {
