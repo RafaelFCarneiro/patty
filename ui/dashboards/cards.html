@@ -1744,7 +1744,9 @@
         function refreshLocaleText() {
             refreshOpenForms();
             updateTabLabels();
-            if (currentBill && activeCard) {
+            // Only a bill that belongs to the card on screen is re-rendered: a card switch still waiting for its bill
+            // must not pair the new card with the old bill (that pair keys, and could clear, a pending payment).
+            if (currentBill && activeCard && currentBill.cardName === activeCard.name) {
                 renderBillSummary();
                 renderTransactionsTable();
             }

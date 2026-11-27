@@ -392,4 +392,14 @@ describe('cards.html locale refresh', () => {
     await sandbox.refreshLocaleData(() => true);
     expect(document.getElementById('add-category').value).toBe('Aluguel');
   });
+
+  it('does not render the previous card bill against a card whose bill is still loading', () => {
+    const { sandbox } = loadFragment('cards');
+    sandbox.activeCard = { id: 'card-2', name: 'Visa', currency: 'BRL' };
+    sandbox.currentBill = { cardName: 'Nubank', bill: { status: 'paid', payments: [] }, transactions: [], total: 0 };
+    const cleared: string[] = [];
+    sandbox.clearUnfinishedPayment = (key: string) => cleared.push(key);
+    sandbox.refreshLocaleText();
+    expect(cleared).toEqual([]);
+  });
 });
