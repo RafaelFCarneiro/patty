@@ -358,17 +358,15 @@ describe('cards.html locale refresh', () => {
     const second = { id: 'card-2', name: 'Visa', currency: 'BRL' };
     const bills = [later(20).then(() => 'old'), Promise.resolve('new')];
     sandbox.fetch = () =>
-      bills
-        .shift()!
-        .then((total) => ({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              bill: { status: 'open', payments: [] },
-              transactions: [],
-              total: total === 'old' ? 1 : 2,
-            }),
-        }));
+      bills.shift()!.then((total) => ({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            bill: { status: 'open', payments: [] },
+            transactions: [],
+            total: total === 'old' ? 1 : 2,
+          }),
+      }));
     sandbox.activeCard = first;
     const stale = sandbox.loadBillDetails();
     sandbox.activeCard = second;
