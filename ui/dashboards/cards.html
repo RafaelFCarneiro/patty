@@ -1720,7 +1720,29 @@
             return { month: m, year: y };
         }
 
+        function relabelCycleOptions(selectId) {
+            Array.from(document.getElementById(selectId).options).forEach(opt => {
+                const [month, year] = String(opt.value).split('_');
+                if (year) opt.textContent = `${monthLabel(Number(month))} ${year}`;
+            });
+        }
+
+        function isModalOpen(id) {
+            return document.getElementById(id).classList.contains('open');
+        }
+
+        function refreshOpenForms() {
+            relabelCycleOptions('add-bill-cycle');
+            relabelCycleOptions('reassign-cycle');
+            if (payTarget && isModalOpen('modal-pay-bill')) {
+                document.getElementById('pay-bill-cycle').textContent = tFill('pay_cycle_label', { month: monthLabel(payTarget.month), year: payTarget.year });
+            }
+            if (isModalOpen('modal-add-card')) updateCardPreview();
+            if (isModalOpen('modal-edit-card')) updateCardEditPreview();
+        }
+
         function refreshLocaleText() {
+            refreshOpenForms();
             updateTabLabels();
             if (currentBill && activeCard) {
                 renderBillSummary();
@@ -2128,10 +2150,10 @@
         }
 
         // Render a single transaction item in the list
-        function renderTxItem(t, container, showDateInline) {
-            const amtFormatted = window.formatMoney(t.amount, t.currency);
+        function renderTxItem(tx, container, showDateInline) {
+            const amtFormatted = window.formatMoney(tx.amount, tx.currency);
 
-            const isIncome = t.type === 'transfer' || t.type === 'income';
+            const isIncome = tx.type === 'transfer' || tx.type === 'income';
             const amountClass = isIncome ? 'income' : 'expense';
             const amountPrefix = isIncome ? '+' : '-';
 
@@ -2151,7 +2173,7 @@
                 'Empréstimos p/ Terc': { icon: 'fa-hand-holding-dollar', color: '#64748b', bg: 'rgba(100, 116, 139, 0.1)', text: '#cbd5e1' }
             };
 
-            let catName = t.categoryName || t('cat_uncategorized');
+            let catName = tx.categoryName || t('cat_uncategorized');
             let colColors = categoryMap[catName] || { icon: 'fa-receipt', color: '#a855f7', bg: 'rgba(168, 85, 247, 0.1)', text: '#d8b4fe' };
 
             // Special overrides for payments
@@ -2165,22 +2187,22 @@
                 ? `<span style="font-size:0.75rem; color:var(--text-dark); font-style:italic; min-width: 80px; text-align: center;">${t('bill_paid_notice')}</span>`
                 : `
                     <div class="tx-item-actions">
-                        ${t.status === 'pending' ? `
-                        <button class="action-btn btn-confirm-icon" data-i18n-title="action_confirm" title="${t('action_confirm')}" onclick="confirmTx('${t.id}', '${escapeJsAttr(t.description)}', '${t.date}', ${t.amount})">
+                        ${tx.status === 'pending' ? `
+                        <button class="action-btn btn-confirm-icon" data-i18n-title="action_confirm" title="${t('action_confirm')}" onclick="confirmTx('${tx.id}', '${escapeJsAttr(tx.description)}', '${tx.date}', ${tx.amount})">
                             <i class="fa-solid fa-check"></i>
                         </button>
                         ` : ''}
-                        <button class="action-btn btn-change-icon" data-i18n-title="tx_move_bill" title="${t('tx_move_bill')}" onclick="openReassignModal('${t.id}', '${escapeJsAttr(t.description)}', '${t.date}', ${t.amount})">
+                        <button class="action-btn btn-change-icon" data-i18n-title="tx_move_bill" title="${t('tx_move_bill')}" onclick="openReassignModal('${tx.id}', '${escapeJsAttr(tx.description)}', '${tx.date}', ${tx.amount})">
                             <i class="fa-solid fa-calendar-days"></i>
                         </button>
-                        <button class="action-btn btn-delete-icon" data-i18n-title="action_delete" title="${t('action_delete')}" onclick="deleteTx('${t.id}', '${escapeJsAttr(t.description)}')">
+                        <button class="action-btn btn-delete-icon" data-i18n-title="action_delete" title="${t('action_delete')}" onclick="deleteTx('${tx.id}', '${escapeJsAttr(tx.description)}')">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </div>
                 `;
 
             const txItem = document.createElement('div');
-            if (t.note) {
+            if (tx.note) {
                 txItem.className = 'tx-list-item has-note';
                 txItem.setAttribute('onclick', 'toggleTxExpand(event, this)');
             } else {
@@ -2188,16 +2210,16 @@
             }
 
             // Compile tags HTML
-            const tagsHtml = t.tags && t.tags.length > 0 
+            const tagsHtml = tx.tags && tx.tags.length > 0 
                 ? `<div style="display:flex; gap: 4px; flex-wrap:wrap; margin-top: 2px;">
-                    ${t.tags.map(tag => `<span class="badge-cat" style="font-size:0.65rem; padding:0.5px 3px; border-radius:3px; color:#c084fc; border-color:rgba(192, 132, 252, 0.2); background:rgba(192, 132, 252, 0.05);"><i class="fa-solid fa-tag" style="font-size:0.55rem;"></i> ${escapeHtml(tag)}</span>`).join('')}
+                    ${tx.tags.map(tag => `<span class="badge-cat" style="font-size:0.65rem; padding:0.5px 3px; border-radius:3px; color:#c084fc; border-color:rgba(192, 132, 252, 0.2); background:rgba(192, 132, 252, 0.05);"><i class="fa-solid fa-tag" style="font-size:0.55rem;"></i> ${escapeHtml(tag)}</span>`).join('')}
                    </div>` 
                 : '';
 
             // Formatting inline date if shown flat
             let inlineDateHtml = '';
             if (showDateInline) {
-                const dateObj = new Date(t.date + 'T12:00:00');
+                const dateObj = new Date(tx.date + 'T12:00:00');
                 const day = String(dateObj.getDate()).padStart(2, '0');
                 const month = String(dateObj.getMonth() + 1).padStart(2, '0');
                 inlineDateHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">• ${day}/${month}</span>`;
@@ -2210,7 +2232,7 @@
                             <i class="fa-solid ${colColors.icon}"></i>
                         </div>
                         <div class="tx-item-details">
-                            <span class="tx-item-desc">${escapeHtml(t.description)}</span>
+                            <span class="tx-item-desc">${escapeHtml(tx.description)}</span>
                             <div class="tx-item-meta">
                                 ${tagsHtml}
                             </div>
@@ -2226,14 +2248,14 @@
                     <div class="tx-item-right">
                         <span class="tx-item-amount ${amountClass}">${amountPrefix} ${amtFormatted}</span>
                         ${actionButtons}
-                        ${t.note ? `<i class="fa-solid fa-chevron-down tx-expand-chevron" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease; margin-left: 0.25rem;"></i>` : ''}
+                        ${tx.note ? `<i class="fa-solid fa-chevron-down tx-expand-chevron" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease; margin-left: 0.25rem;"></i>` : ''}
                     </div>
                 </div>
-                ${t.note ? `
+                ${tx.note ? `
                 <div class="tx-item-drawer">
                     <div class="tx-item-drawer-inner">
                         <i class="fa-solid fa-comment-dots" style="color: var(--accent-primary); margin-right: 8px; margin-top: 2px;"></i>
-                        <span>${escapeHtml(t.note)}</span>
+                        <span>${escapeHtml(tx.note)}</span>
                     </div>
                 </div>
                 ` : ''}
@@ -2250,14 +2272,14 @@
             // Apply search filter
             let filteredTxs = [...txs];
             if (searchTerm) {
-                filteredTxs = filteredTxs.filter(t => {
-                    const descMatch = t.description.toLowerCase().includes(searchTerm);
+                filteredTxs = filteredTxs.filter(tx => {
+                    const descMatch = tx.description.toLowerCase().includes(searchTerm);
                     // Special override for payment category name
-                    const isIncome = t.type === 'transfer' || t.type === 'income';
-                    const catName = (isIncome ? t('cat_payment') : (t.categoryName || t('cat_uncategorized'))).toLowerCase();
+                    const isIncome = tx.type === 'transfer' || tx.type === 'income';
+                    const catName = (isIncome ? t('cat_payment') : (tx.categoryName || t('cat_uncategorized'))).toLowerCase();
                     const catMatch = catName.includes(searchTerm);
-                    const noteMatch = t.note ? t.note.toLowerCase().includes(searchTerm) : false;
-                    const tagsMatch = t.tags ? t.tags.some(tag => tag.toLowerCase().includes(searchTerm)) : false;
+                    const noteMatch = tx.note ? tx.note.toLowerCase().includes(searchTerm) : false;
+                    const tagsMatch = tx.tags ? tx.tags.some(tag => tag.toLowerCase().includes(searchTerm)) : false;
                     return descMatch || catMatch || noteMatch || tagsMatch;
                 });
             }
@@ -2334,7 +2356,7 @@
                     
                     // Formats for group header
                     const dateObj = new Date(dateKey + 'T12:00:00');
-                    const formattedDate = dateObj.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+                    const formattedDate = dateObj.toLocaleDateString(currentLocale, { weekday: 'long', day: 'numeric', month: 'long' });
                     const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
                     
                     const count = group.txs.length;
@@ -3090,7 +3112,7 @@
         var PAY_OUTCOME = { done: 'done', refused: 'refused', unsettled: 'unsettled' };
 
         function tFill(key, values) {
-            return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, value), t(key));
+            return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, () => String(value)), t(key));
         }
 
         function monthLabel(month) {
@@ -3192,7 +3214,7 @@
             }
             clearUnfinishedPayment(attempt.key, attempt.token);
             if (result.outcome === PAY_OUTCOME.done) {
-                showToast(t('toast_payment_recorded').replace('{card}', attempt.card), 'success');
+                showToast(tFill('toast_payment_recorded', { card: attempt.card }), 'success');
             } else {
                 showToast(tFill('pay_error_toast', { message: result.message }), 'error');
             }
@@ -4216,7 +4238,7 @@ async function checkLocale() {
 
 function fillValues(text, valuesJson) {
     const values = valuesJson ? JSON.parse(valuesJson) : {};
-    return Object.entries(values).reduce((filled, [name, value]) => filled.replace(`{${name}}`, value), text);
+    return Object.entries(values).reduce((filled, [name, value]) => filled.replace(`{${name}}`, () => String(value)), text);
 }
 
 function translatePage() {
@@ -4425,6 +4447,7 @@ function initCustomSelects() {
 
 // ADR-027 Live-update listener
 window.onAppDataChanged = function(entities) {
+    if (entities.indexOf('userSettings') !== -1) checkLocale();
     var affected = entities.some(function(tag) {
         return ['creditCard', 'transaction', 'account', 'bill', 'category', 'tag'].indexOf(tag) !== -1;
     });

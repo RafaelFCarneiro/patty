@@ -242,3 +242,68 @@ describe('cards.html follows the PATTY language', () => {
     expect(await deleteConfirmationIn('pt')).toContain('Deseja excluir');
   });
 });
+
+describe('cards.html text built from data', () => {
+  const populated = () => {
+    const { sandbox, document } = loadFragment('cards');
+    sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
+    sandbox.currentBill = {
+      bill: { status: 'open', payments: [] },
+      total: 30,
+      transactions: [
+        {
+          id: 'tx-1',
+          description: 'Coffee',
+          amount: 10,
+          currency: 'BRL',
+          type: 'expense',
+          date: '2026-06-01',
+          status: 'effective',
+        },
+        {
+          id: 'tx-2',
+          description: 'Payment',
+          amount: 20,
+          currency: 'BRL',
+          type: 'income',
+          date: '2026-06-02',
+          status: 'effective',
+        },
+      ],
+    };
+    return { sandbox, document };
+  };
+
+  it('renders a populated bill and finds a payment by its translated category name', () => {
+    const { sandbox, document } = populated();
+    sandbox.currentLocale = 'en';
+    sandbox.renderTransactionsTable();
+    expect(document.getElementById('items-2026-06-01').innerHTML).toContain('Uncategorized');
+    expect(document.getElementById('items-2026-06-02').innerHTML).toContain('Payment');
+    expect(document.getElementById('bill-txs-list').innerHTML).toContain('Tuesday');
+
+    sandbox.searchTerm = 'payment';
+    sandbox.renderTransactionsTable();
+    expect(document.getElementById('no-tx-msg').style.display).toBe('none');
+
+    sandbox.searchTerm = 'zzz';
+    sandbox.renderTransactionsTable();
+    expect(document.getElementById('no-tx-msg').innerHTML).toContain('No results found for &quot;zzz&quot;.');
+  });
+
+  it('keeps dollar-sign tokens of a description verbatim in the confirmation', async () => {
+    const { sandbox } = loadFragment('cards');
+    const asked: string[] = [];
+    sandbox.confirm = (message: string) => (asked.push(message), false);
+    await sandbox.deleteTx('tx-1', 'Coffee $& $$');
+    expect(asked[0]).toContain('"Coffee $& $$"');
+  });
+
+  it('re-reads the locale when the user settings change', async () => {
+    const { sandbox } = loadFragment('cards');
+    sandbox.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ locale: 'es' }) });
+    sandbox.onAppDataChanged(['userSettings']);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sandbox.currentLocale).toBe('es');
+  });
+});
