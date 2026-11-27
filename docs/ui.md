@@ -434,3 +434,12 @@ period has expenses in a single currency) to switch; the chart titles interpolat
 (`{currency}` in the `pending_chart_*` translations). `cards.html` builds its add/edit currency `<select>`s
 from `window.__appCurrencies` (sorted, code plus symbol): the add form preselects `DEFAULT_CURRENCY`, the
 edit form (read-only) shows the card's own currency, and every fallback is `DEFAULT_CURRENCY`.
+
+## Dashboard text and the PATTY language
+
+Every visible string of a bundled dashboard comes from its i18n table (`data-i18n`, `data-i18n-placeholder`,
+`data-i18n-title`, or `t(...)`/`tFill(...)` in script, with `{placeholders}` filled by `tFill`; static text that
+carries values declares them in `data-i18n-values`). `test/unit/ui/dashboard-i18n.test.ts` fails on hard-coded
+element text, labels, option text, placeholders and titles, on literals passed to `showToast`/`confirm`/`alert` or
+assigned to `textContent`/`innerHTML`, and on Portuguese-only words or accents outside the table. `cards.html`
+passes; the dashboards in the test's `NOT_YET_TRANSLATED` list do not yet, and that list only shrinks.
