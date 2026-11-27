@@ -515,4 +515,14 @@ describe('budget.html follows the PATTY language', () => {
     await pending;
     expect(list.innerHTML).toBe('replacement');
   });
+
+  it('keeps the display currency when a preferences request fails after a reload', async () => {
+    const { sandbox, supersede } = loadFragment('budget', { locale: 'en-US' });
+    sandbox.currentDisplayCurrency = 'USD';
+    sandbox.fetch = () => later(20).then(() => Promise.reject(new Error('offline')));
+    const pending = sandbox.initCurrencySelector();
+    supersede();
+    await pending;
+    expect(sandbox.currentDisplayCurrency).toBe('USD');
+  });
 });

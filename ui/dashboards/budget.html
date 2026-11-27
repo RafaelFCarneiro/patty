@@ -812,6 +812,7 @@ async function initCurrencySelector() {
     } catch (e) {
         console.error('Failed to load preferences:', e);
     }
+    if (!isActiveFragment()) return;
 
     currentDisplayCurrency = select.value;
 }
