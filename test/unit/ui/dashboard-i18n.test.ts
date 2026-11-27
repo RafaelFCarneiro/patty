@@ -342,6 +342,23 @@ describe('cards.html follows the PATTY language', () => {
       expect(sandbox.categories).toEqual([]);
     });
 
+    it('shows no error and clears no loading indicator for a load that outlived its fragment', async () => {
+      const { sandbox, document, supersede } = loadFragment('cards', { locale: 'en-US' });
+      const cleared: string[] = [];
+      sandbox.billLoading.classList.remove = () => cleared.push('bill');
+      sandbox.txLoading.classList.remove = () => cleared.push('tx');
+      sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };
+      sandbox.fetch = () => later(20).then(() => Promise.reject(new Error('offline')));
+
+      const initial = sandbox.fetchInitialData();
+      const bill = sandbox.loadBillDetails();
+      supersede();
+      await Promise.all([initial, bill]);
+
+      expect(document.getElementById('toast-box').innerHTML).toBe('');
+      expect(cleared).toEqual([]);
+    });
+
     it('drops a bill answer that arrives after the month changed', async () => {
       const { sandbox, document } = loadFragment('cards', { locale: 'en-US' });
       sandbox.activeCard = { id: 'card-1', name: 'Nubank', currency: 'BRL' };

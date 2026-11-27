@@ -1849,7 +1849,7 @@
                 }
             } catch (err) {
                 console.error("Error loading initial data", err);
-                showToast(t('toast_load_error'), 'error');
+                if (isActiveFragment()) showToast(t('toast_load_error'), 'error');
             }
         }
 
@@ -2034,7 +2034,7 @@
                 if (isLatest()) showToast(t('toast_bill_error'), 'error');
                 return false;
             } finally {
-                if (request === billRequest) {
+                if (isActiveFragment() && request === billRequest) {
                     billLoading.classList.remove('active');
                     txLoading.classList.remove('active');
                 }
