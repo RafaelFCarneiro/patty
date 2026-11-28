@@ -736,6 +736,8 @@ var TRANSLATIONS = {
     }
 };
 
+// Map key of transactions without a category: no real category name can equal it, so only the label is translated.
+var UNCATEGORIZED_KEY = '\u0000uncategorized';
 var compareChart = null;
 var trendChart = null;
 // The page language comes from the shell (window.PATTY.locale, a BCP-47 tag) once, at render; a language change
@@ -762,6 +764,10 @@ var displayCurrencyChosen = false;
 function t(key) {
     const dict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
     return dict[key] || key;
+}
+
+function categoryLabel(catName) {
+    return catName === UNCATEGORIZED_KEY ? t('cat_uncategorized') : catName;
 }
 
 function tFill(key, values) {
@@ -931,7 +937,7 @@ async function loadDashboardData() {
             if (tx.type === 'income') {
                 const amt = Number(tx.amount) || 0;
                 const curr = tx.currency || DEFAULT_CURRENCY;
-                const catName = tx.categoryName || t('cat_uncategorized');
+                const catName = tx.categoryName || UNCATEGORIZED_KEY;
                 
                 if (!incomeCats[catName]) {
                     incomeCats[catName] = { effective: {}, pending: {}, total: {}, txs: [] };
@@ -1008,7 +1014,7 @@ async function loadDashboardData() {
         // Add expense transactions and populate txs lists
         txItems.forEach(tx => {
             if (tx.type === 'expense') {
-                const catName = tx.categoryName || t('cat_uncategorized');
+                const catName = tx.categoryName || UNCATEGORIZED_KEY;
                 const curr = tx.currency || DEFAULT_CURRENCY;
                 const amt = Number(tx.amount) || 0;
 
@@ -1177,7 +1183,7 @@ function renderIncomeCategories(incomeCats, totalIncome) {
                 <div class="category-row-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion('${rowId}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAccordion('${rowId}'); }">
                     <div class="cat-meta-info">
                         <div class="cat-name-label">
-                            <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(catName)}
+                            <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(categoryLabel(catName))}
                         </div>
                         <div>
                             <span class="cat-val-label">${formatMultiCurrency(data.total)}</span>
@@ -1260,7 +1266,7 @@ function renderExpenseBudgetCategories(budgetCategoryMap) {
                 <div class="category-row-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion('${rowId}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAccordion('${rowId}'); }">
                     <div class="cat-meta-info">
                         <div class="cat-name-label">
-                            <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(catName)}
+                            <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(categoryLabel(catName))}
                         </div>
                         <div>
                             <span class="cat-val-label">${valLabel}</span>

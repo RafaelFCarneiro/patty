@@ -523,4 +523,25 @@ describe('budget.html follows the PATTY language', () => {
     expect(document.getElementById('currency-select').value).toBe('USD');
     expect(sandbox.currentDisplayCurrency).toBe('USD');
   });
+
+  it('keeps uncategorized transactions apart from a real category named like their label', () => {
+    const { sandbox, document } = loadFragment('budget', { locale: 'pt-BR' });
+    const label = sandbox.t('cat_uncategorized');
+    const tx = (categoryName?: string) => ({
+      type: 'income',
+      amount: 10,
+      currency: 'BRL',
+      status: 'effective',
+      categoryName,
+    });
+    sandbox.fetch = (url: string) =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(url.startsWith('/api/transactions') ? { items: [tx(label), tx(undefined)] } : {}),
+      });
+    return sandbox.loadDashboardData().then(() => {
+      const html = document.getElementById('income-categories-list').innerHTML as string;
+      expect(html.split(`</i> ${label}`).length - 1).toBe(2);
+    });
+  });
 });
