@@ -447,18 +447,18 @@
             <div class="controls-group">
                 <label for="month-select" data-i18n="reference_label">Reference:</label>
                 <select id="month-select" class="select-custom" onchange="onFilterChange()">
-                    <option value="1">January</option>
-                    <option value="2">February</option>
-                    <option value="3">March</option>
-                    <option value="4">April</option>
-                    <option value="5">May</option>
-                    <option value="6">June</option>
-                    <option value="7">July</option>
-                    <option value="8" selected>August</option>
-                    <option value="9">September</option>
-                    <option value="10">October</option>
-                    <option value="11">November</option>
-                    <option value="12">December</option>
+                    <option value="1" data-i18n="january">January</option>
+                    <option value="2" data-i18n="february">February</option>
+                    <option value="3" data-i18n="march">March</option>
+                    <option value="4" data-i18n="april">April</option>
+                    <option value="5" data-i18n="may">May</option>
+                    <option value="6" data-i18n="june">June</option>
+                    <option value="7" data-i18n="july">July</option>
+                    <option value="8" selected data-i18n="august">August</option>
+                    <option value="9" data-i18n="september">September</option>
+                    <option value="10" data-i18n="october">October</option>
+                    <option value="11" data-i18n="november">November</option>
+                    <option value="12" data-i18n="december">December</option>
                 </select>
                 <select id="year-select" class="select-custom" onchange="onFilterChange()">
                     <option value="2025">2025</option>
@@ -623,6 +623,7 @@ var TRANSLATIONS = {
         chart_lbl_proj_income: "Projected Incomes",
         chart_lbl_budget_exp: "Budgeted Expenses",
         chart_lbl_net_balance: "Projected Net Balance",
+        cat_uncategorized: "Uncategorized",
         january: "January", february: "February", march: "March", april: "April",
         may: "May", june: "June", july: "July", august: "August",
         september: "September", october: "October", november: "November", december: "December"
@@ -675,6 +676,7 @@ var TRANSLATIONS = {
         chart_lbl_proj_income: "Receitas Projetadas",
         chart_lbl_budget_exp: "Despesa Orçada",
         chart_lbl_net_balance: "Saldo Líquido Orçado",
+        cat_uncategorized: "Sem Categoria",
         january: "Janeiro", february: "Fevereiro", march: "Março", april: "Abril",
         may: "Maio", june: "Junho", july: "Julho", august: "Agosto",
         september: "Setembro", october: "Outubro", november: "Novembro", december: "Dezembro"
@@ -727,15 +729,21 @@ var TRANSLATIONS = {
         chart_lbl_proj_income: "Ingresos Proyectados",
         chart_lbl_budget_exp: "Gasto Presupuestado",
         chart_lbl_net_balance: "Saldo Neto Proyectado",
+        cat_uncategorized: "Sin Categoría",
         january: "Enero", february: "Febrero", march: "Marzo", april: "Abril",
         may: "Mayo", june: "Junio", july: "Julio", august: "Agosto",
         september: "Septiembre", october: "Octubre", november: "Noviembre", december: "Diciembre"
     }
 };
 
+// Map key of transactions without a category: no real category name can equal it, so only the label is translated.
+var UNCATEGORIZED_KEY = '\u0000uncategorized';
 var compareChart = null;
 var trendChart = null;
-var currentLocale = 'en';
+// The page language comes from the shell (window.PATTY.locale, a BCP-47 tag) once, at render; a language change
+// reloads the dashboard, so nothing here refreshes it in place.
+var LOCALE_BY_TAG = { 'pt-BR': 'pt', es: 'es', 'en-US': 'en' };
+var currentLocale = LOCALE_BY_TAG[window.PATTY && window.PATTY.locale] || 'en';
 var currentDisplayCurrency = '';
 // True once the person picks a currency; until then the selection follows the base currency.
 var displayCurrencyChosen = false;
@@ -758,25 +766,17 @@ function t(key) {
     return dict[key] || key;
 }
 
-async function checkLocale() {
-    try {
-        const res = await fetch('/api/status');
-        if (res.ok) {
-            const statusData = await res.json();
-            if (statusData.locale && TRANSLATIONS[statusData.locale]) {
-                currentLocale = statusData.locale;
-            }
-        }
-    } catch (e) {
-        console.error('Failed to load status:', e);
-    }
-    translatePage();
+function categoryLabel(catName) {
+    return catName === UNCATEGORIZED_KEY ? t('cat_uncategorized') : catName;
+}
+
+function tFill(key, values) {
+    return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, () => String(value)), t(key));
 }
 
 function translatePage() {
     const dict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
 
-    // 1. Static text elements
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         if (dict[key]) {
@@ -788,23 +788,11 @@ function translatePage() {
             }
         }
     });
-
-    // 2. Month dropdown options
-    const monthSelect = document.getElementById('month-select');
-    if (monthSelect) {
-        const monthKeys = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-        Array.from(monthSelect.options).forEach((opt, idx) => {
-            const key = monthKeys[idx];
-            if (dict[key]) {
-                opt.textContent = dict[key];
-            }
-        });
-    }
 }
 
-// window.__appCurrencies is populated by the shell (ui/app.js) before this script runs.
+// window.__appCurrencies and window.PATTY.baseCurrency are set by the shell (ui/app.js) before this script runs.
 // Defaults the selection to the base currency so the converted total shows without an extra click.
-async function initCurrencySelector() {
+function initCurrencySelector() {
     const select = document.getElementById('currency-select');
     if (!select) return;
 
@@ -816,18 +804,10 @@ async function initCurrencySelector() {
         select.appendChild(opt);
     });
 
-    try {
-        const res = await fetch('/api/preferences');
-        if (res.ok) {
-            const prefs = await res.json();
-            if (prefs.baseCurrency && codes.indexOf(prefs.baseCurrency) !== -1) {
-                select.value = prefs.baseCurrency;
-            }
-        }
-    } catch (e) {
-        console.error('Failed to load preferences:', e);
+    const baseCurrency = window.PATTY.baseCurrency;
+    if (baseCurrency && codes.indexOf(baseCurrency) !== -1) {
+        select.value = baseCurrency;
     }
-
     currentDisplayCurrency = select.value;
 }
 
@@ -926,6 +906,7 @@ async function loadDashboardData() {
     const month = parseInt(document.getElementById('month-select').value);
     const year = parseInt(document.getElementById('year-select').value);
 
+    const isActiveFragment = window.PATTY.current();
     const incomeListEl = document.getElementById('income-categories-list');
     const expenseListEl = document.getElementById('expense-categories-list');
 
@@ -945,6 +926,7 @@ async function loadDashboardData() {
             fetchBudgetStatus(month, year, currentDisplayCurrency),
             fetchAllTransactionsForMonth(year, month)
         ]);
+        if (!isActiveFragment()) return;
 
         // Calculate Income totals and categories
         const incomeTotalEff = {};
@@ -955,7 +937,7 @@ async function loadDashboardData() {
             if (tx.type === 'income') {
                 const amt = Number(tx.amount) || 0;
                 const curr = tx.currency || DEFAULT_CURRENCY;
-                const catName = tx.categoryName || 'Uncategorized';
+                const catName = tx.categoryName || UNCATEGORIZED_KEY;
                 
                 if (!incomeCats[catName]) {
                     incomeCats[catName] = { effective: {}, pending: {}, total: {}, txs: [] };
@@ -1032,7 +1014,7 @@ async function loadDashboardData() {
         // Add expense transactions and populate txs lists
         txItems.forEach(tx => {
             if (tx.type === 'expense') {
-                const catName = tx.categoryName || 'Other';
+                const catName = tx.categoryName || UNCATEGORIZED_KEY;
                 const curr = tx.currency || DEFAULT_CURRENCY;
                 const amt = Number(tx.amount) || 0;
 
@@ -1122,6 +1104,7 @@ async function loadDashboardData() {
 
     } catch (err) {
         console.error('Error loading budget dashboard:', err);
+        if (!isActiveFragment()) return;
         incomeListEl.innerHTML = `
             <div class="state-container" style="color: #f43f5e">
                 <i class="fa-solid fa-triangle-exclamation"></i>
@@ -1161,7 +1144,7 @@ function renderConvertedTotal(converted) {
     el.innerHTML = `
         <span>${t('kpi_converted_label')} <strong>${totalText}</strong>${staleFlag}</span>
         ${excludedCount > 0
-            ? `<span class="kpi-converted-excluded">${t('kpi_converted_excluded').replace('{n}', String(excludedCount))}</span>`
+            ? `<span class="kpi-converted-excluded">${tFill('kpi_converted_excluded', { n: excludedCount })}</span>`
             : ''}
     `;
     el.style.display = 'block';
@@ -1200,7 +1183,7 @@ function renderIncomeCategories(incomeCats, totalIncome) {
                 <div class="category-row-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion('${rowId}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAccordion('${rowId}'); }">
                     <div class="cat-meta-info">
                         <div class="cat-name-label">
-                            <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(catName)}
+                            <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(categoryLabel(catName))}
                         </div>
                         <div>
                             <span class="cat-val-label">${formatMultiCurrency(data.total)}</span>
@@ -1283,7 +1266,7 @@ function renderExpenseBudgetCategories(budgetCategoryMap) {
                 <div class="category-row-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion('${rowId}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAccordion('${rowId}'); }">
                     <div class="cat-meta-info">
                         <div class="cat-name-label">
-                            <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(catName)}
+                            <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(categoryLabel(catName))}
                         </div>
                         <div>
                             <span class="cat-val-label">${valLabel}</span>
@@ -1400,7 +1383,7 @@ function renderMonthlyCompareChart(data) {
                     maxBarThickness: 80
                 },
                 {
-                    label: t('kpi_remaining') || 'Restante',
+                    label: t('kpi_remaining'),
                     data: [null, remainingExpense],
                     backgroundColor: ['rgba(0, 0, 0, 0)', 'rgba(244, 63, 94, 0.25)'],
                     borderRadius: 8,
@@ -1468,7 +1451,7 @@ function renderMonthlyCompareChart(data) {
                             var separator = label.endsWith(':') ? ' ' : ': ';
                             var individualStr = label + separator + formatCurrency(val, data.currency);
 
-                            var accumLabel = t('cumulative') || 'Acumulado';
+                            var accumLabel = t('cumulative');
                             var accumSeparator = accumLabel.endsWith(':') ? ' ' : ': ';
 
                             if (datasetIndex === 0) {
@@ -1513,6 +1496,7 @@ function renderMonthlyCompareChart(data) {
 async function renderTrendChart(selectedYear, selectedMonth) {
     const ctx = document.getElementById('trendChart');
     if (!ctx) return;
+    const isActiveFragment = window.PATTY.current();
 
     if (trendChart) {
         trendChart.destroy();
@@ -1524,6 +1508,7 @@ async function renderTrendChart(selectedYear, selectedMonth) {
 
     // Fetch budget status for the selected month to get the monthly budget limit, per currency
     const bStatus = await fetchBudgetStatus(selectedMonth, selectedYear);
+    if (!isActiveFragment()) return;
     const monthlyLimitByCurrency = {};
     if (bStatus && Array.isArray(bStatus.categories)) {
         bStatus.categories.forEach(cg => {
@@ -1535,6 +1520,7 @@ async function renderTrendChart(selectedYear, selectedMonth) {
 
     // Fetch all transactions for the selected month
     const txs = await fetchAllTransactionsForMonth(selectedYear, selectedMonth);
+    if (!isActiveFragment()) return;
     const monthlyIncomeByCurrency = {};
     txs.forEach(tx => {
         if (tx.type === 'income') addMultiCurrency(monthlyIncomeByCurrency, tx.currency, Number(tx.amount) || 0);
@@ -1667,10 +1653,9 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
-// Initial boot with locale detection
-(async function init() {
-    await checkLocale();
-    await initCurrencySelector();
+(function init() {
+    translatePage();
+    initCurrencySelector();
     loadDashboardData();
 })();
 
